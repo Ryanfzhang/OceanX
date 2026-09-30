@@ -9,15 +9,12 @@ The tool surface stays limited to infrastructure needed by Coordinator and Exper
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import json
-import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 

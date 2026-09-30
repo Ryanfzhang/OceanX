@@ -304,16 +304,16 @@ class DeepAgentEngine:
                         duration_seconds=max(0.0, time.monotonic() - started),
                     )
             final_message = await self._refresh_messages(config)
-            if isinstance(final_message, AIMessage):
-                if final_message.additional_kwargs.get("oceanx_delivered"):
-                    # File-backed delivery is not an extra model call. Do not bill its
-                    # prose a second time; preserve it as the participant's final answer.
-                    yield AssistantTurnComplete(
-                        message=ConversationMessage.from_langchain(final_message),
-                        usage=UsageSnapshot(input_tokens=0, output_tokens=0),
-                        turn_id=f"{request_id or self.thread_id}:delivery", request_id=request_id,
-                    )
-                    return
+            if (isinstance(final_message, AIMessage)
+                    and final_message.additional_kwargs.get("oceanx_delivered")):
+                # File-backed delivery is not an extra model call. Do not bill its
+                # prose a second time; preserve it as the participant's final answer.
+                yield AssistantTurnComplete(
+                    message=ConversationMessage.from_langchain(final_message),
+                    usage=UsageSnapshot(input_tokens=0, output_tokens=0),
+                    turn_id=f"{request_id or self.thread_id}:delivery", request_id=request_id,
+                )
+                return
             if (last_model_message is None or not _message_text(last_model_message).strip()
                     or last_model_message.tool_calls):
                 metadata = last_model_message.response_metadata if last_model_message else {}
@@ -362,4 +362,4 @@ async def build_deep_agent_graph(*, profile, tools, system_prompt, cwd, operatio
 
 
 
-__all__ = ["DeepAgentEngine", "NATIVE_TASK_DESCRIPTION", "build_deep_agent_graph"]
+__all__ = ["NATIVE_TASK_DESCRIPTION", "DeepAgentEngine", "build_deep_agent_graph"]

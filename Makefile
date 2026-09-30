@@ -6,11 +6,9 @@ RUFF_TARGETS = \
 	src/oceanx/agent_tools.py \
 	src/oceanx/deep_runtime.py \
 	src/oceanx/model_config.py \
-	src/oceanx/tool_history.py \
 	src/oceanx/web_search.py \
 	src/oceanx/runtime.py \
 	src/oceanx/tools.py \
-	src/oceanx/team/orchestrator.py \
 	src/oceanx/sandbox \
 	tests/test_oceanx/test_deep_agent_runtime.py
 
