@@ -183,7 +183,11 @@ scientific analysis or snapshotting all existing outputs on every file read.
         if self.record_command is None:
             return await super().aexecute(command, timeout=timeout)
         result = await self.record_command(command, timeout)
-        return ExecuteResponse(output=result.stdout + result.stderr, exit_code=result.returncode)
+        output = result.stdout + result.stderr
+        if result.state == "timed_out":  # otherwise the model sees only "exit code -15"
+            output += (f"\n[Stopped at the time limit after {result.duration_seconds:.0f} s; a larger "
+                       "timeout does not extend it. Process less data per run or save partial results.]")
+        return ExecuteResponse(output=output, exit_code=result.returncode)
 
     async def als(self, path):
         return await self.files.als(path)

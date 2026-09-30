@@ -143,7 +143,21 @@ def _dependency_satisfied(found: dict[str, dict], node_id: str) -> bool:
 
 FRONTIER_MODES = {"shallowest", "any_depth"}
 MAX_PROPOSALS = 3
-_FIELD = r"(?ims)^{label}:\s*(.*?)(?=^(?:Result|Evidence and limitations|Further analysis):|\Z)"
+SUMMARY_LABELS = ("Result", "Evidence and limitations", "Further analysis")
+
+
+def _label(pattern: str) -> str:
+    """A Summary label at a line start, plain or emphasized, then ':' or '.' ("**Result.**")."""
+    return rf"^[ \t]*[*_]{{0,2}}(?:{pattern})[*_]{{0,2}}[ \t]*[:.][*_]{{0,2}}"
+
+
+_NEXT_LABEL = _label("|".join(map(re.escape, SUMMARY_LABELS)))
+
+
+def summary_field(summary: str, label: str) -> str:
+    """One field of an Expert's ## Summary; the single parser for all three labels."""
+    match = re.search(rf"(?ims){_label(re.escape(label))}(.*?)(?={_NEXT_LABEL}|\Z)", summary or "")
+    return match.group(1).strip() if match else ""
 
 
 def proposals_from_summary(summary: str) -> list[str]:
@@ -151,10 +165,11 @@ def proposals_from_summary(summary: str) -> list[str]:
 
     They are saved on the node's result and become nodes only when the Coordinator
     adds one with ``from_proposal`` (e.g. ``B1.2#1``); unadopted proposals simply lapse.
+    An item may wrap onto following lines; it ends at the next item or a blank line.
     """
-    match = re.search(_FIELD.format(label="Further analysis"), summary or "")
-    items = re.findall(r"(?m)^\s*\d+[.)]\s+(.+?)\s*$", match.group(1)) if match else []
-    return items[:MAX_PROPOSALS]
+    items = re.findall(r"(?ms)^[ \t]*\d+[.)][ \t]+(.+?)(?=^[ \t]*\d+[.)][ \t]|\n[ \t]*\n|\Z)",
+                       summary_field(summary, "Further analysis"))
+    return [" ".join(item.split()) for item in items][:MAX_PROPOSALS]
 
 
 def frontier(tree: dict) -> list[str]:
@@ -200,6 +215,19 @@ def _next_id(tree: dict, parent_id: str) -> str:
     return f"{parent_id}.{index}"
 
 
+def _waits_for(found: dict[str, dict], node_id: str, other: str) -> bool:
+    """Whether node_id already waits, directly or through its dependencies, for other."""
+    pending, seen = [node_id], set()
+    while pending:
+        current = pending.pop()
+        if current == other:
+            return True
+        if current not in seen:
+            seen.add(current)
+            pending.extend(found[current]["dependencies"])
+    return False
+
+
 def _descendants(tree: dict, node_id: str) -> set[str]:
     result: set[str] = set()
     pending = _children(tree, node_id)
@@ -240,7 +268,10 @@ def apply_changes(tree: dict, changes: list[dict]) -> tuple[dict, list[str], lis
                 source, _, index = str(change["from_proposal"]).partition("#")
                 offered = ((found.get(source) or {}).get("result") or {}).get("proposals") or []
                 if not index.isdigit() or not 1 <= int(index) <= len(offered):
-                    raise ValueError(f"Unknown Expert proposal: {change['from_proposal']}.")
+                    valid = [f"{key}#{number}" for key, item in found.items() for number in
+                             range(1, len((item.get("result") or {}).get("proposals") or []) + 1)]
+                    raise ValueError(f"Unknown Expert proposal: {change['from_proposal']}. "
+                                     f"Valid proposal IDs: {', '.join(valid) or 'none'}.")
                 change = {**change, "origin_type": "expert-proposal",
                           "origin_refs": [change["from_proposal"]]}
                 origin_refs = change["origin_refs"]
@@ -342,8 +373,12 @@ def apply_changes(tree: dict, changes: list[dict]) -> tuple[dict, list[str], lis
                 raise ValueError("decline needs an existing question node.")
             if found[target]["status"] != "candidate":
                 raise ValueError("Only a candidate question can be declined.")
-            if not str(change.get("reason") or "").strip():
+            reason = str(change.get("reason") or "").strip()
+            if not reason:
                 raise ValueError("decline needs the reason for not exploring now.")
+            # A declined candidate stops returning as a live candidate; reopen revives it.
+            found[target]["status"] = "closed"
+            found[target]["close_reason"] = reason
             changed.append(target)
         elif action == "link":
             other = str(change.get("other") or "")
@@ -352,6 +387,12 @@ def apply_changes(tree: dict, changes: list[dict]) -> tuple[dict, list[str], lis
                 raise ValueError("link needs two different existing nodes.")
             if link_type not in LINK_TYPES:
                 raise ValueError(f"Unknown link type: {link_type}.")
+            if (link_type == "depends_on" and kind(found[other]) == "question"
+                    and other not in found[target]["dependencies"]):
+                # dependencies is what the frontier reads: the target now waits for other's result.
+                if _waits_for(found, other, target):
+                    raise ValueError(f"{target} depends_on {other} would create a dependency cycle.")
+                found[target]["dependencies"].append(other)
             link = {"source": target, "target": other, "type": link_type,
                     "note": str(change.get("reason") or "").strip()}
             if link not in result["links"]:

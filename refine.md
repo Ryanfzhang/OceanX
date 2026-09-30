@@ -13,8 +13,9 @@ native tool in another scheduler.
 
 Each task description contains one scientific question, why its answer matters, its Research Tree
 node when applicable and relevant evidence paths. It does not prescribe an analysis or figure
-checklist. Independent nodes at the shallowest ready frontier can be emitted as parallel task calls
-in one Coordinator turn. A dependent node waits for its evidence dependency.
+checklist. Independent nodes on the ready frontier can be emitted as parallel task calls in one
+Coordinator turn; the research policy decides whether deeper ready nodes wait for shallower ones.
+A dependent node waits for its evidence dependency.
 
 Native task model contexts are isolated. Questions under the same root tree branch share one
 backend-assigned working directory and persistent Python kernel so durable files and in-memory
@@ -93,7 +94,9 @@ Coordinator delegation rules. Runtime runs do not rewrite Skills from accumulate
 Provider retry occurs around the failed model call, so Python and filesystem tools are not replayed.
 Retryable connection failures are recorded but do not consume the Expert call allowance. Each Expert
 task has a 60-call execution ceiling, enters an evidence-read/report-write wind-down inside the
-same DeepAgents run at 48 calls, and reserves a final no-tool delivery call. Repeating the same
+same DeepAgents run at 48 calls (analysis tools requested after that are refused without running),
+and reserves a final no-tool delivery call. An Expert that ends without report.md hands back an
+explicit no-report receipt, never the raw text of that final call. Repeating the same
 normalized execution failure three times also triggers
 handoff. These are liveness boundaries, not scientific acceptance rules or a whole-project budget.
 

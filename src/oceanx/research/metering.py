@@ -1,8 +1,14 @@
 """Record framework model calls as telemetry, never as execution authority."""
 import time
+from contextvars import ContextVar
 from datetime import UTC, datetime
 
 from langchain_core.callbacks import AsyncCallbackHandler
+
+# True while a native Expert runs. The Coordinator's meter is inherited by that nested
+# run, so it skips those calls and leaves them to the Expert's own meter.
+INSIDE_EXPERT: ContextVar[bool] = ContextVar("oceanx_inside_expert", default=False)
+
 
 class CallMeter(AsyncCallbackHandler):
     raise_error = True
@@ -13,6 +19,8 @@ class CallMeter(AsyncCallbackHandler):
         self.started = {}
 
     async def on_chat_model_start(self, serialized, messages, *, run_id, tags=None, metadata=None, **kwargs):
+        if self.run is None and INSIDE_EXPERT.get():
+            return
         c = self.config["configurable"]
         key = str(run_id)
         self.started[key] = time.monotonic()
@@ -51,7 +59,13 @@ class CallMeter(AsyncCallbackHandler):
     async def on_llm_error(self, error, *, run_id, **kwargs):
         key = str(run_id)
         if key in self.calls:
-            self.calls[key].update(state="failed", error_type=type(error).__name__)
+            # The wrapped chain says which transport step failed (e.g. ConnectTimeout vs ReadTimeout).
+            causes, cause = [], error.__cause__ or error.__context__
+            while cause is not None and len(causes) < 6:
+                causes.append(type(cause).__name__)
+                cause = cause.__cause__ or cause.__context__
+            self.calls[key].update(state="failed", error_type=type(error).__name__,
+                                   error_causes=causes)
             self._finish(key)
 
     def _finish(self, key):

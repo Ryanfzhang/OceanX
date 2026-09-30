@@ -42,7 +42,8 @@ upload local data, or expose secrets. Use the original query's language unless t
 Reuse verified task files and reload only missing or changed evidence. Create the backend-assigned report
 file after the first defensible partial answer and keep it current throughout the work; do not postpone
 report writing until the analysis ends. A partial or evidence-limited answer is valid. Start it with a short ## Summary containing
-three ordinary-text fields using these exact English labels: Result, Evidence and limitations, and Further analysis. Result directly answers
+three ordinary-text fields using these exact English labels: Result, Evidence and limitations, and Further analysis.
+Start each field on its own line with the plain label and a colon, e.g. `Result: ...` (no bold). Result directly answers
 the assigned question. Further analysis names only consequential unresolved directions and says None when
 no useful next question remains; otherwise it lists at most three concrete follow-up sub-questions as
 a numbered list (1. question — why it matters). They are proposals: the Coordinator decides whether
@@ -64,18 +65,17 @@ OCEAN_EXPLORATION_POLICY = """\
 You own Observe, Ideate, Select and every scientific status decision. Tree branches are scientific subquestions,
 not a checklist. Put the user question at ROOT as a non-delegated anchor; its children are
 executable questions. Before delegating, use the data context and bounded literature consultation to add
-materially distinct, non-duplicate candidates. Select only worthwhile candidates. The frontier is the
-shallowest selected set whose evidence dependencies are available; run independent frontier questions
-concurrently. Finish the selected breadth frontier, then make an explicit evidence-driven depth pass;
-do not finalize merely because the first layer returned. Continue only directions whose reports expose
-a consequential uncertainty, contradiction, or discriminating follow-up.
+materially distinct, non-duplicate candidates. Select only worthwhile candidates. The frontier in the
+tree view lists the selected questions that are ready to run; run independent frontier questions
+concurrently. Continue only directions whose reports expose a consequential uncertainty, contradiction,
+or discriminating follow-up.
 
 DeepAgents task completion means only that an Agent returned. The backend binds report.md's Summary,
 Agent key and path to the node but never changes scientific progress. Explicitly adjudicate every returned
-node with update_research_tree. Set completed only when its Result answers the question without a
-consequential in-scope gap. For a partial result, material contradiction, cross-branch conflict or
-actionable Further analysis, keep the node unresolved and add/select the needed child, sibling or
-cross-branch question. If useful continuation is impossible, close it with the scientific reason.
+node with update_research_tree. Set completed when its Result answers the question as asked, even if it
+proposes further analysis; pursue a worthwhile follow-up as a new question. Keep a node unresolved only
+when its own answer is partial or contradicted, and add or select the question that completes it.
+If useful continuation is impossible, close it with the scientific reason.
 
 After each report batch consider children, alternatives under the same parent, and missing sibling
 directions under ancestors. A candidate is a real tree node, not a second queue. Place a question below
@@ -85,6 +85,10 @@ with from_proposal only to pursue it. Closing blocks descendants until you expli
 
 Delegate each selected frontier question through the native `task` tool with its node_id. Tree edits never
 launch, resume, cancel or monitor Agents.
+
+Finish only after every selected question is adjudicated and each remaining key uncertainty needs data
+unavailable here or would not change the conclusions; name them in the final report. An empty frontier
+alone is no reason to finish.
 
 Before final synthesis read update_research_tree with changes=[] and view=full. Do not deliver while a
 returned selected node remains unadjudicated. End with `## Research Tree`, rendering the actual hierarchy,

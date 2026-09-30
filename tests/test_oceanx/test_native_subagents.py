@@ -28,8 +28,10 @@ from oceanx.research.graphs import (
     EXPERT_FINAL_CALL,
     EXPERT_MODEL_CALL_LIMIT,
     EXPERT_WIND_DOWN_START,
+    WIND_DOWN_REFUSAL,
     ExpertCallBudgetMiddleware,
     _coordinator_agent,
+    _missing_report,
     _wind_down_request,
 )
 from oceanx.team.profiles import AGENT_PROFILES, get_agent_profile
@@ -393,6 +395,56 @@ def test_compiled_agent_enters_wind_down_on_calls_49_through_60():
             assert "Final delivery call" in system
     assert all("execute" in names for names in model.bound_tool_names[:48])
     assert all("execute" not in names for names in model.bound_tool_names[48:])
+
+
+def test_wind_down_refuses_analysis_tools_the_model_still_requests():
+    research_calls = 0
+
+    @tool
+    def execute(value: int) -> str:
+        """Perform one probe research operation."""
+        nonlocal research_calls
+        research_calls += 1
+        return str(value)
+
+    @tool
+    def write_file(value: int) -> str:
+        """Write one probe report file."""
+        return str(value)
+
+    def call(name: str, index: int) -> AIMessage:
+        return AIMessage(content="", tool_calls=[{
+            "name": name, "args": {"value": index}, "id": f"{name}-{index}", "type": "tool_call"}])
+
+    # Calls 1-48 analyse, call 49 still asks for execute, calls 50-59 write the report.
+    responses = [call("execute", index) for index in range(1, 50)]
+    responses.extend(call("write_file", index) for index in range(50, 60))
+    responses.append(AIMessage(content="Report written."))
+    graph = create_agent(model=_BudgetProbeModel(responses=responses), tools=[execute, write_file],
+                         system_prompt="base", middleware=[ExpertCallBudgetMiddleware()])
+
+    result = asyncio.run(graph.ainvoke({"messages": [HumanMessage(content="research")]}))
+
+    assert research_calls == 48  # the tool from call 48 still ran; the one from call 49 did not
+    refused = next(message for message in result["messages"]
+                   if isinstance(message, ToolMessage) and message.tool_call_id == "execute-49")
+    assert (refused.status, refused.text) == ("error", WIND_DOWN_REFUSAL)
+
+
+def test_missing_report_receipt_never_forwards_tool_markup(tmp_path):
+    root = tmp_path / "agents" / "ocean-process-x"
+    report = root / "reports" / "B1.3" / "report.md"
+    question = HumanMessage(content="Question")
+    # Task 1: the limit-forced, tool-free call 60 returned DeepSeek tool markup as text.
+    capped = [question] + [AIMessage(content="<｜DSML｜ calls>")] * 60
+    text = _missing_report(capped, report)
+    assert text.startswith("Result: No report — it reached its 60-call limit")
+    assert "DSML" not in text and str(root / "scratch") in text
+    cut = [question, AIMessage(content="", tool_calls=[
+        {"name": "execute", "args": {}, "id": "call-1", "type": "tool_call"}])]
+    assert "it stopped after 1 model calls" in _missing_report(cut, report)
+    # An Expert that finished on its own keeps its closing answer.
+    assert _missing_report([question, AIMessage(content="Done.")], report) == "Done."
 
 
 def _team(children, state="running"):

@@ -9,17 +9,23 @@ from __future__ import annotations
 
 import re
 
-from oceanx.research.tree import _blocked, _depth, _descendants, frontier, kind, nodes
+from oceanx.research.tree import (
+    _blocked,
+    _depth,
+    _descendants,
+    frontier,
+    kind,
+    nodes,
+    summary_field,
+)
 
 TERMINAL = {"completed", "closed", "failed"}
 MAX_VIEW_NODES = 40
 TREE_SECTION = re.compile(r"(?ims)^##[ \t]+Research Tree[ \t]*$.*?(?=^##[ \t]+|\Z)")
-_FIELD = r"(?ims)^{label}:\s*(.*?)(?=^(?:Result|Evidence and limitations|Further analysis):|\Z)"
 
 
 def _field(summary: str, label: str) -> str:
-    match = re.search(_FIELD.format(label=re.escape(label)), summary or "")
-    return re.sub(r"\s+", " ", match.group(1)).strip() if match else ""
+    return re.sub(r"\s+", " ", summary_field(summary, label)).strip()
 
 
 def _clip(text: str, limit: int) -> str:

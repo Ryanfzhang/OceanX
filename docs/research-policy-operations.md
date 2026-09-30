@@ -11,7 +11,8 @@ bounded: models propose, logs and a frozen A/B test measure, and a human decides
   (at most 3) are saved on the node as proposals `B1.2#1`, `B1.2#2`, …; they are not nodes.
 - **Coordinator**: every decision. It adopts a proposal only by adding a node with
   `from_proposal: "B1.2#1"` (wording may change); unadopted proposals lapse. It selects,
-  declines, closes and sets verdicts, binds each `task` call to a node with `node_id`, reads
+  declines (which closes the candidate with its reason), closes and sets verdicts, binds each
+  `task` call to a node with `node_id`, reads
   `view=full` once and writes the final `## Research Tree` section.
 
 ## Policies
@@ -24,6 +25,10 @@ plus `guidance.md` appended to the Coordinator prompt.
 |---|---|
 | `v0-coordinator-bfs` | Baseline: question nodes only, shallowest-first frontier, no guidance |
 | `v1-hypotheses` | Hypothesis nodes, directed evidence links, verdicts; competing-explanations guidance |
+| `v2-nested` | Follow-ups placed under the question they continue; `any_depth` frontier, so a nested follow-up starts once its own parent and dependencies have answers instead of waiting for every shallower question |
+
+Nesting and the frontier mode go together: under `shallowest`, a correctly nested follow-up waits for
+every unrelated shallower question, so `v2-nested` is the arm to use when follow-ups should nest.
 
 Selection: `OCEANX_RESEARCH_POLICY` > project choice (**Review → Policies**, stored in
 `.oceanx/research/active_policy`) > `v0-coordinator-bfs`. A new policy is a code change reviewed

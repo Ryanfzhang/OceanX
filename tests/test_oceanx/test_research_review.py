@@ -136,7 +136,8 @@ def test_project_policy_choice_is_a_file_the_owner_sets(tmp_path, monkeypatch):
     project.activate_policy("v1-hypotheses")
     overview = project.policies()
     assert (overview["active"], overview["project_choice"]) == ("v1-hypotheses", "v1-hypotheses")
-    assert {p["name"] for p in overview["available"]} == {"v0-coordinator-bfs", "v1-hypotheses"}
+    assert {p["name"] for p in overview["available"]} == {
+        "v0-coordinator-bfs", "v1-hypotheses", "v2-nested"}
     with pytest.raises(ValueError):
         project.activate_policy("v9-invented")
     monkeypatch.setenv("OCEANX_RESEARCH_POLICY", "v0-coordinator-bfs")

@@ -17,13 +17,14 @@ from deepagents.middleware.filesystem import FilesystemState
 from deepagents.middleware.skills import SkillsState
 from deepagents.middleware.summarization import SummarizationState
 from langchain.agents.middleware import ModelCallLimitMiddleware
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 
 from oceanx.agent_tools import ToolRegistry
 from oceanx.deep_runtime import build_deep_agent_graph
 from oceanx.expert_execution import FIGURE_API_CONTRACT, STANDARD_MODE_CODE_SECONDS
 from oceanx.model_config import load_model_profile
+from oceanx.research.metering import INSIDE_EXPERT
 from oceanx.research.services import (
     AgentRun,
     file_revision,
@@ -105,12 +106,34 @@ def _wind_down_request(request):
     )
 
 
+WIND_DOWN_REFUSAL = (
+    "Not run: the analysis phase of this assignment is over and only file tools work now. "
+    "Write or update report.md from the evidence you already have, then finish."
+)
+
+
+def _refused_tool_call(request):
+    """Refuse a non-file tool that a wind-down call (49-59) still requested.
+
+    The count already includes the call that asked for the tool, so tools from
+    call 48, the last analysis call, still run.
+    """
+    state = request.state if isinstance(request.state, dict) else {}
+    call = request.tool_call
+    if int(state.get("run_model_call_count", 0)) <= EXPERT_WIND_DOWN_START or (
+            call.get("name") in _WIND_DOWN_TOOLS):
+        return None
+    return ToolMessage(content=WIND_DOWN_REFUSAL, tool_call_id=call["id"],
+                       name=call.get("name"), status="error")
+
+
 class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
     """Own the native call count and report wind-down in one middleware instance.
 
     Keeping both behaviours on the same middleware prevents the wind-down from
     depending on private state owned by a separate middleware instance.  Calls
-    49--59 retain only report/file tools; call 60 is a tool-free delivery call.
+    49--59 retain only report/file tools, and any other tool they still request is
+    refused without running; call 60 is a tool-free delivery call.
     """
 
     def __init__(self) -> None:
@@ -121,6 +144,12 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
 
     async def awrap_model_call(self, request, handler):
         return await handler(_wind_down_request(request))
+
+    def wrap_tool_call(self, request, handler):
+        return _refused_tool_call(request) or handler(request)
+
+    async def awrap_tool_call(self, request, handler):
+        return _refused_tool_call(request) or await handler(request)
 
 
 class ResearchState(FilesystemState, SummarizationState, SkillsState, DeepAgentState):
@@ -258,6 +287,10 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    + "\nPalettes: ocean_teal (sequential, default), blue_red (diverging), grouped (categories).")
         if not research:
             prompt += "\n" + STANDARD_EXPERT_POLICY
+        else:
+            limit = int(svc.expert_code_execution.limits.wall_time_seconds or 300)
+            prompt += (f"\nEach execute or ocean_expert_run_code run is stopped after {limit} s; a larger "
+                       "timeout does not extend it. Split long work and save intermediate files.")
     if svc.native_vision and research and role not in {"coordinator", "scientific_discussion_partner"}:
         prompt += (
             "\nA saved figure may have a sibling .preview.png. Inspect it only when the image itself "
@@ -321,6 +354,25 @@ def _question(state) -> str:
                  if isinstance(message, HumanMessage)), "")
 
 
+def _missing_report(messages, report_path: Path) -> str:
+    """The handoff when no report was written.
+
+    An Expert that finished on its own keeps its closing answer. After the limit-forced,
+    tool-free final call the text can be raw tool-call markup, so it is never forwarded.
+    """
+    calls = sum(isinstance(message, AIMessage) for message in messages)
+    last = messages[-1] if messages else None
+    if (calls < EXPERT_MODEL_CALL_LIMIT and isinstance(last, AIMessage) and not last.tool_calls
+            and last.text.strip()):
+        return last.text.strip()
+    reason = (f"it reached its {EXPERT_MODEL_CALL_LIMIT}-call limit" if calls >= EXPERT_MODEL_CALL_LIMIT
+              else f"it stopped after {calls} model calls")
+    root = report_path.parents[2]
+    return (f"Result: No report — {reason} without writing {report_path}. Its saved files are in "
+            f"{root / 'scratch'} and {root / 'outputs'}. To recover, ask the same Expert to write "
+            "the report from those files.")
+
+
 async def expert(config, role: str):
     """Compile one native task subagent with a compact file-backed return value."""
     graph = StateGraph(ExpertState)
@@ -335,7 +387,11 @@ async def expert(config, role: str):
             run=run,
             middleware=[ExpertCallBudgetMiddleware()],
         )
-        result = await author.ainvoke(state, config=config)
+        token = INSIDE_EXPERT.set(True)  # the Coordinator's inherited meter skips these calls
+        try:
+            result = await author.ainvoke(state, config=config)
+        finally:
+            INSIDE_EXPERT.reset(token)
         return {
             **result,
             "question": question,
@@ -351,7 +407,8 @@ async def expert(config, role: str):
             materialize_text=materialize,
             previous_revision=state.get("previous_report_revision"),
         )
-        handoff = report_summary(text) or text.strip() or last.text.strip()
+        handoff = report_summary(text) or text.strip() or _missing_report(
+            state["messages"], host().research.report_path(run))
         published_results: list[tuple[str, str]] = []
         result_store = getattr(host(), "task_results", None)
         if result_store is not None:

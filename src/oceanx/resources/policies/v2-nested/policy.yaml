@@ -1,0 +1,5 @@
+# Follow-ups nested under the answer they continue; a question starts once its own inputs exist.
+name: v2-nested
+description: Follow-ups nested under the question they continue, with a dependency-gated frontier.
+hypotheses: false        # hypothesis nodes, verdicts and evidence links
+frontier: any_depth      # shallowest | any_depth

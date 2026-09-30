@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from oceanx.research.delegation import current_delegation
+from oceanx.research.tree import summary_field
 
 _active_host = None
 _RESULT_BINDING = re.compile(
@@ -67,12 +68,7 @@ def parse_expert_receipt(text: str) -> tuple[str, str | None]:
 
 def expert_result_preview(summary: str) -> str:
     """Extract the answer-bearing Result field for compact UI display."""
-    match = re.search(
-        r"(?ims)^Result:\s*(.*?)(?=^Evidence and limitations:|^Further analysis:|\Z)",
-        summary,
-    )
-    value = match.group(1) if match else summary
-    return re.sub(r"\s+", " ", value).strip()
+    return re.sub(r"\s+", " ", summary_field(summary, "Result") or summary).strip()
 
 
 def result_bindings(text: str) -> tuple[str, ...]:

@@ -16,10 +16,11 @@ from oceanx.research.outcomes import record_task_outcomes
 from oceanx.research.paired_runs import evaluate_pairs
 from oceanx.research.policy import (
     BUNDLED_POLICIES, find_policy, load_policy, validate_policy_document)
+from oceanx.research.services import expert_result_preview
 from oceanx.research.tree import (
     ResearchTree, apply_changes, empty_tree, frontier, proposals_from_summary)
 from oceanx.research.tree_tools import research_tree_tool
-from oceanx.research.tree_view import render_delta, render_full
+from oceanx.research.tree_view import render_delta, render_full, result_fields
 
 SUMMARY = ("Result: Surface heat flux explains onset.\nEvidence and limitations: One year only; "
            "budget residual 20%. Eddy terms unresolved.\nFurther analysis: Test eddy advection.")
@@ -27,6 +28,11 @@ PROPOSING = ("Result: Flux closes 80% of the budget.\nEvidence and limitations: 
              "Further analysis:\n1. Do eddies converge heat in Aug-Sep? — the residual.\n"
              "2. Is the mixed-layer depth biased? — it scales the budget.\n"
              "3. Does 2019 repeat the pattern? — one year is thin.\n4. Extra item.")
+# The style six of the twelve Task 1 reports used: bold labels ending in a period, wrapped items.
+BOLD = ("**Result.** Flux closes 80% of the budget.\n\n**Evidence and limitations.** One year only; "
+        "no flux data.\n\n**Further analysis.**\n1. **Can the increment be measured?** Two routes, "
+        "both\n   need approval. — decides flux versus artefact.\n2. Does a bay-specific flux fit "
+        "April? — the mismatch months.\n\nA closing remark outside the list.")
 
 
 def policy(name):
@@ -62,10 +68,13 @@ def mechanism_tree(tmp_path, name="v1-hypotheses"):
 # --- policies ---------------------------------------------------------------
 
 def test_bundled_policies_load_with_content_versions():
-    v0, v1 = policy("v0-coordinator-bfs"), policy("v1-hypotheses")
+    v0, v1, v2 = policy("v0-coordinator-bfs"), policy("v1-hypotheses"), policy("v2-nested")
     assert v0.version.startswith("policy/v0-coordinator-bfs@")
     assert (v0.hypotheses, v0.frontier_mode, v0.guidance) == (False, "shallowest", "")
     assert v1.hypotheses and v1.guidance
+    # Nesting ships only with a frontier that does not hold deep follow-ups behind other levels.
+    assert (v2.hypotheses, v2.frontier_mode) == (False, "any_depth")
+    assert "target B1.4" in v2.guidance
 
 
 def test_policy_boundary_rejects_unknown_fields_and_values():
@@ -123,13 +132,19 @@ def test_directed_evidence_and_verdict_history(tmp_path):
                         ("unresolved", "Residual too large.")]
 
 
-def test_decline_requires_reason_and_keeps_candidate(tmp_path):
+def test_decline_requires_reason_and_closes_the_candidate(tmp_path):
     tree = mechanism_tree(tmp_path)
     with pytest.raises(ValueError):
         tree.update([{"action": "decline", "target": "B1.4"}])
     tree.update([{"action": "decline", "target": "B1.4", "reason": "No velocity data."}])
-    assert tree.document()["nodes"]["B1.4"]["status"] == "candidate"
+    node = tree.document()["nodes"]["B1.4"]
+    assert (node["status"], node["close_reason"]) == ("closed", "No velocity data.")
     assert tree.events("B1.4")[-1]["type"] == "declined"
+    assert "B1.4" not in tree.read()["candidates"]  # it no longer comes back every round
+    with pytest.raises(ValueError):  # a closed node cannot be declined again
+        tree.update([{"action": "decline", "target": "B1.4", "reason": "Again."}])
+    tree.update([{"action": "reopen", "target": "B1.4"}])
+    assert tree.document()["nodes"]["B1.4"]["status"] == "candidate"
 
 
 def test_v3_tree_is_read_and_upgraded(tmp_path):
@@ -154,6 +169,34 @@ def test_proposals_are_the_numbered_further_analysis_items():
     assert proposals_from_summary("Further analysis: None") == []
 
 
+def test_bold_summary_labels_parse_like_plain_ones():
+    assert proposals_from_summary(BOLD) == [
+        ("**Can the increment be measured?** Two routes, both need approval. — decides flux "
+         "versus artefact."),
+        "Does a bay-specific flux fit April? — the mismatch months."]
+    result, limit, _ = result_fields(BOLD)
+    assert (result, limit) == ("Flux closes 80% of the budget.", "One year only; no flux data.")
+    assert expert_result_preview(BOLD) == "Flux closes 80% of the budget."
+
+
+def test_depends_on_link_gates_the_frontier_and_rejects_cycles(tmp_path):
+    tree = ResearchTree(tmp_path / "research_tree.json", policy=policy("v0-coordinator-bfs"))
+    tree.update([
+        {"action": "add", "target": "ROOT", "question": "Q?"},
+        {"action": "add", "target": "B1", "question": "Characterize.", "status": "selected"},
+        {"action": "add", "target": "B1", "question": "Budget.", "status": "selected"},
+    ])
+    assert frontier(tree.document()) == ["B1.1", "B1.2"]
+    tree.update([{"action": "link", "target": "B1.2", "other": "B1.1", "link_type": "depends_on"}])
+    assert tree.document()["nodes"]["B1.2"]["dependencies"] == ["B1.1"]
+    assert frontier(tree.document()) == ["B1.1"]
+    with pytest.raises(ValueError, match="cycle"):
+        tree.update([{"action": "link", "target": "B1.1", "other": "B1.2",
+                      "link_type": "depends_on"}])
+    tree.attach_result("B1.1", summary="Result: done", agent_key="a", report_path="/r.md")
+    assert frontier(tree.document()) == ["B1.2"]
+
+
 def test_proposals_become_nodes_only_when_the_coordinator_adopts_one(tmp_path):
     tree = mechanism_tree(tmp_path)
     tree.update([{"action": "set_status", "target": "B1.3", "status": "selected"}])
@@ -165,6 +208,9 @@ def test_proposals_become_nodes_only_when_the_coordinator_adopts_one(tmp_path):
         with pytest.raises(ValueError, match="Unknown Expert proposal"):
             tree.update([{"action": "add", "target": "B1.3", "question": "Q?",
                           "from_proposal": bad}])
+    with pytest.raises(ValueError, match=r"Valid proposal IDs: B1\.3#1, B1\.3#2, B1\.3#3\."):
+        tree.update([{"action": "add", "target": "B1.3", "question": "Q?",
+                      "from_proposal": "B1.4#1"}])
     assert set(tree.document()["nodes"]) == before
     tree.update([{"action": "add", "target": "B1.3", "from_proposal": "B1.3#2",
                   "question": "Is the mixed-layer depth biased?"}])
