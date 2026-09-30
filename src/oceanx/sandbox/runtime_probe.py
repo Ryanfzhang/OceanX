@@ -65,7 +65,7 @@ for name in json.loads(sys.argv[1]):
                 try:
                     result = subprocess.run(
                         (str(runtime.executable), "-u", "-c", script, json.dumps(remaining)),
-                        capture_output=True, text=True, timeout=60,
+                        capture_output=True, text=True, timeout=60, check=False,
                         env={**os.environ, "PYTHONNOUSERSITE": "1", "MPLBACKEND": "Agg",
                              "MPLCONFIGDIR": cache_dir},
                     )
@@ -88,7 +88,7 @@ for name in json.loads(sys.argv[1]):
                             self._facts["modules"][name] = fact
                 except (ValueError, TypeError):
                     continue
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Diagnostic exceptions do not escape the background worker and
             # cannot alter a work order's execution state.
             note = f"Probe incomplete: {type(exc).__name__}: {exc}"

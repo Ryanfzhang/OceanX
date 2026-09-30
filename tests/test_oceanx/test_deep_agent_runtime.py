@@ -7,7 +7,6 @@ import pytest
 from deepagents import create_deep_agent
 from deepagents.backends import StateBackend
 from deepagents.middleware.filesystem import FilesystemMiddleware
-from langchain.agents.middleware.types import ModelRequest, ModelResponse
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
@@ -22,8 +21,8 @@ from oceanx.agent_contract import (
 )
 from oceanx.agent_tools import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
 from oceanx.deep_runtime import DeepAgentEngine, _configure_native_harness
-from tests.test_oceanx.graph_fixture import build_deep_agent_engine
 from oceanx.model_config import OceanModelProfile
+from tests.test_oceanx.graph_fixture import build_deep_agent_engine
 
 
 class _BoundFakeModel(FakeMessagesListChatModel):

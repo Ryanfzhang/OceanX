@@ -207,7 +207,6 @@ def save_desktop_model_profiles(
         "max_tokens": 65_536,
         "profiles": profiles,
     }
-    existing_settings = _read_json(root / "settings.json")
     settings_path = root / "settings.json"
     settings_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     credentials_path = root / "credentials.json"
