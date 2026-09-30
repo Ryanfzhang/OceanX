@@ -171,6 +171,6 @@ local paths; review them before sharing.
 pytest -q tests/test_oceanx/test_batch.py tests/test_sandbox/test_linux.py
 ```
 
-The Linux benchmark CI workflow exercises real namespaces/seccomp and a real backend
-handshake/task/data-reference cycle without invoking paid models. Scientific model
-quality and completion still require a subsequent real-query benchmark run.
+Linux verification is run locally; no GitHub CI workflow is configured for it.
+Scientific model quality and completion still require a subsequent real-query
+benchmark run.
