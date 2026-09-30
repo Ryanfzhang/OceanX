@@ -7,8 +7,11 @@ Coordinator run.
 """
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import logging
+import os
 from pathlib import Path
 from typing import NotRequired
 
@@ -42,6 +45,28 @@ _LOGGER = logging.getLogger(__name__)
 EXPERT_MODEL_CALL_LIMIT = 60
 EXPERT_WIND_DOWN_START = 48
 EXPERT_FINAL_CALL = EXPERT_MODEL_CALL_LIMIT - 1
+
+
+def _parallel_expert_limit() -> int:
+    try:
+        return max(1, int(os.environ.get("OCEANX_MAX_PARALLEL_EXPERTS", "2")))
+    except ValueError:
+        return 2
+
+
+# Expert runs that may work at once across the whole app; the rest wait for a free slot.
+# Each run loads data and runs code on this machine, so this bounds local CPU and memory.
+MAX_PARALLEL_EXPERTS = _parallel_expert_limit()
+_EXPERT_SLOTS: tuple[asyncio.AbstractEventLoop, asyncio.Semaphore] | None = None
+
+
+def _expert_slots() -> asyncio.Semaphore:
+    """The app-wide slot pool; the Agent Server runs every graph on one event loop."""
+    global _EXPERT_SLOTS
+    loop = asyncio.get_running_loop()
+    if _EXPERT_SLOTS is None or _EXPERT_SLOTS[0] is not loop:
+        _EXPERT_SLOTS = (loop, asyncio.Semaphore(MAX_PARALLEL_EXPERTS))
+    return _EXPERT_SLOTS[1]
 _WIND_DOWN_TOOLS = frozenset({"ls", "glob", "grep", "read_file", "write_file", "edit_file"})
 COORDINATOR_FILESYSTEM_TOOLS = (
     "ls",
@@ -387,11 +412,17 @@ async def expert(config, role: str):
             run=run,
             middleware=[ExpertCallBudgetMiddleware()],
         )
-        token = INSIDE_EXPERT.set(True)  # the Coordinator's inherited meter skips these calls
-        try:
-            result = await author.ainvoke(state, config=config)
-        finally:
-            INSIDE_EXPERT.reset(token)
+        # The read-only Discussion Partner runs no code, so it does not take a slot.
+        slot = contextlib.nullcontext() if role == "scientific_discussion_partner" else _expert_slots()
+        if isinstance(slot, asyncio.Semaphore) and slot.locked():
+            _LOGGER.info("Expert %s waits for one of %d parallel slots", run.thread_id,
+                         MAX_PARALLEL_EXPERTS)
+        async with slot:
+            token = INSIDE_EXPERT.set(True)  # the Coordinator's inherited meter skips these calls
+            try:
+                result = await author.ainvoke(state, config=config)
+            finally:
+                INSIDE_EXPERT.reset(token)
         return {
             **result,
             "question": question,

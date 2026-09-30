@@ -28,10 +28,13 @@ from oceanx.research.graphs import (
     EXPERT_FINAL_CALL,
     EXPERT_MODEL_CALL_LIMIT,
     EXPERT_WIND_DOWN_START,
+    MAX_PARALLEL_EXPERTS,
     WIND_DOWN_REFUSAL,
     ExpertCallBudgetMiddleware,
     _coordinator_agent,
+    _expert_slots,
     _missing_report,
+    _parallel_expert_limit,
     _wind_down_request,
 )
 from oceanx.team.profiles import AGENT_PROFILES, get_agent_profile
@@ -429,6 +432,38 @@ def test_wind_down_refuses_analysis_tools_the_model_still_requests():
     refused = next(message for message in result["messages"]
                    if isinstance(message, ToolMessage) and message.tool_call_id == "execute-49")
     assert (refused.status, refused.text) == ("error", WIND_DOWN_REFUSAL)
+
+
+def test_expert_runs_share_an_app_wide_parallel_limit():
+    running = peak = 0
+
+    async def expert_run():
+        nonlocal running, peak
+        async with _expert_slots():
+            running += 1
+            peak = max(peak, running)
+            await asyncio.sleep(0.01)
+            running -= 1
+
+    async def scenario():
+        assert _expert_slots() is _expert_slots()  # one pool for every task on the loop
+        await asyncio.gather(*(expert_run() for _ in range(5)))
+
+    asyncio.run(scenario())
+    assert peak == MAX_PARALLEL_EXPERTS
+    peak = 0
+    asyncio.run(scenario())  # a new event loop gets a fresh pool instead of failing
+    assert peak == MAX_PARALLEL_EXPERTS
+    source = (Path(__file__).parents[2] / "src/oceanx/research/graphs.py").read_text()
+    assert "async with slot:" in source  # every Expert run goes through the pool
+
+
+def test_parallel_expert_limit_setting(monkeypatch):
+    monkeypatch.delenv("OCEANX_MAX_PARALLEL_EXPERTS", raising=False)
+    assert _parallel_expert_limit() == 2
+    for value, expected in (("3", 3), ("0", 1), ("many", 2)):
+        monkeypatch.setenv("OCEANX_MAX_PARALLEL_EXPERTS", value)
+        assert _parallel_expert_limit() == expected
 
 
 def test_missing_report_receipt_never_forwards_tool_markup(tmp_path):
