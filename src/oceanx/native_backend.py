@@ -279,7 +279,13 @@ def task_backend(host, config, *, run, library):
             else:
                 roots.extend(host.paths.resolve_uri(f.uri) for f in artifact.files)
         return tuple(path for path in roots if path.exists())
+    from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
+    from oceanx.research.graphs import research_mode
+    research = research_mode(config)
+
     async def record_command(command, timeout):
+        if not research:
+            timeout = min(timeout or STANDARD_MODE_CODE_SECONDS, STANDARD_MODE_CODE_SECONDS)
         return await service.run_shell(workspace_id=c["workspace_id"], task_id=c["task_id"],
             agent_thread_id=run.thread_id, server_run_id=run.server_run_id,
             origin_request_id=c.get("request_id"), command=command, timeout=timeout)

@@ -78,6 +78,7 @@ async def test_standard_workflow_keeps_native_experts_without_a_research_tree(
         profile.profile_id for profile in AGENT_PROFILES
     }
     assert "# Standard workflow" in captured["suffix"]
+    assert "Research mode is off" in captured["suffix"]
     assert "This does not disable the team" in captured["suffix"]
     assert "Do not create or update a research tree" in captured["suffix"]
     assert COORDINATOR_VISUAL_DELIVERY_POLICY in captured["suffix"]

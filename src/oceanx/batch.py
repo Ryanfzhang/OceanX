@@ -36,6 +36,8 @@ class QueryCase(BaseModel):
     datasets: list[Path] = Field(default_factory=list, max_length=64)
     timeout_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     literature_mode: Literal["ask_before_download", "auto_download_open_access", "search_only"] = "ask_before_download"
+    # Same switch as the desktop's research toggle; headless runs keep research as the default.
+    workflow_mode: Literal["standard", "research"] = "research"
     selected_papers: list[str] = Field(default_factory=list, max_length=30)
     permission_tools: list[str] = Field(default_factory=list, max_length=30)
     answers: dict[str, str] = Field(default_factory=dict)
@@ -220,6 +222,7 @@ class BatchClient:
     async def analyze(self) -> dict[str, Any]:
         self.active_request = await self.send("session.submit", {
             "text": self.case.query, "literature_acquisition_mode": self.case.literature_mode,
+            "workflow_mode": self.case.workflow_mode,
         })
         response_ids: set[str] = set()
         while True:
@@ -292,7 +295,10 @@ async def run_case(case: QueryCase, directory: Path) -> dict[str, Any]:
     try:
         async with asyncio.timeout(case.timeout_seconds):
             await client.start()
+            # Backend startup, workspace open, task create and dataset registration.
+            result["setup_seconds"] = round(time.monotonic() - started, 3)
             event = await client.analyze()
+            result["analysis_seconds"] = round(time.monotonic() - started - result["setup_seconds"], 3)
             result["terminal_event"] = event
             result["status"] = {
                 "request.completed": "completed", "request.cancelled": "cancelled",

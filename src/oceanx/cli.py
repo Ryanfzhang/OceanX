@@ -58,12 +58,15 @@ def run_query(
     output: Path = typer.Option(..., "--output", help="New isolated output directory."),
     dataset: list[Path] = typer.Option([], "--dataset", help="Read-only dataset file/directory; repeatable."),
     timeout: float | None = typer.Option(None, "--timeout", min=1),
+    workflow_mode: str = typer.Option("research", "--workflow-mode",
+                                      help="standard | research (the desktop's research toggle)."),
 ) -> None:
     """Run one headless research task. Unanswered interactions are recorded, not auto-approved."""
     from oceanx.batch import QueryCase, resolve_datasets, run_batch
 
     try:
-        case = resolve_datasets(QueryCase(id="query", query=query, datasets=dataset, timeout_seconds=timeout), Path.cwd())
+        case = resolve_datasets(QueryCase(id="query", query=query, datasets=dataset, timeout_seconds=timeout,
+                                          workflow_mode=workflow_mode), Path.cwd())
         results = asyncio.run(run_batch([case], output))
     except asyncio.CancelledError as exc:
         raise typer.Exit(130) from exc

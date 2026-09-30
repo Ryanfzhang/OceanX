@@ -36,6 +36,10 @@ from oceanx.task_workspace import TaskWorkspaceProjector
 
 FIGURE_IMPORT = "from oceanx.scientific_view import ScientificFigure"
 
+# Per-run wall-time cap for bounded (standard-mode) requests; research keeps the default 300 s.
+STANDARD_MODE_CODE_SECONDS = 120
+
+
 FIGURE_API_CONTRACT = {
     "contract_version": "oceanx-scientific-figure-python/v4",
     "constructor": (

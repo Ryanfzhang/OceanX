@@ -78,6 +78,7 @@ class OceanToolServices:
     agent_thread_id: str | None = None
     exploration_belief_sampler: Callable[[str, str], Awaitable[dict]] | None = None
     native_vision: bool = False
+    code_time_limit_seconds: int | None = None  # None: the execution service default
 
 
 @dataclass(frozen=True)
@@ -355,7 +356,7 @@ class OceanExpertRunCodeTool(_OceanTool):
         "OCEAN_WORK_DIR are persistent task scratch for reusable intermediate files; "
         "scratch may be cleaned after the task becomes idle. Save deliverable files under "
         "os.environ['OCEAN_OUTPUT_DIR']; only explicitly published results persist. "
-        "For a user-facing scientific figure, read result-api.md and save one self-describing .nc "
+        "For a user-facing scientific figure, follow the Figure API in your instructions and save one self-describing .nc "
         "with oceanx.scientific_view.ScientificFigure. Ordinary .nc files remain data files. "
         "Do not upload local data or download replacement datasets without user authorization."
     )
@@ -390,6 +391,7 @@ class OceanExpertRunCodeTool(_OceanTool):
                 origin_request_id=self.services.expert_result_origin_request_id,
                 purpose=arguments.purpose,
                 code=arguments.code,
+                _timeout=self.services.code_time_limit_seconds,
             )
             raw = result.as_payload()
             payload = {

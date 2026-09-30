@@ -22,6 +22,7 @@ from langgraph.graph import END, START, StateGraph
 
 from oceanx.agent_tools import ToolRegistry
 from oceanx.deep_runtime import build_deep_agent_graph
+from oceanx.expert_execution import FIGURE_API_CONTRACT, STANDARD_MODE_CODE_SECONDS
 from oceanx.model_config import load_model_profile
 from oceanx.research.services import (
     AgentRun,
@@ -155,6 +156,33 @@ def research_tree(task_id: str):
                         policy_version=f"{policy.version}+{lessons}" if lessons else None)
 
 
+def research_mode(config) -> bool:
+    """The desktop's research toggle; headless runs default to research."""
+    return config["configurable"].get("request_options", {}).get("workflow_mode", "research") == "research"
+
+
+STANDARD_EXPERT_POLICY = f"""\
+# Bounded request (research mode is off)
+The requested output (a figure, number, table, route or file) is the finish line. First cut the data to the
+variables, region, depth and period the request needs; never load a whole field or water column when a slice
+answers it. Compute it with one defensible method, publish it, write the report and stop. Do not add
+sensitivity tests, extra figures or statistics, investigations of individual cells or values, or re-checks of
+saved outputs unless a result is clearly wrong or the researcher asked. Do not open the .preview.png of a
+figure you just saved. State a remaining limitation in one sentence instead of investigating it. Each code run stops after {STANDARD_MODE_CODE_SECONDS} s; if one times
+out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
+"""
+
+STANDARD_COORDINATOR_POLICY = """\
+# Research mode is off
+First judge whether the request is an open research problem: it asks why something happens, which mechanism or
+explanation holds, or otherwise needs open-ended investigation across competing explanations. If it clearly is,
+do not delegate: reply in one or two sentences that it looks like an open research question, and ask whether to
+switch on Research mode or give a brief bounded answer now; then stop. A bounded request, even a complex
+computation such as a route through a current field, proceeds without asking; when unsure, proceed.
+Give the Expert the requested output as the finish line.
+"""
+
+
 def coordinator_report_path(config) -> Path:
     c = config["configurable"]
     return (host().task_workspace_projector.ensure_task_root(c["task_id"]) /
@@ -181,6 +209,7 @@ def services(config, role: str, run: AgentRun | None = None) -> OceanToolService
         agent_thread_id=run.thread_id if run else c["thread_id"],
         coordinator_enabled=role == "coordinator",
         native_vision=profile_supports_vision(model_profile),
+        code_time_limit_seconds=None if research_mode(config) else STANDARD_MODE_CODE_SECONDS,
         paper_selection_sink=(lambda payload, context: h.router._request_paper_selection(
             workspace_id=c["workspace_id"], task_id=c["task_id"], payload=payload, context=context))
         if role == "literature_reproduction_expert" else None,
@@ -191,9 +220,9 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                 subagents=None, suffix=""):
     svc = services(config, role, run)
     c = config["configurable"]
-    research_mode = c.get("request_options", {}).get("workflow_mode", "research") == "research"
+    research = research_mode(config)
     composition = await (
-        build_ocean_runtime(services=svc, research_mode=research_mode) if role == "coordinator" else
+        build_ocean_runtime(services=svc, research_mode=research) if role == "coordinator" else
         build_ocean_discussion_runtime(services=svc)
         if role == "scientific_discussion_partner" else
         build_ocean_expert_runtime(services=svc)
@@ -223,7 +252,13 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    "ScientificFigure.save('name.nc') publishes there automatically. "
                    "Use supplied absolute data/result paths with native file tools or execute. "
                    "Source data and other agents' evidence are read-only; your working directory is writable.")
-    if svc.native_vision and role not in {"coordinator", "scientific_discussion_partner"}:
+        prompt += ("\nFigure API (complete; do not read OceanX source code to learn it): "
+                   + FIGURE_API_CONTRACT["constructor"] + ". Examples:\n"
+                   + "\n".join(FIGURE_API_CONTRACT["examples"])
+                   + "\nPalettes: ocean_teal (sequential, default), blue_red (diverging), grouped (categories).")
+        if not research:
+            prompt += "\n" + STANDARD_EXPERT_POLICY
+    if svc.native_vision and research and role not in {"coordinator", "scientific_discussion_partner"}:
         prompt += (
             "\nA saved figure may have a sibling .preview.png. Inspect it only when the image itself "
             "is scientific evidence needed for your reasoning, such as a spatial pattern; preview "
@@ -276,7 +311,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         filesystem_backend=filesystem,
         filesystem_tools=filesystem_tools,
         research_tree=research_tree(c["task_id"])
-        if role == "coordinator" and research_mode else None)
+        if role == "coordinator" and research else None)
     from oceanx.research.metering import CallMeter
     return graph.with_config(callbacks=[CallMeter(host().store, config, role, run)])
 
@@ -366,10 +401,6 @@ async def expert(config, role: str):
 
 
 async def _coordinator_agent(config):
-    research_mode = (
-        config["configurable"].get("request_options", {}).get("workflow_mode", "research")
-        == "research"
-    )
     # Workflow mode controls research-tree exploration, not whether the
     # Coordinator has a team. Standard requests may still need one or more
     # bounded Experts for analysis, acquisition, inference, or saved results.
@@ -378,9 +409,9 @@ async def _coordinator_agent(config):
              for profile in AGENT_PROFILES]
     report = coordinator_report_path(config)
     report.parent.mkdir(parents=True, exist_ok=True)
-    if not research_mode:
+    if not research_mode(config):
         return await build(config, "coordinator", subagents=specs, suffix=(
-            "\n# Standard workflow\n"
+            "\n" + STANDARD_COORDINATOR_POLICY + "\n# Standard workflow\n"
             "Do not create or update a research tree, generate candidate/frontier nodes, or expand the "
             "request into an open-ended research project. This does not disable the team. Delegate bounded "
             "standalone questions to the appropriate Experts whenever the request needs scientific data "
@@ -432,11 +463,7 @@ async def coordinator(config):
         # Expert assignment. Attach the Coordinator's own report Summary only
         # after native task work and final synthesis have completed.
         summary = report_summary(report_text) or report_text
-        research_mode = (
-            config["configurable"].get("request_options", {}).get("workflow_mode", "research")
-            == "research"
-        )
-        tree = research_tree(config["configurable"]["task_id"]) if research_mode else None
+        tree = research_tree(config["configurable"]["task_id"]) if research_mode(config) else None
         if tree is not None and summary and report_text:
             view = tree.read()
             roots = {
