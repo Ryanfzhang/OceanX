@@ -1,4 +1,4 @@
-# Ocean Research Partner Desktop App 计划
+# OceanX Desktop App 计划
 
 > **2026-08-09 统一计划说明：** Desktop shell、Task-first 布局和 Spatial Workbench 继续以本文为基线；Agent 调度和 Working 交互已由 `next_plan.md` 统一更新。前端不再提供 Standard/Team 或单/多智能体模式切换，所有请求进入 Adaptive Team Runtime；Working 临时框固定包含由真实后端事件驱动的 Agent 协作 Canvas，最终结构化 Artifact 在右侧 Workbench 使用通用 renderer 打开。本文后续与这些决定冲突的旧 multi-agent panel 或列表式 activity 描述仅保留为历史实现记录。
 >
@@ -10,7 +10,7 @@
 
 ## 0. 本次重新设计的结论
 
-Ocean Research Partner 的主界面应当是：
+OceanX 的主界面应当是：
 
 ```text
 Codex 式 Research Task 工作区
@@ -788,7 +788,7 @@ F0 implementation note (2026-07-14):
 - [x] 实现中心 task shell、task transcript 和 composer frame。
 - [x] 嵌入始终挂载的 MapLibre Spatial Workbench（F1 仅提供离线 graticule，artifact layers留给 F3）。
 - [x] 实现 `ocean-artifact://` resource broker（直接路径仅允许当前 workspace state 的 `artifacts/` 子树中的常规 PNG/WebP/JPEG/JSON 文件，采用 realpath containment、5 MiB cap、fixed MIME、`nosniff` 和 no-store；受控文档另走 F4 的短期 opaque grant，不开放通用文件读取）。
-- [x] macOS packaged-dir 启动 Python sidecar spike（2026-07-15：重建 frozen sidecar、Protocol v2 handshake 和 `Ocean Research Partner.app` 内 bundle 检查通过）。
+- [x] macOS packaged-dir 启动 Python sidecar spike（2026-07-15：重建 frozen sidecar、Protocol v2 handshake 和 `OceanX.app` 内 bundle 检查通过）。
 - [ ] Windows packaged-dir 启动 Python sidecar spike。
 
 F1 implementation note (2026-07-14):
@@ -797,7 +797,7 @@ F1 implementation note (2026-07-14):
 - `frontend/packages/ocean-client` is now the generated Protocol v2 declaration home and owns the transport sequence tracker, snapshot-gap decision and workspace revision helper. The generator, its reproducibility test, the retained TUI, and Desktop renderer all import this one transport-independent source. `frontend/packages/ocean-ui` now owns the renderer-independent modal focus primitive, which keeps the top-most accessible dialog keyboard-contained and restores its opener's focus; it has no React runtime dependency and is exercised by the Desktop Electron accessibility path. `frontend/packages/ocean-spatial` now owns the EPSG:4326 image-overlay and bounded LinkedPlot contracts plus the shared offline graticule; Plot Studio and Desktop both parse those contracts before rendering, and Desktop now rejects malformed fields rather than rendering a partial layer. MapLibre lifecycle, selection hit-testing and view-specific inspectors remain local until their interaction contracts converge, rather than forcing current renderer components into a premature common component.
 - The renderer handshakes as Protocol v2 `desktop`, opens the selected local workspace, lists/creates/opens `ResearchTask`s, submits task-bound prompts, and refreshes task revision after an agent terminal. It applies the authoritative `workspace_revision` from every typed terminal and workspace-change event before subsequent mutations, so chained imports/reviews/reports do not reuse a stale optimistic revision. It is connected to the real backend rather than a browser mock.
 - The persistent MapLibre surface now parses task-restored `MapScene` refs, overlays `SpatialLayer` raster parts through the broker, projects Point/LineString/Polygon anchors, persists viewport/inspection state through `TaskMapState`, and renders bounded `LinkedPlot` JSON in its dock. Colorbars, advanced time/depth controls, section/Hovmoller renderers and full evidence navigation remain F3 work.
-- `scripts/build_desktop_sidecar.py` now defines the platform-local PyInstaller `onedir` build and `frontend/ocean-desktop/scripts/{build,verify}-sidecar.mjs` make it a required `electron-builder` resource. A packaged renderer no longer falls back to system Python: it only starts `resources/sidecar/ocean-backend/...` and fails closed if it is absent. The main process passes `backend --state-dir ... --client-kind desktop` to a frozen executable while retaining `python -m oceanx backend ...` for a development interpreter; `verify-sidecar.mjs` now sends a real desktop Protocol v2 handshake and requires `system.ready`, instead of merely checking that the binary exists. A local macOS x64 spike built the sidecar (193 MiB), ran its frozen `ocean-backend doctor`, and verified the executable again from `Ocean Research Partner.app/Contents/Resources/sidecar`; this frozen build reports Seatbelt sandbox, NetCDF and AnalysisRun capability, while `cartopy`, `gsw` and `zarr` are currently absent and must remain unavailable rather than implied by the UI. Windows and macOS signing/notarization remain unchecked. PyInstaller is an explicit `desktop-build` extra rather than an untracked developer-machine dependency.
+- `scripts/build_desktop_sidecar.py` now defines the platform-local PyInstaller `onedir` build and `frontend/ocean-desktop/scripts/{build,verify}-sidecar.mjs` make it a required `electron-builder` resource. A packaged renderer no longer falls back to system Python: it only starts `resources/sidecar/ocean-backend/...` and fails closed if it is absent. The main process passes `backend --state-dir ... --client-kind desktop` to a frozen executable while retaining `python -m oceanx backend ...` for a development interpreter; `verify-sidecar.mjs` now sends a real desktop Protocol v2 handshake and requires `system.ready`, instead of merely checking that the binary exists. A local macOS x64 spike built the sidecar (193 MiB), ran its frozen `ocean-backend doctor`, and verified the executable again from `OceanX.app/Contents/Resources/sidecar`; this frozen build reports Seatbelt sandbox, NetCDF and AnalysisRun capability, while `cartopy`, `gsw` and `zarr` are currently absent and must remain unavailable rather than implied by the UI. Windows and macOS signing/notarization remain unchecked. PyInstaller is an explicit `desktop-build` extra rather than an untracked developer-machine dependency.
 - The package verifier now has two explicit target expectations: macOS must prove Seatbelt through `doctor`, `sandbox-self-check`, and a Protocol v2 handshake; Windows must prove the frozen executable is contained in `win-unpacked/resources`, emits the same handshake, and reports no sandbox backend or AnalysisRun capability. A `windows-latest` CI job now builds that package using the target platform's Python and Electron builder. The F1 Windows spike remains unchecked until its first target-run artifact is reviewed; this job intentionally does not claim the unimplemented Windows trusted-execution broker is safe.
 - Target package CI now uploads compact, path-free `package-verification.json` evidence beside the generated checksum/SBOM/license metadata. The verifier reports target platform/architecture, the required backend schema, and only the doctor sandbox/self-check contract after it has completed the frozen sidecar handshake. This makes the first Windows packaged-dir run reviewable without exposing a build workspace or pretending that its fail-closed broker permits AnalysisRun execution.
 - Package verification additionally reads the final Electron executable and frozen sidecar as Mach-O/PE binaries and refuses a package unless both agree with the native Node target architecture. This closes the gap where a CI bundle could have executed a valid sidecar but carried the wrong Electron or Python ABI for its declared target.
@@ -1259,7 +1259,7 @@ CI 必须把task/checkpoint tests加入默认required checks；不得只放在�
 
 ## 14. Desktop v1 Definition of Done
 
-只有以下条件全部满足，才能称为 Ocean Research Partner Desktop v1：
+只有以下条件全部满足，才能称为 OceanX Desktop v1：
 
 1. App 以 Project/ResearchTask 为第一层组织，支持创建、恢复、重命名、归档和搜索任务。
 2. 左侧task history、中间conversation和右侧常驻Spatial Workbench构成默认工作区。

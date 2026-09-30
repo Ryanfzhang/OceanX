@@ -35,7 +35,7 @@ export function InteractionDrawer({interaction, answer, onAnswer, onSubmit}: Int
         <BookOpenCheck size={17} />
         <div>
           <strong id="interaction-drawer-title">{text('Choose papers', '选择论文')}</strong>
-          <small>{text('Select the evidence OceanMind should use next.', '选择 OceanMind 下一步要使用的论文。')}</small>
+          <small>{text('Select the evidence OceanX should use next.', '选择 OceanX 下一步要使用的论文。')}</small>
         </div>
         <span className="paper-selection-count">{selectedPaperIds.length}/{interaction.options.length}</span>
       </header>
@@ -88,7 +88,7 @@ export function InteractionDrawer({interaction, answer, onAnswer, onSubmit}: Int
   return <section className="interaction-drawer" role="region" aria-labelledby="interaction-drawer-title" aria-live="polite">
     <header>
       <MessageSquare size={16} />
-      <div><strong id="interaction-drawer-title">{permission ? text('Allow analysis execution', '允许执行分析') : text('One detail needed', '需要补充一个细节')}</strong><small>{permission ? text('Review this action before OceanMind continues.', '请在 OceanMind 继续前检查此操作。') : text('Reply here to continue the same task.', '在这里回复以继续同一任务。')}</small></div>
+      <div><strong id="interaction-drawer-title">{permission ? text('Allow analysis execution', '允许执行分析') : text('One detail needed', '需要补充一个细节')}</strong><small>{permission ? text('Review this action before OceanX continues.', '请在 OceanX 继续前检查此操作。') : text('Reply here to continue the same task.', '在这里回复以继续同一任务。')}</small></div>
     </header>
     <p className="interaction-question">{interaction.question}</p>
     {permission ? <div className="interaction-drawer-actions">
@@ -107,8 +107,8 @@ export function InteractionDrawer({interaction, answer, onAnswer, onSubmit}: Int
               onSubmit();
             }
           }}
-          placeholder={text('Reply to OceanMind', '回复 OceanMind')}
-          aria-label={text('Answer to OceanMind', '回复 OceanMind')}
+          placeholder={text('Reply to OceanX', '回复 OceanX')}
+          aria-label={text('Answer to OceanX', '回复 OceanX')}
         />
         <button type="submit" className="primary" disabled={!answer.trim()} title={text('Send reply', '发送回复')} aria-label={text('Send reply', '发送回复')}><SendHorizontal size={15} /></button>
       </div>

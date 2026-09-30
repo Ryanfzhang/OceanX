@@ -2,7 +2,8 @@ import {useEffect, useRef, useState} from 'react';
 import {BarChart3, BookOpen, ChevronDown, ChevronRight, MessageSquare, Sparkles, Timer} from 'lucide-react';
 
 import {presentTranscript, type PresentedTranscriptGroup} from '../conversation-presentation.js';
-import {MessageMarkdown, referencedResultKeys, type MarkdownResultLink} from '../message-markdown.js';
+import {agentDisplayName} from '../agent-display-name.js';
+import {CompactLogMarkdown, InlineMarkdown, MessageMarkdown, referencedResultKeys, type MarkdownResultLink} from '../message-markdown.js';
 import type {PendingInteraction} from '../pending-interaction.js';
 import {resultsForRequest, taskResultRefKey, taskResultsForRequest} from '../types.js';
 import type {DeliveryManifest, ResearchTask, TaskOutput, TaskResultRecord, TeamSnapshot, TranscriptItem} from '../types.js';
@@ -14,29 +15,15 @@ function text(item: TranscriptItem): string {
   return `${item.text}${item.interrupted ? ' (interrupted)' : ''}`;
 }
 
-function compactResearchResult(value: string, limit = 360): string {
-  const cleaned = value
-    .replace(/^[#>\s]+/gm, '')
-    .replace(/[`*_]/g, '')
-    .replace(/\[\[(?:result|output):[^\]]+\]\]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (cleaned.length <= limit) return cleaned;
-  const head = cleaned.slice(0, limit + 1);
-  const boundary = Math.max(
-    head.lastIndexOf('。'),
-    head.lastIndexOf('！'),
-    head.lastIndexOf('？'),
-    head.lastIndexOf('. '),
-    head.lastIndexOf('; '),
-  );
-  return `${head.slice(0, boundary >= Math.floor(limit * .55) ? boundary + 1 : limit).trimEnd()}…`;
+function plainInlineMarkdown(value: string): string {
+  return value.replace(/[*_~`]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 export function taskResultKeys(result: TaskResultRecord): string[] {
   const {task_id: taskId, result_id: resultId, version} = result.result_ref;
   const paddedVersion = String(version).padStart(4, '0');
   const outputPath = typeof result.content?.output_path === 'string' ? result.content.output_path : null;
+  const resultKey = typeof result.content?.result_key === 'string' ? result.content.result_key : null;
   return [
     taskResultRefKey(result.result_ref),
     `${taskId}/${resultId}@v${paddedVersion}`,
@@ -44,9 +31,63 @@ export function taskResultKeys(result: TaskResultRecord): string[] {
     `${resultId}@v${version}`,
     `${resultId}@v${paddedVersion}`,
     resultId,
+    ...(resultKey ? [resultKey] : []),
     ...(outputPath ? [outputPath] : []),
     ...(result.execution_output_names ?? []),
   ];
+}
+
+function shortExpertRole(profileId: string | null | undefined, semanticRole: string): string {
+  if (profileId === 'literature_reproduction_expert') return 'Search';
+  if (profileId === 'ocean_process_expert') return 'Ocean';
+  if (profileId === 'statistical_inference_expert') return 'Statistics';
+  if (profileId === 'scientific_discussion_partner') return 'Discussion';
+  return agentDisplayName(profileId, semanticRole).replace(/\s+Expert$/i, '') || 'Expert';
+}
+
+function researchNode(value: string | null | undefined): string | null {
+  return value?.match(/\bB\d+(?:\.\d+)*\b/)?.[0] ?? null;
+}
+
+/** Return stable, task-local aliases while preserving raw Agent ids as link targets. */
+export function resultOwnerDisplayAliases(team: TeamSnapshot | null): Map<string, string> {
+  const aliases = new Map<string, string>();
+  if (!team) return aliases;
+
+  const nodes = new Map<string, string | null>();
+  for (const todo of team.todos ?? []) {
+    const node = researchNode(todo.question);
+    if (!node) continue;
+    for (const identity of [todo.expert_key, todo.agent_run_id]) {
+      if (!identity) continue;
+      const previous = nodes.get(identity);
+      nodes.set(identity, previous === undefined || previous === node ? node : null);
+    }
+  }
+
+  const roleCounts = new Map<string, number>();
+  for (const agent of team.agents) {
+    if (agent.authority === 'coordinator') continue;
+    const role = shortExpertRole(agent.profile_id, agent.semantic_role);
+    const ordinal = (roleCounts.get(role) ?? 0) + 1;
+    roleCounts.set(role, ordinal);
+    const identities = [agent.agent_id, agent.expert_key, agent.agent_run_id]
+      .filter((value): value is string => Boolean(value));
+    const explicitNode = researchNode(agent.task_goal);
+    for (const identity of identities) {
+      aliases.set(identity, explicitNode ?? nodes.get(identity) ?? `${role} ${ordinal}`);
+    }
+  }
+  return aliases;
+}
+
+function resultKeyLabels(keys: string[], ownerAliases: Map<string, string>): Record<string, string> {
+  return Object.fromEntries(keys.flatMap((key) => {
+    const separator = key.indexOf('/');
+    if (separator < 1 || separator === key.length - 1) return [];
+    const alias = ownerAliases.get(key.slice(0, separator));
+    return alias ? [[key, `${alias} · ${key.slice(separator + 1)}`]] : [];
+  }));
 }
 
 function timestamp(value?: string): number | null {
@@ -74,6 +115,36 @@ function completedDuration(milliseconds: number): string {
   if (totalMinutes < 60) return `${totalMinutes}m ${String(seconds).padStart(2, '0')}s`;
   const hours = Math.floor(totalMinutes / 60);
   return `${hours}h ${String(totalMinutes % 60).padStart(2, '0')}m`;
+}
+
+type ResearchLogEntry =
+  | {kind: 'coordinator'; item: TranscriptItem; occurredAt: number; ordinal: number}
+  | {kind: 'expert'; agent: TeamSnapshot['agents'][number]; title: string; occurredAt: number; ordinal: number};
+
+function expertDisplayName(agent: TeamSnapshot['agents'][number]): string {
+  return agentDisplayName(agent.profile_id, agent.semantic_role);
+}
+
+export function chronologicalResearchLog(
+  process: TranscriptItem[],
+  experts: Array<{agent: TeamSnapshot['agents'][number]; title: string}>,
+): ResearchLogEntry[] {
+  const entries: ResearchLogEntry[] = [
+    ...process.map((item, ordinal) => ({
+      kind: 'coordinator' as const,
+      item,
+      occurredAt: timestamp(item.created_at) ?? Number.MAX_SAFE_INTEGER,
+      ordinal,
+    })),
+    ...experts.map(({agent, title}, index) => ({
+      kind: 'expert' as const,
+      agent,
+      title,
+      occurredAt: timestamp(agent.updated_at ?? agent.created_at ?? undefined) ?? Number.MAX_SAFE_INTEGER,
+      ordinal: process.length + index,
+    })),
+  ];
+  return entries.sort((left, right) => left.occurredAt - right.occurredAt || left.ordinal - right.ordinal);
 }
 
 function requestTimeBounds(group: PresentedTranscriptGroup): {startedAt: number | null; endedAt: number | null; finalAt: number | null} {
@@ -116,11 +187,13 @@ function Working({
   streaming,
   team,
   hiddenProcessItemId = null,
+  onOpenReport,
 }: {
   group: PresentedTranscriptGroup;
   streaming: string;
   team: TeamSnapshot | null;
   hiddenProcessItemId?: string | null;
+  onOpenReport: (path: string, title: string) => void;
 }): React.JSX.Element | null {
   const {text: uiText} = useUiLanguage();
   const traceRef = useRef<HTMLDivElement>(null);
@@ -131,14 +204,60 @@ function Working({
   );
   const live = group.active && streaming && text(process.at(-1) ?? {item_id: '', role: 'assistant', text: ''}) !== streaming ? streaming : '';
   const matchingTeam = team && (team.request_id === group.requestId || (group.active && !team.request_id)) ? team : null;
-  const expertResults = group.active
-    ? (matchingTeam?.agents ?? []).flatMap((agent) => {
-      if (agent.authority === 'coordinator' || !agent.result_summary?.trim()) return [];
-      const summary = compactResearchResult(agent.result_summary);
-      return summary ? [{agent, summary}] : [];
-    })
-    : [];
-  const hasLiveTrace = group.active && Boolean(process.length || live || expertResults.length);
+  const reportPaths = new Set<string>();
+  const expertResults = group.active ? (matchingTeam?.todos ?? []).flatMap((todo) => {
+    if (!todo.report_path) return [];
+    reportPaths.add(todo.report_path);
+    const participant = matchingTeam?.agents.find((agent) =>
+      agent.authority !== 'coordinator'
+      && ((todo.expert_key && agent.expert_key === todo.expert_key)
+        || (!todo.expert_key && agent.profile_id === todo.profile_id)),
+    );
+    const reportPreview = todo.report_title
+      || (participant?.report_path === todo.report_path ? participant.report_title : null)
+      || uiText('Research result', '研究结果');
+    const branch = todo.question.match(/\bB\d+(?:\.\d+)*\b/)?.[0];
+    const reportTitle = branch && !reportPreview.includes(branch)
+      ? `${branch} · ${reportPreview}`
+      : reportPreview;
+    const agent: TeamSnapshot['agents'][number] = {
+      ...(participant ?? {
+        semantic_role: agentDisplayName(todo.profile_id, 'Expert'),
+        authority: 'expert' as const,
+        status: todo.state === 'result_returned' ? 'completed' as const : 'incomplete' as const,
+        activity: reportTitle,
+      }),
+      agent_id: `report:${todo.todo_id}`,
+      profile_id: todo.profile_id,
+      expert_key: todo.expert_key,
+      agent_run_id: todo.agent_run_id,
+      task_goal: todo.question,
+      report_path: todo.report_path,
+      report_title: reportTitle,
+      created_at: todo.created_at,
+      updated_at: todo.updated_at,
+    };
+    return [{agent, title: reportTitle}];
+  }) : [];
+  if (group.active) {
+    for (const agent of matchingTeam?.agents ?? []) {
+      if (agent.authority === 'coordinator' || !agent.report_path || reportPaths.has(agent.report_path)) continue;
+      expertResults.push({agent, title: agent.report_title || uiText('Research result', '研究结果')});
+    }
+  }
+  const researchLog = chronologicalResearchLog(process, expertResults);
+  // A native Expert can already be running while the Coordinator has no
+  // durable transcript turn or returned report yet.  Keep the activity area
+  // visible during that interval and project the current Team activities into
+  // it instead of making the whole log disappear.
+  const currentActivities = researchLog.length || live ? [] : (matchingTeam?.agents ?? [])
+    .filter((agent) => !['completed', 'incomplete', 'blocked', 'failed', 'skipped'].includes(agent.status) && agent.activity.trim())
+    .sort((left, right) =>
+      (timestamp(left.updated_at ?? left.created_at ?? undefined) ?? Number.MAX_SAFE_INTEGER)
+      - (timestamp(right.updated_at ?? right.created_at ?? undefined) ?? Number.MAX_SAFE_INTEGER),
+    );
+  const showResearchLog = group.active && Boolean(matchingTeam || process.length || live || expertResults.length);
+  const hasLiveTrace = group.active && Boolean(researchLog.length || live || currentActivities.length);
   const timing = requestTimeBounds(group);
   useEffect(() => {
     setCanvasCollapsed(false);
@@ -171,17 +290,31 @@ function Working({
     </header>
     <div className="working-stream-content">
       {matchingTeam && !canvasCollapsed ? <AgentCollaborationCanvas snapshot={matchingTeam} /> : null}
-      {hasLiveTrace ? <section className="live-research-log" aria-label={uiText('Live research log', '实时研究记录')}>
-        <header><strong>{uiText('Live research log', '实时研究记录')}</strong><small>{uiText('Temporary', '临时')}</small></header>
+      {showResearchLog ? <section className="live-research-log" aria-label={uiText('Research activity', '研究动态')}>
         <div className="live-research-log-body" ref={traceRef} aria-live="polite">
-          {process.map((item) => <article className={`research-log-entry ${item.role === 'system' ? 'system' : 'coordinator'}`} key={item.item_id}>
-            <strong>{item.role === 'system' ? 'OceanMind' : 'Coordinator'}</strong>
-            <div><MessageMarkdown content={text(item)} /></div>
+          {researchLog.map((entry) => entry.kind === 'coordinator'
+            ? <article className={`research-log-entry ${entry.item.role === 'system' ? 'system' : 'coordinator'}`} key={entry.item.item_id}>
+              <strong>{entry.item.role === 'system' ? 'OceanX:' : 'Coordinator:'}</strong>
+              <div className="research-log-content"><CompactLogMarkdown content={text(entry.item)} /></div>
+            </article>
+            : <article className="research-log-entry expert-result" key={`result:${entry.agent.agent_id}:${entry.agent.report_path}`}>
+              <strong>{expertDisplayName(entry.agent)}:</strong>
+              <div className="research-log-content"><button
+                  className="research-report-link"
+                  type="button"
+                  title={entry.agent.report_path!}
+                  aria-label={`${uiText('Open report', '打开正文')}: ${plainInlineMarkdown(entry.title)}`}
+                  onClick={() => onOpenReport(entry.agent.report_path!, entry.title)}
+                ><InlineMarkdown content={entry.title} /></button></div>
+            </article>)}
+          {currentActivities.map((agent) => <article className="research-log-entry agent-activity" key={`activity:${agent.agent_id}`}>
+            <strong>{agent.authority === 'coordinator' ? 'Coordinator:' : `${expertDisplayName(agent)}:`}</strong>
+            <div className="research-log-content"><p>{agent.activity}</p></div>
           </article>)}
-          {expertResults.map(({agent, summary}) => <article className="research-log-entry expert-result" key={`result:${agent.agent_id}:${summary}`}>
-            <strong>{agent.semantic_role}</strong><p>{summary}</p>
-          </article>)}
-          {live ? <article className="research-log-entry coordinator streaming"><strong>Coordinator</strong><div><MessageMarkdown content={live} /></div></article> : null}
+          {live ? <article className="research-log-entry coordinator streaming"><strong>Coordinator:</strong><div className="research-log-content"><CompactLogMarkdown content={live} /></div></article> : null}
+          {!researchLog.length && !live && !currentActivities.length
+            ? <article className="research-log-entry coordinator streaming"><strong>Coordinator:</strong><div className="research-log-content"><p>{uiText('Preparing the first research update…', '正在准备第一条研究动态…')}</p></div></article>
+            : null}
         </div>
       </section> : null}
     </div>
@@ -237,6 +370,7 @@ export function ConversationTranscript({
   onOpenResult,
   onOpenTaskResult,
   onOpenTaskResultFile = () => undefined,
+  onOpenReport = () => undefined,
 }: {
   loading: boolean;
   transcript: TranscriptItem[];
@@ -256,6 +390,7 @@ export function ConversationTranscript({
   onOpenResult: (output: TaskOutput) => void;
   onOpenTaskResult: (result: TaskResultRecord, featureId?: string) => void;
   onOpenTaskResultFile?: (result: TaskResultRecord, file: TaskResultRecord['files'][number]) => void;
+  onOpenReport?: (path: string, title: string) => void;
 }): React.JSX.Element {
   const {text: uiText} = useUiLanguage();
   if (loading) return <div className="empty-state" role="status"><p>{uiText('Loading task…', '正在加载任务…')}</p></div>;
@@ -263,6 +398,10 @@ export function ConversationTranscript({
   const hasActive = groups.some((group) => group.active);
   const taskScopedResults = taskResults
     .filter((result) => result.kind === 'interactive_view' || result.kind === 'report');
+  // Older self-describing .nc files predate request ownership metadata. Keep
+  // them visible after a backend restart by attaching them only to the latest
+  // completed exchange instead of silently filtering every figure out.
+  const legacyResultGroupKey = [...groups].reverse().find((group) => group.finalItem)?.key ?? null;
   return <>
     {groups.map((group) => {
       const historicalTeam = group.requestId ? teamSnapshots[group.requestId] : null;
@@ -275,7 +414,12 @@ export function ConversationTranscript({
       const checkpointSummary = paperSelection
         ? [...group.processItems].reverse().find((item) => item.role === 'assistant' && text(item).trim()) ?? null
         : null;
-      const requestResults = taskResultsForRequest(taskResults, group.requestId);
+      const requestResults = [
+        ...taskResultsForRequest(taskResults, group.requestId),
+        ...(group.key === legacyResultGroupKey
+          ? taskResults.filter((result) => !result.origin_request_id)
+          : []),
+      ];
       const directResults = requestResults
         .filter((result) => result.kind === 'interactive_view' || result.kind === 'report');
       const supplementaryNotebooks = requestResults.flatMap((result) => {
@@ -289,19 +433,52 @@ export function ConversationTranscript({
       const legacyResults = directResults.length ? [] : resultsForRequest(outputs, manifests, group.requestId);
       const final = group.finalItem ? text(group.finalItem) : '';
       const referencedKeys = referencedResultKeys(final);
+      const ownerAliases = resultOwnerDisplayAliases(groupTeam);
       // Result references are durable at task scope.  A follow-up report may
       // cite a view produced by an earlier request, so link resolution must
       // not be artificially restricted to the current request group.
-      const resultLinks: MarkdownResultLink[] = taskScopedResults.map((result) => ({
-        keys: taskResultKeys(result),
-        label: result.title,
-        summary: result.summary,
-        kind: result.kind,
-        features: Array.isArray(result.content.features) ? result.content.features as Array<{id: string; label: string}> : [],
-        onOpen: (featureId) => onOpenTaskResult(result, featureId),
-      }));
+      const taskResultLinks: MarkdownResultLink[] = taskScopedResults.map((result) => {
+        const keys = taskResultKeys(result);
+        return {
+          keys,
+          keyLabels: resultKeyLabels(keys, ownerAliases),
+          label: result.title,
+          summary: result.summary,
+          kind: result.kind,
+          features: Array.isArray(result.content.features) ? result.content.features as Array<{id: string; label: string}> : [],
+          onOpen: (featureId) => onOpenTaskResult(result, featureId),
+        };
+      });
+      const taskResultKeySet = new Set(taskResultLinks.flatMap((link) => link.keys));
+      const unresolvedByAgent = new Map<string, string[]>();
+      for (const key of referencedKeys) {
+        if (taskResultKeySet.has(key)) continue;
+        const owner = key.split('/')[0];
+        if (!owner) continue;
+        unresolvedByAgent.set(owner, [...(unresolvedByAgent.get(owner) ?? []), key]);
+      }
+      const reportFallbackLinks: MarkdownResultLink[] = (groupTeam?.agents ?? []).flatMap((agent) => {
+        if (!agent.report_path) return [];
+        const identities = [agent.agent_id, agent.expert_key, agent.agent_run_id]
+          .filter((value): value is string => Boolean(value));
+        const keys = identities.flatMap((identity) => unresolvedByAgent.get(identity) ?? []);
+        if (!keys.length) return [];
+        const title = agent.report_title || `${expertDisplayName(agent)} report`;
+        return [{
+          keys: [...new Set(keys)],
+          keyLabels: resultKeyLabels(keys, ownerAliases),
+          label: title,
+          summary: uiText('Open the Expert report that owns this cited output.', '打开拥有该引用结果的 Expert 报告。'),
+          kind: 'report' as const,
+          onOpen: () => onOpenReport(agent.report_path!, title),
+        }];
+      });
+      const resultLinks = [...taskResultLinks, ...reportFallbackLinks];
       const unreferencedResults = directResults.filter((result) =>
         !taskResultKeys(result).some((key) => referencedKeys.has(key)),
+      );
+      const hasRecoveredFigures = unreferencedResults.some((result) =>
+        result.kind === 'interactive_view' && !result.origin_request_id,
       );
       const links = legacyResults.map(({entry, output}) => ({
         ref: entry.open_ref,
@@ -316,6 +493,7 @@ export function ConversationTranscript({
           streaming={streaming}
           team={groupTeam}
           hiddenProcessItemId={checkpointSummary?.item_id ?? null}
+          onOpenReport={onOpenReport}
         />
         {paperSelection ? <InlinePaperSelection
           interaction={paperSelection}
@@ -325,8 +503,8 @@ export function ConversationTranscript({
           onSubmit={onInteractionSubmit}
         /> : null}
         {group.finalItem ? <article className="message assistant"><MessageMarkdown content={final} artifactLinks={links} resultLinks={resultLinks} />
-          {skillUpdates.length ? <section className="skill-updates" aria-label="OceanMind learned from this task">
-            <header><Sparkles size={18} /><div><h3>{uiText('OceanMind learned from this task', 'OceanMind 从本次任务中学习了经验')}</h3><p>{uiText('Skill Curator reviewed these reusable practices after the research round ended.', 'Skill Curator 在研究回合结束后审核了这些可复用经验。')}</p></div></header>
+          {skillUpdates.length ? <section className="skill-updates" aria-label="OceanX learned from this task">
+            <header><Sparkles size={18} /><div><h3>{uiText('OceanX learned from this task', 'OceanX 从本次任务中学习了经验')}</h3><p>{uiText('Skill Curator reviewed these reusable practices after the research round ended.', 'Skill Curator 在研究回合结束后审核了这些可复用经验。')}</p></div></header>
             {skillUpdates.map((result) => <article key={taskResultRefKey(result.result_ref)}>
               <strong>{typeof result.content.skill_name === 'string' ? result.content.skill_name : result.title}</strong>
               <small>{typeof result.content.operation === 'string' && result.content.operation === 'update' ? uiText('Updated', '已更新') : uiText('Created', '已创建')} · {uiText('version', '版本')} {typeof result.content.version === 'number' ? result.content.version : 1}</small>
@@ -341,7 +519,7 @@ export function ConversationTranscript({
               </button>
             </li>)}</ul>
           </section> : null}
-          {unreferencedResults.length || legacyResults.length ? <details className="additional-results">
+          {unreferencedResults.length || legacyResults.length ? <details className="additional-results" open={hasRecoveredFigures}>
             <summary>{uiText('Additional Results', '其他结果')} ({unreferencedResults.length + legacyResults.length})</summary>
             <div className="message-artifact-actions">
               {unreferencedResults.map((result) => <button key={taskResultRefKey(result.result_ref)} className={`result-${result.kind}`} onClick={() => onOpenTaskResult(result)}>
@@ -358,7 +536,7 @@ export function ConversationTranscript({
       </section>;
     })}
     {activeRequestId && !hasActive ? <>
-      <Working group={{key: activeRequestId, requestId: activeRequestId, userItems: [], processItems: [], finalItem: null, active: true}} streaming={streaming} team={team} />
+      <Working group={{key: activeRequestId, requestId: activeRequestId, userItems: [], processItems: [], finalItem: null, active: true}} streaming={streaming} team={team} onOpenReport={onOpenReport} />
     </> : null}
     {!task && !workspacePath ? <div className="empty-state"><MessageSquare size={34} /><p>{uiText('Open a project to begin.', '打开一个项目以开始。')}</p></div> : null}
     {!task && workspacePath ? <div className="empty-state"><MessageSquare size={34} /><p>{uiText('Create or select a research task.', '创建或选择一个研究任务。')}</p></div> : null}

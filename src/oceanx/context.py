@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -11,7 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from oceanx.artifacts.models import ArtifactRef
 from oceanx.backend.store import RequestStore
-
+from oceanx.dataset_context import source_metadata_summary
+from oceanx.datasets import DatasetSourceError, resolve_dataset_source
+from oceanx.storage import OceanPaths
 
 DisclosureDecision = Literal["allow", "prompt", "deny"]
 DisclosureContentType = Literal[
@@ -81,8 +84,9 @@ class ContextPolicyError(RuntimeError):
 class OceanContextBuilder:
     """Select the smallest useful workspace summary without leaking raw local evidence."""
 
-    def __init__(self, *, store: RequestStore) -> None:
+    def __init__(self, *, store: RequestStore, paths: OceanPaths | None = None) -> None:
         self.store = store
+        self.paths = paths
 
     def set_policy(self, *, workspace_id: str, policy: ModelDataDisclosurePolicy) -> None:
         self.store.set_disclosure_policy(
@@ -115,6 +119,7 @@ class OceanContextBuilder:
         task_id: str | None = None,
         token_budget: int = 3_000,
         routing_only: bool = False,
+        dataset_context_root: Path | None = None,
     ) -> OceanContextSnapshot:
         """Build a bounded summary for one authorization scope.
 
@@ -211,6 +216,71 @@ class OceanContextBuilder:
                     )
                 ),
             )
+
+        # Share known scientific metadata with the lead before delegation. The
+        # same task/source scope and disclosure audit apply; no data is probed.
+        if task_records is not None:
+            task_sources: list[dict[str, Any]] = []
+            from oceanx.local_sources import LocalSourceError, resolve_local_source
+            for record in task_records:
+                artifact = record.artifact
+                if "source" not in record.relations:
+                    continue
+                entry: dict[str, Any] = {
+                    "ref": artifact.ref.model_dump(mode="json"),
+                    "title": artifact.title,
+                }
+                if (
+                    artifact.artifact_type == "project_context"
+                    and artifact.schema_version == "ocean-local-source/v1"
+                ):
+                    try:
+                        source = resolve_local_source(
+                            store=self.store, workspace_id=workspace_id, ref=artifact.ref
+                        )
+                        entry.update(
+                            path=str(source.path),
+                            kind=source.kind,
+                            format=source.format,
+                            access="read_only",
+                        )
+                    except LocalSourceError as exc:
+                        entry["path_error"] = str(exc)
+                    candidate = {**base, "task_sources": [*task_sources, entry]}
+                    if _estimate_tokens(candidate) <= token_budget:
+                        task_sources.append(entry)
+            if task_sources:
+                base = {**base, "task_sources": task_sources}
+            data_context: dict[str, Any] = {"sources": [], "omitted_sources": 0}
+            source_index = 0
+            for record in task_records:
+                artifact = record.artifact
+                if "source" not in record.relations or artifact.artifact_type not in {"dataset", "paper"}:
+                    continue
+                source_index += 1
+                if artifact.artifact_type != "dataset":
+                    continue
+                identity = {"handle": f"source_{source_index}", "ref": artifact.ref.model_dump(mode="json"),
+                            "title": artifact.title}
+                if self.paths is not None:
+                    try:
+                        source = resolve_dataset_source(store=self.store, paths=self.paths,
+                            workspace_id=workspace_id, ref=artifact.ref)
+                        identity.update(path=str(source.path), access="read_only")
+                    except DatasetSourceError as exc:
+                        identity["path_error"] = str(exc)
+                entry = {**source_metadata_summary(artifact, dataset_context_root), **identity}
+                candidate = {**base, "dataset_context": {**data_context, "sources": [*data_context["sources"], entry]}}
+                if _estimate_tokens(candidate) > token_budget:
+                    entry = {**identity, "inspection": "details_omitted", "metadata_omitted": True}
+                    candidate["dataset_context"]["sources"] = [*data_context["sources"], entry]
+                if _estimate_tokens(candidate) <= token_budget:
+                    data_context["sources"].append(entry)
+                else:
+                    data_context["omitted_sources"] += 1
+            candidate = {**base, "dataset_context": data_context}
+            if _estimate_tokens(candidate) <= token_budget:
+                base = candidate
 
         slots_by_ref: dict[ArtifactRef, list[str]] = {}
         if task_records is not None:

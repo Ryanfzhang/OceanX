@@ -8,9 +8,7 @@ import type {ArtifactVersion, EventPayload} from '../types.js';
 import {
   isScientificPayload,
   ScientificView,
-  type ScientificLayer,
   type ScientificPayload,
-  type ScientificScalar,
 } from './ScientificView.js';
 
 export type SpatialContext = {
@@ -38,24 +36,7 @@ export type SpatialPayload = {
   spatial_context?: SpatialContext;
 };
 
-type LegacyColumn = {
-  name: string;
-  units?: string;
-  values: ScientificScalar[];
-  role?: 'estimate' | 'lower_bound' | 'upper_bound' | 'reference';
-  group?: string;
-  label?: string;
-};
-
-export type LegacyStructuredPayload = {
-  plot_kind: string;
-  axes: LegacyColumn[];
-  series: LegacyColumn[];
-  shape?: [number, number];
-  spatial_context?: SpatialContext;
-};
-
-export type StructuredPayload = ScientificPayload | LegacyStructuredPayload;
+export type StructuredPayload = ScientificPayload;
 
 type ResultRenderBoundaryProps = {children: ReactNode; resetKey?: string};
 type ResultRenderBoundaryState = {failed: boolean};
@@ -90,18 +71,11 @@ export function isSpatial(value: unknown): value is SpatialPayload {
 }
 
 export function isStructured(value: unknown): value is StructuredPayload {
-  if (isScientificPayload(value)) return true;
-  const payload = asRecord(value);
-  return typeof payload.plot_kind === 'string'
-    && Array.isArray(payload.axes)
-    && Array.isArray(payload.series);
+  return isScientificPayload(value);
 }
 
 export function structuredViewKind(payload: StructuredPayload): string {
-  if (!isScientificPayload(payload)) return payload.plot_kind;
-  const layers = payload.schema_version === 'ocean-scientific-view/v1'
-    ? payload.layers
-    : payload.panels.flatMap((panel) => panel.layers);
+  const layers = payload.panels.flatMap((panel) => panel.layers);
   if (layers.some((layer) => layer.type === 'categories')) return 'classified_samples';
   if (payload.plot_kind === 'scatter' && layers.some((layer) => layer.type === 'field2d' || layer.type === 'heatmap')) return 'density_field';
   return payload.plot_kind;
@@ -173,76 +147,10 @@ function SpatialView({payload, previewUrl}: {payload: SpatialPayload; previewUrl
   </div>;
 }
 
-function logicalGroup(column: LegacyColumn): string {
-  return column.group?.trim() || column.name
-    .replace(/(?:ci|confidence)[\s_.-]*(?:lo|low|hi|high)/ig, ' ')
-    .replace(/(?:^|[\s_.-])(?:lower|upper)(?=$|[\s_.-])/ig, ' ')
-    .replace(/[\s_.-]+$/g, '').replace(/\s+/g, ' ').trim() || column.name;
-}
 
-function legacyToScientific(payload: LegacyStructuredPayload): ScientificPayload {
-  const data: Record<string, ScientificScalar[]> = {};
-  [...payload.axes, ...payload.series].forEach((column) => {data[column.name] = column.values;});
-  const firstAxis = payload.axes[0]!;
-  const secondAxis = payload.axes[1];
-  const firstSeries = payload.series[0];
-  const colors = ['#155795', '#d66a2f', '#398f97', '#8d5b93', '#3f6f56', '#aa8430'];
-
-  if (payload.plot_kind === 'section' || payload.plot_kind === 'hovmoller') {
-    return {
-      schema_version: 'ocean-scientific-view/v1', plot_kind: payload.plot_kind, data,
-      axes: {
-        x: {field: firstAxis.name, label: firstAxis.name, units: firstAxis.units, scale: typeof firstAxis.values[0] === 'number' ? 'linear' : 'category'},
-        y: {field: secondAxis?.name ?? firstAxis.name, label: secondAxis?.name, units: secondAxis?.units, reverse: /depth|pressure/i.test(secondAxis?.name ?? '')},
-      },
-      layers: firstSeries && secondAxis ? [{type: 'field2d', x: firstAxis.name, y: secondAxis.name, z: firstSeries.name, render: 'filled_contour', interpolation: 'linear', levels: 14, label: firstSeries.label ?? firstSeries.name, style: {palette: 'thermal'}}] : [],
-      display: {colorbar_label: firstSeries ? `${firstSeries.label ?? firstSeries.name}${firstSeries.units ? ` (${firstSeries.units})` : ''}` : undefined},
-      spatial_context: payload.spatial_context,
-    };
-  }
-
-  if (payload.plot_kind === 'scatter' || payload.plot_kind === 'ts_diagram') {
-    const colorSeries = firstSeries?.values.every((value) => value === null || typeof value === 'number') ? firstSeries : undefined;
-    return {
-      schema_version: 'ocean-scientific-view/v1', plot_kind: payload.plot_kind, data,
-      axes: {
-        x: {field: firstAxis.name, label: firstAxis.name, units: firstAxis.units},
-        y: {field: secondAxis?.name ?? firstSeries?.name ?? firstAxis.name, label: secondAxis?.name ?? firstSeries?.name, units: secondAxis?.units ?? firstSeries?.units},
-      },
-      layers: secondAxis ? [{type: 'scatter', x: firstAxis.name, y: secondAxis.name, color: colorSeries?.name, color_scale: /depth/i.test(colorSeries?.name ?? '') ? 'log' : 'linear', label: payload.plot_kind === 'ts_diagram' ? 'Water-column samples' : 'Samples', style: {palette: /depth/i.test(colorSeries?.name ?? '') ? 'depth' : 'default', radius: 2.2, opacity: .42}}] : [],
-      display: {colorbar_label: colorSeries ? `${colorSeries.label ?? colorSeries.name}${colorSeries.units ? ` (${colorSeries.units})` : ''}` : undefined},
-      spatial_context: payload.spatial_context,
-    };
-  }
-
-  const isProfile = payload.plot_kind === 'profile';
-  const estimates = payload.series.filter((column) => !column.role || column.role === 'estimate' || column.role === 'reference');
-  const groups = new Map<string, {estimate?: LegacyColumn; lower?: LegacyColumn; upper?: LegacyColumn}>();
-  payload.series.forEach((column) => {
-    const group = logicalGroup(column); const entry = groups.get(group) ?? {};
-    if (column.role === 'lower_bound') entry.lower = column;
-    else if (column.role === 'upper_bound') entry.upper = column;
-    else entry.estimate = column;
-    groups.set(group, entry);
-  });
-  const layers: ScientificLayer[] = [];
-  [...groups.entries()].forEach(([group, columns], index) => {
-    const estimate = columns.estimate; const color = colors[index % colors.length]!;
-    if (!isProfile && columns.lower && columns.upper) layers.push({type: 'band', x: firstAxis.name, y0: columns.lower.name, y1: columns.upper.name, label: `${group} interval`, style: {fill: color, fill_opacity: .15}});
-    if (estimate) layers.push({type: 'line', x: isProfile ? estimate.name : firstAxis.name, y: isProfile ? firstAxis.name : estimate.name, label: estimate.label ?? group, style: {color, width: estimate.role === 'reference' ? 1.5 : 2.4, dash: estimate.role === 'reference' ? '5 4' : undefined, radius: 2.2}});
-  });
-  const primary = estimates[0] ?? firstSeries ?? firstAxis;
-  return {
-    schema_version: 'ocean-scientific-view/v1', plot_kind: payload.plot_kind, data,
-    axes: isProfile
-      ? {x: {field: primary.name, label: primary.label ?? primary.name, units: primary.units}, y: {field: firstAxis.name, label: firstAxis.name, units: firstAxis.units, reverse: true}}
-      : {x: {field: firstAxis.name, label: firstAxis.name, units: firstAxis.units, scale: typeof firstAxis.values[0] === 'number' ? 'linear' : 'category'}, y: {field: primary.name, label: payload.series.length === 1 ? primary.label ?? primary.name : 'Value', units: payload.series.length === 1 ? primary.units : undefined}},
-    layers, spatial_context: payload.spatial_context,
-  };
-}
 
 export function StructuredView({payload, compactHeader = false, featureId}: {payload: StructuredPayload; compactHeader?: boolean; featureId?: string}): React.JSX.Element {
-  return <ScientificView payload={isScientificPayload(payload) ? payload : legacyToScientific(payload)} compactHeader={compactHeader} featureId={featureId} />;
+  return <ScientificView payload={payload} compactHeader={compactHeader} featureId={featureId} />;
 }
 
 export function InteractiveViewWorkbench({artifact, loading, data, previewUrl, error, onClose}: {
@@ -254,10 +162,10 @@ export function InteractiveViewWorkbench({artifact, loading, data, previewUrl, e
   onClose: () => void;
 }): React.JSX.Element {
   const kind = isSpatial(data) ? data.view_kind : isStructured(data) ? data.plot_kind : typeof artifact?.content?.view_kind === 'string' ? artifact.content.view_kind : undefined;
-  return <aside className="result-workbench" aria-label="Result Workbench">
-    <header><div><BarChart3 size={18} /><span><strong>Result Workbench</strong><small>{artifact ? `${viewLabel(kind)} · ${artifact.title}` : 'Select an Interactive Result'}</small></span></div>{artifact ? <button onClick={onClose} title="Close Workbench"><X size={17} /></button> : null}</header>
+  return <aside className="result-workbench" aria-label="Result workbench">
+    <header><div><BarChart3 size={18} /><span><strong>Result workbench</strong><small>{artifact ? `${viewLabel(kind)} · ${artifact.title}` : 'Select an interactive result'}</small></span></div>{artifact ? <button onClick={onClose} title="Close workbench"><X size={17} /></button> : null}</header>
     <div className="result-workbench-body">
-      {!artifact ? <div className="workbench-empty"><BarChart3 size={38} /><h2>Explore research results</h2><p>Open a map or scientific chart from an OceanMind answer.</p></div> : loading ? <div className="workbench-empty"><LoaderCircle className="spin" size={30} /><p>Loading the immutable result…</p></div> : error ? <div className="workbench-error"><strong>View unavailable</strong><p>{error}</p></div> : isSpatial(data) ? <SpatialView payload={data} previewUrl={previewUrl} /> : isStructured(data) ? <ResultRenderBoundary key={`${artifact.ref.artifact_id}@${artifact.ref.version}`} resetKey={`${artifact.ref.artifact_id}@${artifact.ref.version}`}><StructuredView payload={data} /></ResultRenderBoundary> : <div className="workbench-error"><strong>Unsupported result payload</strong><p>The saved result does not match the current scientific view contract.</p></div>}
+      {!artifact ? <div className="workbench-empty"><BarChart3 size={38} /><h2>Explore research results</h2><p>Open a map or scientific chart from an OceanX answer.</p></div> : loading ? <div className="workbench-empty"><LoaderCircle className="spin" size={30} /><p>Loading the immutable result…</p></div> : error ? <div className="workbench-error"><strong>View unavailable</strong><p>{error}</p></div> : isSpatial(data) ? <SpatialView payload={data} previewUrl={previewUrl} /> : isStructured(data) ? <ResultRenderBoundary key={`${artifact.ref.artifact_id}@${artifact.ref.version}`} resetKey={`${artifact.ref.artifact_id}@${artifact.ref.version}`}><StructuredView payload={data} /></ResultRenderBoundary> : <div className="workbench-error"><strong>Unsupported result payload</strong><p>The saved result does not match the current scientific view contract.</p></div>}
       {artifact ? <footer><span>{artifact.summary}</span><code>{artifact.ref.artifact_id}@v{artifact.ref.version}</code></footer> : null}
     </div>
   </aside>;

@@ -1,0 +1,5 @@
+# RQ2 arm: explicit competing-mechanism hypotheses with Coordinator verdicts.
+name: v1-hypotheses
+description: Explicit competing-mechanism hypotheses with Coordinator verdicts.
+hypotheses: true
+frontier: shallowest     # shallowest | any_depth

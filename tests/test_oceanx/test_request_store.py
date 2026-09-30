@@ -51,7 +51,8 @@ def test_fresh_store_never_creates_retired_execution_tables(tmp_path: Path):
             "verification_records",
         }
     )
-    assert {"team_work_records", "code_executions"}.issubset(tables)
+    assert "code_executions" in tables
+    assert "team_work_records" not in tables
     store.close()
 
 
@@ -212,13 +213,11 @@ def test_workflow_progress_update_preserves_lifecycle_state(tmp_path: Path) -> N
     updated = store.update_task_workflow_progress(
         request_id=request.request_id,
         activity="Coordinator conclusion ready",
-        checkpoint={"phase": "coordinator_result"},
     )
 
     assert updated is not None
     assert updated.state == "working"
     assert updated.activity == "Coordinator conclusion ready"
-    assert updated.checkpoint == {"phase": "coordinator_result"}
 
 
 def test_paper_selection_shortlist_survives_task_snapshot_reload(tmp_path: Path) -> None:
@@ -521,7 +520,7 @@ def test_recovery_completes_request_from_durable_coordinator_receipt(
     restarted.close()
 
 
-def test_delete_task_removes_durable_results_and_expert_memory(tmp_path: Path) -> None:
+def test_delete_task_removes_durable_results(tmp_path: Path) -> None:
     """A completed analysis task can be deleted with all private conversation state."""
 
     store = RequestStore(tmp_path / "state.sqlite3")
@@ -560,26 +559,9 @@ def test_delete_task_removes_durable_results_and_expert_memory(tmp_path: Path) -
         confidence=0.9,
     )
     store.record_coordinator_result(request_id=request.request_id, result=result)
-    store.save_expert_session_checkpoint(
-        workspace_id=task.workspace_id,
-        task_scope=task.task_id,
-        participant_key="ocean_process_expert",
-        job_key="job_delete_complete",
-        work_order_id="work_delete_complete",
-        messages=[{"role": "assistant", "content": "Private expert analysis"}],
-        compaction_generation=0,
-    )
-    store.commit_task_terminal_with_checkpoint(
+    store.commit_task_terminal(
         request_id=request.request_id,
-        task_id=task.task_id,
         terminal_event=_completed_event(request, {"assistant_text": result.answer_markdown}),
-        messages=[{"role": "assistant", "content": result.answer_markdown}],
-        provider_id="provider_fixture",
-        model_id="model_fixture",
-        runtime_profile_fingerprint="runtime_fixture",
-        system_prompt_fingerprint="prompt_fixture",
-        compaction_generation=0,
-        usage_summary={},
     )
     completed = store.get_research_task(task.task_id)
     assert completed is not None
@@ -592,21 +574,6 @@ def test_delete_task_removes_durable_results_and_expert_memory(tmp_path: Path) -
     assert store.get_research_task(task.task_id) is None
     assert store.get_request(request.request_id) is None
     assert store.get_coordinator_result(request.request_id) is None
-    assert (
-        store.get_expert_session_checkpoint(
-            workspace_id=task.workspace_id,
-            task_scope=task.task_id,
-            participant_key="ocean_process_expert",
-            job_key="job_delete_complete",
-        )
-        is None
-    )
-    assert store.get_expert_session_message_history(
-        workspace_id=task.workspace_id,
-        task_scope=task.task_id,
-        participant_key="ocean_process_expert",
-        job_key="job_delete_complete",
-    ) == ()
     store.close()
 
 

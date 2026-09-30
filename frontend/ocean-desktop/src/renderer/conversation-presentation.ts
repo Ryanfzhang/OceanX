@@ -27,7 +27,7 @@ export type PresentedTranscriptGroup = {
 /**
  * Present one model request as one conversation exchange.
  *
- * OceanMind persists every assistant tool-use turn for recovery and audit.
+ * OceanX persists every assistant tool-use turn for recovery and audit.
  * Those turns are useful process evidence, but they are not separate answers.
  * The final assistant/system item remains visible; earlier items become the
  * request's collapsible Thinking history.

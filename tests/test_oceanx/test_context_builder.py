@@ -139,14 +139,14 @@ async def test_context_builder_uses_active_refs_summaries_and_audits_metadata_on
         resource_kind="skill",
         resource_name=skill.name,
         resource_version=skill.version,
-        work_order_id="work_context_fixture",
+        agent_run_id="run_context_fixture",
     )
-    assert "pre-run validation assertions" in skill_content
+    assert "hand-checkable example" in skill_content
     assert "reference state" in reference_content
     assert reference_version.startswith("sha256:")
     usage = host.store.list_resource_usage(workspace_id="ws_context")[0]
     assert usage["usage_id"] == usage_id
-    assert usage["work_order_id"] == "work_context_fixture"
+    assert usage["agent_run_id"] == "run_context_fixture"
     assert usage["resource_kind"] == "skill"
     assert usage["resource_name"] == "ocean-analysis-design"
     assert usage["resource_version"] == skill.version

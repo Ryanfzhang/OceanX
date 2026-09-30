@@ -1,7 +1,7 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
 
-import {deduplicateResultLinks, MessageMarkdown, referencedResultKeys, safeExternalHref} from './message-markdown.js';
+import {CompactLogMarkdown, deduplicateResultLinks, MessageMarkdown, referencedResultKeys, safeExternalHref} from './message-markdown.js';
 
 describe('MessageMarkdown', () => {
   const result = {
@@ -34,6 +34,46 @@ describe('MessageMarkdown', () => {
     expect(markup).toContain('Result object unavailable');
     expect(markup).not.toContain('<button');
   });
+
+  it('binds compact agent result paths without rewriting ordinary brackets', () => {
+    const markup = renderToStaticMarkup(<MessageMarkdown
+      content={'The anomaly is surface intensified [ocean-process-1/result1]. Keep [draft] and [a link](https://example.org).'}
+      resultLinks={[{
+        ...result,
+        keys: [...result.keys, 'ocean-process-1/result1'],
+        keyLabels: {'ocean-process-1/result1': 'Ocean 1 · result1'},
+      }]}
+    />);
+    expect(markup).toContain('>Ocean 1 · result1</button>');
+    expect(markup).toContain('[draft]');
+    expect(markup).toContain('href="https://example.org/"');
+    expect(referencedResultKeys('Finding [ocean-process-1/result1].'))
+      .toContain('ocean-process-1/result1');
+  });
+
+  it('uses the same short Agent alias for canonical result markers', () => {
+    const markup = renderToStaticMarkup(<MessageMarkdown
+      content={'[[result:ocean-process-1/result1]]'}
+      resultLinks={[{
+        ...result,
+        keys: [...result.keys, 'ocean-process-1/result1'],
+        keyLabels: {'ocean-process-1/result1': 'B1.1 · result1'},
+      }]}
+    />);
+    expect(markup).toContain('>B1.1 · result1</button>');
+  });
+
+  it('turns a saved local preview image into its published interactive result link', () => {
+    const markup = renderToStaticMarkup(<MessageMarkdown
+      content={'![Current map](/task/agents/ocean/outputs/analysis.preview.png)'}
+      resultLinks={[{...result, keys: [...result.keys, 'analysis']}]}
+    />);
+    expect(markup).toContain('aria-label="Open Analysis"');
+    expect(markup).toContain('>Current map</button>');
+    expect(markup).not.toContain('markdown-image-placeholder');
+    expect(markup).not.toContain('/task/agents/ocean/outputs');
+  });
+
   it('renders research Markdown into structured, safe reading content', () => {
     const markup = renderToStaticMarkup(
       <MessageMarkdown content={'## Research note\n\n- **Verified** coordinate metadata\n- Compared two monthly means\n\n| Check | State |\n| --- | --- |\n| Units | ready |\n\n```python\nmean_sst = sst.mean("time")\n```\n\n$T = T_0 + T\'$,\n\n<script>alert("not rendered")</script>'} />,
@@ -45,6 +85,17 @@ describe('MessageMarkdown', () => {
     expect(markup).toContain('mean_sst');
     expect(markup).toContain('katex');
     expect(markup).not.toContain('<script>');
+  });
+
+  it('keeps compact research-log Markdown in one consistent inline flow', () => {
+    const markup = renderToStaticMarkup(<CompactLogMarkdown content={'## Check\n\n**Compared** outputs:\n\n- Seasonal amplitude\n- `Peak timing`\n\n| State | Value |\n| --- | --- |\n| Ready | yes |'} />);
+
+    expect(markup).toContain('class="compact-log-markdown"');
+    expect(markup).toContain('<strong>Check</strong>');
+    expect(markup).toContain('<strong>Compared</strong>');
+    expect(markup).toContain('class="compact-log-list-item"');
+    expect(markup).toContain('class="compact-log-table"');
+    expect(markup).not.toMatch(/<(?:p|h[1-6]|ul|ol|li|pre|table|thead|tbody|tr|th|td)(?:\s|>)/);
   });
 
   it('only allows http(s) links', () => {
@@ -134,6 +185,6 @@ describe('MessageMarkdown', () => {
 
     expect(markup).toContain('markdown-result-link');
     expect(markup).toContain('>温度断面</button>');
-    expect(markup).not.toContain('outputs/temperature_section.nc');
+    expect(markup).toContain('title="outputs/temperature_section.nc — Temperature section"');
   });
 });

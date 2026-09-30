@@ -1,0 +1,24 @@
+# Frozen acceptance criteria for research-policy changes.
+#
+# A human edits this file, then freezes it with `ocean research freeze-acceptance`,
+# which writes a hash lock. Paired-run acceptance refuses to run unless the file is
+# frozen and unchanged since freezing. Nothing automated ever edits it.
+#
+# Every value below is a DRAFT placeholder chosen by Claude, not a decision.
+# The owner must review and set them before freezing.
+version: 1
+
+held_out_tasks:
+  # JSONL of `ocean batch` query cases used only for acceptance.
+  queries_file: null         # e.g. benchmarking/acceptance/held_out.jsonl
+
+budgets:
+  max_tokens_per_task: 15000000
+  max_wall_seconds_per_task: 7200
+  max_failure_rate: 0.2      # fraction of runs ending failed/timed_out
+
+rq1:
+  min_pairs: 8               # paired live runs per comparison
+  max_quality_regressions: 0 # cases where the owner rates A's final answer better
+  # B passes if it wins more quality comparisons than it loses, or cuts tokens by this share:
+  min_relative_improvement: 0.15

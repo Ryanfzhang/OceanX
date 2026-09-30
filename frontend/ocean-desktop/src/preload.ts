@@ -1,11 +1,12 @@
 import {contextBridge, ipcRenderer} from 'electron';
-import type {BackendFrame, DesktopBackendLaunch, ModelProviderSetup, OceanDesktopBridge, WorkspaceSourceKind} from './shared/bridge.js';
+import type {BackendFrame, DesktopBackendLaunch, ModelProviderSetup, OceanDesktopBridge, StagedImageAttachment} from './shared/bridge.js';
 
 const bridge: OceanDesktopBridge = {
   chooseWorkspace: () => ipcRenderer.invoke('ocean:choose-workspace'),
   listProjects: () => ipcRenderer.invoke('ocean:list-projects'),
   forgetProject: (projectPath: string) => ipcRenderer.invoke('ocean:forget-project', projectPath),
-  chooseWorkspaceSource: (kind: WorkspaceSourceKind) => ipcRenderer.invoke('ocean:choose-workspace-source', kind),
+  chooseWorkspaceSource: (allowImages: boolean) => ipcRenderer.invoke('ocean:choose-workspace-source', allowImages),
+  stageImageAttachment: (attachment: StagedImageAttachment) => ipcRenderer.invoke('ocean:stage-image-attachment', attachment),
   startBackend: (options: DesktopBackendLaunch) => ipcRenderer.invoke('ocean:start-backend', options),
   stopBackend: () => ipcRenderer.invoke('ocean:stop-backend'),
   getBackendStatus: () => ipcRenderer.invoke('ocean:get-backend-status'),

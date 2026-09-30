@@ -12,7 +12,6 @@ import tempfile
 import threading
 import unicodedata
 from dataclasses import dataclass
-from importlib.resources import files as resource_files
 from pathlib import Path
 from typing import Any
 
@@ -20,15 +19,11 @@ from oceanx.artifacts.models import ArtifactVersion
 from oceanx.backend.store import RequestStore, ResearchTaskRecord, TaskArtifactRecord
 from oceanx.storage import OceanPaths
 
-TASKS_DIRECTORY_NAME = "OceanMind Tasks"
+TASKS_DIRECTORY_NAME = "OceanX Tasks"
 TASK_MANIFEST_NAME = "task-manifest.json"
-TASK_MANIFEST_SCHEMA = "ocean-task-workspace/v2"
-EXPERT_SESSION_MANIFEST_NAME = "agent-workspace.json"
-EXPERT_SESSION_MANIFEST_SCHEMA = "ocean-agent-workspace/v1"
+TASK_MANIFEST_SCHEMA = "ocean-task-workspace/v3"
 _README_START = "<!-- OCEANMIND:START -->"
 _README_END = "<!-- OCEANMIND:END -->"
-_SUMMARY_START = "<!-- OCEANMIND:SUMMARY:START -->"
-_SUMMARY_END = "<!-- OCEANMIND:SUMMARY:END -->"
 _INVALID_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _WINDOWS_RESERVED = {
     "CON", "PRN", "AUX", "NUL",
@@ -36,13 +31,8 @@ _WINDOWS_RESERVED = {
     *(f"LPT{index}" for index in range(1, 10)),
 }
 _DIRECTORIES = (
-    "data",
-    "analysis",
-    "outputs",
-    "views",
-    "report",
-    "supplementary",
-    "results",
+    "sources",
+    "agents",
 )
 
 
@@ -90,8 +80,6 @@ class TaskWorkspaceProjector:
                 previous=previous,
             )
             self._write_sources(root, artifacts)
-            self._write_requirements(root)
-            self._write_summary(root, task)
             manifest = {
                 "schema_version": TASK_MANIFEST_SCHEMA,
                 "task": task.as_summary(),
@@ -113,105 +101,29 @@ class TaskWorkspaceProjector:
                 self._ensure_directory(root / name)
             return root
 
-    def write_supplementary_notebook(
-        self,
-        *,
-        task_id: str,
-        request_id: str,
-        content: bytes,
-    ) -> Path:
-        """Create one editable notebook per analysis round, never overwrite user edits.
-
-        Scientific payloads remain in their accepted TaskResult locations.  The
-        notebook refers to those files and is the only supplementary file
-        projected into the user-facing task directory.
-        """
-
-        with self._lock:
-            target = self.supplementary_notebook_path(task_id, request_id)
-            self._ensure_directory(target.parent)
-            if target.is_symlink() or (target.exists() and not target.is_file()):
-                raise TaskWorkspaceProjectionError(
-                    "Supplementary analysis notebook path is not a regular file"
-                )
-            if not target.exists():
-                self._atomic_bytes(target, content, overwrite=False)
-            return target
-
-    def supplementary_notebook_path(self, task_id: str, request_id: str) -> Path:
-        if not request_id.strip():
-            raise TaskWorkspaceProjectionError("An analysis notebook needs a request identity")
-        root = self.ensure_task_root(task_id)
-        round_name = "analysis-" + hashlib.sha256(request_id.encode()).hexdigest()[:20]
-        return root / "supplementary" / round_name / "analysis.ipynb"
-
     def expert_session_root(self, task_id: str, session_key: str) -> Path:
-        """Return one stable root for a logical Expert session.
-
-        A Coordinator follow-up is a new WorkOrder, but it is not a new
-        participant. Keeping executions below the logical ``job_key`` lets a
-        later delta round reuse durable results without reaching into another
-        WorkOrder's private scratch directory.
-        """
+        """Return the fixed task-local directory owned by one native Agent."""
 
         with self._lock:
             root = self.ensure_task_root(task_id)
-            sessions = root / "analysis" / "expert-sessions"
-            self._ensure_directory(sessions)
-            session_digest = hashlib.sha256(session_key.encode("utf-8")).hexdigest()
-            legacy_session = sessions / _safe_name(
-                session_key,
-                fallback="expert-session",
-                limit=96,
-            )
-            preferred_session = sessions / (
-                _safe_name(
-                    session_key,
-                    fallback="expert-session",
-                    limit=72,
-                )
-                + "--"
-                + session_digest[:12]
-            )
-            # Existing tasks keep their pre-v1 directory. New logical Agents
-            # use a digest suffix so filename truncation can never merge two
-            # otherwise distinct session keys.
-            session = legacy_session if legacy_session.exists() else preferred_session
-            self._ensure_directory(session)
-            manifest_path = session / EXPERT_SESSION_MANIFEST_NAME
-            if manifest_path.exists():
-                try:
-                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError) as exc:
-                    raise TaskWorkspaceProjectionError(
-                        "Expert session ownership manifest is invalid"
-                    ) from exc
-                if (
-                    manifest.get("schema_version") != EXPERT_SESSION_MANIFEST_SCHEMA
-                    or manifest.get("task_id") != task_id
-                    or manifest.get("session_key_sha256") != session_digest
-                ):
-                    raise TaskWorkspaceProjectionError(
-                        "Expert session directory belongs to a different logical Agent"
-                    )
-            else:
-                self._atomic_json(
-                    manifest_path,
-                    {
-                        "schema_version": EXPERT_SESSION_MANIFEST_SCHEMA,
-                        "task_id": task_id,
-                        "session_key_sha256": session_digest,
-                        "ownership": "single_logical_agent",
-                        "workspace": "workspace",
-                        "immutable_executions": "executions",
-                        "publication_authority": "coordinator_only",
-                    },
-                )
-            # These directories are private to this logical Agent. Follow-up
-            # rounds reuse them; sibling Agents receive different session roots.
-            for name in ("workspace", "executions", "result-bundles"):
-                self._ensure_directory(session / name)
-            return session
+            agents = root / "agents"
+            self._ensure_directory(agents)
+            agent_key = _safe_name(session_key, fallback="agent", limit=80)
+            agent = agents / agent_key
+            self._ensure_directory(agent)
+            outputs = agent / "outputs"
+            self._ensure_directory(outputs)
+            marker = agent / ".runtime" / "cache-policy-v1.json"
+            if not marker.exists():
+                # Never reclaim pre-existing outputs that predate managed scratch.
+                outputs_managed = not any(outputs.iterdir())
+                self._ensure_directory(marker.parent)
+                self._atomic_json(marker, {
+                    "schema_version": "ocean-task-cache/v1",
+                    "outputs_managed": outputs_managed,
+                })
+            self._ensure_directory(agent / "scratch")
+            return agent
 
     def _task(self, task_id: str) -> ResearchTaskRecord:
         task = self.store.get_research_task(task_id)
@@ -229,14 +141,23 @@ class TaskWorkspaceProjector:
         return root
 
     def _task_root(self, workspace: Path, task: ResearchTaskRecord) -> Path:
+        # Branding changes must not change an existing task's storage identity.
+        # Prefer the original root even if the rename bug already created an
+        # empty OceanX shadow for the same task. Never move or merge either tree:
+        # reports and execution records can contain absolute evidence paths.
+        for directory_name in ("OceanMind Tasks", TASKS_DIRECTORY_NAME):
+            existing_tasks = workspace / directory_name
+            if existing_tasks.is_symlink():
+                raise TaskWorkspaceProjectionError(f"{directory_name} cannot be a symbolic link")
+            if not existing_tasks.is_dir():
+                continue
+            for candidate in sorted(existing_tasks.iterdir()):
+                if (candidate.is_dir() and not candidate.is_symlink()
+                        and self._read_manifest(candidate).get("task", {}).get("task_id") == task.task_id):
+                    return candidate
+
         tasks = workspace / TASKS_DIRECTORY_NAME
         tasks.mkdir(parents=True, exist_ok=True)
-        if tasks.is_symlink():
-            raise TaskWorkspaceProjectionError("OceanMind Tasks cannot be a symbolic link")
-        for candidate in tasks.iterdir():
-            if candidate.is_dir() and not candidate.is_symlink():
-                if self._read_manifest(candidate).get("task", {}).get("task_id") == task.task_id:
-                    return candidate
         base = f"{_safe_name(task.title, fallback='Untitled task', limit=72)}--{_task_suffix(task.task_id)}"
         candidate = tasks / base
         index = 2
@@ -370,29 +291,9 @@ class TaskWorkspaceProjector:
             if link.artifact.artifact_type in {"dataset", "paper"}
         ]
         self._atomic_json(
-            root / "data" / "sources.json",
+            root / "sources" / "sources.json",
             {"schema_version": "ocean-task-sources/v2", "sources": sources},
         )
-
-    @staticmethod
-    def _write_requirements(root: Path) -> None:
-        dependencies = json.loads(resource_files("oceanx")
-                                  .joinpath("resources/runtime/dependencies.json")
-                                  .read_text(encoding="utf-8"))
-        content = "\n".join(dependencies) + "\n"
-        TaskWorkspaceProjector._atomic_text(root / "analysis" / "requirements.txt", content)
-
-    def _write_summary(self, root: Path, task: ResearchTaskRecord) -> None:
-        snapshot = self.store.task_snapshot(task_id=task.task_id, transcript_limit=500)
-        assistants = [item for item in snapshot.transcript if item.role == "assistant" and not item.interrupted]
-        if not assistants:
-            return
-        generated = (
-            f"{_SUMMARY_START}\n# {task.title}\n\n"
-            f"OceanMind task: `{task.task_id}`\n\n{assistants[-1].text.rstrip()}\n"
-            f"{_SUMMARY_END}\n"
-        )
-        self._replace_managed_block(root / "report" / "summary.md", generated, _SUMMARY_START, _SUMMARY_END)
 
     def _write_readme(
         self,
@@ -405,19 +306,14 @@ class TaskWorkspaceProjector:
                 _README_START,
                 f"# {task.title}",
                 "",
-                f"- OceanMind task: `{task.task_id}`",
+                f"- OceanX task: `{task.task_id}`",
                 f"- Status: `{task.status}`",
                 f"- Linked artifacts: {len(artifacts)}",
                 "",
                 "## Folder guide",
                 "",
-                "- `data/`: task inputs and source provenance",
-                "- `analysis/`: Expert code, notebooks, and environment requirements",
-                "- `outputs/`: derived data and supporting evidence",
-                "- `views/`: interactive-view data and previews",
-                "- `report/`: conclusions and formal reports",
-                "- `supplementary/analysis-*/analysis.ipynb`: one editable notebook per analysis round; existing notebooks are never overwritten",
-                "- `results/`: internal accepted-result storage used by the notebook (normally do not browse)",
+                "- `sources/`: task inputs and source provenance",
+                "- `agents/`: one fixed workspace per native Agent; each Agent owns its report, code and outputs",
                 "",
                 _README_END,
                 "",
@@ -482,39 +378,14 @@ class TaskWorkspaceProjector:
         finally:
             temporary.unlink(missing_ok=True)
 
-    @staticmethod
-    def _atomic_bytes(path: Path, content: bytes, *, overwrite: bool = True) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-        temporary = Path(name)
-        try:
-            with os.fdopen(descriptor, "wb") as target:
-                target.write(content)
-                target.flush()
-                os.fsync(target.fileno())
-            temporary.chmod(0o644)
-            if overwrite:
-                os.replace(temporary, path)
-            else:
-                # Publish the complete file exclusively, even if another process created
-                # this round's notebook after our existence check.
-                try:
-                    os.link(temporary, path)
-                except FileExistsError:
-                    if path.is_symlink() or not path.is_file():
-                        raise TaskWorkspaceProjectionError("Notebook target became unsafe")
-        finally:
-            temporary.unlink(missing_ok=True)
-
-
 def _artifact_directory(root: Path, artifact: ArtifactVersion) -> Path:
-    if artifact.artifact_type == "dataset":
-        return root / ("outputs" if artifact.schema_version == "ocean-derived-dataset/v1" else "data")
-    if artifact.artifact_type == "interactive_view":
-        return root / "views"
-    if artifact.artifact_type == "report":
-        return root / "report"
-    return root / "outputs"
+    """Project user-supplied artifacts into one source area.
+
+    Agent products are written directly by their owning Agent and are never
+    projected through the artifact system.
+    """
+
+    return root / "sources"
 
 
 def _artifact_filename(artifact: ArtifactVersion, source_name: str) -> str:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -156,52 +155,5 @@ async def test_disclosure_policy_confirmation_is_versioned_visible_and_replay_sa
         assert restored.disclosure_policy is not None
         assert restored.disclosure_policy["policy_version"] == 2
         assert restored.disclosure_policy["raw_bounded_sample"] == "prompt"
-    finally:
-        await host.close()
-
-
-@pytest.mark.asyncio
-async def test_disclosure_policy_history_migration_backfills_an_existing_active_policy(tmp_path: Path):
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    state_directory = tmp_path / "state"
-    host = OceanBackendHost(state_directory, write_frame=lambda _frame: None)
-    try:
-        client, _recorder, context = await _open_workspace(host, workspace)
-        await host.router.handle_payload(
-            client,
-            {
-                "protocol_version": 2,
-                "request_id": "req_disclosure_migration_v1",
-                "type": "disclosure.policy.set",
-                "payload": {
-                    "provider_id": "openai_codex",
-                    "metadata": "allow",
-                    "aggregate_statistics": "allow",
-                    "raw_bounded_sample": "deny",
-                    "document_text": "deny",
-                    "diagnostic_excerpt": "deny",
-                    "confirmed": True,
-                },
-                "context": context,
-                "expected_workspace_revision": 1,
-            },
-        )
-        await host.close()
-
-        database = state_directory / "workspace.sqlite3"
-        with sqlite3.connect(database) as connection:
-            connection.execute("DROP TABLE workspace_disclosure_policy_versions")
-            connection.execute("DELETE FROM schema_migrations WHERE version = 9")
-
-        host = OceanBackendHost(state_directory, write_frame=lambda _frame: None)
-        history = host.store.list_disclosure_policy_versions(workspace_id="ws_disclosure")
-        assert len(history) == 1
-        assert history[0]["policy_version"] == 1
-        assert history[0]["confirmed_request_id"] is None
-        assert history[0]["confirmed"] is False
-        restored = host.store.workspace_snapshot("ws_disclosure")
-        assert restored.disclosure_policy is not None
-        assert restored.disclosure_policy["confirmed"] is False
     finally:
         await host.close()

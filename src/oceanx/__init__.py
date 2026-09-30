@@ -1,4 +1,4 @@
-"""OceanMind multi-agent ocean science application."""
+"""OceanX multi-agent ocean science application."""
 
 from __future__ import annotations
 

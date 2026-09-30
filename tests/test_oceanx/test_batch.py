@@ -191,27 +191,6 @@ def test_public_commands_and_invalid_manifest_exit_without_model_call(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("enabled", [True, False])
-async def test_curator_opt_out_does_not_change_desktop_default(tmp_path, monkeypatch, enabled):
-    host = OceanBackendHost(tmp_path / "state", write_frame=lambda _: None)
-    calls = []
-    monkeypatch.setattr(host.skill_curator, "start", lambda: calls.append("started"))
-
-    async def empty_stdio(**kwargs):
-        return 0
-
-    monkeypatch.setattr(host.stdio, "run", empty_stdio)
-    try:
-        if enabled:
-            await host.run_stdio()  # Existing Desktop call uses its unchanged default.
-        else:
-            await host.run_stdio(skill_curator=False)
-        assert calls == (["started"] if enabled else [])
-    finally:
-        await host.close()
-
-
-@pytest.mark.asyncio
 async def test_analyze_continues_same_request_after_explicit_paper_selection(tmp_path, monkeypatch):
     case = QueryCase(id="a", query="query unchanged", selected_papers=["Selected paper"])
     client = BatchClient(tmp_path, case)
@@ -249,8 +228,8 @@ def test_public_configure_models_does_not_echo_keys(tmp_path, monkeypatch):
     payload = {"roles": {role: {
         "provider": "openai", "model": "test-model", "base_url": "https://example.invalid/v1",
         "api_key": "test-only-not-a-real-key",
-    } for role in ("coordinator", "expert", "skill_curator")}}
+    } for role in ("coordinator", "expert")}}
     result = CliRunner().invoke(app, ["configure-models"], input=json.dumps(payload))
     assert result.exit_code == 0
     assert "test-only-not-a-real-key" not in result.output
-    assert set(json.loads(result.output)["roles"]) == {"coordinator", "expert", "skill_curator"}
+    assert set(json.loads(result.output)["roles"]) == {"coordinator", "expert"}

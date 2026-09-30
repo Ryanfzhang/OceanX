@@ -173,7 +173,7 @@ export type ScientificTheme = {
 
 export type ScientificFigurePayload = {
   features?: ResultFeature[];
-  schema_version: 'ocean-scientific-figure/v2' | 'ocean-scientific-figure/v3' | 'ocean-scientific-figure/v4';
+  schema_version: 'ocean-scientific-figure/v4';
   plot_kind: string;
   title?: string;
   subtitle?: string;
@@ -185,19 +185,7 @@ export type ScientificFigurePayload = {
   spatial_context?: unknown;
 };
 
-export type ScientificViewPayloadV1 = {
-  schema_version: 'ocean-scientific-view/v1';
-  plot_kind: string;
-  title?: string;
-  subtitle?: string;
-  data: Record<string, ScientificScalar[]>;
-  axes: {x: ScientificAxis; y: ScientificAxis};
-  layers: ScientificLayer[];
-  display?: ScientificPanelDisplay;
-  spatial_context?: unknown;
-};
-
-export type ScientificPayload = ScientificFigurePayload | ScientificViewPayloadV1;
+export type ScientificPayload = ScientificFigurePayload;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -205,16 +193,43 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function isScientificPayload(value: unknown): value is ScientificPayload {
   if (!isRecord(value) || typeof value.plot_kind !== 'string' || !isRecord(value.data)) return false;
-  if (value.schema_version === 'ocean-scientific-view/v1') {
-    return isRecord(value.axes) && Array.isArray(value.layers);
-  }
-  if (value.schema_version === 'ocean-scientific-figure/v2' || value.schema_version === 'ocean-scientific-figure/v3' || value.schema_version === 'ocean-scientific-figure/v4') {
+  if (value.schema_version === 'ocean-scientific-figure/v4') {
     return Array.isArray(value.panels) && value.panels.length > 0;
   }
   return false;
 }
 
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}(?:[T ][0-9:.+-]+Z?)?$/;
+
+const DISPLAY_UNITS: Record<string, string> = {
+  degrees_C: '°C',
+  degree_C: '°C',
+  degC: '°C',
+  'degrees_C m': '°C·m',
+  'degree_C m': '°C·m',
+  'degC m': '°C·m',
+  degrees_north: '°N',
+  degrees_east: '°E',
+};
+
+export function conciseScientificLabel(value: string, maxLength = 52): string {
+  const normalized = value
+    .replace(/degrees_C|degree_C|degC/g, '°C')
+    .replaceAll('_', ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (normalized.length <= maxLength) return normalized;
+  const available = Math.max(12, maxLength - 1);
+  const candidate = normalized.slice(0, available + 1);
+  const boundary = candidate.lastIndexOf(' ');
+  return `${candidate.slice(0, boundary >= available * .62 ? boundary : available).trimEnd()}…`;
+}
+
+export function scientificDisplayUnits(value?: string): string {
+  const units = value?.trim() ?? '';
+  if (units.startsWith('day_of_year_')) return `${units.slice('day_of_year_'.length)} DOY`;
+  return DISPLAY_UNITS[units] ?? units.replaceAll('_', ' ');
+}
 
 function inferredAxis(axis: ScientificAxis, data: Record<string, ScientificScalar[]>): ScientificAxis {
   if (axis.scale === 'time' || axis.scale === 'category' || axis.scale === 'log') return axis;
@@ -225,8 +240,8 @@ function inferredAxis(axis: ScientificAxis, data: Record<string, ScientificScala
 
 export function normalizeScientificFigure(payload: ScientificPayload): ScientificFigurePayload {
   const data = {...payload.data};
-  const normalizeLayers = (layers: ScientificLayer[], panelIndex: number): ScientificLayer[] => layers.map((original, layerIndex) => {
-    let layer: ScientificLayer = original.type === 'heatmap' ? {
+  const normalizeLayers = (layers: ScientificLayer[]): ScientificLayer[] => layers.map((original) => {
+    const layer: ScientificLayer = original.type === 'heatmap' ? {
       ...original,
       type: 'field2d',
       render: 'filled_contour',
@@ -234,15 +249,7 @@ export function normalizeScientificFigure(payload: ScientificPayload): Scientifi
       levels: 18,
     } : original;
 
-    // Repair old builder output that put a numeric colour vector in style.color.
-    // New output is rejected at save time and must use scatter(color_values=...).
-    if (layer.type === 'scatter' && Array.isArray((layer.style as {color?: unknown} | undefined)?.color)) {
-      const values = (layer.style as unknown as {color: unknown[]}).color;
-      const field = `compat_panel_${panelIndex + 1}_layer_${layerIndex + 1}_color`;
-      data[field] = values.map((value) => typeof value === 'number' && Number.isFinite(value) ? value : null);
-      const {color: _invalidColor, ...style} = layer.style as ScientificLayerStyle & {color: unknown};
-      layer = {...layer, color: field, style};
-    }
+
 
     // A short ordered vertical profile is a continuous sampled curve.  Treating
     // it as an unconnected cloud loses the scientific relationship.  Large or
@@ -253,7 +260,9 @@ export function normalizeScientificFigure(payload: ScientificPayload): Scientifi
       && (data[layer.x]?.length ?? 0) >= 2
       && (data[layer.x]?.length ?? 0) <= 1_000
     ) {
-      const {radius: _radius, marker: _marker, ...style} = layer.style ?? {};
+      const style = {...layer.style};
+      delete style.radius;
+      delete style.marker;
       return {
         ...layer,
         type: 'line',
@@ -262,32 +271,45 @@ export function normalizeScientificFigure(payload: ScientificPayload): Scientifi
     }
     return layer;
   });
-  if (payload.schema_version === 'ocean-scientific-figure/v2' || payload.schema_version === 'ocean-scientific-figure/v3' || payload.schema_version === 'ocean-scientific-figure/v4') {
-    return {
-      ...payload,
-      schema_version: 'ocean-scientific-figure/v4',
-      data,
-      panels: payload.panels.map((panel, panelIndex) => ({
-        ...panel,
-        axes: {x: inferredAxis(panel.axes.x, data), y: inferredAxis(panel.axes.y, data)},
-        layers: normalizeLayers(panel.layers, panelIndex),
-      })),
-    };
-  }
-  const legacy = payload as ScientificViewPayloadV1;
+  const panels = payload.panels.map((panel) => {
+    const axes = {x: inferredAxis(panel.axes.x, data), y: inferredAxis(panel.axes.y, data)};
+    let layers = normalizeLayers(panel.layers);
+    const onlyLayer = layers.length === 1 ? layers[0] : undefined;
+    if (
+      payload.plot_kind === 'categorical'
+      && onlyLayer?.type === 'categories'
+      && onlyLayer.category === onlyLayer.y
+      && onlyLayer.labels
+    ) {
+      const source = data[onlyLayer.x] ?? [];
+      const labels = source.map((value) => onlyLayer.labels?.[String(value)] ?? String(value));
+      const hasRealLabels = labels.some((label, index) => label !== String(source[index]));
+      if (source.length && hasRealLabels) {
+        let labelField = `${onlyLayer.x}_labels`;
+        while (labelField in data) labelField += '_category';
+        data[labelField] = labels;
+        axes.x = {
+          ...axes.x,
+          field: labelField,
+          scale: 'category',
+          label: axes.x.label?.replaceAll('_', ' ') || 'Case',
+          units: undefined,
+        };
+        layers = [{
+          id: onlyLayer.id,
+          type: 'scatter',
+          x: labelField,
+          y: onlyLayer.y,
+          label: axes.y.label ?? 'Values',
+          style: {radius: 3.6, opacity: .92, marker: 'circle'},
+        }];
+      }
+    }
+    return {...panel, axes, layers};
+  });
   return {
-    schema_version: 'ocean-scientific-figure/v4',
-    plot_kind: payload.plot_kind,
-    title: payload.title,
-    subtitle: payload.subtitle,
+    ...payload,
     data,
-    layout: {columns: 1},
-    panels: [{
-      id: 'main',
-      axes: {x: inferredAxis(legacy.axes.x, data), y: inferredAxis(legacy.axes.y, data)},
-      layers: normalizeLayers(legacy.layers, 0),
-      display: legacy.display,
-    }],
-    spatial_context: payload.spatial_context,
+    panels,
   };
 }

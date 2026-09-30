@@ -1,4 +1,4 @@
-"""Errors raised by OceanMind's fail-closed scientific execution sandbox."""
+"""Errors raised by OceanX's fail-closed scientific execution sandbox."""
 
 
 class SandboxUnavailableError(RuntimeError):

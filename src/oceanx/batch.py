@@ -34,7 +34,7 @@ class QueryCase(BaseModel):
     id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
     query: str = Field(min_length=1, max_length=32_000)
     datasets: list[Path] = Field(default_factory=list, max_length=64)
-    timeout_seconds: float = Field(default=3600, gt=0, le=604800, allow_inf_nan=False)
+    timeout_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     literature_mode: Literal["ask_before_download", "auto_download_open_access", "search_only"] = "ask_before_download"
     selected_papers: list[str] = Field(default_factory=list, max_length=30)
     permission_tools: list[str] = Field(default_factory=list, max_length=30)
@@ -136,7 +136,7 @@ class BatchClient:
     async def start(self) -> None:
         self.process = await asyncio.create_subprocess_exec(
             sys.executable, "-m", "oceanx", "backend",
-            "--state-dir", str(self.directory / "state"), "--no-skill-curator",
+            "--state-dir", str(self.directory / "state"),
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, limit=_LOG_LIMIT,
             start_new_session=os.name == "posix",

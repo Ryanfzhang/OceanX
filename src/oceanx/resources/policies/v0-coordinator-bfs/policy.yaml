@@ -1,0 +1,5 @@
+# Baseline: Coordinator-owned selection, breadth-first frontier.
+name: v0-coordinator-bfs
+description: Coordinator-owned selection with a breadth-first frontier.
+hypotheses: false        # hypothesis nodes, verdicts and evidence links
+frontier: shallowest     # shallowest | any_depth

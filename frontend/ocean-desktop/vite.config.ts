@@ -8,6 +8,7 @@ const desktopRoot = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   base: './',
   root: 'src/renderer',
+  envDir: desktopRoot,
   plugins: [react()],
   resolve: {
     alias: {

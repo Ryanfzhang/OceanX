@@ -17,7 +17,7 @@ describe('InteractionDrawer', () => {
     expect(markup).not.toContain('aria-modal');
     expect(markup).toContain('One detail needed');
     expect(markup).toContain('Which region should be downloaded?');
-    expect(markup).toContain('aria-label="Answer to OceanMind"');
+    expect(markup).toContain('aria-label="Answer to OceanX"');
   });
 
   it('renders permission choices without a free-form answer', () => {
@@ -31,7 +31,7 @@ describe('InteractionDrawer', () => {
     expect(markup).toContain('Allow analysis execution');
     expect(markup).toContain('Deny');
     expect(markup).toContain('Allow');
-    expect(markup).not.toContain('aria-label="Answer to OceanMind"');
+    expect(markup).not.toContain('aria-label="Answer to OceanX"');
   });
 
   it('renders a compact title-and-checkbox paper shortlist', () => {

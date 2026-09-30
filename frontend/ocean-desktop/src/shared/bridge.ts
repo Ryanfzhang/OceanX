@@ -2,8 +2,12 @@ export type DesktopBackendLaunch = {
   workspacePath: string;
 };
 
-export type WorkspaceSourceKind = 'dataset' | 'paper';
-export type WorkspaceSourceSelection = {relativePath?: string; localPath?: string};
+export type WorkspaceSourceSelection = {
+  kind: 'file' | 'folder';
+  relativePath?: string;
+  localPath?: string;
+};
+export type StagedImageAttachment = {fileName: string; mimeType: string; bytes: Uint8Array};
 
 /**
  * A renderer-to-host setup request. The API key is deliberately absent from
@@ -19,7 +23,6 @@ export type ModelRoleProviderSetup = {
 export type ModelProviderSetup = {
   coordinator: ModelRoleProviderSetup;
   expert: ModelRoleProviderSetup;
-  skillCurator: ModelRoleProviderSetup;
 };
 
 export type ModelRoleProviderStatus = {
@@ -29,12 +32,12 @@ export type ModelRoleProviderStatus = {
   model: string;
   baseUrl?: string;
   configured: boolean;
+  imageInputs: boolean;
 };
 
 export type ModelProviderStatus = {
   coordinator: ModelRoleProviderStatus;
   expert: ModelRoleProviderStatus;
-  skillCurator: ModelRoleProviderStatus;
   configured: boolean;
 };
 
@@ -77,7 +80,8 @@ export type OceanDesktopBridge = {
   chooseWorkspace(): Promise<string | null>;
   listProjects(): Promise<DesktopProjectEntry[]>;
   forgetProject(projectPath: string): Promise<DesktopProjectEntry[]>;
-  chooseWorkspaceSource(kind: WorkspaceSourceKind): Promise<WorkspaceSourceSelection | null>;
+  chooseWorkspaceSource(allowImages: boolean): Promise<WorkspaceSourceSelection | null>;
+  stageImageAttachment(attachment: StagedImageAttachment): Promise<WorkspaceSourceSelection>;
   startBackend(options: DesktopBackendLaunch): Promise<DesktopBackendStatus>;
   stopBackend(): Promise<void>;
   getBackendStatus(): Promise<DesktopBackendStatus>;

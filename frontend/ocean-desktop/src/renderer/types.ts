@@ -48,7 +48,6 @@ export type ResearchTask = {
   status: 'active' | 'completed' | 'archived';
   task_revision: number;
   active_request_id?: string | null;
-  conversation_generation: number;
   updated_at?: string;
   workflow?: TaskWorkflow | null;
 };
@@ -104,7 +103,7 @@ export type TaskResultRecord = {
   summary: string;
   created_at: string;
   origin_request_id?: string | null;
-  work_order_id?: string | null;
+  agent_run_id?: string | null;
   execution_id?: string | null;
   execution_output_names?: string[];
   source_refs?: EventPayload[];
@@ -125,16 +124,19 @@ export type TeamAgent = {
   authority: 'coordinator' | 'expert' | 'discussion';
   status: 'planning' | 'working' | 'waiting' | 'discussing' | 'recovering' | 'completed' | 'incomplete' | 'blocked' | 'failed' | 'skipped';
   activity: string;
-  work_order_id?: string | null;
+  agent_run_id?: string | null;
   task_goal?: string | null;
-  result_summary?: string | null;
+  report_path?: string | null;
+  report_title?: string | null;
   limitations?: string[];
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 export type TeamAgentProfile = {
   profile_id: string;
   display_name: string;
   authority: 'expert' | 'discussion';
-  category: 'framing' | 'data' | 'science' | 'methods' | 'evidence' | 'visualization' | 'discussion';
+  category: 'science' | 'methods' | 'evidence' | 'discussion';
   summary: string;
 };
 export type TeamTodo = {
@@ -145,9 +147,12 @@ export type TeamTodo = {
   expert_key?: string | null;
   expected_outputs: string[];
   state: 'pending' | 'queued' | 'working' | 'result_returned' | 'stopped' | 'skipped';
-  work_order_id?: string | null;
+  agent_run_id?: string | null;
   session_round?: number | null;
-  result_summary?: string | null;
+  report_path?: string | null;
+  report_title?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 export type TeamAgentTranscriptBlock =
   | {type: 'text'; text: string}
@@ -163,9 +168,8 @@ export type TeamAgentTranscriptMessage = {
 };
 export type TeamAgentTranscript = {
   agent_id: string;
-  work_order_id?: string | null;
+  agent_run_id?: string | null;
   messages: TeamAgentTranscriptMessage[];
-  compaction_generation: number;
   updated_at?: string | null;
 };
 export type TeamSnapshot = {

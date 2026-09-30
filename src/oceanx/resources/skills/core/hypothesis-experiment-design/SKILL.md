@@ -14,7 +14,7 @@ metadata:
 
 Use this skill when an observation, literature claim, or proposed mechanism must become a test that
 could change the scientific conclusion. Do not load it for a purely descriptive inventory or when
-the WorkOrder already fixes a valid analysis design.
+the assigned question already fixes a valid analysis design.
 
 ## Define a discriminating claim
 
@@ -51,9 +51,9 @@ otherwise report achievable precision or detectable effect under explicit depend
 
 Keep exploration separate from confirmation. If the method changes after results are seen, record the
 change and recompute affected evidence. Do not turn a visual resemblance, isolated p-value, or
-post-hoc threshold into mechanism evidence. Stop when the bounded test answers the WorkOrder or when
+post-hoc threshold into mechanism evidence. Stop when the bounded test answers the question or when
 the available data cannot discriminate the competing explanations at the required scale.
 
 For physical mechanism checks, consult `references/review/physical-consistency.md`. For trend or
 anomaly designs, consult `references/methods/trend.md` or `references/methods/anomaly.md` only when
-those analyses are part of the WorkOrder.
+those analyses are part of the assigned question.

@@ -70,6 +70,7 @@ native/windows-sandbox-broker/target/
 
 # User data (never commit API keys or session data)
 .oceanmind/
+.oceanx/
 react_tui_smoke.txt
 
 # Local OceanX/benchmark runs (reports, workspaces, execution logs and state).

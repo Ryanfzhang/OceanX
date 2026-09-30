@@ -14,7 +14,6 @@ export function isModelProviderReady(status: ModelProviderStatus | null | undefi
   return Boolean(
     status?.configured
     && isConcreteModelId(status.coordinator.model)
-    && isConcreteModelId(status.expert.model)
-    && isConcreteModelId(status.skillCurator.model),
+    && isConcreteModelId(status.expert.model),
   );
 }

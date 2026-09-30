@@ -41,8 +41,8 @@ SCATTER_SIZE_MIN = 10.0     # <-- MODIFY: minimum marker area (points squared)
 CONTOUR_LEVELS = 24         # <-- MODIFY: smooth filled contours without inventing data
 
 NATURE_COLORS = [
-    "#0F4D92",  # deep blue
-    "#42949E",  # teal
+    "#147D78",  # Ocean teal
+    "#245F82",  # deep blue
     "#8BCF8B",  # soft green
     "#9A4D8E",  # violet
     "#B64342",  # restrained red
@@ -115,7 +115,7 @@ def resolve_result_file(relative_path):
             return candidate.resolve()
     raise FileNotFoundError(
         f"Cannot find preserved result data: {relative_path}. "
-        "Open this notebook from its OceanMind task directory."
+        "Open this notebook from its OceanX task directory."
     )
 
 
@@ -125,7 +125,7 @@ def _view_spec(dataset):
         return json.loads(raw)
     if isinstance(raw, dict):
         return raw
-    raise ValueError("The NetCDF file does not contain an OceanMind view specification")
+    raise ValueError("The NetCDF file does not contain an OceanX view specification")
 
 
 def _values(dataset, spec, field):
@@ -149,15 +149,21 @@ def _coordinates(dataset, spec, field, dimension):
 
 def _colormap(palette):
     palettes = {
+        "ocean_teal": ["#F4F0E5", "#C6DCD5", "#83B9B2", "#47888E", "#27536D"],
+        "blue_red": ["#104E8B", "#376B9E", "#5F89B1", "#AFC3D8", "#C5E9E3", "#D7E1EB", "#F2DADA", "#E5B5B5", "#D89090", "#B22222"],
+        "grouped": ["#104E8B", "#376B9E", "#5F89B1", "#AFC3D8", "#C5E9E3", "#D7E1EB", "#F2DADA", "#E5B5B5", "#D89090", "#B22222"],
         "depth": ["#f3edc9", "#cdddc8", "#93c4bd", "#5a9ea5", "#477992", "#455777", "#66516d"],
         "thermal": ["#243c62", "#47759a", "#82afb5", "#e8e2cd", "#da9a70", "#a94b42"],
-        "haline": ["#f4f0e5", "#c6dcd5", "#83b9b2", "#47888e", "#27536d"],
-        "diverging": ["#315f91", "#8cb5ca", "#f4f3ed", "#dda17d", "#9f443f"],
         "chlorophyll": ["#f1edc8", "#c8dda7", "#83b984", "#4b8c6c", "#285c56"],
-        "default": ["#edf0d6", "#bdd7c1", "#7db5ad", "#518d98", "#4b6282", "#70566f"],
         "categorical": ["#154f70", "#bd6840", "#4a8e92", "#7775a7", "#9d7b36", "#5d7e68", "#a64f68", "#52719b"],
     }
-    palettes["balance"] = palettes["diverging"]
+    palettes["default"] = palettes["ocean_teal"]
+    palettes["sequential"] = palettes["ocean_teal"]
+    palettes["haline"] = palettes["ocean_teal"]
+    palettes["diverging"] = palettes["blue_red"]
+    palettes["balance"] = palettes["blue_red"]
+    palettes["RdBu_r"] = palettes["blue_red"]
+    palettes["rdbu_r"] = palettes["blue_red"]
     if isinstance(palette, str):
         palette = palettes.get(palette, palette)
     if isinstance(palette, (list, tuple)):
@@ -223,7 +229,7 @@ def _render_spatial_map(dataset, spec):
     field = np.asarray(dataset[variable].values)
     colorbar = spec.get("colorbar", {})
     levels = colorbar.get("levels")
-    palette = _colormap(colorbar.get("colormap", "cividis"))
+    palette = _colormap(colorbar.get("colormap", "ocean_teal"))
 
     fig, ax = plt.subplots(
         figsize=(FIGURE_WIDTH, FIGURE_WIDTH * 0.62),
@@ -281,10 +287,23 @@ def _render_layer(ax, dataset, spec, layer):
     if layer_type == "scatter":
         color_field = layer.get("color")
         colors = _values(dataset, spec, color_field) if color_field else style.get("color")
-        radius = float(style.get("radius", 2.0))
+        x = _coordinates(dataset, spec, layer["x"], "x")
+        y = _coordinates(dataset, spec, layer["y"], "y")
+        point_count = int(np.count_nonzero(np.isfinite(x) & np.isfinite(y)))
+        authored_radius = float(style.get("radius", 2.0))
+        authored_opacity = float(style.get("opacity", 0.62))
+        if point_count <= 64:
+            radius = max(authored_radius, 3.4)
+            opacity = max(authored_opacity, 0.84)
+        elif point_count <= 512:
+            radius = max(authored_radius, 2.1)
+            opacity = max(authored_opacity, 0.64)
+        else:
+            radius = authored_radius
+            opacity = authored_opacity
         scatter_kwargs = {
             "s": max(SCATTER_SIZE_MIN, radius * radius * 7.0),
-            "alpha": float(style.get("opacity", 0.62)),
+            "alpha": opacity,
             "linewidths": 0,
             "rasterized": True,
             "marker": {"circle": "o", "square": "s", "triangle": "^", "diamond": "D"}.get(style.get("marker", "circle"), "o"),
@@ -293,21 +312,21 @@ def _render_layer(ax, dataset, spec, layer):
         if color_field:
             scatter_kwargs.update({
                 "c": colors,
-                "cmap": _colormap(style.get("palette", "cividis")),
+                "cmap": _colormap(style.get("palette", "ocean_teal")),
                 "norm": _normalization(layer),
             })
         else:
             scatter_kwargs["color"] = style.get("color", NATURE_COLORS[0])
         return ax.scatter(
-            _coordinates(dataset, spec, layer["x"], "x"),
-            _coordinates(dataset, spec, layer["y"], "y"),
+            x,
+            y,
             **scatter_kwargs,
         )
     if layer_type in {"field2d", "heatmap"}:
         x = _coordinates(dataset, spec, layer["x"], "x")
         y = _coordinates(dataset, spec, layer["y"], "y")
         z = _values(dataset, spec, layer["z"])
-        palette = _colormap(style.get("palette", "cividis"))
+        palette = _colormap(style.get("palette", "ocean_teal"))
         limits = {"norm": _normalization(layer)}
         if layer.get("render") in {"filled_contour", "contourf"}:
             return ax.contourf(
@@ -405,7 +424,7 @@ def _render_layer(ax, dataset, spec, layer):
                 color="#272727",
             )
         return None
-    raise ValueError(f"Unsupported OceanMind layer: {layer_type!r}; figure rendering stopped")
+    raise ValueError(f"Unsupported OceanX layer: {layer_type!r}; figure rendering stopped")
 
 
 def _render_scientific_figure(dataset, spec):
@@ -473,7 +492,7 @@ def _render_scientific_figure(dataset, spec):
 
 
 def render_oceanmind_view(path):
-    """Render one preserved OceanMind result without recomputing its data."""
+    """Render one preserved OceanX result without recomputing its data."""
     path = Path(path)
     with xr.open_dataset(path) as opened:
         dataset = opened.load()
@@ -501,7 +520,7 @@ def build_figure_reproduction_notebook(
             "id": _cell_id(request_id, "introduction"),
             "metadata": {},
             "source": [
-                "# OceanMind analysis notebook\n",
+                "# OceanX analysis notebook\n",
                 "\n",
                 (
                     "This notebook re-renders every accepted interactive result directly "
@@ -538,7 +557,7 @@ def build_figure_reproduction_notebook(
                     "source": [
                         f"## Figure {index}. {source.title}\n",
                         "\n",
-                        f"{source.summary or 'Accepted OceanMind interactive result.'}\n",
+                        f"{source.summary or 'Accepted OceanX interactive result.'}\n",
                     ],
                 },
                 {

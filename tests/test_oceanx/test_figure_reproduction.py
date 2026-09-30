@@ -90,7 +90,7 @@ def test_notebook_renders_iso_dates_as_time_not_categories(renderer, data):
 
 def test_notebook_rejects_unknown_layers_instead_of_silent_omission(renderer, data):
     _, ax = renderer["plt"].subplots()
-    with pytest.raises(ValueError, match="Unsupported OceanMind layer"):
+    with pytest.raises(ValueError, match="Unsupported OceanX layer"):
         renderer["_render_layer"](ax, data, {}, {"type": "unknown"})
 
 

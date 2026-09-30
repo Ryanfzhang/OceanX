@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -10,8 +9,9 @@ import pytest
 from oceanx.backend.events import BackendClient
 from oceanx.backend.host import OceanBackendHost
 from oceanx.backend.router import OceanRequestRouter
-from oceanx.backend.store import RequestStore, RequestStoreError
+from oceanx.backend.store import RequestStoreError
 from oceanx.datasets import resolve_dataset_source
+from oceanx.local_sources import resolve_local_source
 
 
 class _Recorder:
@@ -158,10 +158,10 @@ async def test_dataset_import_registers_workspace_local_netcdf_as_read_only_refe
             workspace_id="ws_dataset_import",
             task_id=task.task_id,
         )[0].ref == ref.key
-        task_roots = list((workspace / "OceanMind Tasks").iterdir())
+        task_roots = list((workspace / "OceanX Tasks").iterdir())
         assert len(task_roots) == 1
-        assert list((task_roots[0] / "data").glob("*.nc")) == []
-        sources = (task_roots[0] / "data" / "sources.json").read_text(encoding="utf-8")
+        assert list((task_roots[0] / "sources").glob("*.nc")) == []
+        sources = (task_roots[0] / "sources" / "sources.json").read_text(encoding="utf-8")
         assert '"materialization_level": "local_reference"' in sources
         assert '"source_relative_path": "data/station.nc"' in sources
 
@@ -222,6 +222,58 @@ async def test_dataset_import_registers_workspace_local_netcdf_as_read_only_refe
         assert failed.request_id == "req_dataset_import_symlink"
         assert failed.payload.error.code == "store_error"
         assert host.store.workspace_snapshot("ws_dataset_import").revision == 2
+    finally:
+        await host.close()
+
+
+@pytest.mark.asyncio
+async def test_source_import_keeps_file_or_folder_scientifically_neutral(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    mixed = workspace / "materials"
+    mixed.mkdir(parents=True)
+    (mixed / "observations.nc").write_bytes(b"CDF\x01fixture")
+    (mixed / "paper.pdf").write_bytes(b"%PDF-1.4 fixture")
+
+    host = OceanBackendHost(tmp_path / "state", write_frame=lambda _frame: None)
+    try:
+        client, recorder, context = await _open_workspace(host, workspace)
+        task = host.store.create_research_task(
+            workspace_id="ws_dataset_import", title="Interpret mixed materials"
+        )
+        await host.router.handle_payload(
+            client,
+            {
+                "protocol_version": 2,
+                "request_id": "req_source_import_folder",
+                "type": "source.import",
+                "payload": {
+                    "relative_path": "materials",
+                    "title": "Research materials",
+                },
+                "context": {**context, "task_id": task.task_id},
+                "expected_workspace_revision": 1,
+            },
+        )
+
+        assert any(event.type == "artifact.created" for event in recorder.events), recorder.events
+        ref = recorder.latest("artifact.created").payload.artifact.ref
+        artifact = host.store.get_artifact(workspace_id="ws_dataset_import", ref=ref)
+        assert artifact is not None
+        assert artifact.artifact_type == "project_context"
+        assert artifact.schema_version == "ocean-local-source/v1"
+        assert artifact.content["source_kind"] == "directory"
+        assert "dataset" not in artifact.content
+        assert "paper" not in artifact.content
+        assert artifact.files == ()
+        assert resolve_local_source(
+            store=host.store,
+            workspace_id="ws_dataset_import",
+            ref=ref,
+        ).path == mixed.resolve()
+
+        snapshot = host.store.task_snapshot(task_id=task.task_id)
+        assert len(snapshot.sources) == 1
+        assert snapshot.sources[0]["relation"] == "source"
     finally:
         await host.close()
 
@@ -452,76 +504,11 @@ async def test_dataset_import_accepts_an_unknown_local_file_without_format_white
         await host.close()
 
 
-@pytest.mark.asyncio
-async def test_restart_reconciles_only_provable_legacy_task_source_ownership(
-    tmp_path: Path,
-) -> None:
-    workspace = tmp_path / "workspace"
-    source = workspace / "data" / "legacy.nc"
-    source.parent.mkdir(parents=True)
-    source.write_bytes(b"CDF\x01legacy fixture")
-    host = OceanBackendHost(tmp_path / "state", write_frame=lambda _frame: None)
-    database = host.paths.database
-    task_id: str | None = None
-    ref = None
-    try:
-        client, recorder, context = await _open_workspace(host, workspace)
-        task = host.store.create_research_task(
-            workspace_id="ws_dataset_import", title="Legacy import ownership"
-        )
-        task_id = task.task_id
-        await host.router.handle_payload(
-            client,
-            {
-                "protocol_version": 2,
-                "request_id": "req_dataset_import_legacy",
-                "type": "dataset.import",
-                "payload": {
-                    "relative_path": "data/legacy.nc",
-                    "materialization_acknowledged": True,
-                },
-                "context": {**context, "task_id": task.task_id},
-                "expected_workspace_revision": 1,
-            },
-        )
-        ref = recorder.latest("artifact.created").payload.artifact.ref
-    finally:
-        await host.close()
-
-    assert task_id is not None and ref is not None
-    connection = sqlite3.connect(database)
-    try:
-        connection.execute(
-            "DELETE FROM task_artifact_links WHERE task_id = ? AND artifact_id = ?",
-            (task_id, ref.artifact_id),
-        )
-        connection.execute(
-            "UPDATE artifact_commit_intents SET task_id = NULL, task_relation = NULL "
-            "WHERE origin_request_id = ?",
-            ("req_dataset_import_legacy",),
-        )
-        connection.execute("DELETE FROM schema_migrations WHERE version = 35")
-        connection.commit()
-    finally:
-        connection.close()
-
-    restarted = RequestStore(database)
-    try:
-        snapshot = restarted.task_snapshot(task_id=task_id)
-        assert snapshot.outputs == ()
-        assert len(snapshot.sources) == 1
-        assert snapshot.sources[0]["artifact"]["ref"] == {
-            "artifact_id": ref.artifact_id,
-            "version": ref.version,
-        }
-        assert snapshot.sources[0]["origin_request_id"] == "req_dataset_import_legacy"
-    finally:
-        restarted.close()
 
 
 def test_desktop_staged_dataset_paths_are_narrowly_scoped() -> None:
     OceanRequestRouter._assert_desktop_staged_dataset_path(
-        ".oceanmind/staging/desktop-imports/"
+        ".oceanx/staging/desktop-imports/"
         "desktop_import_0123456789abcdef0123456789abcdef/source/data.tif"
     )
     with pytest.raises(RequestStoreError, match="Desktop-staged"):

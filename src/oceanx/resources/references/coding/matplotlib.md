@@ -7,9 +7,9 @@ validate registration or values.
 
 For current Matplotlib releases, obtain a colormap through
 `matplotlib.colormaps` or `matplotlib.pyplot.get_cmap`. Do not rely on the
-removed `matplotlib.cm.get_cmap` compatibility function. When an overlay uses
-transparent missing data, write a true RGBA PNG and ensure alpha is either 0
-for nodata or 255 for data before publishing it as a spatial layer.
+removed `matplotlib.cm.get_cmap` compatibility function. For transparent missing
+data in a static image, use an explicit validity mask; distinguish missing cells
+from valid values at the low end of the colour scale.
 
 Choose colour limits from declared values and retain them in the artifact
 metadata. Do not use rendering output as the only numerical check: independently

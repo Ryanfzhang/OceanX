@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Ocean Research Partner">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="OceanX">
   <rect width="1024" height="1024" rx="214" fill="#163e50"/>
   <circle cx="512" cy="480" r="276" fill="#edf5ee"/>
   <path d="M236 480h552M277 334h470M277 626h470M512 204c-86 74-138 167-138 276s52 202 138 276M512 204c86 74 138 167 138 276s-52 202-138 276" fill="none" stroke="#3a8995" stroke-width="28" stroke-linecap="round"/>

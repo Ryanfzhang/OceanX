@@ -405,7 +405,8 @@ def _limits(limits: Any) -> dict[str, int | float]:
             not isinstance(value, (int, float))
             or isinstance(value, bool)
             or not math.isfinite(value)
-            or value <= 0
+            or value < 0
+            or (name == "termination_grace_seconds" and value == 0)
         ):
             raise WindowsBrokerProtocolError(f"Broker limit {name} is invalid")
         result[name] = value

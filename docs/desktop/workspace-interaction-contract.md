@@ -1,6 +1,6 @@
 # Desktop Workspace Interaction Contract
 
-This document freezes the v1 interaction shape for Ocean Research Partner. It
+This document freezes the v1 interaction shape for OceanX. It
 describes the product surface that the renderer may refine, but must not
 silently rearrange or replace with a generic dashboard.
 

@@ -439,7 +439,7 @@ fn supervise_child(
                 _ => {}
             }
         }
-        if terminal.is_none() && started.elapsed() >= deadline {
+        if wall_time_seconds != 0.0 && terminal.is_none() && started.elapsed() >= deadline {
             terminal = Some(("timed_out", "wall_time_seconds"));
         }
         if let Some((status, trigger)) = terminal {
@@ -915,7 +915,7 @@ fn validate_request(request: &BrokerRequest) -> Result<(), String> {
     ];
     if limits
         .iter()
-        .any(|value| !value.is_finite() || *value <= 0.0)
+        .any(|value| !value.is_finite() || *value < 0.0)
     {
         return Err("Broker request contains invalid resource limits".to_owned());
     }
@@ -932,6 +932,9 @@ fn validate_request(request: &BrokerRequest) -> Result<(), String> {
 }
 
 fn bounded_capture_limit(value: f64) -> Result<usize, String> {
+    if value == 0.0 {
+        return Ok(usize::MAX);
+    }
     if !value.is_finite() || value <= 0.0 || value > MAX_CAPTURE_BYTES {
         return Err("Broker standard-stream budget is invalid".to_owned());
     }

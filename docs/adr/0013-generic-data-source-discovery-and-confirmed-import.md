@@ -6,7 +6,7 @@
 ## Context
 
 The first real remote-data implementation used NOAA OISST as a narrow
-engineering validation. That does not make OISST an Ocean Research Partner
+engineering validation. That does not make OISST an OceanX
 workflow or a suitable agent-facing product abstraction. A researcher asks for
 data in terms of variables, spatial and temporal coverage, vertical domain and
 scientific intent; the system must select from compatible configured sources

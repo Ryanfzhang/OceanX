@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import time
 from pathlib import Path
 
-from oceanx_delivery import checked_file
+def checked_file(root: Path, relative: str, record: dict) -> Path:
+    """Validate a recorded benchmark file without importing a runtime adapter."""
+    candidate = (root / relative).resolve(strict=True)
+    if root.resolve() not in candidate.parents or not candidate.is_file() or candidate.is_symlink():
+        raise ValueError("Recorded output escapes its benchmark directory")
+    digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    if record.get("sha256") and record["sha256"] != digest:
+        raise ValueError("Recorded output checksum does not match")
+    return candidate
 
 
 def collect_run(run: Path, destination: Path | None = None) -> Path:

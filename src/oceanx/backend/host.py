@@ -4,34 +4,31 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sys
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import BinaryIO, TextIO
+from typing import BinaryIO
 
+from oceanx.artifacts.files import ArtifactFileStore
+from oceanx.artifacts.service import ArtifactService
 from oceanx.backend.events import BackendClient, EventBus
 from oceanx.backend.router import OceanRequestRouter
 from oceanx.backend.store import RequestStore
-from oceanx.artifacts.files import ArtifactFileStore
-from oceanx.artifacts.service import ArtifactService
-from oceanx.exports import PortableExportService
-from oceanx.workspace import WorkspaceService
+from oceanx.cache_cleanup import TaskCacheCleaner
 from oceanx.expert_execution import ExpertCodeExecutionService
-from oceanx.expert_deliverables import ExpertDeliverableService
-from oceanx.expert_recovery import ExpertRecoveryService
+from oceanx.exports import PortableExportService
 from oceanx.protocol.v2.models import ClientKind, EventEnvelope
+from oceanx.research.services import ResearchServices
 from oceanx.storage import OceanPaths
-from oceanx.skill_curator import SkillCurator
-from oceanx.task_workspace import TaskWorkspaceProjector
 from oceanx.task_results import TaskResultStore
-from oceanx.team.orchestrator import (
-    OceanTeamOrchestrator,
-    OceanTeamSettings,
-)
-
+from oceanx.task_workspace import TaskWorkspaceProjector
+from oceanx.workspace import WorkspaceService
 
 FrameWriter = Callable[[str], Awaitable[None] | None]
 PROTOCOL_PREFIX = "OHJSON:"
+_CACHE_SWEEP_INTERVAL_SECONDS = 6 * 60 * 60
+_LOGGER = logging.getLogger(__name__)
 
 
 class JsonlStdioAdapter:
@@ -113,7 +110,6 @@ class OceanBackendHost:
         state_directory: Path,
         *,
         write_frame: FrameWriter,
-        team_settings: OceanTeamSettings | None = None,
         expected_client_kind: ClientKind = "desktop",
     ) -> None:
         self.paths = OceanPaths.for_state_root(state_directory).ensure()
@@ -125,6 +121,12 @@ class OceanBackendHost:
         self.task_results = TaskResultStore(
             task_workspaces=self.task_workspace_projector,
         )
+        self.cache_cleaner = TaskCacheCleaner(
+            store=self.store,
+            task_workspaces=self.task_workspace_projector,
+        )
+        self._cache_maintenance_stop = asyncio.Event()
+        self._cache_maintenance_task: asyncio.Task[None] | None = None
         self.artifact_service = ArtifactService(
             store=self.store,
             files=ArtifactFileStore(self.paths),
@@ -140,43 +142,18 @@ class OceanBackendHost:
             paths=self.paths,
             task_workspaces=self.task_workspace_projector,
         )
-        self.expert_deliverables = ExpertDeliverableService(
-            store=self.store,
-            task_workspaces=self.task_workspace_projector,
-            task_results=self.task_results,
-        )
         self.event_bus = EventBus()
-        self.skill_curator = SkillCurator(
-            store=self.store,
-            task_results=self.task_results,
-            event_emitter=self.event_bus.emit_workspace,
-        )
         # Filesystem intents are recovered before active request records are marked interrupted.
         self.recovered_artifact_operations = self.artifact_service.recover_pending()
-        self.expert_recovery = ExpertRecoveryService(
-            store=self.store,
-            task_workspaces=self.task_workspace_projector,
-            task_results=self.task_results,
-        )
-        self.recovered_expert_work = self.expert_recovery.recover()
-        self.team = OceanTeamOrchestrator(
-            store=self.store,
-            artifacts=self.artifact_service,
-            task_results=self.task_results,
-            expert_code_execution=self.expert_code_execution,
-            expert_deliverables=self.expert_deliverables,
-            domain_event_emitter=self.event_bus.emit_workspace,
-            settings=team_settings,
-        )
+        self.research = ResearchServices(self)
         self.router = OceanRequestRouter(
             store=self.store,
             event_bus=self.event_bus,
             artifact_service=self.artifact_service,
             portable_export_service=self.portable_export_service,
-            team_orchestrator=self.team if self.team.settings.enabled else None,
+            research_services=self.research,
             task_workspace_projector=self.task_workspace_projector,
             task_results=self.task_results,
-            skill_curator=self.skill_curator,
         )
         self.stdio = JsonlStdioAdapter(
             router=self.router,
@@ -185,17 +162,47 @@ class OceanBackendHost:
             expected_client_kind=expected_client_kind,
         )
 
-    async def run_stdio(self, *, input_stream: BinaryIO | None = None, skill_curator: bool = True) -> int:
-        if skill_curator:
-            self.skill_curator.start()
+    async def run_stdio(self, *, input_stream: BinaryIO | None = None) -> int:
+        self.start_cache_maintenance()
         return await self.stdio.run(input_stream=input_stream)
 
+    def start_cache_maintenance(self) -> None:
+        """Sweep expired task caches at startup and periodically thereafter."""
+        if self._cache_maintenance_task is None:
+            self._cache_maintenance_task = asyncio.create_task(self._maintain_cache())
+
+    async def _maintain_cache(self) -> None:
+        while not self._cache_maintenance_stop.is_set():
+            try:
+                candidates = await asyncio.to_thread(self.cache_cleaner.candidates)
+                for candidate in candidates:
+                    # A task may have received a new request since the query.
+                    current = self.store.get_research_task(candidate.task_id)
+                    if current is None or current.active_request_id is not None:
+                        continue
+                    agents = self.task_workspace_projector.ensure_task_root(candidate.task_id) / "agents"
+                    for key in tuple(self.expert_code_execution.kernels.kernels):
+                        if Path(key).is_relative_to(agents):
+                            await self.expert_code_execution.kernels.close(key)
+                    await asyncio.to_thread(self.cache_cleaner.clean_task, candidate.task_id)
+            except Exception:
+                _LOGGER.exception("Task cache maintenance failed")
+            try:
+                await asyncio.wait_for(
+                    self._cache_maintenance_stop.wait(), timeout=_CACHE_SWEEP_INTERVAL_SECONDS,
+                )
+            except TimeoutError:
+                pass
+
     async def close(self) -> None:
-        await self.skill_curator.close()
+        self._cache_maintenance_stop.set()
+        if self._cache_maintenance_task is not None:
+            await self._cache_maintenance_task
         await self.stdio.close()
         await self.router.shutdown_active_analysis()
         if not self.router.shutdown_requested:
             self.router.interrupt_active_requests()
+        await self.expert_code_execution.kernels.close()
         self.store.close()
 
 
@@ -203,30 +210,16 @@ async def run_stdio_backend(
     state_directory: Path,
     *,
     expected_client_kind: ClientKind = "desktop",
-    skill_curator: bool = True,
 ) -> int:
     """Run the production stdio adapter using stdout only for protocol frames."""
 
-    output: TextIO = sys.stdout
-
-    def write_frame(frame: str) -> None:
-        output.write(frame)
-        output.flush()
-
-    host = OceanBackendHost(
-        state_directory,
-        write_frame=write_frame,
-        expected_client_kind=expected_client_kind,
-    )
-    try:
-        return await host.run_stdio(skill_curator=skill_curator)
-    finally:
-        await host.close()
+    from oceanx.research.launcher import run_desktop_gateway
+    return await run_desktop_gateway(state_directory, expected_client_kind=expected_client_kind)
 
 
 __all__ = [
+    "PROTOCOL_PREFIX",
     "JsonlStdioAdapter",
     "OceanBackendHost",
-    "PROTOCOL_PREFIX",
     "run_stdio_backend",
 ]

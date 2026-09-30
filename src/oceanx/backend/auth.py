@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from oceanx.protocol.v2.models import ClientKind
 
-
 DESKTOP_CAPABILITIES = frozenset(
     {
         "session.open",
@@ -36,6 +35,7 @@ REQUEST_CAPABILITIES = {
     "task.delete": "task.write",
     "task.snapshot.get": "task.read",
     "task.agent_transcript.get": "task.read",
+    "task.report.read": "task.read",
     "task.output.list": "task.read",
     "workspace.open": "workspace.write",
     "workspace.snapshot.get": "workspace.read",
@@ -50,12 +50,20 @@ REQUEST_CAPABILITIES = {
     "artifact.versions.get": "workspace.read",
     "artifact.create": "workspace.write",
     "dataset.import": "workspace.write",
+    "source.import": "workspace.write",
     "paper.import": "workspace.write",
     "paper.register": "workspace.write",
     "hypothesis.activate": "workspace.write",
     "portable.export.create": "workspace.write",
     "disclosure.policy.get": "workspace.read",
     "disclosure.policy.set": "workspace.write",
+    "research.lessons.list": "workspace.read",
+    "research.lessons.decide": "workspace.write",
+    "research.lessons.retire": "workspace.write",
+    "research.lessons.consolidate": "workspace.write",
+    "research.review.get": "workspace.read",
+    "research.labels.set": "workspace.write",
+    "research.policies.activate": "workspace.write",
     "system.shutdown": "system.shutdown",
 }
 

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Local-first desktop workbench for ocean research tasks.",
-  "author": "Ocean Research Partner contributors",
+  "author": "OceanX contributors",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -64,7 +64,7 @@
   },
   "build": {
     "appId": "org.oceanpartner.desktop",
-    "productName": "Ocean Research Partner",
+    "productName": "OceanX",
     "icon": "assets/ocean-partner-icon.png",
     "files": [
       "dist/renderer/**",
@@ -86,6 +86,9 @@
     ],
     "mac": {
       "icon": "assets/ocean-partner-icon.icns",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "OceanX uses the microphone only when you start voice input in the message composer."
+      },
       "target": [
         "zip",
         "dmg"

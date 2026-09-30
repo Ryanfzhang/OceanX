@@ -1,6 +1,7 @@
 import {Paperclip} from 'lucide-react';
 
 import {MessageMarkdown} from '../message-markdown.js';
+import {agentDisplayName} from '../agent-display-name.js';
 import type {TeamAgent, TeamAgentProfile, TeamAgentTranscript, TeamAgentTranscriptBlock, TeamTodo} from '../types.js';
 
 const TODO_STATE_LABELS: Record<TeamTodo['state'], string> = {
@@ -13,12 +14,16 @@ const TODO_STATE_LABELS: Record<TeamTodo['state'], string> = {
 };
 
 function displayRole(agent: TeamAgent, profiles: TeamAgentProfile[]): string {
-  return profiles.find((profile) => profile.profile_id === agent.profile_id)?.display_name
-    ?? agent.semantic_role;
+  return agentDisplayName(
+    agent.profile_id,
+    profiles.find((profile) => profile.profile_id === agent.profile_id)?.display_name ?? agent.semantic_role,
+  );
 }
 
 function statusLabel(status: TeamAgent['status']): string {
-  return status.replaceAll('_', ' ').replace(/\b[a-z]/g, (char) => char.toUpperCase());
+  if (status === 'incomplete') return 'Partial result';
+  const phrase = status.replaceAll('_', ' ');
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
 }
 
 /** The activity feed can carry markdown headings or result excerpts; the header shows one clean line. */
@@ -28,10 +33,10 @@ function activitySummary(activity: string): string {
 
 function todosForAgent(agent: TeamAgent, todos: TeamTodo[]): TeamTodo[] {
   if (agent.authority === 'coordinator') return todos;
-  const byWorkOrder = agent.work_order_id
-    ? todos.filter((todo) => todo.work_order_id === agent.work_order_id)
+  const byAgentRun = agent.agent_run_id
+    ? todos.filter((todo) => todo.agent_run_id === agent.agent_run_id)
     : [];
-  if (byWorkOrder.length) return byWorkOrder;
+  if (byAgentRun.length) return byAgentRun;
   return agent.profile_id
     ? todos.filter((todo) => todo.profile_id === agent.profile_id
       && (todo.expert_key ?? null) === (agent.expert_key ?? null))
@@ -59,118 +64,6 @@ function timeLabel(value?: string): string | null {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return new Intl.DateTimeFormat(undefined, {hour: '2-digit', minute: '2-digit'}).format(parsed);
-}
-
-type JsonEnvelope = {
-  prose: string;
-  payload: Record<string, unknown>;
-};
-
-/**
- * Work-order prompts arrive as instruction prose followed by a JSON envelope.
- * Split the two so the payload can be rendered as a card instead of a raw dump.
- */
-function parseJsonEnvelope(text: string): JsonEnvelope | null {
-  const trimmed = text.trim();
-  for (let start = trimmed.indexOf('{'); start !== -1; start = trimmed.indexOf('{', start + 1)) {
-    try {
-      const parsed: unknown = JSON.parse(trimmed.slice(start));
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return {prose: trimmed.slice(0, start).trim(), payload: parsed as Record<string, unknown>};
-      }
-    } catch {
-      // This brace opens an incomplete structure; keep scanning.
-    }
-  }
-  return null;
-}
-
-type Assignment = {
-  goal: string;
-  doneWhen?: string;
-  contextSummary?: string;
-  intents: string[];
-  constraints: string[];
-  sources: string[];
-};
-
-function stringField(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
-function stringList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-    .map((item) => item.trim());
-}
-
-function sourceList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((item) => {
-    if (item && typeof item === 'object') {
-      const record = item as Record<string, unknown>;
-      const title = stringField(record, 'title') ?? stringField(record, 'handle');
-      const kind = stringField(record, 'kind');
-      if (title) return kind ? `${title} (${kind})` : title;
-      return null;
-    }
-    return typeof item === 'string' && item.trim() ? item.trim() : null;
-  }).filter((item): item is string => Boolean(item));
-}
-
-function asAssignment(payload: Record<string, unknown>): Assignment | null {
-  const goal = stringField(payload, 'task_goal');
-  if (!goal) return null;
-  return {
-    goal,
-    doneWhen: stringField(payload, 'done_when'),
-    contextSummary: stringField(payload, 'context_summary'),
-    intents: stringList(payload.outcome_intents),
-    constraints: stringList(payload.constraints),
-    sources: sourceList(payload.sources),
-  };
-}
-
-function AssignmentCard({assignment, prose}: {assignment: Assignment; prose: string}) {
-  return <div className="agent-assignment-card">
-    <dl>
-      <div>
-        <dt>Task</dt>
-        <dd>{assignment.goal}</dd>
-      </div>
-      {assignment.doneWhen ? <div>
-        <dt>Done when</dt>
-        <dd>{assignment.doneWhen}</dd>
-      </div> : null}
-      {assignment.contextSummary ? <div>
-        <dt>Context</dt>
-        <dd>{assignment.contextSummary}</dd>
-      </div> : null}
-    </dl>
-    {assignment.intents.length ? <ul className="agent-assignment-intents">
-      {assignment.intents.map((intent) => <li key={intent}>{intent.replaceAll('_', ' ')}</li>)}
-    </ul> : null}
-    {assignment.sources.length ? <p className="agent-assignment-sources">Sources: {assignment.sources.join(' · ')}</p> : null}
-    {assignment.constraints.length ? <ul className="agent-assignment-constraints">
-      {assignment.constraints.map((constraint) => <li key={constraint}>{constraint}</li>)}
-    </ul> : null}
-    {prose ? <details className="agent-assignment-raw">
-      <summary>Full instructions</summary>
-      <pre>{prose}</pre>
-    </details> : null}
-  </div>;
-}
-
-function StructuredPayload({prose, payload}: {prose: string; payload: Record<string, unknown>}) {
-  return <>
-    {prose ? <MessageMarkdown content={prose} /> : null}
-    <details className="agent-assignment-raw">
-      <summary>Structured payload</summary>
-      <pre>{JSON.stringify(payload, null, 2)}</pre>
-    </details>
-  </>;
 }
 
 type HistoryEntry =
@@ -219,7 +112,14 @@ function historyEntries(messages: TeamAgentTranscript['messages']): HistoryEntry
     });
   }
   flushTechnical();
-  return entries;
+  if (!entries.every((entry) => entry.createdAt && Number.isFinite(new Date(entry.createdAt).getTime()))) {
+    return entries;
+  }
+  return entries
+    .map((entry, index) => ({entry, index}))
+    .sort((left, right) => new Date(left.entry.createdAt!).getTime() - new Date(right.entry.createdAt!).getTime()
+      || left.index - right.index)
+    .map(({entry}) => entry);
 }
 
 export function AgentActivityPanel({
@@ -247,7 +147,7 @@ export function AgentActivityPanel({
   const selectedTodos = todosForAgent(agent, todos);
   const returned = selectedTodos.filter((todo) => todo.state === 'result_returned').length;
   const matchesSelection = transcript?.agent_id === agent.agent_id
-    && (agent.authority === 'coordinator' || transcript.work_order_id === agent.work_order_id);
+    && (agent.authority === 'coordinator' || transcript.agent_run_id === agent.agent_run_id);
   const messages = matchesSelection ? transcript?.messages ?? [] : [];
   const entries = historyEntries(messages);
   const coordinatorSelected = agent.authority === 'coordinator';
@@ -265,8 +165,8 @@ export function AgentActivityPanel({
 
     <section className="agent-task-strip" aria-label={`${role} assigned work`}>
       <header>
-        <strong>{coordinatorSelected ? 'Research Tasks' : 'Assigned Work'}</strong>
-        <small>{selectedTodos.length ? `${returned} of ${selectedTodos.length} Results Ready` : 'Planning'}</small>
+        <strong>{coordinatorSelected ? 'Research tasks' : 'Assigned work'}</strong>
+        <small>{selectedTodos.length ? `${returned} of ${selectedTodos.length} results ready` : 'Planning'}</small>
       </header>
       {selectedTodos.length ? <ol>
         {selectedTodos.map((todo) => <li className={`state-${todo.state}`} key={todo.todo_id}>
@@ -285,22 +185,14 @@ export function AgentActivityPanel({
         {loading ? <p className="agent-activity-state">Loading saved conversation…</p> : null}
         {error ? <p className="agent-activity-state error">{error}</p> : null}
         {!loading && !error && !entries.length ? <p className="agent-activity-state">No saved messages yet.</p> : null}
-        {matchesSelection && transcript && transcript.compaction_generation > 0 ? <details className="agent-activity-memory">
-          <summary>Long-session history preserved</summary>
-          <p>Messages remain available across {transcript.compaction_generation} context-compaction boundary/boundaries.</p>
-        </details> : null}
         {entries.map((entry) => {
           const timestamp = timeLabel(entry.createdAt);
           if (entry.kind === 'message') {
-            const envelope = parseJsonEnvelope(entry.text);
-            const assignment = envelope ? asAssignment(envelope.payload) : null;
             return <article className={`agent-timeline-message role-${entry.role}`} key={entry.key}>
               <i aria-hidden="true" />
               <div>
                 <header><small>{speakerLabel(entry.role, role, coordinatorSelected)}</small>{timestamp ? <time>{timestamp}</time> : null}</header>
-                {assignment && envelope ? <AssignmentCard assignment={assignment} prose={envelope.prose} />
-                  : envelope ? <StructuredPayload prose={envelope.prose} payload={envelope.payload} />
-                  : <MessageMarkdown content={entry.text} />}
+                <MessageMarkdown content={entry.text} />
               </div>
             </article>;
           }

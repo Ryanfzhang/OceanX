@@ -23,6 +23,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from enum import Enum
+from functools import lru_cache
 from pathlib import Path
 from typing import Final, cast
 
@@ -42,6 +43,20 @@ from oceanx.sandbox.windows_broker import (
 
 _MACOS_SYSTEM_PROFILE: Final = Path("/System/Library/Sandbox/Profiles/system.sb")
 _SAFE_PATH: Final = "/usr/bin:/bin"
+# macOS /bin/sh consults /private/var/select/sh and emits a diagnostic under
+# Seatbelt. Use bash directly so native file helpers receive clean JSON stdout.
+POSIX_SHELL: Final = "/bin/bash" if get_platform() == "macos" else "/bin/sh"
+
+
+def shell_runtime_roots(python_roots: tuple[Path, ...]) -> tuple[Path, ...]:
+    """System executables must be readable as well as executable inside isolation.
+
+    On merged-/usr Linux, /bin is a symlink to /usr/bin; the real directory is already listed.
+    """
+    return (*python_roots, *(p for p in (Path("/bin"), Path("/usr/bin"))
+                             if p.is_dir() and not p.is_symlink()))
+
+
 _DEFAULT_CONDA_ENV_NAME: Final = "oceanx"
 _CONDA_ENV_NAME_VARIABLE: Final = "OCEAN_CONDA_ENV"
 _PYTHON_OVERRIDE_VARIABLE: Final = "OCEAN_SANDBOX_PYTHON"
@@ -115,12 +130,13 @@ class ResourceLimits:
                 not isinstance(value, (int, float))
                 or isinstance(value, bool)
                 or not math.isfinite(value)
-                or value <= 0
+                or value < 0
+                or (name in {"memory_poll_interval_seconds", "termination_grace_seconds"} and value == 0)
             )
         ]
         if invalid:
             raise ValueError(
-                "Sandbox resource limits must be finite positive numbers: "
+                "Sandbox resource limits must be finite nonnegative numbers (zero disables a quota): "
                 + ", ".join(invalid)
             )
 
@@ -203,7 +219,6 @@ class PythonSandboxRuntime:
     read_roots: tuple[Path, ...]
     package_roots: tuple[Path, ...]
     requirements: tuple[str, ...]
-    available_modules: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -436,7 +451,7 @@ def _validate_python_launcher(candidate: Path) -> Path:
 def current_python_executable() -> Path:
     """Return the explicitly configured or activated Conda Python launcher.
 
-    OceanMind intentionally does not fall back to the backend virtualenv. Set
+    OceanX intentionally does not fall back to the backend virtualenv. Set
     ``OCEAN_SANDBOX_PYTHON`` only for an explicit packaged/test override, or
     ``OCEAN_CONDA_ENV`` to select a named environment. Otherwise honor active
     Conda; without activation (e.g. a packaged app), find the named oceanx runtime.
@@ -448,7 +463,13 @@ def current_python_executable() -> Path:
 
     configured_name = os.environ.get(_CONDA_ENV_NAME_VARIABLE, "").strip()
     active_prefix = os.environ.get("CONDA_PREFIX")
-    if not configured_name and active_prefix:
+    # A shell often leaves base active even when OceanX was started with an
+    # absolute envs/oceanx/bin/python. Base is a Conda manager, not the chosen
+    # scientific environment. Explicit runtime overrides above still win.
+    active_is_base = bool(active_prefix and (
+        (Path(active_prefix) / "condabin" / "conda").is_file()
+        or (Path(active_prefix) / "bin" / "conda").is_file()))
+    if not configured_name and active_prefix and not active_is_base:
         # Do not silently switch dependencies when the active environment is
         # broken. Keep its launcher path so Conda's package discovery is intact.
         return _validate_python_launcher(_python_launcher(Path(active_prefix)))
@@ -460,28 +481,26 @@ def current_python_executable() -> Path:
     raise SandboxUnavailableError(
         f"Conda environment '{environment_name}' is unavailable. Create it with "
         f"`conda create -n {environment_name} python=3.11`, then install "
-        "OceanMind's root requirements.txt. The backend environment is not used as a fallback."
+        "OceanX's root requirements.txt. The backend environment is not used as a fallback."
     )
 
 
 def current_python_runtime() -> PythonSandboxRuntime:
-    """Inspect the selected interpreter and return its immutable sandbox contract."""
+    """Resolve filesystem permissions, not scientific-library availability.
+
+    Only successful identity inspections are cached. A timeout must not poison
+    future code calls or be interpreted as a missing scientific dependency.
+    """
 
     executable = current_python_executable()
+    return _inspect_python_runtime(executable)
+
+
+@lru_cache(maxsize=8)
+def _inspect_python_runtime(executable: Path) -> PythonSandboxRuntime:
     inspection = r'''
-import importlib, json, site, sys, sysconfig
+import json, site, sys, sysconfig
 from importlib import metadata
-checked_modules = (
-    "numpy", "pandas", "scipy", "xarray", "matplotlib", "PIL", "h5py",
-    "h5netcdf", "zarr", "fsspec", "dask.array", "rasterio", "pyproj",
-    "shapely", "netCDF4", "cartopy", "gsw",
-)
-module_errors = {}
-for module_name in checked_modules:
-    try:
-        importlib.import_module(module_name)
-    except (ImportError, OSError) as exc:
-        module_errors[module_name] = f"{type(exc).__name__}: {exc}"
 packages = sorted({
     f"{dist.metadata['Name']}=={dist.version}"
     for dist in metadata.distributions()
@@ -493,8 +512,6 @@ print(json.dumps({
     "site_packages": site.getsitepackages(),
     "paths": [sysconfig.get_path(key) for key in ("stdlib", "platstdlib", "purelib", "platlib")],
     "requirements": packages,
-    "module_errors": module_errors,
-    "available_modules": sorted(set(checked_modules) - set(module_errors)),
 }))
 '''
     try:
@@ -503,7 +520,7 @@ print(json.dumps({
             check=True,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=60,
             env={**os.environ, "PYTHONNOUSERSITE": "1"},
         )
         payload = json.loads(completed.stdout)
@@ -512,15 +529,6 @@ print(json.dumps({
         raise SandboxUnavailableError(
             f"Configured Python runtime {executable} could not be inspected: {exc}"
         ) from exc
-
-    module_errors = payload.get("module_errors")
-    required_errors = module_errors if isinstance(module_errors, dict) else {}
-    if required_errors:
-        details = "; ".join(f"{name}: {error}" for name, error in required_errors.items())
-        raise SandboxUnavailableError(
-            f"Conda environment '{prefix.name}' is missing required scientific runtime modules. "
-            f"Install OceanMind's root requirements.txt. Import failures: {details}"
-        )
 
     raw_package_roots = payload.get("site_packages", ())
     raw_paths = payload.get("paths", ())
@@ -542,9 +550,6 @@ print(json.dumps({
         read_roots=_unique_paths(tuple(roots)),
         package_roots=package_roots,
         requirements=requirements,
-        available_modules=tuple(
-            item for item in payload.get("available_modules", ()) if isinstance(item, str)
-        ),
     )
 
 
@@ -802,7 +807,8 @@ async def _run_windows_brokered_command(
         )
         stdout, _stderr = await asyncio.wait_for(
             process.communicate(request),
-            timeout=policy.limits.wall_time_seconds + policy.limits.termination_grace_seconds + 5.0,
+            timeout=(policy.limits.wall_time_seconds + policy.limits.termination_grace_seconds + 5.0
+                     if policy.limits.wall_time_seconds else None),
         )
     except TimeoutError:
         if process.returncode is None:
@@ -883,9 +889,9 @@ def summarize_output_tree(output_root: Path | str, limits: ResourceLimits) -> Ou
         total_bytes += stat_result.st_size
 
     limit_exceeded = None
-    if file_count > limits.output_file_count:
+    if limits.output_file_count and file_count > limits.output_file_count:
         limit_exceeded = "output_file_count"
-    elif total_bytes > limits.output_total_bytes:
+    elif limits.output_total_bytes and total_bytes > limits.output_total_bytes:
         limit_exceeded = "output_total_bytes"
     return OutputTreeSummary(
         file_count=file_count,
@@ -905,7 +911,7 @@ async def _wait_for_completion(
 ) -> tuple[str | None, _CapturedStream, _CapturedStream]:
     """Wait for process completion, a bounded stream, or the wall deadline."""
     active: set[asyncio.Task[object]] = {process_task, stdout_task, stderr_task}
-    deadline = time.monotonic() + limits.wall_time_seconds
+    deadline = time.monotonic() + limits.wall_time_seconds if limits.wall_time_seconds else float("inf")
     next_memory_sample = time.monotonic() + limits.memory_poll_interval_seconds
     stdout: _CapturedStream | None = None
     stderr: _CapturedStream | None = None
@@ -926,7 +932,7 @@ async def _wait_for_completion(
                 return "wall_time", _stream_result(stdout_task), _stream_result(stderr_task)
             rss_bytes = await _read_process_rss_bytes(process_pid)
             next_memory_sample = time.monotonic() + limits.memory_poll_interval_seconds
-            if rss_bytes is not None and rss_bytes > limits.memory_bytes:
+            if limits.memory_bytes and rss_bytes is not None and rss_bytes > limits.memory_bytes:
                 return "memory_bytes", _stream_result(stdout_task), _stream_result(stderr_task)
             continue
         active.difference_update(done)
@@ -953,6 +959,9 @@ async def _capture_stream(stream: asyncio.StreamReader, limit: int) -> _Captured
         chunk = await stream.read(65_536)
         if not chunk:
             return _CapturedStream(data=bytes(captured), exceeded=False)
+        if not limit:
+            captured.extend(chunk)
+            continue
         remaining = limit - len(captured)
         if remaining > 0:
             captured.extend(chunk[:remaining])
@@ -1170,6 +1179,8 @@ def _validate_resource_limits(limits: ResourceLimits) -> None:
         (resource.RLIMIT_NOFILE, limits.open_files),
     )
     for resource_id, value in requested:
+        if not value:
+            continue
         _, hard = resource.getrlimit(resource_id)
         if hard != resource.RLIM_INFINITY and hard < value:
             raise SandboxUnavailableError(
@@ -1192,6 +1203,8 @@ def _build_limit_preexec(
 
     def apply_limits() -> None:
         for resource_id, value in resource_limits:
+            if not value:
+                continue
             if defer_process_limit and resource_id == resource.RLIMIT_NPROC:
                 continue
             resource.setrlimit(resource_id, (value, value))

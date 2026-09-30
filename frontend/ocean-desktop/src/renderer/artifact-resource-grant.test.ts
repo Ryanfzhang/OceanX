@@ -30,10 +30,10 @@ describe('parseArtifactResourceGrant', () => {
   it('accepts a task-owned local result grant before the host containment check', () => {
     expect(parseArtifactResourceGrant({
       ...validGrant,
-      resource_uri: 'file:///project/OceanMind%20Tasks/task/results/result/v0001/view.json',
+      resource_uri: 'file:///project/OceanX%20Tasks/task/results/result/v0001/view.json',
       mime_type: 'application/json',
     })).toMatchObject({
-      resourceUri: 'file:///project/OceanMind%20Tasks/task/results/result/v0001/view.json',
+      resourceUri: 'file:///project/OceanX%20Tasks/task/results/result/v0001/view.json',
       mimeType: 'application/json',
     });
   });

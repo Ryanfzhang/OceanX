@@ -2,6 +2,7 @@ import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 
 import type {TeamAgent, TeamAgentProfile, TeamSnapshot, TeamTodo} from '../types.js';
+import {agentDisplayName} from '../agent-display-name.js';
 import {CoordinatorRoleIcon, ExpertRoleIcon} from './AgentRoleIcons.js';
 
 const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -11,12 +12,21 @@ type PreviewAnchor = {pointerX: number; pointerY: number; left: number; top: num
 type CanvasAgent = TeamAgent & {
   displayRole: string;
   profile: TeamAgentProfile | null;
+  assignmentId?: string;
+  researchNodeId?: string;
+  nodeLabel?: string;
 };
 
 const DEFAULT_CANVAS_WIDTH = 620;
-const NODE_WIDTH = 176;
-const NODE_HEIGHT = 76;
+const NODE_WIDTH = 48;
+const NODE_HEIGHT = 48;
 const EXPERT_ACCENTS = ['#2f80b9', '#2b9a87', '#766fc1', '#bd7b38', '#c45f64', '#587e5e'];
+const PROFILE_ACCENTS: Record<string, string> = {
+  literature_reproduction_expert: '#2f80b9',
+  ocean_process_expert: '#147d78',
+  statistical_inference_expert: '#766fc1',
+  scientific_discussion_partner: '#bd7b38',
+};
 
 function safeId(value: string): string {
   return value.replace(/[^A-Za-z0-9_-]/g, '-');
@@ -26,33 +36,140 @@ function cleanText(value: string | null | undefined): string {
   return (value ?? '').replace(/^[#>\s]+/, '').replace(/[`*_]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function positionsFor(agents: CanvasAgent[], width: number): {positions: Map<string, Point>; height: number} {
+function researchNodeId(value: string | null | undefined): string | undefined {
+  return value?.match(/(?<![A-Za-z0-9])(B\d+(?:\.\d+)*)(?![A-Za-z0-9])/i)?.[1]?.toUpperCase();
+}
+
+function researchParentId(value: string): string | null {
+  const separator = value.lastIndexOf('.');
+  return separator < 0 ? null : value.slice(0, separator);
+}
+
+function todoStatus(todo: TeamTodo, participant: TeamAgent | undefined): TeamAgent['status'] {
+  if (todo.state === 'result_returned') return 'completed';
+  if (todo.state === 'skipped') return 'skipped';
+  if (todo.state === 'stopped') {
+    return participant && ['failed', 'incomplete', 'blocked', 'skipped'].includes(participant.status)
+      ? participant.status
+      : 'incomplete';
+  }
+  if (participant && ['waiting', 'working', 'planning', 'recovering', 'discussing'].includes(participant.status)) {
+    return participant.status;
+  }
+  return todo.state === 'working' ? 'working' : 'planning';
+}
+
+function conciseDispatchId(value: string): string {
+  return value.length <= 14 ? value : `${value.slice(0, 6)}…${value.slice(-5)}`;
+}
+
+function hierarchyFor(agents: CanvasAgent[]): Map<string, string> {
+  const coordinator = agents.find((item) => item.authority === 'coordinator');
+  const parents = new Map<string, string>();
+  if (!coordinator) return parents;
+  const researchAgents = new Map(
+    agents.flatMap((agent) => agent.researchNodeId ? [[agent.researchNodeId, agent] as const] : []),
+  );
+  for (const agent of agents) {
+    if (agent.authority === 'coordinator') continue;
+    let parentNode = agent.researchNodeId ? researchParentId(agent.researchNodeId) : null;
+    let parent = parentNode ? researchAgents.get(parentNode) : undefined;
+    while (!parent && parentNode) {
+      parentNode = researchParentId(parentNode);
+      parent = parentNode ? researchAgents.get(parentNode) : undefined;
+    }
+    parents.set(agent.agent_id, parent?.agent_id ?? coordinator.agent_id);
+  }
+  return parents;
+}
+
+function positionsFor(agents: CanvasAgent[], width: number): {
+  positions: Map<string, Point>;
+  height: number;
+  width: number;
+  parents: Map<string, string>;
+} {
   const coordinator = agents.find((item) => item.authority === 'coordinator');
   const members = agents.filter((item) => item.authority !== 'coordinator');
   const positions = new Map<string, Point>();
+  const parents = hierarchyFor(agents);
   if (!members.length) {
-    if (coordinator) positions.set(coordinator.agent_id, {x: width / 2, y: 86});
-    return {positions, height: 168};
+    if (coordinator) positions.set(coordinator.agent_id, {x: width / 2, y: 62});
+    return {positions, height: 102, width, parents};
   }
-  if (coordinator) positions.set(coordinator.agent_id, {x: width / 2, y: 80});
-  const columns = width >= 580 ? Math.min(3, members.length) : width >= 410 ? Math.min(2, members.length) : 1;
-  const rows = Math.ceil(members.length / columns);
-  const horizontalInset = Math.max(12, Math.min(28, width * .04));
-  const availableWidth = width - horizontalInset * 2;
-  const firstRowY = 210;
-  const rowGap = 112;
-  members.forEach((member, index) => {
-    const row = Math.floor(index / columns);
-    const firstInRow = row * columns;
-    const rowCount = Math.min(columns, members.length - firstInRow);
-    const column = index - firstInRow;
-    const slotWidth = availableWidth / rowCount;
-    positions.set(member.agent_id, {
-      x: horizontalInset + slotWidth * (column + .5),
-      y: firstRowY + row * rowGap,
-    });
+  const depthById = new Map<string, number>();
+  const depthOf = (agentId: string, seen = new Set<string>()): number => {
+    if (depthById.has(agentId)) return depthById.get(agentId)!;
+    const parent = parents.get(agentId);
+    if (!parent || parent === coordinator?.agent_id || seen.has(parent)) return 1;
+    seen.add(agentId);
+    const depth = depthOf(parent, seen) + 1;
+    depthById.set(agentId, depth);
+    return depth;
+  };
+  const sortKey = (agent: CanvasAgent) => agent.researchNodeId
+    ? agent.researchNodeId.split('.').map((part) => part.replace(/^B/, '').padStart(5, '0')).join('.')
+    : `${agent.created_at ?? ''}\u0000${agent.assignmentId ?? agent.agent_id}`;
+  const childrenByParent = new Map<string, CanvasAgent[]>();
+  members.forEach((member) => {
+    const parentId = parents.get(member.agent_id) ?? coordinator?.agent_id;
+    if (!parentId) return;
+    childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), member]);
   });
-  return {positions, height: firstRowY + (rows - 1) * rowGap + NODE_HEIGHT / 2 + 34};
+  childrenByParent.forEach((children) => children.sort((left, right) => sortKey(left).localeCompare(sortKey(right))));
+
+  // A tidy-tree layout: every terminal branch owns one horizontal slot and
+  // every parent sits at the centre of its own descendants. This prevents a
+  // parent with children from being shifted on top of an adjacent sibling.
+  const leafIndexById = new Map<string, number>();
+  const visited = new Set<string>();
+  let leafCount = 0;
+  const placeSubtree = (agent: CanvasAgent, ancestry = new Set<string>()): number => {
+    const existing = leafIndexById.get(agent.agent_id);
+    if (existing !== undefined) return existing;
+    if (ancestry.has(agent.agent_id)) {
+      const index = leafCount++;
+      leafIndexById.set(agent.agent_id, index);
+      return index;
+    }
+    visited.add(agent.agent_id);
+    const nextAncestry = new Set(ancestry).add(agent.agent_id);
+    const children = childrenByParent.get(agent.agent_id) ?? [];
+    if (!children.length) {
+      const index = leafCount++;
+      leafIndexById.set(agent.agent_id, index);
+      return index;
+    }
+    const childIndices = children.map((child) => placeSubtree(child, nextAncestry));
+    const centre = (Math.min(...childIndices) + Math.max(...childIndices)) / 2;
+    leafIndexById.set(agent.agent_id, centre);
+    return centre;
+  };
+  (coordinator ? childrenByParent.get(coordinator.agent_id) ?? [] : []).forEach((root) => placeSubtree(root));
+  members.filter((member) => !visited.has(member.agent_id)).sort((left, right) => sortKey(left).localeCompare(sortKey(right))).forEach((member) => placeSubtree(member));
+
+  const horizontalInset = Math.max(22, Math.min(34, width * .045));
+  const minimumLeafGap = 92;
+  const contentWidth = Math.max(width, horizontalInset * 2 + NODE_WIDTH + Math.max(0, leafCount - 1) * minimumLeafGap);
+  const firstX = horizontalInset + NODE_WIDTH / 2;
+  const lastX = contentWidth - horizontalInset - NODE_WIDTH / 2;
+  const xFor = (leafIndex: number) => leafCount <= 1
+    ? contentWidth / 2
+    : firstX + leafIndex * ((lastX - firstX) / (leafCount - 1));
+  const firstLevelY = 154;
+  const levelGap = 104;
+  members.forEach((member) => positions.set(member.agent_id, {
+    x: xFor(leafIndexById.get(member.agent_id) ?? 0),
+    y: firstLevelY + (depthOf(member.agent_id) - 1) * levelGap,
+  }));
+  if (coordinator) positions.set(coordinator.agent_id, {x: contentWidth / 2, y: 58});
+  const maximumDepth = Math.max(...members.map((member) => depthOf(member.agent_id)));
+  return {
+    positions,
+    height: firstLevelY + (maximumDepth - 1) * levelGap + NODE_HEIGHT / 2 + 22,
+    width: contentWidth,
+    parents,
+  };
 }
 
 function connectionPath(from: Point, to: Point): string {
@@ -95,18 +212,25 @@ function connectionEnd(from: Point, to: Point): Point {
 }
 
 function statusLabel(status: TeamAgent['status']): string {
-  return status.replace('_', ' ').replace(/\b[a-z]/g, (char) => char.toUpperCase());
+  if (status === 'incomplete') return 'Partial result';
+  const phrase = status.replaceAll('_', ' ');
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
 }
 
 function authorityLabel(authority: TeamAgent['authority']): string {
   if (authority === 'coordinator') return 'Coordinator';
   if (authority === 'expert') return 'Expert';
-  return 'Scientific Discussion Partner';
+  return 'Scientific discussion partner';
 }
 
 function stableAccent(agent: CanvasAgent, index: number): string {
   if (agent.authority === 'coordinator') return '#216f9f';
+  if (agent.profile_id && PROFILE_ACCENTS[agent.profile_id]) return PROFILE_ACCENTS[agent.profile_id]!;
   return EXPERT_ACCENTS[Math.max(0, index - 1) % EXPERT_ACCENTS.length]!;
+}
+
+function legendLabel(agent: CanvasAgent): string {
+  return agentDisplayName(agent.profile_id, agent.displayRole);
 }
 
 type NodeCopy = {
@@ -114,27 +238,16 @@ type NodeCopy = {
   workingOn: string;
 };
 
-function todoStatus(todo: TeamTodo): TeamAgent['status'] {
-  if (todo.state === 'working') return 'working';
-  if (todo.state === 'result_returned') return 'completed';
-  if (todo.state === 'stopped') return 'incomplete';
-  if (todo.state === 'skipped') return 'skipped';
-  return 'waiting';
-}
-
 function assignedTodos(snapshot: TeamSnapshot, agent: CanvasAgent): TeamTodo[] {
   const todos = snapshot.todos ?? [];
   if (agent.authority === 'coordinator') return todos;
-  const exact = agent.work_order_id ? todos.filter((todo) => todo.work_order_id === agent.work_order_id) : [];
+  if (agent.assignmentId) return todos.filter((todo) => todo.todo_id === agent.assignmentId);
+  const exact = agent.agent_run_id ? todos.filter((todo) => todo.agent_run_id === agent.agent_run_id) : [];
   if (exact.length) return exact;
   return agent.profile_id
     ? todos.filter((todo) => todo.profile_id === agent.profile_id
       && (todo.expert_key ?? null) === (agent.expert_key ?? null))
     : [];
-}
-
-function expertIdentity(profileId: string, expertKey?: string | null): string {
-  return `expert:${profileId}:${expertKey || 'default'}`;
 }
 
 function nodeTaskSummary(snapshot: TeamSnapshot, agent: CanvasAgent): NodeCopy {
@@ -152,7 +265,7 @@ function nodeTaskSummary(snapshot: TeamSnapshot, agent: CanvasAgent): NodeCopy {
     ?? assigned.at(-1);
   const terminalActivity: Partial<Record<TeamAgent['status'], string>> = {
     completed: 'Work complete; the result has been returned to the Coordinator.',
-    incomplete: 'Returned the supported evidence and its unresolved limitation.',
+    incomplete: cleanText(agent.activity) || 'Only part of the work was returned; see the report for details.',
     blocked: 'Reported the material blocker to the Coordinator.',
     failed: 'The workstream stopped before returning a reliable result.',
     skipped: 'This workstream was not needed in the current research path.',
@@ -165,53 +278,77 @@ function nodeTaskSummary(snapshot: TeamSnapshot, agent: CanvasAgent): NodeCopy {
   };
 }
 
-function activeRoster(snapshot: TeamSnapshot): CanvasAgent[] {
+export function activeRoster(snapshot: TeamSnapshot): CanvasAgent[] {
   const profiles = new Map((snapshot.role_pool ?? []).map((profile) => [profile.profile_id, profile]));
   const coordinator = snapshot.agents.find((agent) => agent.authority === 'coordinator') ?? {
     agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator' as const,
     status: 'working' as const, activity: 'Request received',
   };
   const complete: CanvasAgent[] = [{...coordinator, displayRole: 'Coordinator', profile: null}];
-  const logicalAgents = new Map<string, TeamAgent>();
-  const activeStatuses = new Set<TeamAgent['status']>(['planning', 'working', 'discussing']);
-  for (const agent of snapshot.agents) {
-    if (agent.authority === 'coordinator') continue;
-    // profile_id is the capability type; expert_key is the concrete instance.
-    // Repeated rounds of one instance fold together, while same-type siblings
-    // remain separate nodes. Prefer the active round in legacy snapshots.
-    const key = agent.profile_id
-      ? expertIdentity(agent.profile_id, agent.expert_key)
-      : agent.work_order_id ?? agent.agent_id;
-    const current = logicalAgents.get(key);
-    if (!current || activeStatuses.has(agent.status) || !activeStatuses.has(current.status)) {
-      logicalAgents.set(key, agent);
+  const participants = snapshot.agents.filter((agent) => agent.authority !== 'coordinator');
+  const participantFor = (todo: TeamTodo) => participants.find(
+    (agent) => Boolean(todo.agent_run_id) && agent.agent_run_id === todo.agent_run_id,
+  ) ?? participants.find(
+    (agent) => Boolean(todo.expert_key) && (agent.expert_key === todo.expert_key || agent.agent_id === todo.expert_key),
+  ) ?? participants.find((agent) => agent.profile_id === todo.profile_id);
+  const representedParticipants = new Set<string>();
+  const assignmentNodes = new Map<string, {todo: TeamTodo; participant?: TeamAgent; nodeId?: string}>();
+  for (const todo of snapshot.todos ?? []) {
+    const participant = participantFor(todo);
+    if (participant) representedParticipants.add(participant.agent_id);
+    const nodeId = researchNodeId(todo.question)
+      ?? researchNodeId(todo.report_path)
+      ?? researchNodeId(todo.todo_id);
+    // A research-tree node owns one icon. Re-dispatching that same node updates
+    // its icon; ordinary tasks remain separate by their native dispatch ID.
+    const key = nodeId ? `research:${nodeId}` : `dispatch:${todo.todo_id}`;
+    const previous = assignmentNodes.get(key);
+    const isActive = ['pending', 'queued', 'working'].includes(todo.state);
+    const previousActive = previous && ['pending', 'queued', 'working'].includes(previous.todo.state);
+    if (!previous || (isActive && !previousActive) || isActive === previousActive) {
+      assignmentNodes.set(key, {todo, participant, nodeId});
     }
   }
-  // Keep every task-planned Expert visible even before its session starts.
-  for (const todo of snapshot.todos ?? []) {
-    const key = expertIdentity(todo.profile_id, todo.expert_key);
-    const alreadyRepresented = logicalAgents.has(key);
-    if (alreadyRepresented) continue;
-    const profile = profiles.get(todo.profile_id);
-    logicalAgents.set(key, {
-      agent_id: `planned-${safeId(key)}`,
+  for (const [agentId, {todo, participant, nodeId}] of assignmentNodes) {
+    const profile = profiles.get(todo.profile_id) ?? null;
+    const displayRole = agentDisplayName(
+      todo.profile_id,
+      profile?.display_name ?? participant?.semantic_role ?? authorityLabel(participant?.authority ?? 'expert'),
+    );
+    complete.push({
+      agent_id: agentId,
       profile_id: todo.profile_id,
-      expert_key: todo.expert_key,
-      semantic_role: profile?.display_name ?? 'Planned Expert',
-      authority: profile?.authority ?? 'expert',
-      status: todoStatus(todo),
-      activity: todo.state === 'pending' ? 'Waiting to Start' : todo.question,
-      work_order_id: todo.work_order_id,
+      expert_key: todo.expert_key ?? participant?.expert_key ?? null,
+      semantic_role: displayRole,
+      authority: participant?.authority ?? profile?.authority ?? 'expert',
+      status: todoStatus(todo, participant),
+      activity: participant && participant.agent_run_id === todo.agent_run_id
+        ? participant.activity
+        : todo.report_title ?? (todo.state === 'result_returned' ? 'Result returned' : todo.question),
+      agent_run_id: todo.agent_run_id,
       task_goal: todo.question,
-      result_summary: todo.result_summary,
+      report_path: todo.report_path,
+      report_title: todo.report_title,
+      created_at: todo.created_at,
+      updated_at: todo.updated_at,
+      displayRole,
+      profile,
+      assignmentId: todo.todo_id,
+      researchNodeId: nodeId,
+      nodeLabel: nodeId ?? conciseDispatchId(todo.todo_id),
     });
   }
-  for (const agent of logicalAgents.values()) {
+  for (const agent of participants) {
+    if (representedParticipants.has(agent.agent_id)) continue;
     const profile = agent.profile_id ? profiles.get(agent.profile_id) ?? null : null;
     complete.push({
       ...agent,
-      displayRole: profile?.display_name ?? (agent.semantic_role || authorityLabel(agent.authority)),
+      displayRole: agentDisplayName(
+        agent.profile_id,
+        profile?.display_name ?? (agent.semantic_role || authorityLabel(agent.authority)),
+      ),
       profile,
+      nodeLabel: conciseDispatchId(agent.agent_id),
     });
   }
   return complete;
@@ -252,7 +389,16 @@ export function AgentCollaborationCanvas({
   const [detailAnchor, setDetailAnchor] = useState<PreviewAnchor | null>(null);
   const normalized = snapshot;
   const roster = activeRoster(normalized);
-  const {positions, height} = positionsFor(roster, canvasWidth);
+  const {positions, height: graphHeight, width: graphWidth, parents} = positionsFor(roster, canvasWidth);
+  const legendAgents = [...new Map(
+    roster
+      .filter((agent) => agent.authority !== 'coordinator')
+      .map((agent) => [agent.profile_id ?? agent.displayRole, agent]),
+  ).values()];
+  const legendHeight = legendAgents.length
+    ? 24 + legendAgents.length * 22
+    : 0;
+  const height = graphHeight + legendHeight;
   const agentById = new Map(roster.map((agent) => [agent.agent_id, agent]));
   const accentById = new Map(roster.map((agent, index) => [agent.agent_id, stableAccent(agent, index)]));
   const colorOf = (agentId: string) => accentById.get(agentId) ?? '#2f80b9';
@@ -273,38 +419,21 @@ export function AgentCollaborationCanvas({
     accent: edgeAccent(fromAgentId, toAgentId),
   });
   type CanvasEdge = ReturnType<typeof makeEdge> & {key: string};
-  const activePathKeys = new Set<string>();
   const activePaths: CanvasEdge[] = [];
-  for (const interaction of normalized.interactions.filter((item) => item.state === 'active')) {
-    const key = `${interaction.from_agent_id}:${interaction.to_agent_id}`;
-    if (activePathKeys.has(key)) continue;
-    const from = positions.get(interaction.from_agent_id);
-    const to = positions.get(interaction.to_agent_id);
-    if (!from || !to) continue;
-    activePathKeys.add(key);
-    activePaths.push({key, ...makeEdge(interaction.from_agent_id, interaction.to_agent_id, from, to)});
-  }
-  const relationshipKeys = new Set<string>();
   const relationshipPaths: CanvasEdge[] = [];
-  for (const relation of [...normalized.dependencies, ...normalized.interactions.filter((item) => item.state === 'completed')]) {
-    const key = `${relation.from_agent_id}:${relation.to_agent_id}`;
-    if (relationshipKeys.has(key)) continue;
-    const from = positions.get(relation.from_agent_id);
-    const to = positions.get(relation.to_agent_id);
-    if (!from || !to) continue;
-    relationshipKeys.add(key);
-    relationshipPaths.push({key, ...makeEdge(relation.from_agent_id, relation.to_agent_id, from, to)});
-  }
-  const coordinator = roster.find((agent) => agent.authority === 'coordinator');
   for (const agent of roster.filter((item) => item.authority !== 'coordinator')) {
-    if (!coordinator) break;
-    const key = `${coordinator.agent_id}:${agent.agent_id}`;
-    if (activePathKeys.has(key) || relationshipKeys.has(key)) continue;
-    const from = positions.get(coordinator.agent_id);
+    const parentId = parents.get(agent.agent_id);
+    if (!parentId) continue;
+    const key = `${parentId}:${agent.agent_id}`;
+    const from = positions.get(parentId);
     const to = positions.get(agent.agent_id);
     if (!from || !to) continue;
-    relationshipKeys.add(key);
-    relationshipPaths.push({key, ...makeEdge(coordinator.agent_id, agent.agent_id, from, to)});
+    const edge = {key, ...makeEdge(parentId, agent.agent_id, from, to)};
+    if (['planning', 'working', 'discussing', 'recovering'].includes(agent.status)) {
+      activePaths.push(edge);
+    } else {
+      relationshipPaths.push(edge);
+    }
   }
 
   useEffect(() => {
@@ -339,7 +468,7 @@ export function AgentCollaborationCanvas({
       style={{left: detailAnchor.left, top: detailAnchor.top}}
       role="tooltip"
     >
-      <header><strong>{hoveredAgent.displayRole}</strong></header>
+      <header><strong>{hoveredAgent.displayRole}</strong>{hoveredAgent.nodeLabel ? <span>{hoveredAgent.nodeLabel}</span> : null}</header>
       <dl>
         <div><dt>Objective</dt><dd>{hoveredCopy.objective}</dd></div>
         <div><dt>Working on</dt><dd>{hoveredCopy.workingOn}</dd></div>
@@ -347,8 +476,14 @@ export function AgentCollaborationCanvas({
     </aside>, document.body)
     : null;
 
-  return <section className="agent-canvas" aria-label="Active OceanMind Team" ref={canvasRef}>
-    <svg viewBox={`0 0 ${canvasWidth} ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="OceanMind professional team collaboration topology">
+  return <section className="agent-canvas" aria-label="Active OceanX Team" ref={canvasRef}>
+    <svg
+      viewBox={`0 0 ${graphWidth} ${height}`}
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label="OceanX professional team collaboration topology"
+      style={{width: graphWidth, minWidth: '100%'}}
+    >
       <defs>
         {relationshipPaths.map((edge) => <linearGradient
           key={gradientId('rel', edge.key)}
@@ -370,11 +505,11 @@ export function AgentCollaborationCanvas({
         </linearGradient>)}
       </defs>
       <g className="agent-edges">
-        {relationshipPaths.map((edge) => <g className="agent-relationship" key={edge.key} style={{'--agent-accent': edge.accent} as React.CSSProperties}>
+        {relationshipPaths.map((edge) => <g className="agent-relationship" key={edge.key} data-from-agent={edge.fromAgentId} data-to-agent={edge.toAgentId} style={{'--agent-accent': edge.accent} as React.CSSProperties}>
           <path className="agent-edge completed" d={edge.path} stroke={`url(#${gradientId('rel', edge.key)})`} />
           <circle className="agent-edge-endpoint" cx={edge.end.x} cy={edge.end.y} r="2.6" />
         </g>)}
-        {activePaths.map((edge) => <g className="agent-active-exchange" key={edge.key} style={{'--agent-accent': edge.accent} as React.CSSProperties}>
+        {activePaths.map((edge) => <g className="agent-active-exchange" key={edge.key} data-from-agent={edge.fromAgentId} data-to-agent={edge.toAgentId} style={{'--agent-accent': edge.accent} as React.CSSProperties}>
           <path className="agent-edge active" d={edge.path} stroke={`url(#${gradientId('act', edge.key)})`} />
           <path className="agent-edge-flow" d={edge.path} pathLength={100} />
           <circle className="agent-edge-source" cx={edge.start.x} cy={edge.start.y} r="3" />
@@ -387,17 +522,19 @@ export function AgentCollaborationCanvas({
       </g>
       <g className="agent-nodes">
         {roster.map((agent, index) => {
-          const point = positions.get(agent.agent_id) ?? {x: canvasWidth / 2, y: height / 2};
+          const point = positions.get(agent.agent_id) ?? {x: graphWidth / 2, y: height / 2};
           const role = agent.displayRole;
           const task = nodeTaskSummary(snapshot, agent);
           const accent = accentById.get(agent.agent_id) ?? '#2f80b9';
           return <g
             key={agent.agent_id}
             className={`agent-node authority-${agent.authority} status-${agent.status}`}
+            data-agent-id={agent.agent_id}
+            data-research-node={agent.researchNodeId}
             transform={`translate(${point.x}, ${point.y})`}
             style={{animationDelay: `${index * 55}ms`, '--agent-accent': accent} as React.CSSProperties}
             tabIndex={0}
-            aria-label={`${role}. Objective: ${task.objective}. Working on: ${task.workingOn}.`}
+            aria-label={`${agent.nodeLabel ? `${agent.nodeLabel}. ` : ''}${role}. Objective: ${task.objective}. Working on: ${task.workingOn}.`}
             onMouseEnter={(event) => {
               setHoveredAgentId(agent.agent_id);
               setDetailAnchor(previewAnchor(event.clientX, event.clientY));
@@ -416,23 +553,31 @@ export function AgentCollaborationCanvas({
               setDetailAnchor(null);
             }}
           >
+            {agent.authority === 'coordinator' ? <foreignObject className="agent-node-role-object" x={-72} y={-51} width={144} height={23}>
+              <div className="agent-node-role" title={role}>{role}</div>
+            </foreignObject> : agent.nodeLabel ? <foreignObject className="agent-node-role-object" x={-39} y={-45} width={78} height={18}>
+              <div className="agent-node-role agent-node-id" title={agent.assignmentId ?? agent.nodeLabel}>{agent.nodeLabel}</div>
+            </foreignObject> : null}
             <rect className="agent-node-card" x={-NODE_WIDTH / 2} y={-NODE_HEIGHT / 2} width={NODE_WIDTH} height={NODE_HEIGHT} rx="13" />
-            <foreignObject className="agent-node-copy-object" x={-NODE_WIDTH / 2 + 10} y={-NODE_HEIGHT / 2 + 9} width={NODE_WIDTH - 20} height={NODE_HEIGHT - 18}>
+            <foreignObject className="agent-node-copy-object" x={-NODE_WIDTH / 2} y={-NODE_HEIGHT / 2} width={NODE_WIDTH} height={NODE_HEIGHT}>
               <div className="agent-node-copy">
-                <i className="agent-node-avatar">
-                  {agent.authority === 'coordinator' ? <CoordinatorRoleIcon /> : <ExpertRoleIcon />}
-                  <em />
-                </i>
-                <div className="agent-node-identity">
-                  <strong>{role}</strong>
-                  <small>{statusLabel(agent.status)}</small>
-                </div>
+                {agent.authority === 'coordinator' ? <CoordinatorRoleIcon /> : <ExpertRoleIcon />}
+                <em title={statusLabel(agent.status)} />
               </div>
             </foreignObject>
           </g>;
         })}
       </g>
     </svg>
+    {legendAgents.length ? <aside className="agent-canvas-legend" aria-label="Expert role legend">
+      {legendAgents.map((agent, index) => {
+        const label = legendLabel(agent);
+        return <div key={agent.profile_id ?? agent.displayRole} title={agent.displayRole}>
+          <i style={{'--legend-accent': stableAccent(agent, index + 1)} as React.CSSProperties} />
+          <strong>{label}</strong>
+        </div>;
+      })}
+    </aside> : null}
     {detailPopover}
   </section>;
 }

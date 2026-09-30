@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useCallback, useEffect, useState} from 'react';
 import {CloudDownload, Cog, ShieldCheck, X} from 'lucide-react';
 
 import type {DesktopUpdateStatus, ModelProviderSetup, ModelProviderStatus, ModelRoleProviderSetup, ModelRoleProviderStatus} from '../../../shared/bridge.js';
@@ -17,20 +17,20 @@ function ModelProviderSettings({
   onSave: (setup: ModelProviderSetup) => void;
 }): React.JSX.Element {
   const {text} = useUiLanguage();
-  type RoleKey = keyof Pick<ModelProviderSetup, 'coordinator' | 'expert' | 'skillCurator'>;
+  type RoleKey = keyof Pick<ModelProviderSetup, 'coordinator' | 'expert'>;
   type EditableRole = ModelRoleProviderSetup & {baseUrl: string; apiKey: string};
-  const editable = (value?: ModelRoleProviderStatus): EditableRole => ({
+  const editable = useCallback((value?: ModelRoleProviderStatus): EditableRole => ({
     provider: value?.provider === 'anthropic' ? 'anthropic' : 'openai',
     model: editableModelId(value?.model),
     baseUrl: value?.baseUrl ?? '',
     apiKey: '',
-  });
+  }), []);
   const [roles, setRoles] = useState<Record<RoleKey, EditableRole>>({
-    coordinator: editable(status?.coordinator), expert: editable(status?.expert), skillCurator: editable(status?.skillCurator),
+    coordinator: editable(status?.coordinator), expert: editable(status?.expert),
   });
   useEffect(() => {
-    setRoles({coordinator: editable(status?.coordinator), expert: editable(status?.expert), skillCurator: editable(status?.skillCurator)});
-  }, [status]);
+    setRoles({coordinator: editable(status?.coordinator), expert: editable(status?.expert)});
+  }, [editable, status]);
   const modelReady = isModelProviderReady(status);
   const roleStatus = (key: RoleKey) => status?.[key];
   const readyToSave = !saving && (Object.keys(roles) as RoleKey[]).every((key) => isConcreteModelId(roles[key].model) && (roles[key].apiKey.trim() || roleStatus(key)?.configured));
@@ -38,14 +38,12 @@ function ModelProviderSettings({
   const specs: Array<{key: RoleKey; title: string; description: string}> = [
     {key: 'coordinator', title: text('Coordinator', '协调者'), description: text('Strong planning, delegation, and synthesis', '负责高质量规划、委派与综合')},
     {key: 'expert', title: text('Experts', '专家'), description: text('Agentic analysis, tools, and code execution', '负责工具调用、分析与代码执行')},
-    {key: 'skillCurator', title: text('Skill Curator', '技能策展者'), description: text('Independent review of reusable experience', '独立审批可复用经验')},
   ];
   return <section className="settings-section settings-model-provider" aria-label="Model provider">
     <div className="settings-section-heading"><div><h2>{text('Role APIs', '角色 API')}</h2><p className="settings-section-summary">{text('Assign a separate provider, endpoint, key, and model to each role.', '为每个角色分别指定服务商、地址、密钥与模型。')}</p></div><span className={modelReady ? 'settings-state ready' : 'settings-state'}>{modelReady ? text('Ready', '已就绪') : text('Setup needed', '需要配置')}</span></div>
     <form className="role-api-form" onSubmit={(event) => {event.preventDefault(); if (readyToSave) onSave({
       coordinator: {...roles.coordinator, model: roles.coordinator.model.trim(), baseUrl: roles.coordinator.baseUrl.trim() || undefined, apiKey: roles.coordinator.apiKey || undefined},
       expert: {...roles.expert, model: roles.expert.model.trim(), baseUrl: roles.expert.baseUrl.trim() || undefined, apiKey: roles.expert.apiKey || undefined},
-      skillCurator: {...roles.skillCurator, model: roles.skillCurator.model.trim(), baseUrl: roles.skillCurator.baseUrl.trim() || undefined, apiKey: roles.skillCurator.apiKey || undefined},
     });}}>
       <div className="role-api-grid">{specs.map(({key, title, description}) => {
         const role = roles[key]; const configured = roleStatus(key)?.configured;

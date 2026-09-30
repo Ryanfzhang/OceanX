@@ -5,6 +5,7 @@ import maplibregl, {type Map as MapLibreMap, type StyleSpecification} from 'mapl
 
 import type {ResultDocument} from '../types.js';
 import {FEATURE_COLORS, categoryColor, featureAnchor, featureBounds, prepareResultFeature, resultFeatureMapLayers, resultFeatures} from './result-features.js';
+import {resolveScientificPalette} from './scientific-palettes.js';
 import {
   isSpatial,
   isStructured,
@@ -17,17 +18,16 @@ import {
   viewLabel,
 } from './InteractiveViewWorkbench.js';
 
+const cartoBasemapsKey = (import.meta.env.VITE_CARTO_BASEMAPS_API_KEY ?? '').trim();
+const cartoTileQuery = cartoBasemapsKey ? `?key=${encodeURIComponent(cartoBasemapsKey)}` : '';
+
 const BASEMAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
     'carto-light': {
       type: 'raster',
-      tiles: [
-        'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-      ],
+      tiles: ['a', 'b', 'c', 'd'].map(subdomain =>
+        `https://${subdomain}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png${cartoTileQuery}`),
       tileSize: 256,
       attribution: '© OpenStreetMap contributors © CARTO',
     },
@@ -72,16 +72,6 @@ type ResultWorkbenchProps = {
 };
 
 type HoverValue = {longitude: number; latitude: number; value: number | null};
-
-const SPATIAL_PALETTES: Record<string, string[]> = {
-  viridis: ['#440154', '#414487', '#2a788e', '#22a884', '#7ad151', '#fde725'],
-  magma: ['#000004', '#2c115f', '#721f81', '#b73779', '#f1605d', '#feb078', '#fcfdbf'],
-  plasma: ['#0d0887', '#6a00a8', '#b12a90', '#e16462', '#fca636', '#f0f921'],
-  cividis: ['#00224e', '#24476d', '#576d72', '#8d8a66', '#c3aa4b', '#fee838'],
-  thermal: ['#243c62', '#47759a', '#82afb5', '#e8e2cd', '#da9a70', '#a94b42'],
-  balance: ['#315f91', '#8cb5ca', '#f4f3ed', '#dda17d', '#9f443f'],
-  haline: ['#f4f0e5', '#c6dcd5', '#83b9b2', '#47888e', '#27536d'],
-};
 
 type GridPosition = {lower: number; upper: number; ratio: number};
 
@@ -172,8 +162,7 @@ function parseHex(value: string): [number, number, number] {
 
 function spatialPalette(payload: SpatialPayload): string[] {
   const colorbar = payload.colorbar as {colormap?: unknown} | undefined;
-  const name = typeof colorbar?.colormap === 'string' ? colorbar.colormap.toLowerCase() : 'viridis';
-  return SPATIAL_PALETTES[name] ?? SPATIAL_PALETTES.viridis!;
+  return resolveScientificPalette(colorbar?.colormap);
 }
 
 function spatialDomain(payload: SpatialPayload): [number, number] {
@@ -317,6 +306,38 @@ export function shouldFitRegion(
   return context.fit_policy === 'always' || previousRegionKey !== context.region_key;
 }
 
+export function usableMapViewport(width: number, height: number): boolean {
+  return Number.isFinite(width) && Number.isFinite(height) && width >= 32 && height >= 32;
+}
+
+export function mapFitPadding(width: number, height: number): number {
+  return Math.max(16, Math.min(48, Math.floor(Math.min(width, height) * .08)));
+}
+
+type PendingMapFit = {
+  bounds: [number, number, number, number];
+  duration: number;
+  maxZoom?: number;
+  regionKey?: string;
+};
+
+function fitMapToRegion(
+  map: MapLibreMap,
+  container: HTMLElement,
+  target: PendingMapFit,
+): boolean {
+  const {width, height} = container.getBoundingClientRect();
+  if (!usableMapViewport(width, height)) return false;
+  map.resize();
+  const [west, south, east, north] = target.bounds;
+  map.fitBounds([[west, south], [east, north]], {
+    padding: mapFitPadding(width, height),
+    duration: target.duration,
+    ...(target.maxZoom === undefined ? {} : {maxZoom: target.maxZoom}),
+  });
+  return true;
+}
+
 function featureLabel(properties: GeoJsonProperties, index: number): string {
   const candidate = properties?.label ?? properties?.name ?? properties?.region_name ?? properties?.region;
   return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : `Region ${index + 1}`;
@@ -437,6 +458,7 @@ export function ResultWorkbench({
   const mapRef = useRef<MapLibreMap | null>(null);
   const splitDragRef = useRef(false);
   const regionKeyRef = useRef<string | null>(null);
+  const pendingMapFitRef = useRef<PendingMapFit | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [hover, setHover] = useState<HoverValue | null>(null);
@@ -533,13 +555,27 @@ export function ResultWorkbench({
     if (displayContext) addContextLayers(map, displayContext.collection);
 
     const contextBounds = boundsForContext(context);
-    if (context && contextBounds) {
-      if (shouldFitRegion(regionKeyRef.current, context)) {
-        const [west, south, east, north] = contextBounds;
-        map.fitBounds([[west, south], [east, north]], {padding: 48, duration: regionKeyRef.current ? 450 : 0});
-      }
-      regionKeyRef.current = context.region_key;
+    if (!context || !contextBounds) {
+      pendingMapFitRef.current = null;
+      return;
     }
+    if (shouldFitRegion(regionKeyRef.current, context)) {
+      pendingMapFitRef.current = {
+        bounds: contextBounds,
+        duration: regionKeyRef.current ? 450 : 0,
+        regionKey: context.region_key,
+      };
+    }
+    const frame = requestAnimationFrame(() => {
+      const target = pendingMapFitRef.current;
+      const container = containerRef.current;
+      if (!target || !container || mapRef.current !== map) return;
+      if (fitMapToRegion(map, container, target)) {
+        if (target.regionKey) regionKeyRef.current = target.regionKey;
+        pendingMapFitRef.current = null;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [context, displayContext, previewUrl, ready, spatial, spatialCanvas]);
 
   useEffect(() => setChartExpanded(false), [document?.key]);
@@ -580,14 +616,27 @@ export function ResultWorkbench({
       return [new maplibregl.Marker({element: button}).setLngLat(anchor).addTo(map)];
     });
     const focused = selected && featureBounds(selected);
-    if (focused) {
-      const [w, s, e, n] = focused;
-      map.fitBounds([[w-.05, s-.05], [e+.05, n+.05]], {padding: 65, maxZoom: 9, duration: 350});
-    } else if (!selectedFeature) {
-      const [w, s, e, n] = spatial.bounds;
-      map.fitBounds([[w, s], [e, n]], {padding: 45, duration: 350});
+    const fitTarget: PendingMapFit | null = focused
+      ? {bounds: [focused[0] - .05, focused[1] - .05, focused[2] + .05, focused[3] + .05], duration: 350, maxZoom: 9}
+      : !selectedFeature
+        ? {bounds: spatial.bounds, duration: 350, regionKey: context?.region_key}
+        : null;
+    let fitFrame: number | null = null;
+    if (fitTarget) {
+      pendingMapFitRef.current = fitTarget;
+      fitFrame = requestAnimationFrame(() => {
+        fitFrame = null;
+        const container = containerRef.current;
+        if (!container || pendingMapFitRef.current !== fitTarget) return;
+        if (fitMapToRegion(map, container, fitTarget)) {
+          if (fitTarget.regionKey) regionKeyRef.current = fitTarget.regionKey;
+          pendingMapFitRef.current = null;
+        }
+      });
     }
     return () => {
+      if (fitFrame !== null) cancelAnimationFrame(fitFrame);
+      if (pendingMapFitRef.current === fitTarget) pendingMapFitRef.current = null;
       markers.forEach(marker => marker.remove());
       layers.forEach(layer => {
         map.off('click', layer.id, chooseObject);
@@ -598,12 +647,35 @@ export function ResultWorkbench({
       clearPointer();
       if (map.getSource(source)) map.removeSource(source);
     };
-  }, [ready, spatial, features, mapFeatures, selectedFeature, selected]);
+  }, [context?.region_key, ready, spatial, features, mapFeatures, selectedFeature, selected]);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => mapRef.current?.resize());
-    return () => cancelAnimationFrame(frame);
-  }, [chartExpanded, figureOnly, structured]);
+    const map = mapRef.current;
+    const container = containerRef.current;
+    if (!map || !container || !ready) return;
+    let frame: number | null = null;
+    const syncViewport = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        const {width, height} = container.getBoundingClientRect();
+        if (!usableMapViewport(width, height)) return;
+        map.resize();
+        const target = pendingMapFitRef.current;
+        if (target && fitMapToRegion(map, container, target)) {
+          if (target.regionKey) regionKeyRef.current = target.regionKey;
+          pendingMapFitRef.current = null;
+        }
+      });
+    };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncViewport);
+    observer?.observe(container);
+    syncViewport();
+    return () => {
+      observer?.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [ready]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -618,7 +690,7 @@ export function ResultWorkbench({
     };
   }, [ready, spatial]);
 
-  return <aside className={`spatial-workbench${features.length ? ' with-objects' : ''}`} aria-label="Result Workbench">
+  return <aside className={`spatial-workbench${features.length ? ' with-objects' : ''}`} aria-label="Result workbench">
     {features.length ? <nav className="result-feature-legend" aria-label="Result objects">
       <div className="result-object-toolbar">
         <Layers3 size={15} aria-hidden="true" />
@@ -636,12 +708,11 @@ export function ResultWorkbench({
     </nav> : null}
     <div ref={bodyRef} style={{'--spatial-map-share': `${chartExpanded ? 18 : mapShare}%`} as CSSProperties} className={`spatial-workbench-body${structured ? ' with-figure' : ''}${figureOnly ? ' figure-only' : ''}${chartExpanded ? ' figure-focused' : ''}`}>
       {featureError ? <div role="alert" className="workbench-map-error">{featureError}</div> : null}
-      {document ? <button className="workbench-close" onClick={onClose} title="Close Result" aria-label="Close Result"><X size={17} /></button> : null}
+      {document ? <button className="workbench-close" onClick={onClose} title="Close result" aria-label="Close result"><X size={17} /></button> : null}
       <div className="spatial-map-stage">
         <div className="spatial-map-canvas" ref={containerRef} />
         {!ready && !failed ? <div className="map-loading">Preparing map…</div> : null}
         {failed ? <div className="map-fallback"><Layers3 size={32} /><strong>Map unavailable</strong><span>The basemap could not be loaded. Result data remains available.</span></div> : null}
-        {ready && !document ? <div className="map-empty-hint"><Layers3 size={22} /><span>No Interactive Result Selected</span><small>Open a map or scientific chart from an OceanMind answer.</small></div> : null}
         {loading ? <div className="workbench-map-status"><LoaderCircle className="spin" size={22} />Loading result…</div> : null}
         {error ? <div className="workbench-map-error"><strong>View unavailable</strong><span>{error}</span></div> : null}
         {document && !loading && !error && !spatial && !structured && !fallback ? <div className="workbench-map-error"><strong>Result unavailable</strong><span>No interactive, preview, or downloadable presentation is available.</span></div> : null}

@@ -1,6 +1,6 @@
 # Headless benchmark runner
 
-`ocean run` and `ocean batch` are local, headless clients of OceanMind's existing
+`ocean run` and `ocean batch` are local, headless clients of OceanX's existing
 Protocol v2 backend. They do **not** change Desktop interactions, agent prompts,
 Coordinator decisions, Expert scheduling, or paper-selection semantics. No HTTP
 server or open port is required. Start the commands on the machine holding the data.
@@ -49,7 +49,7 @@ To configure a new server:
 ocean configure-models < /secure/path/role-config.json
 ```
 
-The input is `{"roles": {"coordinator": {...}, "expert": {...}, "skill_curator": {...}}}`.
+The input is `{"roles": {"coordinator": {...}, "expert": {...}}}`.
 Each role has `provider` (`openai` or `anthropic`), `model`, `base_url`
 (or null), and `api_key`. Keep that file private, outside datasets/results and source
 control. OpenAI-compatible providers such as DeepSeek use `openai` with their custom
@@ -93,10 +93,8 @@ unknown query fields are rejected instead of accidentally disclosing grading dat
 
 Cases run **sequentially** in this first version; each case's Experts can still
 work concurrently under the existing Coordinator. Each case/attempt has a separate
-backend process, SQLite state, task and output workspace. No histories or candidate
-experience databases are shared between cases. Skill Curator is disabled only for
-these backend processes, so skills do not evolve during evaluation. Desktop's
-default remains enabled.
+backend process, SQLite state, task and output workspace. No Agent Server thread
+history is shared between cases, and bundled Skills do not change during evaluation.
 
 For the canonical Q01–Q30 tasks, `benchmarking/server/prepare_queries.py` can
 generate this JSONL from explicit shared data bindings. Inputs can be directories
@@ -146,7 +144,7 @@ benchmark-001/
     events.jsonl                 # protocol stream (64 MiB cap, truncation flag)
     backend.log                  # backend diagnostics (64 MiB cap)
     state/                       # isolated databases and canonical artifacts
-    workspace/OceanMind Tasks/   # normal editable reports/notebooks/results
+    workspace/OceanX Tasks/   # normal editable reports/notebooks/results
 ```
 
 `completed` means the backend returned normally, **not** that the hypothesis is

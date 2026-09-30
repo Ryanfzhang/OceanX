@@ -377,6 +377,23 @@ export interface InteractionRespondRequest {
   "expected_task_revision"?: number | null;
 }
 
+export interface LocalSourceImportPayload {
+  "relative_path"?: string | null;
+  "local_path"?: string | null;
+  "title"?: string | null;
+  "artifact_id"?: string | null;
+}
+
+export interface LocalSourceImportRequest {
+  "protocol_version": 2;
+  "request_id": string;
+  "type": "source.import";
+  "payload": LocalSourceImportPayload;
+  "context": RequestContext;
+  "expected_workspace_revision": number;
+  "expected_task_revision"?: number | null;
+}
+
 export interface PaperCitation {
   "title": string;
   "authors"?: Array<string>;
@@ -444,7 +461,7 @@ export interface PortableExportCreateRequest {
 }
 
 export interface ProtocolErrorPayload {
-  "code": "invalid_request" | "unsupported_protocol" | "request_id_conflict" | "request_interrupted" | "workspace_revision_conflict" | "permission_denied" | "interaction_timeout" | "model_error" | "tool_error" | "budget_exhausted" | "expert_timeout" | "expert_resource_limit_exceeded" | "expert_code_exit_nonzero" | "dependency_missing" | "unsafe_execution" | "source_changed_during_work" | "expert_result_incomplete" | "artifact_not_found" | "artifact_version_conflict" | "artifact_commit_failed" | "invalid_artifact" | "task_not_found" | "task_revision_conflict" | "task_active_request_conflict" | "task_checkpoint_incompatible" | "store_error" | "cancelled";
+  "code": "invalid_request" | "unsupported_protocol" | "request_id_conflict" | "request_interrupted" | "workspace_revision_conflict" | "permission_denied" | "interaction_timeout" | "model_error" | "tool_error" | "budget_exhausted" | "expert_timeout" | "expert_resource_limit_exceeded" | "expert_code_exit_nonzero" | "dependency_missing" | "unsafe_execution" | "source_changed_during_work" | "expert_result_incomplete" | "artifact_not_found" | "artifact_version_conflict" | "artifact_commit_failed" | "invalid_artifact" | "task_not_found" | "task_revision_conflict" | "task_active_request_conflict" | "store_error" | "cancelled";
   "message": string;
   "recoverable": boolean;
   "details": Record<string, unknown>;
@@ -557,6 +574,107 @@ export interface RequestStatusGetRequest {
   "expected_task_revision"?: number | null;
 }
 
+export interface ResearchLabelSetPayload {
+  "task_id": string;
+  "node_id": string;
+  "label": "decision-changing" | "informative-but-not-decisive" | "misleading-or-wasteful";
+}
+
+export interface ResearchLabelSetRequest {
+  "protocol_version": 2;
+  "request_id": string;
+  "type": "research.labels.set";
+  "payload": ResearchLabelSetPayload;
+  "context": RequestContext;
+  "expected_workspace_revision"?: number | null;
+  "expected_task_revision"?: number | null;
+}
+
+export interface ResearchLessonDecidePayload {
+  "proposal_id": string;
+  "decision": "approve" | "reject";
+  "text"?: string | null;
+  "applies_when"?: string | null;
+  "reason"?: string | null;
+}
+
+export interface ResearchLessonDecideRequest {
+  "protocol_version": 2;
+  "request_id": string;
+  "type": "research.lessons.decide";
+  "payload": ResearchLessonDecidePayload;
+  "context": RequestContext;
+  "expected_workspace_revision"?: number | null;
+  "expected_task_revision"?: number | null;
+}
+
+export interface ResearchLessonRetirePayload {
+  "lesson_id": string;
+  "reason": string;
+}
+
+export interface ResearchLessonRetireRequest {
+  "protocol_version": 2;
+  "request_id": string;
+  "type": "research.lessons.retire";
+  "payload": ResearchLessonRetirePayload;
+  "context": RequestContext;
+  "expected_workspace_revision"?: number | null;
+  "expected_task_revision"?: number | null;
+}
+
+export interface ResearchLessonsConsolidatePayload {
+  "propose"?: boolean;
+}
+
+export interface ResearchLessonsConsolidateRequest {
+  "protocol_version": 2;
+  "request_id": string;
+  "type": "research.lessons.consolidate";
+  "payload": ResearchLessonsConsolidatePayload;
+  "context": RequestContext;
+  "expected_workspace_revision"?: number | null;
+  "expected_task_revision"?: number | null;
+}
+
+export interface ResearchLessonsListRequest {
+  "protocol_version": 2;
+  "request_id": string;
+  "type": "research.lessons.list";
+  "payload": EmptyPayload;
+  "context": RequestContext;
+  "expected_workspace_revision"?: number | null;
+  "expected_task_revision"?: number | null;
+}
+
+export interface ResearchPolicyActivatePayload {
+  "name": string;
+}
+
+export interface ResearchPolicyActivateRequest {
+  "protocol_version": 2;
+  "request_id": string;
+  "type": "research.policies.activate";
+  "payload": ResearchPolicyActivatePayload;
+  "context": RequestContext;
+  "expected_workspace_revision"?: number | null;
+  "expected_task_revision"?: number | null;
+}
+
+export interface ResearchReviewGetPayload {
+  "task_id"?: string | null;
+}
+
+export interface ResearchReviewGetRequest {
+  "protocol_version": 2;
+  "request_id": string;
+  "type": "research.review.get";
+  "payload": ResearchReviewGetPayload;
+  "context": RequestContext;
+  "expected_workspace_revision"?: number | null;
+  "expected_task_revision"?: number | null;
+}
+
 export interface ResearchSkillMetadataPayload {
   "name": string;
   "description": string;
@@ -595,6 +713,7 @@ export interface SessionSubmitPayload {
   "text": string;
   "context_refs"?: Array<ArtifactRef>;
   "literature_acquisition_mode"?: "ask_before_download" | "auto_download_open_access" | "search_only";
+  "workflow_mode"?: "standard" | "research";
 }
 
 export interface SessionSubmitRequest {
@@ -693,7 +812,7 @@ export interface TaskAgentTranscriptGetPayload {
   "task_id": string;
   "parent_request_id": string;
   "agent_id": string;
-  "work_order_id"?: string | null;
+  "agent_run_id"?: string | null;
 }
 
 export interface TaskAgentTranscriptGetRequest {
@@ -808,6 +927,22 @@ export interface TaskRenameRequest {
   "expected_task_revision"?: number | null;
 }
 
+export interface TaskReportReadPayload {
+  "task_id": string;
+  "report_path": string;
+  "offset"?: number;
+}
+
+export interface TaskReportReadRequest {
+  "protocol_version": 2;
+  "request_id": string;
+  "type": "task.report.read";
+  "payload": TaskReportReadPayload;
+  "context": RequestContext;
+  "expected_workspace_revision"?: number | null;
+  "expected_task_revision"?: number | null;
+}
+
 export interface TaskResultInteractiveViewGetPayload {
   "result_ref": TaskResultRef;
 }
@@ -901,7 +1036,6 @@ export interface TaskSnapshotPayload {
   "interactions"?: Array<TaskInteractionPayload>;
   "team_snapshot"?: TeamSnapshotPayload | null;
   "team_snapshots"?: Array<TeamSnapshotPayload>;
-  "checkpoint"?: Record<string, unknown>;
   "workflow"?: Record<string, unknown> | null;
 }
 
@@ -912,8 +1046,6 @@ export interface TaskSummaryPayload {
   "status": "active" | "completed" | "archived";
   "task_revision": number;
   "active_request_id"?: string | null;
-  "stable_checkpoint_id"?: string | null;
-  "conversation_generation": number;
   "created_at": string;
   "updated_at": string;
 }
@@ -938,17 +1070,20 @@ export interface TeamAgentPayload {
   "authority": "coordinator" | "expert" | "discussion";
   "status": "planning" | "working" | "waiting" | "discussing" | "recovering" | "completed" | "incomplete" | "blocked" | "failed" | "skipped";
   "activity"?: string;
-  "work_order_id"?: string | null;
+  "agent_run_id"?: string | null;
   "task_goal"?: string | null;
-  "result_summary"?: string | null;
+  "report_path"?: string | null;
+  "report_title"?: string | null;
   "limitations"?: Array<string>;
+  "created_at"?: string | null;
+  "updated_at"?: string | null;
 }
 
 export interface TeamAgentProfilePayload {
   "profile_id": string;
   "display_name": string;
   "authority": "expert" | "discussion";
-  "category": "framing" | "data" | "science" | "methods" | "evidence" | "visualization" | "discussion";
+  "category": "science" | "methods" | "evidence" | "discussion";
   "summary": string;
 }
 
@@ -1000,9 +1135,12 @@ export interface TeamTodoPayload {
   "expert_key"?: string | null;
   "expected_outputs"?: Array<string>;
   "state": "pending" | "queued" | "working" | "result_returned" | "stopped" | "skipped";
-  "work_order_id"?: string | null;
+  "agent_run_id"?: string | null;
   "session_round"?: number | null;
-  "result_summary"?: string | null;
+  "report_path"?: string | null;
+  "report_title"?: string | null;
+  "created_at"?: string | null;
+  "updated_at"?: string | null;
 }
 
 export interface ToolCallCompletedEvent {
@@ -1136,6 +1274,6 @@ export interface WorkspaceSnapshotPayload {
   "disclosure_policy"?: DisclosurePolicySummary | null;
 }
 
-export type OceanRequest = SystemHandshakeRequest | SessionOpenRequest | SessionSubmitRequest | TaskCreateRequest | TaskListRequest | TaskGetRequest | TaskRenameRequest | TaskArchiveRequest | TaskDeleteRequest | TaskSnapshotGetRequest | TaskAgentTranscriptGetRequest | TaskOutputListRequest | WorkspaceOpenRequest | WorkspaceSnapshotGetRequest | RequestStatusGetRequest | RequestCancelRequest | InteractionRespondRequest | SystemShutdownRequest | ArtifactListRequest | ArtifactGetRequest | ArtifactResourceGrantRequest | TaskResultResourceGrantRequest | TaskResultInteractiveViewGetRequest | ArtifactVersionsRequest | ArtifactCreateRequest | DatasetImportRequest | PaperImportRequest | PaperRegisterRequest | HypothesisActivateRequest | PortableExportCreateRequest | DisclosurePolicyGetRequest | DisclosurePolicySetRequest;
+export type OceanRequest = SystemHandshakeRequest | SessionOpenRequest | SessionSubmitRequest | TaskCreateRequest | TaskListRequest | TaskGetRequest | TaskRenameRequest | TaskArchiveRequest | TaskDeleteRequest | TaskSnapshotGetRequest | TaskAgentTranscriptGetRequest | TaskReportReadRequest | TaskOutputListRequest | WorkspaceOpenRequest | WorkspaceSnapshotGetRequest | RequestStatusGetRequest | RequestCancelRequest | InteractionRespondRequest | SystemShutdownRequest | ArtifactListRequest | ArtifactGetRequest | ArtifactResourceGrantRequest | TaskResultResourceGrantRequest | TaskResultInteractiveViewGetRequest | ArtifactVersionsRequest | ArtifactCreateRequest | DatasetImportRequest | LocalSourceImportRequest | PaperImportRequest | PaperRegisterRequest | HypothesisActivateRequest | PortableExportCreateRequest | DisclosurePolicyGetRequest | DisclosurePolicySetRequest | ResearchLessonsListRequest | ResearchLessonDecideRequest | ResearchLessonRetireRequest | ResearchLessonsConsolidateRequest | ResearchReviewGetRequest | ResearchLabelSetRequest | ResearchPolicyActivateRequest;
 
 export type OceanEvent = SystemReadyEvent | RequestAcceptedEvent | RequestCompletedEvent | RequestFailedEvent | RequestCancelledEvent | InteractionRequestedEvent | TranscriptItemAppendedEvent | AssistantDeltaEvent | AssistantTurnCompletedEvent | ToolCallStartedEvent | ToolCallCompletedEvent | ContextCompactionProgressEvent | TaskSnapshotEvent | TaskResultsChangedEvent | TeamSnapshotEvent | WorkspaceSnapshotEvent | WorkspaceChangedEvent | DisclosurePolicyUpdatedEvent | SystemShutdownEvent | SystemErrorEvent | ArtifactCreatedEvent | ArtifactVersionCreatedEvent | ArtifactStatusChangedEvent;

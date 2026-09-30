@@ -59,7 +59,7 @@ signed final artifact, not an unsigned CI output.
 
 ```bash
 make release-manifest \
-  APP="frontend/ocean-desktop/dist/mac/Ocean Research Partner.app" \
+  APP="frontend/ocean-desktop/dist/mac/OceanX.app" \
   VERSION="0.1.5" \
   OUTPUT="release-metadata/macos-x64-0.1.5"
 ```

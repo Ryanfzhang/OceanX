@@ -4,26 +4,27 @@ flowchart TB
     C -->|"开放研究问题"| T
 
     subgraph R["研究探索闭环 · 仅 Coordinator 维护"]
-        T["研究树<br/>问题根节点 → 主假设 → 子假设"]
-        T --> S["UCB 排序 + 渐进扩展<br/>建议 test / expand / stop"]
-        S --> D["Coordinator 决策"]
+        T["研究树<br/>问题根节点 → 同层候选 → 子问题"]
+        T --> D["Coordinator 观察 · 构思 · 选择"]
         D -->|"扩展：提出子假设"| T
         F["Coordinator 评估<br/>证据反馈 · 信息增益 · 分支状态"] --> T
     end
 
-    D -->|"检验：具体 WorkOrder"| E
+    D -->|"检验：一个研究子问题"| E
     C -->|"普通任务：直接委派"| E
 
     subgraph X["Expert 执行层 · 不接收研究树"]
-        E["持久化 Expert Session<br/>复用会话与紧凑 Checkpoint"]
+        E["DeepAgents 原生同步 task<br/>独立上下文 · 同根工作区与 Python 内核复用"]
         E --> A["文献检索 · 数据检查 · 分析计算"]
-        A --> W["WorkResult<br/>结论 · 证据 · 产物 · 阻碍"]
+        A --> W["report.md<br/>短 Summary · 自由正文"]
+        A --> N["ScientificFigure.save(.nc)<br/>数据 · Panel · Layer · 单位"]
     end
 
     W -->|"研究任务反馈"| F
     W -->|"交付结果"| C
+    N -->|"确定性预览与交互视图"| STORE
     A <--> DATA["任务工作区<br/>数据 · 代码 · 文件"]
-    W --> STORE["持久化存储<br/>证据 · 引用 · ResultBundle"]
+    W --> STORE["任务目录<br/>report.md · 代码 · .nc · 预览"]
     T -.-> STORE
 
     D -->|"主分支走通 / 全部不可继续 / 暂停"| C
@@ -31,16 +32,13 @@ flowchart TB
     STORE -.-> OUT
     OUT --> UI
 
-    E -.->|"显式保存经验"| L["经验 Inbox → Curator → 版本化 Skills"]
-    C -.->|"显式保存经验"| L
-    L -.->|"按需加载"| E
-    L -.->|"按需加载"| C
+    SK["只读方法 Skills<br/>按角色暴露 · 按需加载"] -.-> E
 
     classDef coord fill:#17334D,color:#fff,stroke:#17334D;
     classDef tree fill:#E0F2EF,color:#17334D,stroke:#309889;
     classDef expert fill:#E8EFFA,color:#17334D,stroke:#6C8CB5;
     classDef memory fill:#F5EFE4,color:#554431,stroke:#BD9D65;
     class C,D,F coord;
-    class T,S tree;
-    class E,A,W expert;
-    class DATA,STORE,L memory;
+    class T tree;
+    class E,A,W,N expert;
+    class DATA,STORE,SK memory;

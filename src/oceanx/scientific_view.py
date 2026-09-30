@@ -1,4 +1,4 @@
-"""Framework-owned builder for OceanMind interactive scientific figures.
+"""Framework-owned builder for OceanX interactive scientific figures.
 
 Expert code supplies scientific arrays and meaning.  This module owns the
 renderer schema and NumPy/xarray conversion.  One interactive view is persisted
@@ -18,6 +18,13 @@ from itertools import pairwise
 from numbers import Real
 from pathlib import Path
 from typing import Any, Literal
+
+from oceanx.figure_preview import write_figure_preview
+from oceanx.palettes import (
+    DEFAULT_GROUPED_PALETTE,
+    DEFAULT_SEQUENTIAL_PALETTE,
+    normalize_palette,
+)
 
 Scalar = int | float | str | None
 AxisScale = Literal["linear", "log", "time", "category"]
@@ -87,16 +94,7 @@ def _finite_number(value: Any, *, name: str) -> float:
 
 
 def _palette(value: str | Sequence[str]) -> str | list[str]:
-    if isinstance(value, str):
-        if not value.strip():
-            raise ValueError("scatter palette cannot be empty")
-        return value
-    if not isinstance(value, Sequence) or not value:
-        raise TypeError("scatter palette must be a name or a non-empty sequence of colours")
-    colors = list(value)
-    if not all(isinstance(color, str) and color.strip() for color in colors):
-        raise TypeError("scatter palette colours must be non-empty strings")
-    return colors
+    return normalize_palette(value)
 
 
 def _analysis_context_for(source_handle: str | None) -> dict[str, Any] | None:
@@ -449,7 +447,7 @@ class ScientificPanel:
         color: str | None = None,
         color_scale: Literal["linear", "log"] = "linear",
         color_domain: Sequence[float] | None = None,
-        palette: str | Sequence[str] = "viridis",
+        palette: str | Sequence[str] = DEFAULT_SEQUENTIAL_PALETTE,
         radius: float = 1.2,
         opacity: float = 0.25,
         marker: Literal["circle", "square", "triangle", "diamond"] = "circle",
@@ -536,8 +534,9 @@ class ScientificPanel:
         self,
         z: Any,
         *,
+        valid_mask: Any | None = None,
         label: str = "",
-        palette: str | Sequence[str] = "viridis",
+        palette: str | Sequence[str] = DEFAULT_SEQUENTIAL_PALETTE,
         color_scale: Literal["linear", "log"] = "linear",
         color_domain: Sequence[float] | None = None,
         colorbar_label: str = "",
@@ -553,6 +552,7 @@ class ScientificPanel:
 
         return self.field2d(
             z,
+            valid_mask=valid_mask,
             label=label,
             palette=palette,
             color_scale=color_scale,
@@ -567,12 +567,13 @@ class ScientificPanel:
         self,
         z: Any,
         *,
+        valid_mask: Any | None = None,
         label: str = "",
         variable: str = "",
         units: str = "",
         field_kind: Literal["continuous", "categorical"] = "continuous",
         category_labels: Mapping[int | float, str] | None = None,
-        palette: str | Sequence[str] = "viridis",
+        palette: str | Sequence[str] = DEFAULT_SEQUENTIAL_PALETTE,
         color_scale: Literal["linear", "log"] = "linear",
         color_domain: Sequence[float] | None = None,
         colorbar_label: str = "",
@@ -585,7 +586,11 @@ class ScientificPanel:
 
         The layer describes data semantics rather than a plotting-library
         primitive.  The Workbench owns interpolation, responsive rendering,
-        colorbars, and interaction.
+        colorbars, and interaction. ``valid_mask`` is True only where a cell
+        belongs to the scientific display domain; False cells are persisted as
+        missing and therefore remain transparent over a map.  In particular,
+        land and cells outside a comparison domain must not be encoded as an
+        ordinary numeric or categorical value.
         """
 
         import numpy as np
@@ -600,6 +605,15 @@ class ScientificPanel:
                 f"field2d z has shape {matrix.shape}; expected (len(y), len(x)) = {expected_shape}"
             )
         values = _flat(matrix)
+        if valid_mask is not None:
+            selected = np.asarray(_python_values(valid_mask))
+            if selected.shape != expected_shape or not np.issubdtype(
+                selected.dtype, np.bool_
+            ):
+                raise ValueError(
+                    "field2d valid_mask must be a boolean array with the same shape as z"
+                )
+            values = [value if keep else None for value, keep in zip(values, selected.flat)]
         if not any(isinstance(value, (int, float)) for value in values):
             raise ValueError("field2d requires at least one finite value")
         if render not in {"filled_contour", "smooth", "cells"}:
@@ -608,6 +622,11 @@ class ScientificPanel:
             raise ValueError(f"Unsupported field2d interpolation: {interpolation}")
         if field_kind not in {"continuous", "categorical"}:
             raise ValueError(f"Unsupported field2d field kind: {field_kind}")
+        if self.figure.plot_kind == "spatial_map" and valid_mask is None:
+            raise ValueError(
+                "spatial maps require valid_mask so land and cells outside the analysis "
+                "domain cannot become plotted values"
+            )
         categories = None
         if field_kind == "categorical":
             observed = sorted({float(value) for value in values if isinstance(value, (int, float))})
@@ -660,7 +679,7 @@ class ScientificPanel:
             "render": render,
             "interpolation": interpolation,
             "levels": normalized_levels,
-            "style": _bounded_style(style, palette=palette),
+            "style": _bounded_style(style, palette=_palette(palette)),
         }
         if label:
             layer["label"] = label
@@ -682,6 +701,7 @@ class ScientificPanel:
         labels: Mapping[str | int | float, str] | None = None,
         label: str = "Categories",
         show_labels: bool = True,
+        palette: str | Sequence[str] = DEFAULT_GROUPED_PALETTE,
         style: Mapping[str, Any] | None = None,
     ) -> ScientificPanel:
         """Add categorised samples without domain-specific plot branches."""
@@ -706,7 +726,7 @@ class ScientificPanel:
             "category": self.figure._add_data(f"{self.panel_id}_categories{index}_value", values),
             "label": label,
             "show_labels": bool(show_labels),
-            "style": _bounded_style(style, palette="categorical"),
+            "style": _bounded_style(style, palette=_palette(palette)),
         }
         if normalized_labels:
             layer["labels"] = normalized_labels
@@ -1312,7 +1332,8 @@ class ScientificFigure:
         finally:
             if temporary.exists():
                 temporary.unlink()
-        self._register_saved_result(path)
+        preview = write_figure_preview(path)
+        self._register_saved_result(path, preview)
         return path
 
     def _save_spatial_map(self, output: str | os.PathLike[str]) -> Path:
@@ -1362,12 +1383,16 @@ class ScientificFigure:
             name=variable,
             attrs={"units": units},
         ).to_dataset()
-        palette = (layer.get("style") or {}).get("palette", "viridis")
+        palette = (layer.get("style") or {}).get("palette", DEFAULT_SEQUENTIAL_PALETTE)
         finite = field[np.isfinite(field)]
         if finite.size == 0:
             raise ValueError("spatial_map field requires at least one finite value")
-        scale_min = float(finite.min())
-        scale_max = float(finite.max())
+        domain = layer.get("color_domain")
+        if domain is not None:
+            scale_min, scale_max = float(domain[0]), float(domain[1])
+        else:
+            scale_min = float(finite.min())
+            scale_max = float(finite.max())
         if scale_min == scale_max:
             epsilon = max(1e-12, abs(scale_min) * 1e-9)
             scale_min, scale_max = scale_min - epsilon, scale_max + epsilon
@@ -1391,7 +1416,7 @@ class ScientificFigure:
             "bounds": bounds,
             "colorbar": {
                 "label": panel.payload.get("display", {}).get("colorbar_label") or units,
-                "colormap": palette if isinstance(palette, str) else "viridis",
+                "colormap": palette,
                 "levels": [float(value) for value in np.linspace(scale_min, scale_max, 9)],
             },
             "rendering": {
@@ -1423,6 +1448,7 @@ class ScientificFigure:
         finally:
             if temporary.exists():
                 temporary.unlink()
+        preview = write_figure_preview(path)
         event: dict[str, Any] = {
             "kind": "interactive_view",
             "view_kind": "spatial_map",
@@ -1432,10 +1458,11 @@ class ScientificFigure:
             "longitude_coordinate": "longitude",
             "latitude_coordinate": "latitude",
             "units": units,
-            "colormap": palette if isinstance(palette, str) else "viridis",
+            "colormap": palette,
             "colorbar_label": (panel.payload.get("display", {}).get("colorbar_label") or units),
             "field_kind": metadata.get("field_kind", "continuous"),
             "view_type": "map.field2d",
+            "preview_output": _result_relative_path(preview),
         }
         if self.conclusions:
             event["conclusions"] = list(self.conclusions)
@@ -1465,11 +1492,11 @@ class ScientificFigure:
             variables[name] = (tuple(spec["dims"]), array)
         return xr.Dataset(variables)
 
-    def _register_saved_result(self, path: Path) -> None:
+    def _register_saved_result(self, path: Path, preview: Path) -> None:
         """Tell the hosting runtime that a complete view now exists.
 
         The registration file is framework-owned and intentionally separate from
-        the renderer payload.  In an OceanMind execution this makes ``save`` the
+        the renderer payload.  In an OceanX execution this makes ``save`` the
         atomic delivery boundary: a later exception or model/provider failure can
         no longer erase a figure that was already written successfully.  Outside
         that runtime (for example in a notebook or unit test) ``save`` remains an
@@ -1482,6 +1509,7 @@ class ScientificFigure:
             "title": self.title,
             "summary": self.caption or self.subtitle,
             "view_type": self._view_type(),
+            "preview_output": _result_relative_path(preview),
         }
         if self.conclusions:
             event["conclusions"] = list(self.conclusions)
@@ -1490,212 +1518,8 @@ class ScientificFigure:
         _append_result_event(path, event)
 
 
-class ScientificMap:
-    """Deprecated compatibility wrapper for pre-unified Expert programs.
-
-    New analysis should use ``ScientificFigure(plot_kind="spatial_map")`` so
-    every interactive result follows the same panel/layer API.
-    """
-
-    def __init__(
-        self,
-        *,
-        title: str,
-        summary: str = "",
-        conclusions: Sequence[str] = (),
-        source_handle: str | None = None,
-        colormap: str = "viridis",
-        colorbar_label: str = "",
-        field_kind: Literal["continuous", "categorical"] = "continuous",
-    ) -> None:
-        self.title = title
-        self.summary = summary
-        self.conclusions = tuple(str(item).strip() for item in conclusions if str(item).strip())
-        self.source_handle = source_handle
-        self.colormap = colormap
-        self.colorbar_label = colorbar_label
-        self.field_kind = field_kind
-
-    def save(
-        self,
-        output: str | os.PathLike[str],
-        *,
-        field: Any,
-        longitude: Any,
-        latitude: Any,
-        variable: str,
-        units: str = "",
-    ) -> Path:
-        import numpy as np
-        import xarray as xr
-
-        longitude_values = np.asarray(_python_values(longitude))
-        latitude_values = np.asarray(_python_values(latitude))
-        field_values = np.asarray(_python_values(field))
-        if longitude_values.ndim != 1 or latitude_values.ndim != 1:
-            raise ValueError("ScientificMap longitude and latitude must be one-dimensional")
-        expected = (latitude_values.size, longitude_values.size)
-        if field_values.shape != expected:
-            transposed = (longitude_values.size, latitude_values.size)
-            if field_values.shape == transposed and transposed != expected:
-                field_values = field_values.T
-            else:
-                raise ValueError(
-                    f"ScientificMap field has shape {field_values.shape}; expected {expected}"
-                )
-        variable_name = re.sub(r"[^A-Za-z0-9_]", "_", variable.strip())
-        if not variable_name or variable_name[0].isdigit():
-            variable_name = "value_" + variable_name
-        data = xr.DataArray(
-            field_values,
-            dims=("latitude", "longitude"),
-            coords={"longitude": longitude_values, "latitude": latitude_values},
-            name=variable_name,
-            attrs={"units": units},
-        )
-        path = _result_path(output)
-        if path.suffix.lower() != ".nc":
-            path = path.with_suffix(".nc")
-        data.to_dataset().to_netcdf(path)
-        event: dict[str, Any] = {
-            "kind": "interactive_view",
-            "view_kind": "spatial_map",
-            "title": self.title,
-            "summary": self.summary,
-            "variable": variable_name,
-            "longitude_coordinate": "longitude",
-            "latitude_coordinate": "latitude",
-            "units": units or None,
-            "colormap": self.colormap,
-            "colorbar_label": self.colorbar_label or units or None,
-            "field_kind": self.field_kind,
-            "view_spec": {
-                "schema_version": "ocean-interactive-view/v1",
-                "type": "map.contourf" if self.field_kind == "continuous" else "map.cells",
-                "plot_kind": "spatial_map",
-                "figure_schema": "ocean-scientific-figure/v4",
-                "data": {
-                    "longitude": {
-                        "variable": "longitude",
-                        "dims": ["longitude"],
-                        "shape": [int(longitude_values.size)],
-                    },
-                    "latitude": {
-                        "variable": "latitude",
-                        "dims": ["latitude"],
-                        "shape": [int(latitude_values.size)],
-                    },
-                    variable_name: {
-                        "variable": variable_name,
-                        "dims": ["latitude", "longitude"],
-                        "shape": [int(latitude_values.size), int(longitude_values.size)],
-                    },
-                },
-                "layout": {"columns": 1},
-                "panels": [
-                    {
-                        "id": "panel_1",
-                        "axes": {
-                            "x": {"field": "longitude", "label": "Longitude"},
-                            "y": {"field": "latitude", "label": "Latitude"},
-                        },
-                        "layers": [
-                            {
-                                "type": "field2d",
-                                "x": "longitude",
-                                "y": "latitude",
-                                "z": variable_name,
-                                "render": (
-                                    "filled_contour" if self.field_kind == "continuous" else "cells"
-                                ),
-                                "interpolation": "linear",
-                                "levels": 14,
-                                "style": {"palette": self.colormap},
-                            }
-                        ],
-                    }
-                ],
-                "interaction": {"tooltip": True, "zoom": True},
-            },
-            "data_schema": {
-                "schema_version": "ocean-view-data/v1",
-                "format": "netcdf",
-                "dataset_output": _result_relative_path(path),
-                "variables": [
-                    {
-                        "name": variable_name,
-                        "dims": ["latitude", "longitude"],
-                        "shape": [int(latitude_values.size), int(longitude_values.size)],
-                        "units": units,
-                        "roles": ["z"],
-                    },
-                    {
-                        "name": "longitude",
-                        "dims": ["longitude"],
-                        "shape": [int(longitude_values.size)],
-                        "units": "degrees_east",
-                        "roles": ["x"],
-                    },
-                    {
-                        "name": "latitude",
-                        "dims": ["latitude"],
-                        "shape": [int(latitude_values.size)],
-                        "units": "degrees_north",
-                        "roles": ["y"],
-                    },
-                ],
-            },
-        }
-        if self.conclusions:
-            event["conclusions"] = list(self.conclusions)
-        if self.source_handle:
-            event["source_handle"] = self.source_handle
-        _append_result_event(path, event)
-        return path
 
 
-def publish_report(
-    output: str | os.PathLike[str],
-    *,
-    title: str,
-    summary: str = "",
-    conclusions: Sequence[str] = (),
-    attachments: Sequence[str] = (),
-    checks: Sequence[str] = (),
-    limitations: Sequence[str] = (),
-) -> Path:
-    """Read-compatible legacy report writer; Expert runtimes do not expose it."""
-
-    path = _result_path(output)
-    if not path.is_file():
-        sections = [f"# {title}"]
-        if summary.strip():
-            sections.extend(("", summary.strip()))
-        for heading, values in (
-            ("Conclusions", conclusions),
-            ("Checks performed", checks),
-            ("Limitations", limitations),
-        ):
-            items = [str(item).strip() for item in values if str(item).strip()]
-            if items:
-                sections.extend(("", f"## {heading}", "", *(f"- {item}" for item in items)))
-        path.write_text("\n".join(sections).rstrip() + "\n", encoding="utf-8")
-    event: dict[str, Any] = {
-        "kind": "report",
-        "title": title,
-        "summary": summary,
-        "attachment_outputs": [str(item) for item in attachments],
-        "report_checks": [str(item) for item in checks if str(item).strip()],
-        "report_limitations": [str(item) for item in limitations if str(item).strip()],
-    }
-    normalized_conclusions = [str(item) for item in conclusions if str(item).strip()]
-    if normalized_conclusions:
-        event["conclusions"] = normalized_conclusions
-    _append_result_event(path, event)
-    return path
 
 
-# ``publish_report`` remains importable only so historical executions and
-# persisted result fixtures can still be read. New Expert sandboxes export the
-# figure builders alone; Coordinator finalization owns report creation.
-__all__ = ["ScientificFigure", "ScientificMap", "ScientificPanel"]
+__all__ = ["ScientificFigure", "ScientificPanel"]

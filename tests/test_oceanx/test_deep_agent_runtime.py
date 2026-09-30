@@ -21,14 +21,9 @@ from oceanx.agent_contract import (
     ToolExecutionStarted,
 )
 from oceanx.agent_tools import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
-from oceanx.deep_runtime import (
-    DeepAgentEngine,
-    TokenBudgetWindDownMiddleware,
-    _disable_generic_deep_agent_tools,
-    build_deep_agent_engine,
-)
+from oceanx.deep_runtime import DeepAgentEngine, _configure_native_harness
+from tests.test_oceanx.graph_fixture import build_deep_agent_engine
 from oceanx.model_config import OceanModelProfile
-from oceanx.tool_history import ToolHistoryRepairMiddleware, repair_tool_history
 
 
 class _BoundFakeModel(FakeMessagesListChatModel):
@@ -182,7 +177,7 @@ class _NestedToolEventGraph:
                 "name": "ocean_assign",
                 "run_id": "assign-run",
                 "parent_ids": ["root-graph"],
-                "data": {"output": "durable ExpertResult receipt"},
+                "data": {"output": "durable native Expert report receipt"},
             },
             {
                 "event": "on_chat_model_start",
@@ -201,117 +196,12 @@ class _NestedToolEventGraph:
             yield event
 
 
-def test_tool_history_repair_closes_dangling_calls_and_drops_orphans() -> None:
-    repaired = repair_tool_history(
-        [
-            HumanMessage(content="start"),
-            AIMessage(
-                content="",
-                tool_calls=[
-                    {"name": "ocean_increment", "args": {"value": 1}, "id": "call-1"}
-                ],
-            ),
-            HumanMessage(content="continue after interruption"),
-            ToolMessage(content="orphan", tool_call_id="missing-call"),
-        ]
-    )
-    synthetic = [message for message in repaired if isinstance(message, ToolMessage)]
-    assert len(synthetic) == 1
-    assert synthetic[0].tool_call_id == "call-1"
-    assert synthetic[0].status == "error"
-
-
-def test_token_budget_enters_wind_down_then_returns_a_hard_limit_handoff() -> None:
-    model = _BoundFakeModel(responses=[AIMessage(content="unused")])
-    middleware = TokenBudgetWindDownMiddleware(
-        max_input_tokens=100,
-        max_output_tokens=100,
-    )
-    request = ModelRequest(model=model, messages=[], system_prompt="Base expert policy")
-    first = ModelResponse(
-        result=[
-            AIMessage(
-                content="continue",
-                usage_metadata={
-                    "input_tokens": 85,
-                    "output_tokens": 10,
-                    "total_tokens": 95,
-                },
-            )
-        ]
-    )
-    middleware.wrap_model_call(request, lambda _request: first)
-
-    observed: list[ModelRequest] = []
-    second = ModelResponse(
-        result=[
-            AIMessage(
-                content="final",
-                usage_metadata={
-                    "input_tokens": 15,
-                    "output_tokens": 5,
-                    "total_tokens": 20,
-                },
-            )
-        ]
-    )
-    response = middleware.wrap_model_call(
-        request,
-        lambda modified: observed.append(modified) or second,
-    )
-    assert response is second
-    assert observed
-    assert "delivery reserve" in str(observed[0].system_message.content)
-
-    handler_called = False
-
-    def unexpected_handler(_request: ModelRequest) -> ModelResponse:
-        nonlocal handler_called
-        handler_called = True
-        return second
-
-    terminal = middleware.wrap_model_call(request, unexpected_handler)
-    assert not handler_called
-    assert "reached its token budget" in str(terminal.result[0].content)
-    assert terminal.result[0].additional_kwargs["oceanx_budget_exhausted"] is True
-
-
-@pytest.mark.asyncio
-async def test_budget_short_circuit_without_model_event_is_not_retried():
-    from types import SimpleNamespace
-    from oceanx.agent_contract import ErrorEvent
-
-    class BudgetGraph:
-        async def aget_state(self, config):
-            return SimpleNamespace(values={"messages": [AIMessage(
-                content="Token budget exhausted; partial work is saved.",
-                additional_kwargs={"oceanx_budget_exhausted": True},
-            )]}, next=())
-
-        async def astream_events(self, *args, **kwargs):
-            if False:
-                yield {}
-
-    engine = DeepAgentEngine(
-        graph=BudgetGraph(), thread_id="budget-test", system_prompt="Test",
-        max_turns=4, operation_id_factory=lambda *args: "operation",
-    )
-    events = [e async for e in engine.submit_message("question", request_id="req")]
-    errors = [e for e in events if isinstance(e, ErrorEvent)]
-    assert len(errors) == 1
-    assert errors[0].code == "budget_exhausted"
-    assert errors[0].retryable is False
-    assert not engine._empty_response_pending
-
-
 @pytest.mark.asyncio
 async def test_nested_agent_events_inside_a_tool_do_not_leak_into_parent_stream() -> None:
     operation = lambda request_id, turn_id, call_id: f"{request_id}:{turn_id}:{call_id}"
     engine = DeepAgentEngine(
         graph=_NestedToolEventGraph(),
         thread_id="coordinator-thread",
-        system_prompt="Coordinator test",
-        max_turns=4,
         operation_id_factory=operation,
     )
 
@@ -337,13 +227,46 @@ async def test_nested_agent_events_inside_a_tool_do_not_leak_into_parent_stream(
 
 
 @pytest.mark.asyncio
+async def test_parallel_native_task_events_keep_their_own_assignment_when_start_order_changes():
+    class Graph:
+        async def aget_state(self, _config):
+            return type("Snapshot", (), {"values": {}})()
+
+        async def astream_events(self, *_args, **_kwargs):
+            calls = [{"id": f"call-{branch}", "name": "task", "type": "tool_call",
+                      "args": {"subagent_type": "ocean_process_expert", "description": f"{branch}: study"}}
+                     for branch in ("B1", "B2")]
+            yield {"event": "on_chat_model_end", "run_id": "model", "data": {
+                "output": AIMessage(content="", tool_calls=calls)}}
+            # Native tools may start in a different order than the model's list.
+            for call in reversed(calls):
+                yield {"event": "on_tool_start", "name": "task", "run_id": call["id"] + "-run",
+                       "data": {"input": call["args"]}}
+            for call in calls:
+                yield {"event": "on_tool_end", "name": "task", "run_id": call["id"] + "-run",
+                       "data": {"output": call["args"]["description"]}}
+            yield {"event": "on_chat_model_end", "run_id": "final", "data": {
+                "output": AIMessage(content="Final synthesis.")}}
+
+    engine = DeepAgentEngine(graph=Graph(), thread_id="coordinator",
+                             operation_id_factory=lambda *_args: "operation")
+    events = [e async for e in engine.submit_message("study", request_id="req")]
+    starts = [e for e in events if isinstance(e, ToolExecutionStarted)]
+    ends = [e for e in events if isinstance(e, ToolExecutionCompleted)]
+    assert [e.tool_call_id for e in starts] == ["call-B2", "call-B1"]
+    assert [e.tool_input["description"] for e in starts] == ["B2: study", "B1: study"]
+    assert [(e.tool_call_id, e.output) for e in ends] == [("call-B1", "B1: study"), ("call-B2", "B2: study")]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("delivery", ["normal", "disconnect", "empty", "length", "refusal"])
-async def test_deep_agent_exposes_only_ocean_tools_and_returns_one_final_answer(
+async def test_deep_agent_returns_one_final_answer_with_fixture_tool_allowlist(
     tmp_path: Path, delivery: str, monkeypatch,
 ) -> None:
-    async def sleep(delay):
-        pass
-    monkeypatch.setattr("oceanx.model_recovery.asyncio.sleep", sleep)
+    from oceanx.provider_retry import provider_retry_middleware
+    retry = provider_retry_middleware()
+    retry.initial_delay = 0
+    retry.jitter = False
     disconnect = delivery == "disconnect"
     model = (_DisconnectAfterToolModel if disconnect else _BoundFakeModel)(
         responses=[
@@ -365,8 +288,14 @@ async def test_deep_agent_exposes_only_ocean_tools_and_returns_one_final_answer(
         model.responses.insert(1, AIMessage(content="", response_metadata={"finish_reason": "stop"}))
     elif delivery in {"length", "refusal"}:
         model.responses[1] = AIMessage(content="", response_metadata={"finish_reason": delivery})
+    extra_calls = 48 if delivery == "normal" else 0
+    for i in range(extra_calls):
+        model.responses.insert(-1, AIMessage(content="", tool_calls=[{
+            "name": "ocean_increment", "args": {"value": i},
+            "id": f"extra-{i}", "type": "tool_call",
+        }], usage_metadata={"input_tokens": 100_000, "output_tokens": 10, "total_tokens": 100_010}))
     # Fake model provider identity is its llm type.
-    _disable_generic_deep_agent_tools(type(model).__name__.lower())
+    _configure_native_harness(type(model).__name__.lower())
     backend = StateBackend()
     registry = ToolRegistry()
     increment = _IncrementTool()
@@ -377,8 +306,8 @@ async def test_deep_agent_exposes_only_ocean_tools_and_returns_one_final_answer(
         tools=registry.as_langchain_tools(cwd=tmp_path, operation_id_factory=operation),
         system_prompt="Ocean test",
         middleware=[
+            retry,
             FilesystemMiddleware(backend=backend, tools=["read_file"]),
-            ToolHistoryRepairMiddleware(),
         ],
         subagents=[],
         backend=backend,
@@ -388,28 +317,24 @@ async def test_deep_agent_exposes_only_ocean_tools_and_returns_one_final_answer(
     engine = DeepAgentEngine(
         graph=graph,
         thread_id="expert-thread",
-        system_prompt="Ocean test",
-        max_turns=4,
         operation_id_factory=operation,
     )
 
     from oceanx.backend.router import _coordinator_events
     events = [event async for event in _coordinator_events(engine, "run", "req-1")]
-    assert len(increment.contexts) == 1
+    assert len(increment.contexts) == 1 + extra_calls
     snapshot = await graph.aget_state(engine._config("req-1"))
     assert sum(isinstance(m, HumanMessage) and m.content == "run"
                for m in snapshot.values["messages"]) == 1
-    assert sum(isinstance(m, HumanMessage) for m in snapshot.values["messages"]) == (
-        2 if delivery == "empty" else 1
-    )
+    assert sum(isinstance(m, HumanMessage) for m in snapshot.values["messages"]) == 1
 
     assert any(isinstance(event, ToolExecutionStarted) for event in events)
     assert any(isinstance(event, ToolExecutionCompleted) for event in events)
-    if delivery in {"length", "refusal"}:
+    if delivery in {"length", "refusal", "empty"}:
         from oceanx.agent_contract import ErrorEvent
         assert isinstance(events[-1], ErrorEvent)
-        assert events[-1].code == "model_output_error"
-        assert events[-1].retryable is False
+        assert events[-1].code == ("empty_model_response" if delivery == "empty" else "model_output_error")
+        assert events[-1].retryable is (delivery == "empty")
         assert not events[-1].retries_exhausted
         return
     final = [event for event in events if isinstance(event, AssistantTurnComplete)][-1]
@@ -420,7 +345,7 @@ async def test_deep_agent_exposes_only_ocean_tools_and_returns_one_final_answer(
     assert increment.contexts[0].tool_call_id == "call-1"
     assert increment.contexts[0].operation_id == "req-1:langgraph:call-1"
     assert model.bound_tool_names
-    assert set(model.bound_tool_names[0]) == {"ocean_increment"}
+    assert set(model.bound_tool_names[0]) == {"ocean_increment", "read_file"}
 
 
 @pytest.mark.asyncio
@@ -440,7 +365,7 @@ async def test_sqlite_checkpoint_resumes_the_same_expert_after_runtime_rebuild(
         credential_slot="fixture",
         api_key="fixture-key",
     )
-    _disable_generic_deep_agent_tools("_boundfakemodel")
+    _configure_native_harness("_boundfakemodel")
     registry = ToolRegistry()
     operation = lambda request_id, turn_id, call_id: f"{request_id}:{turn_id}:{call_id}"
 

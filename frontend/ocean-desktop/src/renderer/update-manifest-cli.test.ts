@@ -24,7 +24,7 @@ describe('desktop update-manifest signing CLI', () => {
       const privateKey = join(directory, 'release-key.pem');
       const output = join(directory, 'manifest.json');
       const archive = join(directory, 'Ocean-Partner-arm64.zip');
-      const archiveBytes = Buffer.from('signed Ocean Research Partner archive', 'utf8');
+      const archiveBytes = Buffer.from('signed OceanX archive', 'utf8');
       await writeFile(archive, archiveBytes);
       await writeFile(input, JSON.stringify({
         schema_version: 'ocean-desktop-update/v1',

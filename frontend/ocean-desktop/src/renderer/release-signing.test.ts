@@ -40,14 +40,14 @@ describe('desktop release signing gates', () => {
   it('keeps signed-package layout target-specific and requires Developer ID evidence on macOS', () => {
     const root = '/release-root';
     const files = (directory: string, matcher: (file: string) => boolean) => [
-      '/release-root/dist/Ocean Research Partner-0.1.0.dmg',
-      '/release-root/dist/Ocean Research Partner-0.1.0-mac.zip',
+      '/release-root/dist/OceanX-0.1.0.dmg',
+      '/release-root/dist/OceanX-0.1.0-mac.zip',
     ].filter((path) => matcher(path.slice(directory.length + 1)));
-    expect(signedPackageLayout({platform: 'darwin', root, name: 'Ocean Research Partner', files})).toMatchObject({
-      app: '/release-root/dist/mac/Ocean Research Partner.app',
+    expect(signedPackageLayout({platform: 'darwin', root, name: 'OceanX', files})).toMatchObject({
+      app: '/release-root/dist/mac/OceanX.app',
       executables: [
-        '/release-root/dist/mac/Ocean Research Partner.app/Contents/MacOS/Ocean Research Partner',
-        '/release-root/dist/mac/Ocean Research Partner.app/Contents/Resources/sidecar/ocean-backend/ocean-backend',
+        '/release-root/dist/mac/OceanX.app/Contents/MacOS/OceanX',
+        '/release-root/dist/mac/OceanX.app/Contents/Resources/sidecar/ocean-backend/ocean-backend',
       ],
     });
     expect(hasDeveloperIdAuthority('Authority=Developer ID Application: Ocean Partner (TEAM123456)')).toBe(true);

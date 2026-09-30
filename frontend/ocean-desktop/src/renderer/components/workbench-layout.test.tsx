@@ -3,14 +3,43 @@ import {describe, expect, it} from 'vitest';
 
 import type {ArtifactVersion, DeliveryManifest, ResultDocument, TaskOutput, TaskResultRecord, TeamAgentTranscript, TeamSnapshot} from '../types.js';
 import {AgentActivityPanel} from './AgentActivityPanel.js';
-import {AgentCollaborationCanvas} from './AgentCollaborationCanvas.js';
+import {activeRoster, AgentCollaborationCanvas} from './AgentCollaborationCanvas.js';
 import {ConversationTranscript} from './ConversationTranscript.js';
 import {InteractiveViewWorkbench} from './InteractiveViewWorkbench.js';
 import {normalizeScientificFigure} from './scientific-figure.js';
-import {scientificAxisExtent} from './ScientificView.js';
-import {boundsForContext, displayContextFor, ResultWorkbench, sampleSpatialGrid, shouldFitRegion, spatialRasterDimensions} from './SpatialWorkbench.js';
+import {clampScientificDomain, scientificAxisExtent, scientificScatterAppearance} from './ScientificView.js';
+import {boundsForContext, displayContextFor, mapFitPadding, ResultWorkbench, sampleSpatialGrid, shouldFitRegion, spatialRasterDimensions, usableMapViewport} from './SpatialWorkbench.js';
 
 describe('research workbench layout', () => {
+  it('keeps sparse scientific scatter points legible without saturating dense clouds', () => {
+    expect(scientificScatterAppearance({radius: 1.2, opacity: .25}, 8)).toEqual({radius: 3.4, opacity: .84});
+    expect(scientificScatterAppearance({radius: 1.2, opacity: .25}, 5_000)).toEqual({radius: 1.2, opacity: .25});
+  });
+
+  it('keeps same-capability native Expert threads as separate participants', () => {
+    const snapshot: TeamSnapshot = {
+      revision: 1,
+      status: 'working',
+      strategy: 'parallel_team',
+      agents: [
+        {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Coordinating'},
+        {agent_id: 'thread-horizontal', profile_id: 'ocean_process_expert', semantic_role: 'Ocean Process Expert', authority: 'expert', status: 'working', activity: 'Horizontal structure', agent_run_id: 'run-horizontal'},
+        {agent_id: 'thread-vertical', profile_id: 'ocean_process_expert', semantic_role: 'Ocean Process Expert', authority: 'expert', status: 'working', activity: 'Vertical structure', agent_run_id: 'run-vertical'},
+      ],
+      dependencies: [],
+      interactions: [],
+      todos: [],
+      role_pool: [],
+    };
+
+    expect(activeRoster(snapshot).map((agent) => agent.agent_id)).toEqual([
+      'coordinator', 'thread-horizontal', 'thread-vertical',
+    ]);
+    expect(activeRoster(snapshot).map((agent) => agent.displayRole)).toEqual([
+      'Coordinator', 'Ocean Expert', 'Ocean Expert',
+    ]);
+  });
+
   it('repairs old short profile scatters into a continuous sampled curve', () => {
     const normalized = normalizeScientificFigure({
       schema_version: 'ocean-scientific-figure/v4',
@@ -66,7 +95,7 @@ describe('research workbench layout', () => {
       strategy: 'single_delegate',
       agents: [
         {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Coordinating'},
-        {agent_id: 'data', semantic_role: 'Data Expert', authority: 'expert', status: 'working', activity: 'Inspecting metadata', work_order_id: 'work_1'},
+        {agent_id: 'data', semantic_role: 'Data Expert', authority: 'expert', status: 'working', activity: 'Inspecting metadata', agent_run_id: 'work_1'},
       ],
       dependencies: [],
       interactions: [{
@@ -86,6 +115,7 @@ describe('research workbench layout', () => {
     expect(markup).not.toContain('style="height:');
     expect(markup).toContain('Coordinator');
     expect(markup).toContain('Data Expert');
+    expect(markup).toContain('width="48" height="48"');
     expect(markup).not.toContain('agent-canvas-conversation');
   });
 
@@ -96,15 +126,15 @@ describe('research workbench layout', () => {
       strategy: 'parallel_team',
       agents: [
         {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Coordinating three workstreams'},
-        {agent_id: 'physical', semantic_role: 'Physical Oceanographer', authority: 'expert', status: 'working', activity: 'Analyzing circulation', work_order_id: 'work_physical'},
-        {agent_id: 'biogeo', semantic_role: 'Biogeochemistry Expert', authority: 'expert', status: 'working', activity: 'Analyzing oxygen', work_order_id: 'work_biogeo'},
-        {agent_id: 'visual', semantic_role: 'Scientific Visualization Expert', authority: 'expert', status: 'working', activity: 'Designing views', work_order_id: 'work_visual'},
+        {agent_id: 'physical', semantic_role: 'Physical Oceanographer', authority: 'expert', status: 'working', activity: 'Analyzing circulation', agent_run_id: 'work_physical'},
+        {agent_id: 'biogeo', semantic_role: 'Biogeochemistry Expert', authority: 'expert', status: 'working', activity: 'Analyzing oxygen', agent_run_id: 'work_biogeo'},
+        {agent_id: 'statistics', semantic_role: 'Statistical Inference Expert', authority: 'expert', status: 'working', activity: 'Testing uncertainty', agent_run_id: 'work_statistics'},
       ],
       dependencies: [],
       interactions: [
         {interaction_id: 'interaction_physical', from_agent_id: 'coordinator', to_agent_id: 'physical', kind: 'delegation', summary: 'Analyze circulation', state: 'active'},
         {interaction_id: 'interaction_biogeo', from_agent_id: 'coordinator', to_agent_id: 'biogeo', kind: 'delegation', summary: 'Analyze oxygen', state: 'active'},
-        {interaction_id: 'interaction_visual', from_agent_id: 'coordinator', to_agent_id: 'visual', kind: 'delegation', summary: 'Design views', state: 'active'},
+        {interaction_id: 'interaction_statistics', from_agent_id: 'coordinator', to_agent_id: 'statistics', kind: 'delegation', summary: 'Test uncertainty', state: 'active'},
       ],
       role_pool: [],
     };
@@ -113,14 +143,14 @@ describe('research workbench layout', () => {
 
     expect(markup).toContain('Physical Oceanographer');
     expect(markup).toContain('Biogeochemistry Expert');
-    expect(markup).toContain('Scientific Visualization Expert');
+    expect(markup).toContain('Statistical Inference Expert');
     expect(markup.match(/class="agent-edge active"/g)).toHaveLength(3);
     expect(markup.match(/agent-role-icon-expert/g)).toHaveLength(3);
     expect(markup.match(/agent-role-icon-coordinator/g)).toHaveLength(1);
     expect(new Set([...markup.matchAll(/--agent-accent:([^;"]+)/g)].map((match) => match[1])).size).toBeGreaterThanOrEqual(4);
   });
 
-  it('keeps planned Experts visible and limits canvas detail to objective and current work', () => {
+  it('shows every backend assignment and preserves a waiting Expert state', () => {
     const snapshot: TeamSnapshot = {
       request_id: 'req_canvas_progress',
       revision: 4,
@@ -128,21 +158,22 @@ describe('research workbench layout', () => {
       strategy: 'parallel_team',
       agents: [
         {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Synthesizing returned evidence'},
-        {agent_id: 'physical', profile_id: 'physical', semantic_role: 'Physical Oceanographer', authority: 'expert', status: 'completed', activity: 'Returned circulation evidence', work_order_id: 'work_physical'},
+        {agent_id: 'physical', profile_id: 'physical', semantic_role: 'Physical Oceanographer', authority: 'expert', status: 'completed', activity: 'Returned circulation evidence', agent_run_id: 'work_physical'},
+        {agent_id: 'statistics', profile_id: 'statistics', semantic_role: 'Statistical Inference Expert', authority: 'expert', status: 'waiting', activity: 'Waiting to start', agent_run_id: 'work_statistics'},
       ],
       todos: [
         {
           todo_id: 'circulation', question: 'Resolve the complete annual and seasonal Loop Current structure across the study region.', depends_on: [], profile_id: 'physical', expected_outputs: ['answer'],
-          state: 'result_returned', work_order_id: 'work_physical', result_summary: 'The annual mean resolves a coherent Loop Current extension and its vertical signature across the upper ocean.',
+          state: 'result_returned', agent_run_id: 'work_physical', report_path: '/task/physics/report.md',
         },
         {
-          todo_id: 'visualization', question: 'Prepare the evidence visualization after the physical analysis is available.', depends_on: ['circulation'], profile_id: 'visual', expected_outputs: ['view'],
-          state: 'pending', work_order_id: 'work_visual',
+          todo_id: 'uncertainty', question: 'Test the uncertainty after the physical analysis is available.', depends_on: ['circulation'], profile_id: 'statistics', expected_outputs: ['answer'],
+          state: 'pending', agent_run_id: 'work_statistics',
         },
       ],
       role_pool: [
         {profile_id: 'physical', display_name: 'Physical Oceanographer', authority: 'expert', category: 'science', summary: 'Physical interpretation'},
-        {profile_id: 'visual', display_name: 'Scientific Visualization Expert', authority: 'expert', category: 'visualization', summary: 'Evidence visualization'},
+        {profile_id: 'statistics', display_name: 'Statistical Inference Expert', authority: 'expert', category: 'methods', summary: 'Statistical inference'},
       ],
       dependencies: [],
       interactions: [],
@@ -153,18 +184,17 @@ describe('research workbench layout', () => {
     expect(markup).toContain('Physical Oceanographer');
     expect(markup).toContain('Objective: Resolve the complete annual and seasonal Loop Current structure');
     expect(markup).not.toContain('coherent Loop Current extension and its vertical signature');
-    expect(markup).toContain('Scientific Visualization Expert');
+    expect(markup).toContain('Statistical Inference Expert');
     expect(markup).toContain('status-waiting');
-    expect(markup).toContain('Prepare the evidence visualization');
+    expect(markup).toContain('Test the uncertainty');
     expect(markup).not.toContain('role="button"');
   });
 
   it('renders the selected agent complete history in the fixed canvas panel', () => {
-    const agent = {agent_id: 'physical', semantic_role: 'Physical Oceanographer', authority: 'expert' as const, status: 'working' as const, activity: 'Analyzing circulation', work_order_id: 'work_physical'};
+    const agent = {agent_id: 'physical', semantic_role: 'Physical Oceanographer', authority: 'expert' as const, status: 'working' as const, activity: 'Analyzing circulation', agent_run_id: 'work_physical'};
     const transcript: TeamAgentTranscript = {
       agent_id: agent.agent_id,
-      work_order_id: agent.work_order_id,
-      compaction_generation: 0,
+      agent_run_id: agent.agent_run_id,
       messages: [
         {message_id: 'message_1', role: 'coordinator', blocks: [{type: 'text', text: 'Analyze the circulation evidence.'}]},
         {message_id: 'message_2', role: 'expert', blocks: [{type: 'tool_call', tool_call_id: 'tool_1', tool_name: 'ocean_execute_code', input: {script: 'analysis.py'}}]},
@@ -186,7 +216,7 @@ describe('research workbench layout', () => {
   it('keeps a unified result workbench mounted when no result is selected', () => {
     const markup = renderToStaticMarkup(<ResultWorkbench />);
 
-    expect(markup).toContain('aria-label="Result Workbench"');
+    expect(markup).toContain('aria-label="Result workbench"');
     expect(markup).not.toContain('Result Workbench</strong>');
     expect(markup).not.toContain('Charts Open Here Too');
     expect(markup).toContain('Preparing map');
@@ -204,8 +234,9 @@ describe('research workbench layout', () => {
       loading={false}
       data={{
         plot_kind: 'time_series',
-        axes: [{name: 'month', values: ['Jan', 'Feb', 'Mar']}],
-        series: [{name: 'chlorophyll', units: 'mg m-3', values: [.2, .3, .25]}],
+        schema_version: 'ocean-scientific-figure/v4',
+        data: {month: ['Jan', 'Feb', 'Mar'], chlorophyll: [.2, .3, .25]},
+        panels: [{id: 'main', axes: {x: {field: 'month', scale: 'category'}, y: {field: 'chlorophyll', units: 'mg m-3'}}, layers: [{type: 'line', x: 'month', y: 'chlorophyll'}]}],
         spatial_context: {
           region_key: 'gulf-region',
           bounds: [-98, 18, -77, 32],
@@ -225,7 +256,7 @@ describe('research workbench layout', () => {
       onClose={() => undefined}
     />);
 
-    expect(markup).toContain('aria-label="Result Workbench"');
+    expect(markup).toContain('aria-label="Result workbench"');
     expect(markup).toContain('result-chart-surface');
     expect(markup).toContain('spatial-workbench-body with-figure');
     expect(markup).toContain('Study area');
@@ -248,15 +279,17 @@ describe('research workbench layout', () => {
       document={document}
       loading={false}
       data={{
-        schema_version: 'ocean-scientific-view/v1',
+        schema_version: 'ocean-scientific-figure/v4',
         plot_kind: 'profile',
         title: 'Area-mean temperature profile',
         data: {temperature: [27.2, 12.4], depth: [0.49, 5727.9]},
+        panels: [{id: 'main',
         axes: {
           x: {field: 'temperature', label: 'Potential temperature', units: '°C'},
           y: {field: 'depth', label: 'Depth', units: 'm', reverse: true},
         },
         layers: [{type: 'line', x: 'temperature', y: 'depth', label: 'Annual mean'}],
+        }],
         spatial_context: {
           region_key: 'dataset:gulf',
           bounds: [-98.5, 16.5, -77, 32],
@@ -287,8 +320,9 @@ describe('research workbench layout', () => {
       loading={false}
       data={{
         plot_kind: 'time_series',
-        axes: [{name: 'month', values: ['Jan', 'Feb', 'Mar']}],
-        series: [{name: 'anomaly', units: '°C', values: [-.2, .1, .3]}],
+        schema_version: 'ocean-scientific-figure/v4',
+        data: {month: ['Jan', 'Feb', 'Mar'], anomaly: [-.2, .1, .3]},
+        panels: [{id: 'main', axes: {x: {field: 'month', scale: 'category'}, y: {field: 'anomaly', units: '°C'}}, layers: [{type: 'line', x: 'month', y: 'anomaly'}]}],
       }}
       previewUrl={null}
       error={null}
@@ -298,6 +332,57 @@ describe('research workbench layout', () => {
     expect(markup).toContain('spatial-workbench-body with-figure figure-only');
     expect(markup).toContain('result-chart-surface');
     expect(markup).not.toContain('Study area');
+  });
+
+  it('shows every compact category label instead of hiding alternating observations', () => {
+    const labels = ['Jun–Sep', 'Jun–Oct', 'Jul–Oct', 'May–Oct', 'Apr–Mar', 'Jan–Dec', 'Dec–Feb', 'Aug–Nov'];
+    const markup = renderToStaticMarkup(<ResultWorkbench
+      document={{key: 'task_1/windows@v1', title: 'Window sensitivity', content: {view_kind: 'scatter'}}}
+      loading={false}
+      data={{
+        plot_kind: 'categorical',
+        schema_version: 'ocean-scientific-figure/v4',
+        data: {window: labels, contrast: [-.05, -.12, .1, .19, .53, .7, .72, .76]},
+        panels: [{
+          id: 'main',
+          axes: {x: {field: 'window', scale: 'category'}, y: {field: 'contrast', units: '°C'}},
+          layers: [{type: 'scatter', x: 'window', y: 'contrast'}],
+        }],
+      }}
+      previewUrl={null}
+      error={null}
+      onClose={() => undefined}
+    />);
+
+    labels.forEach((label) => expect(markup).toContain(label));
+    expect(markup.match(/scientific-category-tick/g)).toHaveLength(labels.length);
+    expect(markup).toContain('scientific-zero-reference');
+  });
+
+  it('uses a shared local domain and identity line for same-unit comparison scatters', () => {
+    const markup = renderToStaticMarkup(<ResultWorkbench
+      document={{key: 'task_1/depth-comparison@v1', title: 'Half-amplitude depth', content: {view_kind: 'scatter'}}}
+      loading={false}
+      data={{
+        plot_kind: 'scatter',
+        schema_version: 'ocean-scientific-figure/v4',
+        data: {reference_depth: [52, 60, 70], bay_depth: [45, 46, 48]},
+        panels: [{
+          id: 'main',
+          axes: {
+            x: {field: 'reference_depth', label: 'Reference half depth', units: 'm'},
+            y: {field: 'bay_depth', label: 'Bay half depth', units: 'm'},
+          },
+          layers: [{type: 'scatter', x: 'reference_depth', y: 'bay_depth'}],
+        }],
+      }}
+      previewUrl={null}
+      error={null}
+      onClose={() => undefined}
+    />);
+
+    expect(markup).toContain('scientific-identity-reference');
+    expect(markup).not.toMatch(/class="scientific-tick">0<\/text>/);
   });
 
   it('shows a saved PNG when interactive rendering is unavailable', () => {
@@ -361,6 +446,15 @@ describe('research workbench layout', () => {
     expect(shouldFitRegion('another-region', context)).toBe(true);
   });
 
+  it('fits maps only after layout and scales camera padding to the viewport', () => {
+    expect(usableMapViewport(0, 640)).toBe(false);
+    expect(usableMapViewport(31, 640)).toBe(false);
+    expect(usableMapViewport(640, 320)).toBe(true);
+    expect(mapFitPadding(640, 120)).toBe(16);
+    expect(mapFitPadding(640, 320)).toBe(25);
+    expect(mapFitPadding(1_200, 900)).toBe(48);
+  });
+
   it('renders section payloads as an inspectable continuous field surface', () => {
     const artifact: ArtifactVersion = {
       ref: {artifact_id: 'interactive_view_section', version: 1},
@@ -374,8 +468,9 @@ describe('research workbench layout', () => {
       loading={false}
       data={{
         plot_kind: 'section',
-        axes: [{name: 'distance', units: 'km', values: [0, 10]}, {name: 'depth', units: 'm', values: [0, 50]}],
-        series: [{name: 'temperature', units: '°C', values: [24, 22, 18, 15]}],
+        schema_version: 'ocean-scientific-figure/v4',
+        data: {distance: [0, 10], depth: [0, 50], temperature: [24, 22, 18, 15]},
+        panels: [{id: 'main', axes: {x: {field: 'distance', units: 'km'}, y: {field: 'depth', label: 'depth', units: 'm', reverse: true}}, layers: [{type: 'field2d', x: 'distance', y: 'depth', z: 'temperature'}]}],
       }}
       previewUrl={null}
       error={null}
@@ -437,10 +532,11 @@ describe('research workbench layout', () => {
       artifact={artifact}
       loading={false}
       data={{
-        schema_version: 'ocean-scientific-view/v1',
+        schema_version: 'ocean-scientific-figure/v4',
         plot_kind: 'ts_diagram',
         title: 'Water-mass structure',
         data: {salinity: [35.1, 35.6], temperature: [12, 24], depth: [500, 20]},
+        panels: [{id: 'main',
         axes: {
           x: {field: 'salinity', label: 'Practical salinity', range: [34.8, 36]},
           y: {field: 'temperature', label: 'Potential temperature', units: '°C'},
@@ -451,6 +547,7 @@ describe('research workbench layout', () => {
           {type: 'annotation', items: [{x: 35.6, y: 24, text: '20 m'}]},
         ],
         display: {colorbar_label: 'Depth (m)'},
+        }],
       }}
       previewUrl={null}
       error={null}
@@ -479,14 +576,16 @@ describe('research workbench layout', () => {
       }}
       loading={false}
       data={{
-        schema_version: 'ocean-scientific-view/v1',
+        schema_version: 'ocean-scientific-figure/v4',
         plot_kind: 'ts_diagram',
         data: {salinity, temperature, depth},
+        panels: [{id: 'main',
         axes: {
           x: {field: 'salinity', label: 'Salinity', units: 'psu'},
           y: {field: 'temperature', label: 'Temperature', units: '°C'},
         },
         layers: [{type: 'scatter', x: 'salinity', y: 'temperature', color: 'depth', color_scale: 'log'}],
+        }],
       }}
       previewUrl={null}
       error={null}
@@ -511,7 +610,7 @@ describe('research workbench layout', () => {
       artifact={artifact}
       loading={false}
       data={{
-        schema_version: 'ocean-scientific-figure/v2',
+        schema_version: 'ocean-scientific-figure/v4',
         plot_kind: 'time_series',
         title: 'Coupled evidence',
         subtitle: 'Shared data, independent axes and layers',
@@ -570,6 +669,12 @@ describe('research workbench layout', () => {
     expect(extent[1]).toBeGreaterThan(5727.9);
   });
 
+  it('keeps zoomed and panned scientific views inside their data domain', () => {
+    expect(clampScientificDomain([-2030, 3784], [0, 5814])).toEqual([0, 5814]);
+    expect(clampScientificDomain([-500, 2000], [0, 5814])).toEqual([0, 2500]);
+    expect(clampScientificDomain([5000, 7000], [0, 5814])).toEqual([3814, 5814]);
+  });
+
   it('shows a Workbench action when a request manifest delivers an interactive view', () => {
     const output: TaskOutput = {
       artifact: {
@@ -624,7 +729,7 @@ describe('research workbench layout', () => {
       strategy: 'single_delegate',
       agents: [
         {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'completed', activity: 'Returned the available evidence'},
-        {agent_id: 'data', semantic_role: 'Data Expert', authority: 'expert', status: 'incomplete', activity: 'Returned a useful partial result', work_order_id: 'work_1'},
+        {agent_id: 'data', semantic_role: 'Data Expert', authority: 'expert', status: 'incomplete', activity: 'Returned a useful partial result', agent_run_id: 'work_1'},
       ],
       dependencies: [{from_agent_id: 'coordinator', to_agent_id: 'data', kind: 'delegation'}],
       interactions: [],
@@ -649,7 +754,8 @@ describe('research workbench layout', () => {
     />);
 
     expect(markup).toContain('<span>Team</span>');
-    expect(markup).toContain('Incomplete');
+    expect(markup).toContain('Partial result');
+    expect(markup).not.toContain('>Incomplete<');
     expect(markup).toContain('status-incomplete');
   });
 
@@ -661,7 +767,7 @@ describe('research workbench layout', () => {
       strategy: 'single_delegate',
       agents: [
         {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'completed', activity: 'Task completed'},
-        {agent_id: 'data', semantic_role: 'Data Expert', authority: 'expert', status: 'completed', activity: 'Evidence returned', work_order_id: 'work_supplement'},
+        {agent_id: 'data', semantic_role: 'Data Expert', authority: 'expert', status: 'completed', activity: 'Evidence returned', agent_run_id: 'work_supplement'},
       ],
       dependencies: [{from_agent_id: 'coordinator', to_agent_id: 'data', kind: 'delegation'}],
       interactions: [],
@@ -746,7 +852,7 @@ describe('research workbench layout', () => {
       onOpenTaskResult={() => undefined}
     />);
 
-    expect(markup).toContain('OceanMind learned from this task');
+    expect(markup).toContain('OceanX learned from this task');
     expect(markup).toContain('robust-contour-rendering');
     expect(markup).toContain('version 2');
   });
@@ -759,10 +865,10 @@ describe('research workbench layout', () => {
       strategy: 'parallel_team',
       agents: [
         {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Coordinating'},
-        {agent_id: 'physical', semantic_role: 'Physical Oceanographer', authority: 'expert', status: 'working', activity: 'Analyzing circulation', work_order_id: 'work_physical'},
+        {agent_id: 'physical', semantic_role: 'Physical Oceanographer', authority: 'expert', status: 'working', activity: 'Analyzing circulation', agent_run_id: 'work_physical'},
       ],
       todos: [
-        {todo_id: 'circulation', question: 'Resolve the circulation structure.', depends_on: [], profile_id: 'physical', expected_outputs: ['answer'], state: 'working', work_order_id: 'work_physical', session_round: 1},
+        {todo_id: 'circulation', question: 'Resolve the circulation structure.', depends_on: [], profile_id: 'physical', expected_outputs: ['answer'], state: 'working', agent_run_id: 'work_physical', session_round: 1},
         {todo_id: 'synthesis', question: 'Synthesize the physical interpretation.', depends_on: ['circulation'], profile_id: 'physical', expected_outputs: ['answer'], state: 'pending'},
       ],
       dependencies: [],
@@ -802,17 +908,17 @@ describe('research workbench layout', () => {
     expect(activeMarkup).not.toContain('round 1');
     expect(activeMarkup).not.toContain('Physical Oceanographer activity and conversation');
     expect(activeMarkup).not.toContain('Show team map');
-    expect(activeMarkup).toContain('aria-label="Active OceanMind Team"');
+    expect(activeMarkup).toContain('aria-label="Active OceanX Team"');
     expect(activeMarkup).not.toContain('Final evidence-backed answer.');
     expect(finalMarkup).toContain('Final evidence-backed answer.');
     expect(finalMarkup).not.toContain('Research Tasks');
     expect(finalMarkup).toContain('Hide team');
-    expect(finalMarkup).toContain('aria-label="Active OceanMind Team"');
+    expect(finalMarkup).toContain('aria-label="Active OceanX Team"');
     expect(finalMarkup).toContain('Resolve the circulation structure.');
     expect(finalMarkup).not.toContain('Coordinator activity and conversation');
   });
 
-  it('shows temporary Coordinator updates and compact Expert results below the canvas', () => {
+  it('shows temporary Coordinator updates and file-derived report titles below the canvas', () => {
     const snapshot: TeamSnapshot = {
       request_id: 'req_live_log',
       revision: 3,
@@ -827,8 +933,9 @@ describe('research workbench layout', () => {
           authority: 'expert',
           status: 'waiting',
           activity: 'Waiting for Coordinator feedback',
-          work_order_id: 'work_physical',
-          result_summary: 'The seasonal comparison resolves a stronger upper-ocean Loop Current signature in summer and a deeper mixed layer in winter.',
+          agent_run_id: 'work_physical',
+          report_path: '/task/physics/report.md',
+          report_title: '**Result:** Seasonal Loop Current structure',
         },
       ],
       todos: [{
@@ -838,8 +945,8 @@ describe('research workbench layout', () => {
         profile_id: 'physical',
         expected_outputs: ['answer'],
         state: 'result_returned',
-        work_order_id: 'work_physical',
-        result_summary: 'The seasonal comparison resolves a stronger upper-ocean Loop Current signature in summer and a deeper mixed layer in winter.',
+        agent_run_id: 'work_physical',
+        report_path: '/task/physics/report.md',
       }],
       dependencies: [{from_agent_id: 'coordinator', to_agent_id: 'physical', kind: 'delegation'}],
       interactions: [],
@@ -859,7 +966,7 @@ describe('research workbench layout', () => {
     };
     const items = [
       {item_id: 'user_live_log', role: 'user' as const, text: 'Compare the seasonal structure.', request_id: 'req_live_log'},
-      {item_id: 'coordinator_live_log', role: 'assistant' as const, text: 'I am comparing the returned seasonal evidence before deciding whether a refinement is needed.', request_id: 'req_live_log'},
+      {item_id: 'coordinator_live_log', role: 'assistant' as const, text: 'I am **comparing** the returned seasonal evidence before deciding whether a refinement is needed.\n\n- Seasonal amplitude\n- Peak timing', request_id: 'req_live_log'},
     ];
     const activeMarkup = renderToStaticMarkup(<ConversationTranscript
       {...common}
@@ -869,17 +976,129 @@ describe('research workbench layout', () => {
     const finalMarkup = renderToStaticMarkup(<ConversationTranscript
       {...common}
       team={{...snapshot, status: 'completed'}}
-      transcript={[...items, {item_id: 'answer_live_log', role: 'assistant', text: 'The final seasonal conclusion.', request_id: 'req_live_log'}]}
+      transcript={[...items, {item_id: 'answer_live_log', role: 'assistant', text: 'The final seasonal conclusion [work_physical/raw-analysis].', request_id: 'req_live_log'}]}
       activeRequestId={null}
     />);
 
-    expect(activeMarkup).toContain('Live research log');
-    expect(activeMarkup).toContain('I am comparing the returned seasonal evidence');
-    expect(activeMarkup).toContain('The seasonal comparison resolves a stronger upper-ocean Loop Current signature');
-    expect(finalMarkup).toContain('The final seasonal conclusion.');
+    expect(activeMarkup).not.toContain('Live research log');
+    expect(activeMarkup).not.toContain('Temporary');
+    expect(activeMarkup).toContain('<strong>Coordinator:</strong>');
+    expect(activeMarkup).toContain('<div class="research-log-content"><span class="compact-log-markdown">');
+    expect(activeMarkup).toContain('class="compact-log-markdown"');
+    expect(activeMarkup).toContain('<strong>comparing</strong>');
+    expect(activeMarkup).toContain('<span class="compact-log-list-item">Seasonal amplitude</span>');
+    expect(activeMarkup).not.toContain('<li>Seasonal amplitude</li>');
+    expect(activeMarkup).not.toContain('**comparing**');
+    expect(activeMarkup).toContain('Seasonal Loop Current structure');
+    expect(activeMarkup).toContain('<strong>Result:</strong>');
+    expect(activeMarkup).not.toContain('**Result:**');
+    expect(activeMarkup).toContain('class="research-report-link"');
+    expect(activeMarkup).toContain('/task/physics/report.md');
+    expect(finalMarkup).toContain('The final seasonal conclusion ');
+    expect(finalMarkup).toContain('Physical Oceanographer 1 · raw-analysis');
+    expect(finalMarkup).toContain('aria-label="Open Result: Seasonal Loop Current structure"');
+    expect(finalMarkup).toContain('title="work_physical/raw-analysis —');
     expect(finalMarkup).not.toContain('Live research log');
     expect(finalMarkup).not.toContain('I am comparing the returned seasonal evidence');
-    expect(finalMarkup).not.toContain('The seasonal comparison resolves a stronger upper-ocean Loop Current signature');
+  });
+
+  it('keeps the activity log below the canvas while the first Expert result is pending', () => {
+    const snapshot: TeamSnapshot = {
+      request_id: 'req_pending_log',
+      revision: 2,
+      status: 'working',
+      strategy: 'single_delegate',
+      agents: [
+        {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Waiting for the literature evidence'},
+        {agent_id: 'literature', profile_id: 'literature_reproduction_expert', semantic_role: 'Literature Expert', authority: 'expert', status: 'working', activity: 'Searching the relevant literature', agent_run_id: 'work_literature'},
+      ],
+      todos: [{
+        todo_id: 'literature-scope', question: 'Map the mechanism literature.', depends_on: [],
+        profile_id: 'literature_reproduction_expert', expected_outputs: ['answer'],
+        state: 'working', agent_run_id: 'work_literature',
+      }],
+      dependencies: [{from_agent_id: 'coordinator', to_agent_id: 'literature', kind: 'delegation'}],
+      interactions: [],
+      role_pool: [],
+    };
+    const markup = renderToStaticMarkup(<ConversationTranscript
+      loading={false}
+      transcript={[{item_id: 'user_pending_log', role: 'user', text: 'Research this question.', request_id: snapshot.request_id}]}
+      streaming=""
+      activeRequestId={snapshot.request_id ?? null}
+      task={null}
+      workspacePath="/tmp/workspace"
+      outputs={[]}
+      manifests={[]}
+      taskResults={[]}
+      team={snapshot}
+      onOpenResult={() => undefined}
+      onOpenTaskResult={() => undefined}
+    />);
+
+    expect(markup).toContain('class="live-research-log"');
+    expect(markup).toContain('Waiting for the literature evidence');
+    expect(markup).toContain('Searching the relevant literature');
+    expect(markup.indexOf('aria-label="Active OceanX Team"')).toBeLessThan(markup.indexOf('class="live-research-log"'));
+  });
+
+  it('shows every research-node assignment even when the backend reuses one Expert identity', () => {
+    const snapshot: TeamSnapshot = {
+      request_id: 'req_assignment_reports',
+      revision: 6,
+      status: 'working',
+      strategy: 'single_delegate',
+      agents: [
+        {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Expanding the frontier'},
+        {
+          agent_id: 'ocean-b1', profile_id: 'ocean_process_expert', expert_key: 'ocean-b1',
+          semantic_role: 'Ocean Expert', authority: 'expert', status: 'completed',
+          activity: 'B1.2 result returned', agent_run_id: 'call-b12',
+          report_path: '/task/reports/B1.2/report.md', report_title: 'B1.2 transport result',
+        },
+      ],
+      todos: [
+        {
+          todo_id: 'call-b11', question: 'B1.1: establish anomaly', depends_on: [],
+          profile_id: 'ocean_process_expert', expert_key: 'ocean-b1', expected_outputs: [],
+          state: 'result_returned', agent_run_id: 'call-b11',
+          report_path: '/task/reports/B1.1/report.md', report_title: 'Established the anomaly',
+          created_at: '2026-09-18T10:00:00Z', updated_at: '2026-09-18T10:05:00Z',
+        },
+        {
+          todo_id: 'call-b12', question: 'B1.2: test transport', depends_on: [],
+          profile_id: 'ocean_process_expert', expert_key: 'ocean-b1', expected_outputs: [],
+          state: 'result_returned', agent_run_id: 'call-b12',
+          report_path: '/task/reports/B1.2/report.md', report_title: 'Found no transport signal',
+          created_at: '2026-09-18T10:06:00Z', updated_at: '2026-09-18T10:11:00Z',
+        },
+      ],
+      dependencies: [{from_agent_id: 'coordinator', to_agent_id: 'ocean-b1', kind: 'delegation'}],
+      interactions: [],
+      role_pool: [],
+    };
+    const markup = renderToStaticMarkup(<ConversationTranscript
+      loading={false}
+      transcript={[{item_id: 'user_assignment_reports', role: 'user', text: 'Research the anomaly.', request_id: snapshot.request_id}]}
+      streaming=""
+      activeRequestId={snapshot.request_id ?? null}
+      task={null}
+      workspacePath="/tmp/workspace"
+      outputs={[]}
+      manifests={[]}
+      taskResults={[]}
+      team={snapshot}
+      onOpenResult={() => undefined}
+      onOpenTaskResult={() => undefined}
+    />);
+
+    expect(markup.match(/agent-role-icon-expert/g)).toHaveLength(2);
+    expect(markup).toContain('data-research-node="B1.1"');
+    expect(markup).toContain('data-research-node="B1.2"');
+    expect(markup).toContain('B1.1 · Established the anomaly');
+    expect(markup).toContain('B1.2 · Found no transport signal');
+    expect(markup).toContain('/task/reports/B1.1/report.md');
+    expect(markup).toContain('/task/reports/B1.2/report.md');
   });
 
   it('embeds paper selection after the Coordinator checkpoint without ending the request', () => {
@@ -890,7 +1109,7 @@ describe('research workbench layout', () => {
       strategy: 'single_delegate',
       agents: [
         {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Waiting for the paper selection'},
-        {agent_id: 'literature', semantic_role: 'Literature & Reproduction Expert', authority: 'expert', status: 'completed', activity: 'Returned the candidate shortlist', work_order_id: 'work_literature'},
+        {agent_id: 'literature', semantic_role: 'Literature Expert', authority: 'expert', status: 'completed', activity: 'Returned the candidate shortlist', agent_run_id: 'work_literature'},
       ],
       dependencies: [{from_agent_id: 'coordinator', to_agent_id: 'literature', kind: 'delegation'}],
       interactions: [],
@@ -913,7 +1132,7 @@ describe('research workbench layout', () => {
       pendingInteraction={{
         interactionId: 'int_paper_checkpoint',
         kind: 'paper_selection',
-        question: 'Choose the papers OceanMind should use for hypothesis development.',
+        question: 'Choose the papers OceanX should use for hypothesis development.',
         options: [{
           paperId: 'paper_eddy',
           title: 'The Vertical Structure of a Loop Current Eddy',
@@ -937,7 +1156,7 @@ describe('research workbench layout', () => {
     expect(markup).not.toContain('Completed in');
   });
 
-  it('shows one stable canvas node and count for repeated rounds of the same role', () => {
+  it('shows ordinary follow-up dispatches as separate Coordinator children', () => {
     const snapshot: TeamSnapshot = {
       request_id: 'req_role_singleton',
       revision: 5,
@@ -945,12 +1164,11 @@ describe('research workbench layout', () => {
       strategy: 'parallel_team',
       agents: [
         {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Coordinating'},
-        {agent_id: 'literature_discovery', profile_id: 'literature_reproduction_expert', semantic_role: 'Literature & Reproduction Expert', authority: 'expert', status: 'completed', activity: 'Returned the candidate shortlist', work_order_id: 'work_discovery'},
-        {agent_id: 'literature_reading', profile_id: 'literature_reproduction_expert', semantic_role: 'Literature & Reproduction Expert', authority: 'expert', status: 'working', activity: 'Reading selected papers', work_order_id: 'work_reading'},
+        {agent_id: 'literature-thread', profile_id: 'literature_reproduction_expert', semantic_role: 'Literature Expert', authority: 'expert', status: 'working', activity: 'Reading selected papers', agent_run_id: 'work_reading'},
       ],
       todos: [
-        {todo_id: 'paper_discovery', question: 'Find candidate papers.', depends_on: [], profile_id: 'literature_reproduction_expert', expected_outputs: ['answer'], state: 'result_returned', work_order_id: 'work_discovery', session_round: 1},
-        {todo_id: 'paper_reading', question: 'Read selected papers.', depends_on: ['paper_discovery'], profile_id: 'literature_reproduction_expert', expected_outputs: ['answer'], state: 'working', work_order_id: 'work_reading', session_round: 2},
+        {todo_id: 'prior-reading', question: 'Search papers.', depends_on: [], profile_id: 'literature_reproduction_expert', expert_key: 'literature-thread', expected_outputs: [], state: 'result_returned', agent_run_id: 'work_searching'},
+        {todo_id: 'literature-thread', question: 'Read selected papers.', depends_on: [], profile_id: 'literature_reproduction_expert', expected_outputs: ['answer'], state: 'working', agent_run_id: 'work_reading'},
       ],
       dependencies: [],
       interactions: [],
@@ -971,21 +1189,121 @@ describe('research workbench layout', () => {
       onOpenTaskResult={() => undefined}
     />);
 
-    expect(markup.match(/<strong>Literature &amp; Reproduction Expert<\/strong>/g)).toHaveLength(1);
-    expect(markup.match(/agent-role-icon-expert/g)).toHaveLength(1);
+    expect(markup).toContain('<strong>Search Expert</strong>');
+    expect(markup).not.toContain('Evidence &amp; reproduction');
+    expect(markup.match(/agent-role-icon-expert/g)).toHaveLength(2);
+    expect(markup).toContain('data-from-agent="coordinator" data-to-agent="dispatch:prior-reading"');
+    expect(markup).toContain('data-from-agent="coordinator" data-to-agent="dispatch:literature-thread"');
     expect(markup).toContain('Reading selected papers');
   });
 
+  it('renders delegated research nodes as the research-tree hierarchy', () => {
+    const snapshot: TeamSnapshot = {
+      request_id: 'req_research_hierarchy',
+      revision: 8,
+      status: 'working',
+      strategy: 'parallel_team',
+      agents: [
+        {agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Expanding the research tree'},
+        {
+          agent_id: 'ocean-b1', profile_id: 'ocean_process_expert', expert_key: 'ocean-b1',
+          semantic_role: 'Ocean Expert', authority: 'expert', status: 'working',
+          activity: 'Resolving the nested mechanism', agent_run_id: 'run-b111',
+        },
+        {
+          agent_id: 'statistics-b1', profile_id: 'statistical_inference_expert', expert_key: 'statistics-b1',
+          semantic_role: 'Statistic Expert', authority: 'expert', status: 'working',
+          activity: 'Testing the sibling diagnostic', agent_run_id: 'run-b112',
+        },
+      ],
+      todos: [
+        {
+          todo_id: 'call-parent', question: 'B1.1: establish the parent mechanism.', depends_on: [],
+          profile_id: 'ocean_process_expert', expert_key: 'ocean-b1', expected_outputs: [],
+          state: 'result_returned', agent_run_id: 'run-b11', report_path: '/task/reports/B1.1/report.md',
+        },
+        {
+          todo_id: 'call-child-ocean', question: 'B1.1.1: resolve the nested process.', depends_on: [],
+          profile_id: 'ocean_process_expert', expert_key: 'ocean-b1', expected_outputs: [],
+          state: 'working', agent_run_id: 'run-b111',
+        },
+        {
+          todo_id: 'call-child-statistics', question: 'B1.1.2: test the nested diagnostic.', depends_on: [],
+          profile_id: 'statistical_inference_expert', expert_key: 'statistics-b1', expected_outputs: [],
+          state: 'working', agent_run_id: 'run-b112',
+        },
+        {
+          todo_id: 'call-sibling', question: 'B1.2: constrain the sibling explanation.', depends_on: [],
+          profile_id: 'literature_reproduction_expert', expert_key: 'literature-b1', expected_outputs: [],
+          state: 'result_returned', agent_run_id: 'run-b12', report_path: '/task/reports/B1.2/report.md',
+        },
+      ],
+      dependencies: [],
+      interactions: [],
+      role_pool: [],
+    };
+
+    const markup = renderToStaticMarkup(<AgentCollaborationCanvas snapshot={snapshot} />);
+
+    expect(markup.match(/agent-role-icon-expert/g)).toHaveLength(4);
+    expect(markup).toContain('data-from-agent="coordinator" data-to-agent="research:B1.1"');
+    expect(markup).toContain('data-from-agent="research:B1.1" data-to-agent="research:B1.1.1"');
+    expect(markup).toContain('data-from-agent="research:B1.1" data-to-agent="research:B1.1.2"');
+    expect(markup).toContain('data-from-agent="coordinator" data-to-agent="research:B1.2"');
+    expect(markup).toContain('data-research-node="B1.1.1"');
+    expect(markup).toContain('data-research-node="B1.1.2"');
+  });
+
+  it('reserves separate horizontal space for adjacent research subtrees', () => {
+    const todo = (node: string, profileId = 'ocean_process_expert'): NonNullable<TeamSnapshot['todos']>[number] => ({
+      todo_id: `call-${node}`,
+      question: `${node}: investigate this branch.`,
+      depends_on: [],
+      profile_id: profileId,
+      expected_outputs: [],
+      state: 'working',
+      agent_run_id: `run-${node}`,
+    });
+    const snapshot: TeamSnapshot = {
+      request_id: 'req_wide_research_hierarchy',
+      revision: 9,
+      status: 'working',
+      strategy: 'parallel_team',
+      agents: [{agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Coordinating'}],
+      todos: [
+        todo('B1.2', 'statistical_inference_expert'),
+        todo('B1.3'),
+        todo('B1.7'),
+        todo('B1.8'),
+        todo('B1.8.1'),
+        todo('B1.9'),
+        {todo_id: 'call_general_00875', question: 'Run a general literature check.', depends_on: [], profile_id: 'literature_reproduction_expert', expected_outputs: [], state: 'working'},
+      ],
+      dependencies: [],
+      interactions: [],
+      role_pool: [],
+    };
+
+    const markup = renderToStaticMarkup(<AgentCollaborationCanvas snapshot={snapshot} />);
+    const nodeX = (agentId: string) => Number(markup.match(new RegExp(`data-agent-id="${agentId.replace('.', '\\.') }"[^>]*transform="translate\\(([-.0-9]+),`))?.[1]);
+    const firstLevel = ['research:B1.2', 'research:B1.3', 'research:B1.7', 'research:B1.8', 'research:B1.9', 'dispatch:call_general_00875']
+      .map(nodeX)
+      .sort((left, right) => left - right);
+
+    expect(firstLevel.every(Number.isFinite)).toBe(true);
+    expect(firstLevel.slice(1).every((x, index) => x - firstLevel[index]! >= 70)).toBe(true);
+  });
+
   it('shows parallel same-profile Experts as separate stable canvas nodes', () => {
-    const expert = (expertKey: string, workOrderId: string, taskGoal: string): TeamSnapshot['agents'][number] => ({
+    const expert = (expertKey: string, agentRunId: string, taskGoal: string): TeamSnapshot['agents'][number] => ({
       agent_id: `job_${expertKey}`,
       profile_id: 'ocean_process_expert',
       expert_key: expertKey,
-      semantic_role: 'Ocean Process & Mechanism Expert',
+      semantic_role: 'Ocean Expert',
       authority: 'expert',
       status: 'working',
       activity: 'Investigating the assigned question',
-      work_order_id: workOrderId,
+      agent_run_id: agentRunId,
       task_goal: taskGoal,
     });
     const snapshot: TeamSnapshot = {
@@ -1000,9 +1318,9 @@ describe('research workbench layout', () => {
         expert('water_mass_analyst', 'work_water_mass', 'Resolve T-S water masses.'),
       ],
       todos: [
-        {todo_id: 'horizontal', question: 'Resolve horizontal structure.', depends_on: [], profile_id: 'ocean_process_expert', expert_key: 'horizontal_analyst', expected_outputs: ['answer'], state: 'working', work_order_id: 'work_horizontal'},
-        {todo_id: 'vertical', question: 'Resolve vertical structure.', depends_on: [], profile_id: 'ocean_process_expert', expert_key: 'vertical_analyst', expected_outputs: ['answer'], state: 'working', work_order_id: 'work_vertical'},
-        {todo_id: 'water_mass', question: 'Resolve T-S water masses.', depends_on: [], profile_id: 'ocean_process_expert', expert_key: 'water_mass_analyst', expected_outputs: ['answer'], state: 'working', work_order_id: 'work_water_mass'},
+        {todo_id: 'horizontal', question: 'Resolve horizontal structure.', depends_on: [], profile_id: 'ocean_process_expert', expert_key: 'horizontal_analyst', expected_outputs: ['answer'], state: 'working', agent_run_id: 'work_horizontal'},
+        {todo_id: 'vertical', question: 'Resolve vertical structure.', depends_on: [], profile_id: 'ocean_process_expert', expert_key: 'vertical_analyst', expected_outputs: ['answer'], state: 'working', agent_run_id: 'work_vertical'},
+        {todo_id: 'water_mass', question: 'Resolve T-S water masses.', depends_on: [], profile_id: 'ocean_process_expert', expert_key: 'water_mass_analyst', expected_outputs: ['answer'], state: 'working', agent_run_id: 'work_water_mass'},
       ],
       dependencies: [
         {from_agent_id: 'coordinator', to_agent_id: 'job_horizontal_analyst', kind: 'delegation'},
@@ -1012,7 +1330,7 @@ describe('research workbench layout', () => {
       interactions: [],
       role_pool: [{
         profile_id: 'ocean_process_expert',
-        display_name: 'Ocean Process & Mechanism Expert',
+        display_name: 'Ocean Expert',
         authority: 'expert',
         category: 'science',
         summary: 'Interprets physical ocean processes.',
@@ -1033,7 +1351,9 @@ describe('research workbench layout', () => {
       onOpenTaskResult={() => undefined}
     />);
 
-    expect(markup.match(/<strong>Ocean Process &amp; Mechanism Expert<\/strong>/g)).toHaveLength(3);
+    const legendMarkup = markup.match(/<aside class="agent-canvas-legend"[^>]*>(.*?)<\/aside>/)?.[1] ?? '';
+    expect(legendMarkup.match(/<strong>Ocean Expert<\/strong>/g)).toHaveLength(1);
+    expect(markup).not.toContain('Physical mechanisms');
     expect(markup.match(/agent-role-icon-expert/g)).toHaveLength(3);
   });
 });

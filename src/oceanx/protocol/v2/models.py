@@ -59,7 +59,6 @@ ErrorCode = Literal[
     "task_not_found",
     "task_revision_conflict",
     "task_active_request_conflict",
-    "task_checkpoint_incompatible",
     "store_error",
     "cancelled",
 ]
@@ -69,6 +68,7 @@ LiteratureAcquisitionMode = Literal[
     "auto_download_open_access",
     "search_only",
 ]
+WorkflowMode = Literal["standard", "research"]
 
 
 class StrictModel(BaseModel):
@@ -108,8 +108,10 @@ class SessionSubmitPayload(StrictModel):
         default=(), max_length=8, json_schema_extra={"uniqueItems": True}
     )
     literature_acquisition_mode: LiteratureAcquisitionMode = "ask_before_download"
+    workflow_mode: WorkflowMode = "research"
+
     @model_validator(mode="after")
-    def _require_non_whitespace_text(self) -> "SessionSubmitPayload":
+    def _require_non_whitespace_text(self) -> SessionSubmitPayload:
         if not self.text.strip():
             raise ValueError("session.submit text must contain non-whitespace text")
         if len(set(self.context_refs)) != len(self.context_refs):
@@ -144,7 +146,7 @@ class TaskAgentTranscriptGetPayload(TaskIdPayload):
 
     parent_request_id: str = Field(min_length=1, max_length=128)
     agent_id: str = Field(min_length=1, max_length=128)
-    work_order_id: str | None = Field(default=None, max_length=128)
+    agent_run_id: str | None = Field(default=None, max_length=128)
 
 
 class TaskOutputListPayload(TaskIdPayload):
@@ -157,6 +159,45 @@ class WorkspaceOpenPayload(StrictModel):
 
 class EmptyPayload(StrictModel):
     """Explicit empty object payload for commands with no inputs."""
+
+
+class ResearchLessonDecidePayload(StrictModel):
+    """A human decision on one lesson proposal; wording may be edited before approval."""
+
+    proposal_id: str = Field(pattern=r"^lp_[a-f0-9]{12}$")
+    decision: Literal["approve", "reject"]
+    text: str | None = Field(default=None, min_length=1, max_length=600)
+    applies_when: str | None = Field(default=None, min_length=1, max_length=400)
+    reason: str | None = Field(default=None, max_length=600)
+
+
+class ResearchLessonRetirePayload(StrictModel):
+    lesson_id: str = Field(pattern=r"^L\d{3,}$")
+    reason: str = Field(min_length=1, max_length=600)
+
+
+class ResearchReviewGetPayload(StrictModel):
+    """Policies and, for one task, the few nodes worth a human label."""
+
+    task_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class ResearchLabelSetPayload(StrictModel):
+    task_id: str = Field(min_length=1, max_length=128)
+    node_id: str = Field(pattern=r"^B\d+(?:\.\d+)*$", max_length=64)
+    label: Literal["decision-changing", "informative-but-not-decisive", "misleading-or-wasteful"]
+
+
+class ResearchPolicyActivatePayload(StrictModel):
+    """Choose the research policy used for this project's new tasks."""
+
+    name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class ResearchLessonsConsolidatePayload(StrictModel):
+    """Digest and clean up research memory; optionally ask the meta-agent for proposals."""
+
+    propose: bool = False
 
 
 class RequestStatusGetPayload(StrictModel):
@@ -173,7 +214,7 @@ class InteractionRespondPayload(StrictModel):
     answer: str = Field(min_length=1, max_length=16_000)
 
     @model_validator(mode="after")
-    def _require_non_whitespace_answer(self) -> "InteractionRespondPayload":
+    def _require_non_whitespace_answer(self) -> InteractionRespondPayload:
         if not self.answer.strip():
             raise ValueError("interaction.respond answer must contain non-whitespace text")
         return self
@@ -270,11 +311,26 @@ class DatasetImportPayload(StrictModel):
     artifact_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{2,127}$")
 
     @model_validator(mode="after")
-    def _one_source_locator(self) -> "DatasetImportPayload":
+    def _one_source_locator(self) -> DatasetImportPayload:
         if (self.relative_path is None) == (self.local_path is None):
             raise ValueError("Dataset import requires exactly one local source path")
         if self.desktop_staged and self.relative_path is None:
             raise ValueError("Desktop-staged compatibility imports require relative_path")
+        return self
+
+
+class LocalSourceImportPayload(StrictModel):
+    """Attach one file or directory without deciding its scientific role."""
+
+    relative_path: str | None = Field(default=None, min_length=1, max_length=1_024)
+    local_path: str | None = Field(default=None, min_length=1, max_length=4_096)
+    title: str | None = Field(default=None, min_length=1, max_length=512)
+    artifact_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{2,127}$")
+
+    @model_validator(mode="after")
+    def _one_source_locator(self) -> LocalSourceImportPayload:
+        if (self.relative_path is None) == (self.local_path is None):
+            raise ValueError("Source import requires exactly one local source path")
         return self
 
 
@@ -308,7 +364,7 @@ class PortableExportCreatePayload(StrictModel):
     )
 
     @model_validator(mode="after")
-    def _validate_unique_refs(self) -> "PortableExportCreatePayload":
+    def _validate_unique_refs(self) -> PortableExportCreatePayload:
         if len(set(self.artifact_refs)) != len(self.artifact_refs):
             raise ValueError("Portable export artifact_refs must be unique")
         return self
@@ -350,7 +406,7 @@ class RequestBase(StrictModel):
     expected_task_revision: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
-    def _require_context_after_handshake(self) -> "RequestBase":
+    def _require_context_after_handshake(self) -> RequestBase:
         if self.type != "system.handshake" and self.context is None:
             raise ValueError("context is required after system.handshake")
         return self
@@ -413,6 +469,17 @@ class TaskDeleteRequest(RequestBase):
 class TaskSnapshotGetRequest(RequestBase):
     type: Literal["task.snapshot.get"]
     payload: TaskSnapshotGetPayload
+    context: RequestContext
+
+
+class TaskReportReadPayload(TaskIdPayload):
+    report_path: str = Field(min_length=1)
+    offset: int = Field(default=0, ge=0)
+
+
+class TaskReportReadRequest(RequestBase):
+    type: Literal["task.report.read"]
+    payload: TaskReportReadPayload
     context: RequestContext
 
 
@@ -514,6 +581,13 @@ class DatasetImportRequest(RequestBase):
     expected_workspace_revision: int = Field(ge=0)
 
 
+class LocalSourceImportRequest(RequestBase):
+    type: Literal["source.import"]
+    payload: LocalSourceImportPayload
+    context: RequestContext
+    expected_workspace_revision: int = Field(ge=0)
+
+
 class PaperImportRequest(RequestBase):
     type: Literal["paper.import"]
     payload: PaperImportPayload
@@ -538,6 +612,48 @@ class HypothesisActivateRequest(RequestBase):
 class PortableExportCreateRequest(RequestBase):
     type: Literal["portable.export.create"]
     payload: PortableExportCreatePayload
+    context: RequestContext
+
+
+class ResearchLessonsListRequest(RequestBase):
+    type: Literal["research.lessons.list"]
+    payload: EmptyPayload
+    context: RequestContext
+
+
+class ResearchLessonDecideRequest(RequestBase):
+    type: Literal["research.lessons.decide"]
+    payload: ResearchLessonDecidePayload
+    context: RequestContext
+
+
+class ResearchLessonRetireRequest(RequestBase):
+    type: Literal["research.lessons.retire"]
+    payload: ResearchLessonRetirePayload
+    context: RequestContext
+
+
+class ResearchLessonsConsolidateRequest(RequestBase):
+    type: Literal["research.lessons.consolidate"]
+    payload: ResearchLessonsConsolidatePayload
+    context: RequestContext
+
+
+class ResearchReviewGetRequest(RequestBase):
+    type: Literal["research.review.get"]
+    payload: ResearchReviewGetPayload
+    context: RequestContext
+
+
+class ResearchLabelSetRequest(RequestBase):
+    type: Literal["research.labels.set"]
+    payload: ResearchLabelSetPayload
+    context: RequestContext
+
+
+class ResearchPolicyActivateRequest(RequestBase):
+    type: Literal["research.policies.activate"]
+    payload: ResearchPolicyActivatePayload
     context: RequestContext
 
 
@@ -567,6 +683,7 @@ RequestEnvelope = Annotated[
         TaskDeleteRequest,
         TaskSnapshotGetRequest,
         TaskAgentTranscriptGetRequest,
+        TaskReportReadRequest,
         TaskOutputListRequest,
         WorkspaceOpenRequest,
         WorkspaceSnapshotGetRequest,
@@ -582,12 +699,20 @@ RequestEnvelope = Annotated[
         ArtifactVersionsRequest,
         ArtifactCreateRequest,
         DatasetImportRequest,
+        LocalSourceImportRequest,
         PaperImportRequest,
         PaperRegisterRequest,
         HypothesisActivateRequest,
         PortableExportCreateRequest,
         DisclosurePolicyGetRequest,
         DisclosurePolicySetRequest,
+        ResearchLessonsListRequest,
+        ResearchLessonDecideRequest,
+        ResearchLessonRetireRequest,
+        ResearchLessonsConsolidateRequest,
+        ResearchReviewGetRequest,
+        ResearchLabelSetRequest,
+        ResearchPolicyActivateRequest,
     ],
     Field(discriminator="type"),
 ]
@@ -611,7 +736,7 @@ class ScientificRuntimeCapabilityPayload(StrictModel):
     dependency_count: int | None = Field(default=None, ge=0, le=10_000)
 
     @model_validator(mode="after")
-    def _require_identity_only_when_available(self) -> "ScientificRuntimeCapabilityPayload":
+    def _require_identity_only_when_available(self) -> ScientificRuntimeCapabilityPayload:
         identity = (self.schema_version, self.fingerprint_sha256, self.dependency_count)
         if self.available and any(value is None for value in identity):
             raise ValueError("available scientific runtime requires a complete identity")
@@ -686,7 +811,7 @@ class RequestCancelledPayload(StrictModel):
 
 
 class PaperSelectionOptionPayload(StrictModel):
-    """One Literature Expert-curated paper presented by the Coordinator."""
+    """One Search Expert-curated paper presented by the Coordinator."""
 
     paper_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     title: str = Field(min_length=1, max_length=1_000)
@@ -735,8 +860,6 @@ class TaskSummaryPayload(StrictModel):
     status: ResearchTaskState
     task_revision: int = Field(ge=0)
     active_request_id: str | None = Field(default=None, max_length=128)
-    stable_checkpoint_id: str | None = Field(default=None, pattern=r"^chk_[A-Za-z0-9_-]+$")
-    conversation_generation: int = Field(ge=0)
     created_at: str
     updated_at: str
 
@@ -781,12 +904,9 @@ class TeamAgentProfilePayload(StrictModel):
     display_name: str = Field(min_length=1, max_length=160)
     authority: Literal["expert", "discussion"]
     category: Literal[
-        "framing",
-        "data",
         "science",
         "methods",
         "evidence",
-        "visualization",
         "discussion",
     ]
     summary: str = Field(min_length=1, max_length=512)
@@ -813,10 +933,13 @@ class TeamAgentPayload(StrictModel):
         "skipped",
     ]
     activity: str = Field(default="", max_length=512)
-    work_order_id: str | None = Field(default=None, max_length=128)
+    agent_run_id: str | None = Field(default=None, max_length=128)
     task_goal: str | None = Field(default=None, max_length=8_000)
-    result_summary: str | None = Field(default=None, max_length=8_000)
+    report_path: str | None = None
+    report_title: str | None = None
     limitations: tuple[str, ...] = Field(default=(), max_length=32)
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class TeamTodoPayload(StrictModel):
@@ -841,9 +964,12 @@ class TeamTodoPayload(StrictModel):
         "stopped",
         "skipped",
     ]
-    work_order_id: str | None = Field(default=None, max_length=128)
+    agent_run_id: str | None = Field(default=None, max_length=128)
     session_round: int | None = Field(default=None, ge=1)
-    result_summary: str | None = Field(default=None, max_length=8_000)
+    report_path: str | None = None
+    report_title: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class TeamDependencyPayload(StrictModel):
@@ -876,10 +1002,12 @@ class TeamSnapshotPayload(StrictModel):
         "team_with_discussion",
     ]
     role_pool: tuple[TeamAgentProfilePayload, ...] = Field(default=(), max_length=16)
-    agents: tuple[TeamAgentPayload, ...] = Field(min_length=1, max_length=13)
-    todos: tuple[TeamTodoPayload, ...] = Field(default=(), max_length=6)
-    dependencies: tuple[TeamDependencyPayload, ...] = Field(default=(), max_length=16)
-    interactions: tuple[TeamInteractionPayload, ...] = Field(default=(), max_length=16)
+    # DeepAgents owns the native child registry, so the display protocol must
+    # not reject a valid long-running task because it crossed an old UI limit.
+    agents: tuple[TeamAgentPayload, ...] = Field(min_length=1)
+    todos: tuple[TeamTodoPayload, ...] = ()
+    dependencies: tuple[TeamDependencyPayload, ...] = ()
+    interactions: tuple[TeamInteractionPayload, ...] = ()
 
 
 class TaskSnapshotPayload(StrictModel):
@@ -892,8 +1020,7 @@ class TaskSnapshotPayload(StrictModel):
     task_results: tuple[dict[str, Any], ...] = ()
     interactions: tuple[TaskInteractionPayload, ...] = ()
     team_snapshot: TeamSnapshotPayload | None = None
-    team_snapshots: tuple[TeamSnapshotPayload, ...] = Field(default=(), max_length=100)
-    checkpoint: dict[str, Any] = Field(default_factory=dict)
+    team_snapshots: tuple[TeamSnapshotPayload, ...] = ()
     workflow: dict[str, Any] | None = None
 
 
@@ -1172,6 +1299,7 @@ MUTATING_REQUEST_TYPES = frozenset(
         "system.shutdown",
         "artifact.create",
         "dataset.import",
+        "source.import",
         "paper.import",
         "paper.register",
         "hypothesis.activate",

@@ -19,7 +19,7 @@ def _module():
 
 
 def _fixture_app(tmp_path: Path) -> tuple[Path, Path]:
-    app = tmp_path / "Ocean Research Partner.app"
+    app = tmp_path / "OceanX.app"
     sidecar = app / "Contents" / "Resources" / "sidecar" / "ocean-backend" / "_internal"
     sidecar.mkdir(parents=True)
     (app / "Contents" / "Resources" / "main.js").write_text("desktop", encoding="utf-8")
@@ -50,7 +50,7 @@ def _fixture_windows_app(tmp_path: Path) -> tuple[Path, Path]:
     app = tmp_path / "win-unpacked"
     sidecar = app / "resources" / "sidecar" / "ocean-backend" / "_internal"
     sidecar.mkdir(parents=True)
-    (app / "Ocean Research Partner.exe").write_bytes(b"desktop")
+    (app / "OceanX.exe").write_bytes(b"desktop")
     metadata = sidecar / "fixture-windows-4.5.6.dist-info"
     metadata.mkdir()
     (metadata / "METADATA").write_text(
@@ -81,13 +81,13 @@ def test_release_manifest_is_deterministic_and_atomic(tmp_path: Path):
     first = module.build_release_documents(
         app_path=app,
         desktop_root=desktop,
-        application_name="Ocean Research Partner",
+        application_name="OceanX",
         application_version="0.1.0",
     )
     second = module.build_release_documents(
         app_path=app,
         desktop_root=desktop,
-        application_name="Ocean Research Partner",
+        application_name="OceanX",
         application_version="0.1.0",
     )
     assert first == second
@@ -115,7 +115,7 @@ def test_release_manifest_includes_the_windows_frozen_sidecar_dependencies(tmp_p
     documents = module.build_release_documents(
         app_path=app,
         desktop_root=desktop,
-        application_name="Ocean Research Partner",
+        application_name="OceanX",
         application_version="0.1.0",
     )
 
@@ -136,7 +136,7 @@ def test_release_manifest_rejects_a_missing_or_ambiguous_frozen_sidecar(
     tmp_path: Path, layout: str
 ):
     module = _module()
-    app = tmp_path / "Ocean Research Partner.app"
+    app = tmp_path / "OceanX.app"
     app.mkdir()
     (app / "desktop.bin").write_bytes(b"desktop")
     if layout == "ambiguous":
@@ -150,7 +150,7 @@ def test_release_manifest_rejects_a_missing_or_ambiguous_frozen_sidecar(
         module.build_release_documents(
             app_path=app,
             desktop_root=desktop,
-            application_name="Ocean Research Partner",
+            application_name="OceanX",
             application_version="0.1.0",
         )
 

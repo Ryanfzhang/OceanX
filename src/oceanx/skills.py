@@ -32,7 +32,7 @@ class OceanResourceUnavailableError(RuntimeError):
 
 
 class OceanSkillDocumentError(ValueError):
-    """A generated SKILL.md does not satisfy OceanMind's routing contract."""
+    """A generated SKILL.md does not satisfy OceanX's routing contract."""
 
 
 @dataclass(frozen=True)
@@ -212,7 +212,7 @@ def record_ocean_resource_use(
     resource_kind: str,
     resource_name: str,
     resource_version: str,
-    work_order_id: str | None = None,
+    agent_run_id: str | None = None,
     request_id: str | None = None,
     agent_id: str | None = None,
 ) -> str:
@@ -225,7 +225,7 @@ def record_ocean_resource_use(
         resource_kind=resource_kind,
         resource_name=resource_name,
         resource_version=resource_version,
-        work_order_id=work_order_id,
+        agent_run_id=agent_run_id,
         request_id=request_id,
         agent_id=agent_id,
     )
@@ -249,9 +249,8 @@ def ocean_skill_prompt_section(
         "# Ocean Research Manuals",
         "",
         (
-            "These are private process manuals, not a method library or mandatory opening step. "
-            "Load a manual only when it materially changes the method or safety of the current "
-            "request; never narrate manual loading to the researcher."
+            "These are optional method guides. Load a Skill or its references only when relevant "
+            "to the current question. They do not define delegation or delivery procedures."
         ),
         "",
     ]

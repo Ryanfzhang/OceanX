@@ -1,4 +1,4 @@
-"""OceanMind-native model profiles and credential storage."""
+"""OceanX-native model profiles and credential storage."""
 
 from __future__ import annotations
 
@@ -7,14 +7,16 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_deepseek import ChatDeepSeek
 from langchain_openai import ChatOpenAI
 
 ProviderKind = Literal["anthropic", "openai", "deepseek"]
-ModelRole = Literal["coordinator", "expert", "skill_curator"]
+ModelRole = Literal["coordinator", "expert"]
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class OceanModelProfile:
     credential_slot: str
     api_key: str
     max_tokens: int = 65_536
+    image_inputs: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -70,15 +73,10 @@ def _profile_payload(
     active = str(settings.get("active_profile") or "ocean-desktop-api")
     if isinstance(profiles, dict) and isinstance(profiles.get(active), dict):
         raw = dict(profiles[active])
-        # Old desktop profiles only allowed the reviewer model ID to differ.
-        # Preserve that configuration while migrating to independent roles.
-        if role == "skill_curator" and raw.get("skill_reviewer_model"):
-            raw["last_model"] = raw["skill_reviewer_model"]
-            raw["default_model"] = raw["skill_reviewer_model"]
         return active, raw
     provider = str(settings.get("provider") or settings.get("api_format") or "anthropic")
     return active, {
-        "label": "OceanMind model",
+        "label": "OceanX model",
         "provider": provider,
         "api_format": settings.get("api_format", provider),
         "default_model": settings.get("model", "claude-sonnet-4-6"),
@@ -161,37 +159,27 @@ def load_model_profile(
     base_url = raw.get("base_url")
     return OceanModelProfile(
         name=name,
-        label=str(raw.get("label") or "OceanMind model"),
+        label=str(raw.get("label") or "OceanX model"),
         provider=provider,
         model=model,
         base_url=str(base_url).strip() if isinstance(base_url, str) and base_url.strip() else None,
         credential_slot=slot,
         api_key=api_key,
         max_tokens=max(24_576, int(settings.get("max_tokens") or 65_536)),
+        image_inputs=raw.get("image_inputs") if isinstance(raw.get("image_inputs"), bool) else None,
     )
 
 
-def load_skill_reviewer_profile() -> OceanModelProfile:
-    """Load the independent API profile used for Skill review."""
-
-    profile = load_model_profile("skill_curator")
-    configured = os.environ.get("OCEANMIND_SKILL_REVIEW_MODEL", "").strip()
-    if not configured:
-        return profile
-    return OceanModelProfile(**{**profile.__dict__, "model": configured})
-
-
 def save_desktop_model_profiles(
-    *, setups: dict[ModelRole, OceanModelSetup]
+    *, setups: dict[ModelRole, OceanModelSetup], probe_vision: bool = False
 ) -> OceanModelProfile:
-    if set(setups) != {"coordinator", "expert", "skill_curator"}:
-        raise ValueError("Every OceanMind model role must be configured")
+    if set(setups) != {"coordinator", "expert"}:
+        raise ValueError("Every OceanX model role must be configured")
     root = ocean_config_dir()
     root.mkdir(parents=True, exist_ok=True)
     slots: dict[ModelRole, str] = {
         "coordinator": "ocean-desktop-coordinator",
         "expert": "ocean-desktop-expert",
-        "skill_curator": "ocean-desktop-skill-curator",
     }
     existing_keys = {
         role: load_model_profile(role, require_api_key=False).api_key for role in slots
@@ -205,7 +193,6 @@ def save_desktop_model_profiles(
             "label": {
                 "coordinator": "Coordinator API",
                 "expert": "Expert API",
-                "skill_curator": "Skill Curator API",
             }[role],
             "provider": setup.provider,
             "api_format": "anthropic" if setup.provider == "anthropic" else "openai",
@@ -221,8 +208,6 @@ def save_desktop_model_profiles(
         "profiles": profiles,
     }
     existing_settings = _read_json(root / "settings.json")
-    if "curator_limits" in existing_settings:
-        payload["curator_limits"] = existing_settings["curator_limits"]
     settings_path = root / "settings.json"
     settings_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     credentials_path = root / "credentials.json"
@@ -236,6 +221,20 @@ def save_desktop_model_profiles(
     if changed_credentials:
         credentials_path.write_text(json.dumps(credentials, indent=2) + "\n", encoding="utf-8")
         credentials_path.chmod(0o600)
+    if probe_vision:
+        probed: dict[tuple[str, str, str | None, str], bool | None] = {}
+        changed_capabilities = False
+        for role, slot in slots.items():
+            profile = load_model_profile(role)
+            probe_key = (profile.provider, profile.model, profile.base_url, profile.api_key)
+            if probe_key not in probed:
+                probed[probe_key] = probe_profile_vision(profile)
+            result = probed[probe_key]
+            if result is not None:
+                profiles[slot]["image_inputs"] = result
+                changed_capabilities = True
+        if changed_capabilities:
+            settings_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return load_model_profile("coordinator")
 
 
@@ -245,7 +244,6 @@ def save_desktop_model_profile(
     model: str,
     base_url: str | None,
     api_key: str | None,
-    skill_reviewer_model: str | None = None,
 ) -> OceanModelProfile:
     """Backward-compatible migration helper for the former single API form."""
 
@@ -253,40 +251,137 @@ def save_desktop_model_profile(
         setups={
             "coordinator": OceanModelSetup(provider, model, base_url, api_key),
             "expert": OceanModelSetup(provider, model, base_url, api_key),
-            "skill_curator": OceanModelSetup(
-                provider, skill_reviewer_model or model, base_url, api_key
-            ),
         }
     )
 
 
-def create_chat_model(profile: OceanModelProfile) -> BaseChatModel:
+class OceanChatDeepSeek(ChatDeepSeek):
+    """Keep genuine provider reasoning across tools, checkpoints and follow-ups.
+
+    ChatDeepSeek extracts streamed reasoning_content; the installed integration
+    does not yet serialize it on subsequent requests. Never synthesize it.
+    """
+
+    def _get_request_payload(self, input_, *, stop=None, **kwargs):
+        messages = self._convert_input(input_).to_messages()
+        payload = super()._get_request_payload(messages, stop=stop, **kwargs)
+        for message, serialized in zip(messages, payload["messages"], strict=True):
+            if isinstance(message, AIMessage) and "reasoning_content" in message.additional_kwargs:
+                serialized["reasoning_content"] = message.additional_kwargs["reasoning_content"]
+        return payload
+
+
+def create_chat_model(
+    profile: OceanModelProfile, *, request_timeout: float | None = None
+) -> BaseChatModel:
     common: dict[str, Any] = {
         "model": profile.model,
         "api_key": profile.api_key,
         "max_tokens": profile.max_tokens,
         "streaming": True,
+        "max_retries": 0,  # Deep Agent model/summary middleware owns the single retry layer.
     }
     if profile.provider == "anthropic":
+        if request_timeout is not None:
+            common["timeout"] = request_timeout
         if profile.base_url:
             common["base_url"] = profile.base_url
         return ChatAnthropic(**common)
-    if profile.provider == "deepseek" and not profile.base_url:
-        return ChatDeepSeek(**common)
+    if request_timeout is not None:
+        common["request_timeout"] = request_timeout
     if profile.base_url:
         common["base_url"] = profile.base_url
+    # Older saved profiles name the wire format "openai" even for DeepSeek's
+    # own endpoint. Keep their model, credentials and URL; select its adapter.
+    if profile.provider == "deepseek" or urlparse(profile.base_url or "").hostname == "api.deepseek.com":
+        return OceanChatDeepSeek(**common)
     return ChatOpenAI(**common)
 
 
+_VISION_PROBE_IMAGE = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def _exception_status_code(error: BaseException) -> int | None:
+    """Extract an HTTP status without depending on one provider SDK."""
+
+    current: object | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        status = getattr(current, "status_code", None)
+        if isinstance(status, int):
+            return status
+        response = getattr(current, "response", None)
+        status = getattr(response, "status_code", None)
+        if isinstance(status, int):
+            return status
+        current = getattr(current, "__cause__", None) or getattr(current, "__context__", None)
+    return None
+
+
+def probe_profile_vision(profile: OceanModelProfile) -> bool | None:
+    """Test image input through the configured adapter.
+
+    ``None`` means the probe was inconclusive (for example a timeout, invalid
+    credential, or rate limit). Only a provider response that rejects the
+    request shape is evidence that image input is unsupported.
+    """
+
+    message = HumanMessage(
+        content=[
+            {"type": "text", "text": "Reply OK."},
+            {"type": "image_url", "image_url": {"url": _VISION_PROBE_IMAGE}},
+        ]
+    )
+    try:
+        create_chat_model(profile, request_timeout=10).bind(max_tokens=8).invoke([message])
+    except Exception as error:  # noqa: BLE001 - provider SDKs expose different errors
+        status = _exception_status_code(error)
+        if status in {400, 404, 405, 415, 422}:
+            return False
+        return None
+    return True
+
+
+def profile_supports_vision(profile: OceanModelProfile) -> bool:
+    """Return whether this exact provider/model pairing accepts image input.
+
+    LangChain's model profiles do not cover every OpenAI-compatible model. In
+    particular, DeepSeek's current public Flash model is multimodal but has no
+    adapter profile, so an adapter-only lookup incorrectly reports ``False``.
+    Keep the explicit official-endpoint mapping here rather than guessing from
+    a generic model name used by an arbitrary compatible endpoint.
+    """
+
+    if not all(hasattr(profile, field) for field in ("model", "api_key", "max_tokens")):
+        return False
+    if profile.image_inputs is not None:
+        return profile.image_inputs
+    capabilities = getattr(create_chat_model(profile), "profile", None)
+    if isinstance(capabilities, dict) and capabilities.get("image_inputs"):
+        return True
+    hostname = (urlparse(profile.base_url or "").hostname or "").lower()
+    model = profile.model.strip().lower()
+    return hostname == "api.deepseek.com" and model in {
+        "deepseek-flash",
+        "deepseek-v4-flash",
+        "deepseek-v4-flash-vision-exp",
+    }
+
+
 __all__ = [
+    "ModelRole",
     "OceanModelProfile",
     "OceanModelSetup",
-    "ModelRole",
     "ProviderKind",
     "create_chat_model",
     "load_model_profile",
-    "load_skill_reviewer_profile",
     "ocean_config_dir",
+    "probe_profile_vision",
+    "profile_supports_vision",
     "save_desktop_model_profile",
     "save_desktop_model_profiles",
 ]

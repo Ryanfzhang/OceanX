@@ -21,5 +21,5 @@ def install_oceanx_models(config=None):
     model_config._profile_payload = profile
     model_config._stored_api_key = key
     model_config._load_settings_payload = lambda: {'max_tokens': config.max_tokens}
-    return {**config.public(), 'roles': ['coordinator', 'expert', 'skill_curator'],
+    return {**config.public(), 'roles': ['coordinator', 'expert'],
             'api_profile': 'benchmark.yaml', 'scope': 'benchmark_process_only'}

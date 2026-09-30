@@ -11,6 +11,7 @@ import pytest
 
 from oceanx.backend.events import BackendClient
 from oceanx.backend.host import OceanBackendHost
+from oceanx.expert_deliverables import hydrate_ocean_view_netcdf
 from oceanx.scientific_view import ScientificFigure
 
 
@@ -26,6 +27,53 @@ class _Recorder:
             event for event in reversed(self.events)
             if event.type == "request.completed" and event.request_id == request_id
         )
+
+
+def test_spatial_fields_require_and_preserve_explicit_valid_mask(
+    tmp_path: Path,
+) -> None:
+    longitude = np.array([120.0, 121.0, 122.0])
+    latitude = np.array([32.0, 31.0])
+    classes = np.array([[0, 1, 1], [0, 2, 3]])
+    valid = np.array([[False, True, True], [False, True, True]])
+
+    unmasked = ScientificFigure(plot_kind="spatial_map", title="Comparison classes")
+    with pytest.raises(ValueError, match="spatial maps require valid_mask"):
+        unmasked.panel(x=longitude, y=latitude).field2d(
+            classes,
+            field_kind="categorical",
+            category_labels={
+                0: "Outside comparison",
+                1: "Both",
+                2: "Model",
+                3: "Satellite",
+            },
+            variable="comparison_class",
+            units="1",
+        )
+
+    unmasked_continuous = ScientificFigure(plot_kind="spatial_map", title="Retrieval count")
+    with pytest.raises(ValueError, match="spatial maps require valid_mask"):
+        unmasked_continuous.panel(x=longitude, y=latitude).field2d(
+            classes,
+            variable="valid_retrieval_days",
+            units="days",
+        )
+
+    figure = ScientificFigure(plot_kind="spatial_map", title="Comparison classes")
+    figure.panel(x=longitude, y=latitude).field2d(
+        classes,
+        valid_mask=valid,
+        field_kind="categorical",
+        category_labels={1: "Both", 2: "Model", 3: "Satellite"},
+        variable="comparison_class",
+        units="1",
+    )
+    output = figure.save(tmp_path / "comparison-classes.nc")
+    hydrated = hydrate_ocean_view_netcdf(output)
+
+    assert hydrated["values"] == [[None, 1.0, 1.0], [None, 2.0, 3.0]]
+    assert [entry["value"] for entry in hydrated["categories"]] == [1.0, 2.0, 3.0]
 
 
 @pytest.mark.asyncio

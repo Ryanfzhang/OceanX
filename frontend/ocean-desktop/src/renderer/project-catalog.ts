@@ -27,8 +27,7 @@ function isTask(value: unknown): value is ResearchTask {
     && typeof task.workspace_id === 'string'
     && typeof task.title === 'string'
     && (task.status === 'active' || task.status === 'completed' || task.status === 'archived')
-    && typeof task.task_revision === 'number'
-    && typeof task.conversation_generation === 'number';
+    && typeof task.task_revision === 'number';
 }
 
 export function parseProjectCatalog(raw: string | null): ProjectCatalogEntry[] {

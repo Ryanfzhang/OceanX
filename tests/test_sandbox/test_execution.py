@@ -66,7 +66,7 @@ def _resource_limits(**updates: int | float) -> ResourceLimits:
 )
 @pytest.mark.parametrize("value", (float("nan"), float("inf"), True))
 def test_resource_limits_reject_nonfinite_or_boolean_budgets(field: str, value: int | float | bool):
-    with pytest.raises(ValueError, match="finite positive"):
+    with pytest.raises(ValueError, match="finite nonnegative"):
         _resource_limits(**{field: value})
 
 
@@ -142,7 +142,7 @@ def test_seatbelt_profile_has_no_network_and_only_declared_write_roots(tmp_path:
 
 
 def test_seatbelt_profile_preserves_unicode_paths(tmp_path: Path) -> None:
-    task_root = tmp_path / "OceanMind Tasks" / "测试分析"
+    task_root = tmp_path / "OceanX Tasks" / "测试分析"
     work = task_root / "work"
     output = task_root / "output"
     temporary = task_root / "temporary"
@@ -168,7 +168,7 @@ async def test_sandbox_can_open_a_runner_below_a_unicode_task_root(tmp_path: Pat
     if not capabilities.available:
         pytest.skip(capabilities.reason or "sandbox backend is unavailable")
 
-    task_root = tmp_path / "OceanMind Tasks" / "测试分析"
+    task_root = tmp_path / "OceanX Tasks" / "测试分析"
     work = task_root / "work"
     output = task_root / "output"
     temporary = task_root / "temporary"
@@ -313,6 +313,22 @@ def test_python_runtime_does_not_fall_back_from_broken_active_conda(tmp_path, mo
     monkeypatch.setenv("CONDA_PREFIX", str(tmp_path / "removed"))
     with pytest.raises(SandboxUnavailableError, match="Python interpreter"):
         current_python_executable()
+
+
+def test_ambient_base_does_not_select_base_for_science(tmp_path, monkeypatch):
+    base = tmp_path / "miniconda"
+    (base / "bin").mkdir(parents=True)
+    (base / "bin/conda").touch()
+    env = base / "envs/oceanx"
+    (env / "bin").mkdir(parents=True)
+    (env / "bin/python").symlink_to(Path(sys.executable).resolve())
+    monkeypatch.delenv("OCEAN_SANDBOX_PYTHON", raising=False)
+    monkeypatch.delenv("OCEAN_CONDA_ENV", raising=False)
+    monkeypatch.setenv("CONDA_PREFIX", str(base))
+    monkeypatch.setattr("oceanx.sandbox.execution._configured_conda_prefixes", lambda _: (env,))
+    assert current_python_executable() == env / "bin/python"
+    monkeypatch.setenv("OCEAN_SANDBOX_PYTHON", sys.executable)
+    assert current_python_executable() == Path(sys.executable).parent.resolve() / Path(sys.executable).name
 
 
 def test_explicit_named_scientific_environment_overrides_active_conda(tmp_path, monkeypatch):
@@ -649,12 +665,31 @@ async def test_sandboxed_command_stops_at_wall_time_limit(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_zero_resource_quotas_allow_completion(tmp_path: Path):
+    capabilities = get_sandbox_execution_capabilities()
+    if not capabilities.available:
+        pytest.skip(capabilities.reason or "sandbox backend is unavailable")
+    limits = _resource_limits(**{name: 0 for name in (
+        "wall_time_seconds", "cpu_time_seconds", "memory_bytes", "disk_bytes",
+        "process_count", "open_files", "stdout_bytes", "stderr_bytes",
+        "output_file_count", "output_total_bytes",
+    )})
+    policy, work = _policy(tmp_path, limits=limits)
+    script = work / "complete.py"
+    script.write_text("import time\ntime.sleep(0.2)\nprint('x' * 8192)\n", encoding="utf-8")
+    result = await run_sandboxed_command(_python_command(script), policy=policy, cwd=work)
+    assert result.returncode == 0
+    assert result.limit_trigger is None
+    assert len(result.stdout) > 8192
+
+
+@pytest.mark.asyncio
 async def test_cancelling_sandboxed_command_terminates_its_process_group(tmp_path: Path):
     capabilities = get_sandbox_execution_capabilities()
     if not capabilities.available:
         pytest.skip(capabilities.reason or "sandbox backend is unavailable")
 
-    policy, work = _policy(tmp_path, limits=_resource_limits(wall_time_seconds=30.0))
+    policy, work = _policy(tmp_path, limits=_resource_limits(wall_time_seconds=0))
     pid_file = policy.output_root / "sandboxed.pid"
     script = work / "wait_for_cancel.py"
     script.write_text(

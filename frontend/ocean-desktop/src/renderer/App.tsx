@@ -1,16 +1,17 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Check, Database, FileText, Plus, SendHorizontal, Square, Trash2, X} from 'lucide-react';
+import {Check, GitFork, ImageOff, LoaderCircle, Mic, Plus, SendHorizontal, Square, Trash2, X} from 'lucide-react';
 
 import type {BackendFrame, DesktopUpdateStatus, ModelProviderSetup, ModelProviderStatus} from '../shared/bridge.js';
 import {artifactFileName, asRecord, changedResultsTaskId, isActiveForegroundRequest, isTaskCreationReady, parseDesktopRuntimeCapabilities, projectNameFromPath, shouldApplyTaskSnapshot, sourceTitleFromPath} from './app-utils.js';
 import {ConversationTranscript, taskResultKeys} from './components/ConversationTranscript.js';
 import {InteractionDrawer} from './components/InteractionDrawer.js';
-import {LocalSourceImportDrawer} from './components/LocalSourceImportDrawer.js';
-import {OceanMindWelcome} from './components/OceanMindWelcome.js';
+import {OceanXWelcome} from './components/OceanXWelcome.js';
 import {ProjectTaskSidebar} from './components/ProjectTaskSidebar.js';
 import {ReportWorkbench} from './components/ReportWorkbench.js';
 import {ResultWorkbench} from './components/SpatialWorkbench.js';
 import {DesktopSettingsDialog} from './components/dialogs/DesktopSettingsDialog.js';
+import {ResearchLessonsDialog} from './components/dialogs/ResearchLessonsDialog.js';
+import {parseLessonOverview} from './lesson-review.js';
 import {ProjectRemoveDialog} from './components/dialogs/ProjectRemoveDialog.js';
 import {TaskDeleteDialog} from './components/dialogs/TaskDeleteDialog.js';
 import {useUiLanguage} from './i18n.js';
@@ -18,15 +19,18 @@ import {isModelProviderReady} from './model-provider.js';
 import {pendingInteractionFromPayload, type PendingInteraction} from './pending-interaction.js';
 import {paperAcquisitionStorageKey, parsePaperAcquisitionCommand, readPaperAcquisitionMode, type PaperAcquisitionMode} from './paper-acquisition-mode.js';
 import {forgetProject, mergeRememberedProjects, parseProjectCatalog, rememberProject, upsertTaskPreservingOrder, type ProjectCatalogEntry} from './project-catalog.js';
+import {revisionFromRequestFailure} from './request-recovery.js';
 import {requestId} from './request-id.js';
 import {taskResultRefKey} from './types.js';
 import type {AppearanceTheme, ArtifactSummary, ArtifactVersion, DeliveryManifest, DisplayDensity, EventPayload, OceanEvent, RequestContext, ResearchTask, ResolvedAppearanceTheme, ResultDocument, TaskOutput, TaskResultFile, TaskResultRecord, TeamSnapshot, TranscriptItem, Workspace} from './types.js';
+import {readWorkflowMode, workflowModeStorageKey, writeWorkflowMode, type WorkflowMode} from './workflow-mode.js';
 
-type PendingImport = {kind: 'dataset' | 'paper'; relativePath?: string; localPath?: string};
+type SourceSelection = {kind: 'file' | 'folder'; relativePath?: string; localPath?: string};
+type PendingImageAttachment = {fileName: string; mimeType: string; bytes: Uint8Array; previewUrl: string};
 type PendingTaskCreate = {projectPath: string; title: string};
 type ResultSurface = {kind: 'interactive_view' | 'report'; document: ResultDocument} | null;
 type RequestHandler = (result: EventPayload) => void;
-type RequestErrorHandler = (message: string) => void;
+type RequestErrorHandler = (message: string, error: EventPayload) => void;
 type TaskResultGrantPurpose =
   | 'report_viewer'
   | 'report_notebook'
@@ -39,9 +43,32 @@ type TaskResultGrantPurpose =
   | 'interactive_view_preview'
   | 'result_file';
 const TERMINAL_WORKFLOW_STATES = new Set(['completed', 'incomplete', 'failed', 'cancelled']);
-const PROJECT_CATALOG_STORAGE_KEY = 'oceanmind.project-catalog.v1';
+const PROJECT_CATALOG_STORAGE_KEY = 'oceanx.project-catalog.native-v1';
 
 type DeleteCandidate = {task: ResearchTask; projectPath: string};
+type SpeechResult = {isFinal: boolean; 0: {transcript: string}};
+type SpeechRecognitionEventLike = Event & {resultIndex: number; results: ArrayLike<SpeechResult>};
+type SpeechRecognitionErrorEventLike = Event & {error?: string};
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+function speechRecognitionConstructor(): SpeechRecognitionConstructor | null {
+  const speechWindow = window as typeof window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
+}
 
 function optimisticUser(request: string, value: string): TranscriptItem {
   return {item_id: `optimistic_${request}`, request_id: request, role: 'user', text: value, created_at: new Date().toISOString()};
@@ -53,7 +80,7 @@ function reconcile(items: TranscriptItem[], incoming: TranscriptItem): Transcrip
   if (incoming.role === 'user' && incoming.request_id) {
     const optimistic = items.findIndex((item) => item.item_id === `optimistic_${incoming.request_id}`);
     // Keep the optimistic send time: elapsed timing starts when the question is
-    // handed to OceanMind, not when the backend echoes the transcript item.
+    // handed to OceanX, not when the backend echoes the transcript item.
     if (optimistic >= 0) return items.map((item, index) => index === optimistic ? {...incoming, created_at: item.created_at ?? incoming.created_at} : item);
   }
   return [...items, incoming].sort((a, b) => (a.sequence ?? Number.MAX_SAFE_INTEGER) - (b.sequence ?? Number.MAX_SAFE_INTEGER));
@@ -86,7 +113,7 @@ export function App(): React.JSX.Element {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [context, setContext] = useState<RequestContext | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [tasks, setTasks] = useState<ResearchTask[]>([]);
+  const [, setTasks] = useState<ResearchTask[]>([]);
   const [activeTask, setActiveTask] = useState<ResearchTask | null>(null);
   const [taskLoading, setTaskLoading] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
@@ -96,18 +123,17 @@ export function App(): React.JSX.Element {
   const [team, setTeam] = useState<TeamSnapshot | null>(null);
   const [teamSnapshots, setTeamSnapshots] = useState<Record<string, TeamSnapshot>>({});
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const [stoppingRequestId, setStoppingRequestId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [workflowMode, setWorkflowMode] = useState<WorkflowMode>('standard');
+  const [listening, setListening] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [paperAcquisitionMode, setPaperAcquisitionMode] = useState<PaperAcquisitionMode>('ask_before_download');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [projects, setProjects] = useState<ProjectCatalogEntry[]>(() => parseProjectCatalog(window.localStorage.getItem(PROJECT_CATALOG_STORAGE_KEY)));
-  const [attachmentMenu, setAttachmentMenu] = useState(false);
-  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
-  const [importTitle, setImportTitle] = useState('');
-  const [importAuthors, setImportAuthors] = useState('');
-  const [importYear, setImportYear] = useState('');
-  const [importDoi, setImportDoi] = useState('');
-  const [importing, setImporting] = useState(false);
+  const [sourceImporting, setSourceImporting] = useState(false);
+  const [pendingImage, setPendingImage] = useState<PendingImageAttachment | null>(null);
   const [pendingInteraction, setPendingInteraction] = useState<PendingInteraction | null>(null);
   const [interactionAnswer, setInteractionAnswer] = useState('');
   const [resultSurface, setResultSurface] = useState<ResultSurface>(null);
@@ -120,9 +146,12 @@ export function App(): React.JSX.Element {
   const [reportMarkdown, setReportMarkdown] = useState('');
   const [reportResources, setReportResources] = useState<Array<{name: string; label: string; url: string; mimeType: string}>>([]);
   const [inlineStatus, setInlineStatus] = useState<string | null>(null);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<DeleteCandidate | null>(null);
   const [projectRemoveCandidate, setProjectRemoveCandidate] = useState<ProjectCatalogEntry | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [lessonsOpen, setLessonsOpen] = useState(false);
+  const [pendingLessons, setPendingLessons] = useState(0);
   const [modelProvider, setModelProvider] = useState<ModelProviderStatus | null>(null);
   const [modelSaving, setModelSaving] = useState(false);
   const [runtime, setRuntime] = useState<ReturnType<typeof parseDesktopRuntimeCapabilities>>(null);
@@ -149,6 +178,8 @@ export function App(): React.JSX.Element {
   const pendingTaskDelete = useRef<string | null>(null);
   const pendingTaskCreate = useRef<PendingTaskCreate | null>(null);
   const projectActivationGeneration = useRef(0);
+  const pendingImageRef = useRef<PendingImageAttachment | null>(null);
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {contextRef.current = context;}, [context]);
   useEffect(() => {taskRef.current = activeTask;}, [activeTask]);
@@ -156,10 +187,26 @@ export function App(): React.JSX.Element {
   useEffect(() => {workspaceRef.current = workspace;}, [workspace]);
   useEffect(() => {workspacePathRef.current = workspacePath;}, [workspacePath]);
   useEffect(() => {projectsRef.current = projects;}, [projects]);
+  useEffect(() => {pendingImageRef.current = pendingImage;}, [pendingImage]);
+  useEffect(() => () => {
+    if (pendingImageRef.current) URL.revokeObjectURL(pendingImageRef.current.previewUrl);
+    speechRecognitionRef.current?.abort();
+  }, []);
+  useEffect(() => {
+    if (modelProvider?.expert.imageInputs) setAttachmentNotice(null);
+  }, [modelProvider?.expert.imageInputs]);
   useEffect(() => {window.localStorage.setItem(PROJECT_CATALOG_STORAGE_KEY, JSON.stringify(projects));}, [projects]);
   useEffect(() => {
     const key = paperAcquisitionStorageKey(workspacePath, activeTask?.task_id ?? null);
     setPaperAcquisitionMode(readPaperAcquisitionMode(window.localStorage, key));
+  }, [activeTask?.task_id, workspacePath]);
+  useEffect(() => {
+    speechRecognitionRef.current?.abort();
+    speechRecognitionRef.current = null;
+    setListening(false);
+    setVoiceNotice(null);
+    const key = workflowModeStorageKey(workspacePath, activeTask?.task_id ?? null);
+    setWorkflowMode(readWorkflowMode(window.localStorage, key));
   }, [activeTask?.task_id, workspacePath]);
   useEffect(() => {
     void window.oceanDesktop.listProjects()
@@ -196,7 +243,13 @@ export function App(): React.JSX.Element {
       frame.expected_workspace_revision = workspaceRef.current?.revision ?? 0;
       if (task && targetTask) frame.expected_task_revision = targetTask.task_revision;
     }
-    void send(frame).then((sent) => {if (!sent) {handlers.current.delete(id); errorHandlers.current.delete(id);}});
+    void send(frame).then((sent) => {
+      if (!sent) {
+        handlers.current.delete(id);
+        errorHandlers.current.delete(id);
+        errorHandler?.('Backend request failed.', {});
+      }
+    });
     return id;
   }, [send]);
   const taskRequest = useCallback((type: string, payload: EventPayload, targetTask: ResearchTask, handler?: RequestHandler, revisions = false): string | null => {
@@ -219,6 +272,16 @@ export function App(): React.JSX.Element {
     return id;
   }, [send]);
 
+  const lessonRequest = useCallback((type: string, payload: EventPayload, onResult: (result: EventPayload) => void, onError: (message: string) => void) => {
+    const id = request(type, payload, onResult, false, false, (message) => onError(message));
+    if (!id) onError(text('Open a project first.', '请先打开项目。'));
+  }, [request, text]);
+  useEffect(() => {
+    // Badge only: count pending lesson proposals whenever a project connects.
+    if (!context) return;
+    request('research.lessons.list', {}, (result) => setPendingLessons(parseLessonOverview(result)?.pending.length ?? 0), false, false, () => setPendingLessons(0));
+  }, [context, request]);
+
   const refreshTasks = useCallback(() => {
     request('task.list', {include_archived: false, limit: 200}, (result) => {
       const next = Array.isArray(result.tasks) ? result.tasks as ResearchTask[] : [];
@@ -236,6 +299,7 @@ export function App(): React.JSX.Element {
     setTeam(null);
     setTeamSnapshots({});
     setActiveRequestId(null);
+    setStoppingRequestId(null);
     setStreaming('');
     setPendingInteraction(null);
     setResultSurface(null);
@@ -246,6 +310,11 @@ export function App(): React.JSX.Element {
     setResultFileUrl(null);
     setReportMarkdown('');
     setReportResources([]);
+    setSourceImporting(false);
+    setPendingImage((current) => {
+      if (current) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
   }, []);
   const openTask = useCallback((taskId: string, optimisticTask?: ResearchTask) => {
     const switching = taskRef.current?.task_id !== taskId;
@@ -324,7 +393,7 @@ export function App(): React.JSX.Element {
       if (event.request_id) {handlers.current.delete(event.request_id); errorHandlers.current.delete(event.request_id);}
       handler?.(asRecord(payload.result));
       if (isActiveForegroundRequest(event.request_id, activeRequestRef.current)) {
-        setActiveRequestId(null); setStreaming('');
+        setActiveRequestId(null); setStoppingRequestId(null); setStreaming('');
         const taskId = event.task_id ?? taskRef.current?.task_id;
         if (taskId) openTask(taskId);
         refreshTasks();
@@ -341,10 +410,10 @@ export function App(): React.JSX.Element {
           : typeof error.message === 'string' ? error.message : typeof payload.reason === 'string' ? payload.reason : 'Request did not complete.';
       const errorHandler = event.request_id ? errorHandlers.current.get(event.request_id) : undefined;
       if (event.request_id) {handlers.current.delete(event.request_id); errorHandlers.current.delete(event.request_id);}
-      errorHandler?.(message);
-      setInlineStatus(message);
+      if (errorHandler) errorHandler(message, error);
+      else setInlineStatus(message);
       if (isActiveForegroundRequest(event.request_id, activeRequestRef.current)) {
-        setActiveRequestId(null); setStreaming('');
+        setActiveRequestId(null); setStoppingRequestId(null); setStreaming('');
         setPendingInteraction(null); setInteractionAnswer('');
         const taskId = event.task_id ?? taskRef.current?.task_id;
         if (taskId) openTask(taskId);
@@ -356,8 +425,21 @@ export function App(): React.JSX.Element {
     if (event.type === 'request.accepted' && payload.request_type === 'session.submit' && event.request_id) {
       setActiveRequestId(event.request_id); refreshTasks(); return;
     }
-    if (event.type === 'workspace.snapshot') {setWorkspace(payload as unknown as Workspace); refreshTasks(); return;}
-    if (event.type === 'workspace.changed' && typeof payload.workspace_revision === 'number') setWorkspace((current) => current ? {...current, revision: payload.workspace_revision as number} : current);
+    if (event.type === 'workspace.snapshot') {
+      const next = payload as unknown as Workspace;
+      workspaceRef.current = next;
+      setWorkspace(next);
+      refreshTasks();
+      return;
+    }
+    if (event.type === 'workspace.changed' && typeof payload.workspace_revision === 'number') {
+      const current = workspaceRef.current;
+      if (current) {
+        const next = {...current, revision: payload.workspace_revision as number};
+        workspaceRef.current = next;
+        setWorkspace(next);
+      }
+    }
     if ((event.type === 'artifact.created' || event.type === 'artifact.version.created') && payload.artifact) {
       const artifact = payload.artifact as ArtifactSummary;
       setWorkspace((current) => current ? {...current, artifacts: [artifact, ...current.artifacts.filter((item) => item.ref.artifact_id !== artifact.ref.artifact_id)]} : current);
@@ -422,7 +504,7 @@ export function App(): React.JSX.Element {
     if (event.type === 'assistant.delta' && event.request_id === activeRequestRef.current && typeof payload.text === 'string') setStreaming((current) => (current + payload.text).slice(-32_000));
     if (event.type === 'assistant.turn.completed' && event.request_id === activeRequestRef.current) setStreaming('');
     if (event.type === 'interaction.requested') {const interaction = pendingInteractionFromPayload(payload); if (interaction) setPendingInteraction(interaction);}
-  }, [connectReady, loadTaskResults, openTask, refreshTasks, resetTaskPresentation, taskRequest]);
+  }, [connectReady, loadTaskResults, openTask, refreshTasks, resetTaskPresentation, taskRequest, text]);
 
   useEffect(() => window.oceanDesktop.onBackendFrame(handleFrame), [handleFrame]);
   useEffect(() => {
@@ -556,11 +638,126 @@ export function App(): React.JSX.Element {
     pendingTaskCreate.current = null;
     setNewTaskTitle((current) => current.trim() === pending.title ? '' : current);
   }, [context, dispatchTaskCreate, workspace, workspacePath]);
+  const dispatchResearchRequest = (userText: string, task: ResearchTask, mode: WorkflowMode) => {
+    const activePaperMode = readPaperAcquisitionMode(window.localStorage, paperAcquisitionStorageKey(workspacePathRef.current, task.task_id));
+    const id = requestId('session_submit');
+    setTranscript((current) => [...current, optimisticUser(id, userText)]); setPrompt(''); setStreaming(''); setTeam(null); setActiveRequestId(id); setInlineStatus(null);
+    void send({protocol_version: 2, request_id: id, type: 'session.submit', payload: {text: userText, context_refs: [], literature_acquisition_mode: activePaperMode, workflow_mode: mode}, context: {...contextRef.current!, task_id: task.task_id}, expected_workspace_revision: workspaceRef.current?.revision ?? 0, expected_task_revision: task.task_revision});
+  };
+  const toggleWorkflowMode = () => {
+    const task = taskRef.current;
+    if (!task || activeRequestRef.current) return;
+    setWorkflowMode((current) => {
+      const next: WorkflowMode = current === 'research' ? 'standard' : 'research';
+      writeWorkflowMode(
+        window.localStorage,
+        workflowModeStorageKey(workspacePathRef.current, task.task_id),
+        next,
+      );
+      return next;
+    });
+  };
+  const toggleVoiceInput = () => {
+    if (listening) {
+      speechRecognitionRef.current?.stop();
+      return;
+    }
+    const Recognition = speechRecognitionConstructor();
+    if (!Recognition) {
+      setVoiceNotice(text('Voice input is not supported in this desktop runtime.', '当前桌面运行环境不支持语音输入。'));
+      return;
+    }
+    const recognition = new Recognition();
+    const base = prompt.trimEnd();
+    const prefix = base ? `${base} ` : '';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+    recognition.onresult = (event) => {
+      let finalText = '';
+      let interimText = '';
+      for (let index = 0; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const transcriptText = result?.[0]?.transcript ?? '';
+        if (result?.isFinal) finalText += transcriptText;
+        else interimText += transcriptText;
+      }
+      setPrompt(`${prefix}${finalText}${interimText}`.trimStart());
+    };
+    recognition.onerror = (event) => {
+      setListening(false);
+      speechRecognitionRef.current = null;
+      const denied = event.error === 'not-allowed' || event.error === 'service-not-allowed';
+      setVoiceNotice(denied
+        ? text('Microphone access is required for voice input.', '语音输入需要麦克风权限。')
+        : text('Voice input stopped. Try again.', '语音输入已停止，请重试。'));
+    };
+    recognition.onend = () => {
+      setListening(false);
+      speechRecognitionRef.current = null;
+    };
+    try {
+      setVoiceNotice(null);
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+      setListening(true);
+    } catch {
+      speechRecognitionRef.current = null;
+      setListening(false);
+      setVoiceNotice(text('Voice input could not start.', '无法启动语音输入。'));
+    }
+  };
+  const updateWorkspaceRevision = (revision: number) => {
+    const current = workspaceRef.current;
+    if (!current) return;
+    const next = {...current, revision};
+    workspaceRef.current = next;
+    setWorkspace(next);
+  };
+  const importSource = (
+    selected: SourceSelection,
+    options: {afterImport?: () => void; reopenTask?: boolean} = {},
+    retry = false,
+  ) => {
+    const selectedPath = selected.relativePath ?? selected.localPath; if (!selectedPath) return;
+    const title = sourceTitleFromPath(selectedPath);
+    setSourceImporting(true);
+    const done = () => {
+      setSourceImporting(false);
+      refreshTasks();
+      if (options.reopenTask !== false && taskRef.current) openTask(taskRef.current.task_id);
+      options.afterImport?.();
+    };
+    const failed: RequestErrorHandler = (message, error) => {
+      const revision = revisionFromRequestFailure(error);
+      if (!retry && revision !== null) {
+        updateWorkspaceRevision(revision);
+        importSource(selected, options, true);
+        return;
+      }
+      setSourceImporting(false);
+      setInlineStatus(message);
+    };
+    const id = request(
+      'source.import',
+      {relative_path: selected.relativePath, local_path: selected.localPath, title},
+      done,
+      true,
+      true,
+      failed,
+    );
+    if (!id) failed(text('Backend is not connected.', '后端未连接。'), {});
+  };
+  const clearPendingImage = () => setPendingImage((current) => {
+    if (current) URL.revokeObjectURL(current.previewUrl);
+    return null;
+  });
   const submit = () => {
-    const userText = prompt.trim(); const task = taskRef.current;
-    if (!userText || !task || task.status === 'archived' || task.active_request_id) return;
+    const enteredText = prompt.trim(); const task = taskRef.current;
+    if ((!enteredText && !pendingImage) || !task || task.status === 'archived' || task.active_request_id || sourceImporting) return;
+    const userText = enteredText || text('Analyze the attached image.', '请分析所附图片。');
     const paperCommand = parsePaperAcquisitionCommand(userText);
-    if (paperCommand) {
+    if (paperCommand && !pendingImage) {
       if (paperCommand.kind === 'set') {
         const key = paperAcquisitionStorageKey(workspacePathRef.current, task.task_id);
         if (key) window.localStorage.setItem(key, paperCommand.mode);
@@ -576,10 +773,31 @@ export function App(): React.JSX.Element {
       return;
     }
     if (!isModelProviderReady(modelProvider)) {setSettingsOpen(true); return;}
-    const activePaperMode = readPaperAcquisitionMode(window.localStorage, paperAcquisitionStorageKey(workspacePathRef.current, task.task_id));
-    const id = requestId('session_submit');
-    setTranscript((current) => [...current, optimisticUser(id, userText)]); setPrompt(''); setStreaming(''); setTeam(null); setActiveRequestId(id); setInlineStatus(null);
-    void send({protocol_version: 2, request_id: id, type: 'session.submit', payload: {text: userText, context_refs: [], literature_acquisition_mode: activePaperMode}, context: {...contextRef.current!, task_id: task.task_id}, expected_workspace_revision: workspaceRef.current?.revision ?? 0, expected_task_revision: task.task_revision});
+    const submittedWorkflowMode = workflowMode;
+    if (listening) speechRecognitionRef.current?.stop();
+    if (!pendingImage) {
+      dispatchResearchRequest(userText, task, submittedWorkflowMode);
+      return;
+    }
+    const attachment = pendingImage;
+    setSourceImporting(true);
+    void window.oceanDesktop.stageImageAttachment({
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      bytes: attachment.bytes,
+    }).then((selected) => {
+      importSource(selected, {
+        reopenTask: false,
+        afterImport: () => {
+          if (taskRef.current?.task_id !== task.task_id) return;
+          clearPendingImage();
+          dispatchResearchRequest(userText, task, submittedWorkflowMode);
+        },
+      });
+    }).catch((error) => {
+      setSourceImporting(false);
+      setInlineStatus(error instanceof Error ? error.message : text('Could not add the pasted image.', '无法添加粘贴的图片。'));
+    });
   };
   const setPaperModeFromMenu = (mode: PaperAcquisitionMode) => {
     const task = taskRef.current;
@@ -590,28 +808,73 @@ export function App(): React.JSX.Element {
     setPrompt('');
     setInlineStatus(null);
   };
-  const cancel = () => {if (activeRequestId) request('request.cancel', {target_request_id: activeRequestId, reason: 'Cancelled from desktop'}, undefined, true);};
+  const cancel = () => {
+    if (!activeRequestId || stoppingRequestId === activeRequestId) return;
+    const targetRequestId = activeRequestId;
+    setStoppingRequestId(targetRequestId);
+    const cancelRequestId = request(
+      'request.cancel',
+      {target_request_id: targetRequestId, reason: 'Cancelled from desktop'},
+      undefined,
+      true,
+      false,
+      (message) => {
+        setStoppingRequestId((current) => current === targetRequestId ? null : current);
+        setInlineStatus(message);
+      },
+    );
+    if (!cancelRequestId) setStoppingRequestId(null);
+  };
   const answer = (fixed?: string) => {
     const value = fixed ?? interactionAnswer.trim(); if (!pendingInteraction || !value) return;
     request('interaction.respond', {interaction_id: pendingInteraction.interactionId, answer: value}, undefined, true); setPendingInteraction(null); setInteractionAnswer('');
   };
-  const chooseSource = async (kind: PendingImport['kind']) => {
-    setAttachmentMenu(false); const selected = await window.oceanDesktop.chooseWorkspaceSource(kind); if (!selected) return;
-    const selectedPath = selected.relativePath ?? selected.localPath; if (!selectedPath) return;
-    setPendingImport({kind, relativePath: selected.relativePath, localPath: selected.localPath}); setImportTitle(sourceTitleFromPath(selectedPath)); setImportAuthors(''); setImportYear(''); setImportDoi('');
-  };
-  const commitImport = () => {
-    if (!pendingImport || !importTitle.trim()) return;
-    setImporting(true); const done = () => {setImporting(false); setPendingImport(null); refreshTasks(); if (taskRef.current) openTask(taskRef.current.task_id);};
-    if (pendingImport.kind === 'dataset') {
-      request('dataset.import', {relative_path: pendingImport.relativePath, local_path: pendingImport.localPath, materialization_level: 'local_reference', title: importTitle.trim()}, done, true, true);
-    } else {
-      const year = Number.parseInt(importYear, 10); const citation: EventPayload = {title: importTitle.trim(), authors: importAuthors.split(',').map((item) => item.trim()).filter(Boolean)};
-      if (Number.isInteger(year)) citation.publication_year = year; if (importDoi.trim()) citation.doi = importDoi.trim();
-      request('paper.import', {relative_path: pendingImport.relativePath, citation, materialization_acknowledged: true}, done, true, true);
+  const chooseSource = async () => {
+    try {
+      const selected = await window.oceanDesktop.chooseWorkspaceSource(modelProvider?.expert.imageInputs === true); if (!selected) return;
+      importSource(selected);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : text('Could not add the selected source.', '无法添加所选来源。');
+      if (message === 'The configured analysis model cannot read images.') {
+        setAttachmentNotice(text('Images are unavailable for this model.', '当前模型不支持图片。'));
+      } else {
+        setInlineStatus(message);
+      }
     }
   };
-  const cancelImport = () => {setPendingImport(null);};
+  const pasteIntoPrompt = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const image = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/'));
+    if (!image) return;
+    event.preventDefault();
+    if (!modelProvider?.expert.imageInputs) {
+      setAttachmentNotice(text('Images are unavailable for this model.', '当前模型不支持图片。'));
+      return;
+    }
+    const file = image.getAsFile();
+    if (!file) {
+      setAttachmentNotice(text('The pasted image could not be read.', '无法读取粘贴的图片。'));
+      return;
+    }
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size === 0 || file.size > 16 * 1024 * 1024) {
+      setAttachmentNotice(text('Use a PNG, JPEG, WebP, or GIF image under 16 MB.', '请使用小于 16 MB 的 PNG、JPEG、WebP 或 GIF 图片。'));
+      return;
+    }
+    void file.arrayBuffer()
+      .then((buffer) => {
+        const next = {
+          fileName: file.name || 'pasted-image',
+          mimeType: file.type,
+          bytes: new Uint8Array(buffer),
+          previewUrl: URL.createObjectURL(file),
+        };
+        setPendingImage((current) => {
+          if (current) URL.revokeObjectURL(current.previewUrl);
+          return next;
+        });
+        setAttachmentNotice(null);
+      })
+      .catch(() => setAttachmentNotice(text('The pasted image could not be read.', '无法读取粘贴的图片。')));
+  };
   const grant = (artifact: ArtifactVersion, fileName: string, purpose: string): Promise<string> => new Promise((resolve, reject) => {
     const id = request('artifact.resource.grant', {artifact_ref: artifact.ref, file_name: fileName, purpose}, (result) => {
       const token = typeof result.resource_token === 'string' ? result.resource_token : null;
@@ -632,17 +895,39 @@ export function App(): React.JSX.Element {
     void grantTaskResult(result, file, 'result_file').then((url) => {
       return window.oceanDesktop.openArtifactResource(url);
     }).then((opened) => {
-      if (opened.revealed) setInlineStatus('No notebook application is registered, so OceanMind revealed the saved file instead.');
+      if (opened.revealed) setInlineStatus('No notebook application is registered, so OceanX revealed the saved file instead.');
     }).catch((error) => {
       setInlineStatus(error instanceof Error ? error.message : 'Supplementary material is unavailable.');
     });
   };
   const openReportResource = (resource: {url: string}) => {
     void window.oceanDesktop.openArtifactResource(resource.url).then((opened) => {
-      if (opened.revealed) setInlineStatus('No application is registered for this file, so OceanMind revealed it instead.');
+      if (opened.revealed) setInlineStatus('No application is registered for this file, so OceanX revealed it instead.');
     }).catch((error) => {
       setInlineStatus(error instanceof Error ? error.message : 'Report resource is unavailable.');
     });
+  };
+  const openExpertReport = (path: string, title: string) => {
+    if (!activeTask) return;
+    const taskId = activeTask.task_id;
+    openResultKey.current = path;
+    setResultSurface({kind: 'report', document: {key: path, title, content: {}}});
+    setReportMarkdown(''); setReportResources([]); setResultError(null); setResultLoading(true);
+    const readPage = (offset: number, accumulated: string) => {
+      const id = request('task.report.read', {task_id: taskId, report_path: path, offset}, (page) => {
+        if (openResultKey.current !== path) return;
+        if (typeof page.text !== 'string') {
+          setResultError('Report is temporarily unreadable.'); setResultLoading(false); return;
+        }
+        const markdown = accumulated + page.text;
+        if (typeof page.next_offset === 'number' && page.next_offset > offset) readPage(page.next_offset, markdown);
+        else {setReportMarkdown(markdown); setResultLoading(false);}
+      }, true, false, () => {
+        if (openResultKey.current === path) {setResultError('Report is temporarily unreadable.'); setResultLoading(false);}
+      });
+      if (!id) {setResultError('Backend is not connected.'); setResultLoading(false);}
+    };
+    readPage(0, '');
   };
   const openTaskResult = (result: TaskResultRecord, featureId?: string) => {
     setResultFeatureId(featureId);
@@ -712,7 +997,7 @@ export function App(): React.JSX.Element {
         }
       } else {
         setResultLoading(false);
-        if (!previewFile && !downloadFile) setResultError('Restart OceanMind to load this interactive result with the matching backend.');
+        if (!previewFile && !downloadFile) setResultError('Restart OceanX to load this interactive result with the matching backend.');
       }
       return;
     }
@@ -829,14 +1114,22 @@ export function App(): React.JSX.Element {
     }
   };
 
-  const reportResultLinks = taskResults.filter((result) => result.kind === 'interactive_view').map((result) => ({
+  const reportAgentKey = resultSurface?.kind === 'report'
+    ? resultSurface.document.key.match(/[\\/]agents[\\/]([^\\/]+)[\\/]report\.md$/)?.[1] ?? null
+    : null;
+  const reportResultLinks = taskResults
+    .filter((result) => result.kind === 'interactive_view')
+    .filter((result) => !reportAgentKey || reportAgentKey === 'coordinator' || result.content.agent_key === reportAgentKey)
+    .map((result) => ({
     keys: taskResultKeys(result), label: result.title, summary: result.summary, kind: result.kind,
     features: Array.isArray(result.content.features) ? result.content.features as Array<{id: string; label: string}> : [],
     onOpen: (featureId?: string) => openTaskResult(result, featureId),
-  }));
+    }));
   const projectName = projectNameFromPath(workspace?.path ?? workspacePath);
   const activeArchived = activeTask?.status === 'archived';
-  const status = context ? activeRequestId ? text('Working', '运行中') : text('Ready', '已就绪') : workspacePath ? text('Connecting', '连接中') : text('No project', '未选择项目');
+  const status = context ? activeRequestId
+    ? stoppingRequestId === activeRequestId ? text('Stopping', '正在停止') : text('Working', '运行中')
+    : text('Ready', '已就绪') : workspacePath ? text('Connecting', '连接中') : text('No project', '未选择项目');
 
   return <main className={`ocean-shell density-${density} theme-${resolvedTheme}${activeTask ? '' : ' welcome-mode'}`}>
     <ProjectTaskSidebar
@@ -856,28 +1149,64 @@ export function App(): React.JSX.Element {
         if (task) setDeleteCandidate({task, projectPath: path});
       }}
       onOpenSettings={() => setSettingsOpen(true)}
+      onOpenLessons={() => setLessonsOpen(true)}
+      pendingLessons={pendingLessons}
     />
     <section className="conversation-pane">
       <header className="conversation-toolbar">{activeTask ? <div className="conversation-title"><strong>{activeTask.title}</strong></div> : <span />}{activeTask ? <div className="conversation-actions"><button onClick={() => setDeleteCandidate({task: activeTask, projectPath: workspacePath ?? ''})} title={text('Delete task', '删除任务')}><Trash2 size={16} /></button></div> : <span />}</header>
-      <div className={`conversation-scroll${activeTask ? '' : ' welcome-scroll'}`}>{activeTask ? <ConversationTranscript loading={taskLoading} transcript={transcript} streaming={streaming} activeRequestId={activeRequestId} task={activeTask} workspacePath={workspacePath} outputs={outputs} manifests={manifests} taskResults={taskResults} team={team} teamSnapshots={teamSnapshots} pendingInteraction={pendingInteraction} interactionAnswer={interactionAnswer} onInteractionAnswer={setInteractionAnswer} onInteractionSubmit={answer} onOpenResult={openResult} onOpenTaskResult={openTaskResult} onOpenTaskResultFile={openTaskResultFile} /> : <OceanMindWelcome projectName={projectName} hasProject={Boolean(workspacePath)} title={newTaskTitle} onTitle={setNewTaskTitle} onCreateTask={createTask} onChooseProject={() => void chooseProject()} />}</div>
+      <div className={`conversation-scroll${activeTask ? '' : ' welcome-scroll'}`}>{activeTask ? <ConversationTranscript loading={taskLoading} transcript={transcript} streaming={streaming} activeRequestId={activeRequestId} task={activeTask} workspacePath={workspacePath} outputs={outputs} manifests={manifests} taskResults={taskResults} team={team} teamSnapshots={teamSnapshots} pendingInteraction={pendingInteraction} interactionAnswer={interactionAnswer} onInteractionAnswer={setInteractionAnswer} onInteractionSubmit={answer} onOpenResult={openResult} onOpenTaskResult={openTaskResult} onOpenTaskResultFile={openTaskResultFile} onOpenReport={openExpertReport} /> : <OceanXWelcome projectName={projectName} hasProject={Boolean(workspacePath)} title={newTaskTitle} onTitle={setNewTaskTitle} onCreateTask={createTask} onChooseProject={() => void chooseProject()} />}</div>
       {activeTask ? <div className="composer-wrap">
         {inlineStatus ? <div className="inline-status"><span>{inlineStatus}</span><button onClick={() => setInlineStatus(null)}><X size={14} /></button></div> : null}
-        <div className={`composer-stack ${pendingImport ? 'source-drawer-open' : ''}`}>
-          <LocalSourceImportDrawer pending={pendingImport} title={importTitle} authors={importAuthors} year={importYear} doi={importDoi} busy={importing} onTitle={setImportTitle} onAuthors={setImportAuthors} onYear={setImportYear} onDoi={setImportDoi} onCancel={cancelImport} onConfirm={commitImport} />
+        <div className="composer-stack">
           {pendingInteraction && pendingInteraction.kind !== 'paper_selection' ? <InteractionDrawer interaction={pendingInteraction} answer={interactionAnswer} onAnswer={setInteractionAnswer} onSubmit={answer} /> : <div className="composer">{prompt.trimStart().toLowerCase().startsWith('/papers') ? <div className="composer-command-menu" aria-label={text('Paper search modes', '论文检索模式')}>
             {([
               ['ask_before_download', '/papers ask', text('Ask before download', '下载前询问')],
               ['auto_download_open_access', '/papers auto', text('Auto-download open access', '自动下载开放全文')],
               ['search_only', '/papers search-only', text('Search only', '仅搜索')],
             ] as Array<[PaperAcquisitionMode, string, string]>).map(([mode, command, label]) => <button key={mode} type="button" onClick={() => setPaperModeFromMenu(mode)}><span><code>{command}</code><strong>{label}</strong></span>{paperAcquisitionMode === mode ? <Check size={15} /> : null}</button>)}
-          </div> : null}<textarea value={prompt} disabled={!activeTask || activeArchived || pendingInteraction?.kind === 'paper_selection'} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault(); submit();}}} placeholder={pendingInteraction?.kind === 'paper_selection' ? text('Choose papers above to continue', '请在上方选择论文后继续') : activeTask ? text('Ask about this research task', '询问这个研究任务') : text('Select a research task', '选择研究任务')} />
-            <div className="composer-actions"><div className="attachment-anchor"><button onClick={() => setAttachmentMenu((value) => !value)} disabled={!activeTask || pendingInteraction?.kind === 'paper_selection'} title={text('Add source', '添加来源')}><Plus size={19} /></button>{attachmentMenu ? <div className="attachment-menu"><button onClick={() => void chooseSource('dataset')}><Database size={16} />{text('Data', '数据')}</button><button onClick={() => void chooseSource('paper')}><FileText size={16} />{text('Paper', '论文')}</button></div> : null}</div>{activeRequestId ? <button className="send-button stop" onClick={cancel}><Square size={15} /></button> : <button className="send-button" onClick={submit} disabled={!prompt.trim() || !activeTask || activeArchived}><SendHorizontal size={17} /></button>}</div>
+          </div> : null}{pendingImage ? <div className="composer-attachment-tray"><div className="composer-image-attachment"><img src={pendingImage.previewUrl} alt={pendingImage.fileName} /><button type="button" onClick={clearPendingImage} disabled={sourceImporting} aria-label={text('Remove image', '移除图片')} title={text('Remove image', '移除图片')}><X size={13} /></button></div></div> : null}<textarea value={prompt} disabled={!activeTask || activeArchived || pendingInteraction?.kind === 'paper_selection'} onChange={(event) => setPrompt(event.target.value)} onPaste={pasteIntoPrompt} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault(); submit();}}} placeholder={pendingInteraction?.kind === 'paper_selection' ? text('Choose papers above to continue', '请在上方选择论文后继续') : activeTask ? text('Ask about this research task', '询问这个研究任务') : text('Select a research task', '选择研究任务')} />
+            <div className="composer-actions">
+              <div className="attachment-anchor">
+                {attachmentNotice ? <div className="attachment-notice" role="status"><ImageOff size={14} /><span>{attachmentNotice}</span><button type="button" onClick={() => setAttachmentNotice(null)} aria-label={text('Dismiss', '关闭')}><X size={12} /></button></div> : null}
+                <button onClick={() => void chooseSource()} disabled={!activeTask || sourceImporting || pendingInteraction?.kind === 'paper_selection'} aria-busy={sourceImporting} aria-label={sourceImporting ? text('Adding source', '正在添加来源') : text('Add file or folder', '添加文件或文件夹')} title={sourceImporting ? text('Adding source…', '正在添加来源…') : text('Add file or folder', '添加文件或文件夹')}>{sourceImporting ? <LoaderCircle className="spin" size={17} /> : <Plus size={19} />}</button>
+              </div>
+              <button
+                type="button"
+                className={`research-mode-button${workflowMode === 'research' ? ' active' : ''}`}
+                onClick={toggleWorkflowMode}
+                disabled={!activeTask || activeArchived || Boolean(activeRequestId) || pendingInteraction?.kind === 'paper_selection'}
+                aria-pressed={workflowMode === 'research'}
+                aria-label={text('Research mode', '研究模式')}
+                title={workflowMode === 'research'
+                  ? text('Research mode is on: use experts and build a research tree', '研究模式已开启：调用专家并构建研究树')
+                  : text('Research mode is off: answer directly without a research tree', '研究模式已关闭：直接回答，不构建研究树')}
+              >
+                <GitFork size={15} />
+                <span>{text('Research', '研究')}</span>
+                <i aria-hidden="true" />
+              </button>
+              <div className="composer-actions-spacer" />
+              <div className="voice-anchor">
+                {voiceNotice ? <div className="voice-notice" role="status"><span>{voiceNotice}</span><button type="button" onClick={() => setVoiceNotice(null)} aria-label={text('Dismiss', '关闭')}><X size={12} /></button></div> : null}
+                <button
+                  type="button"
+                  className={`voice-button${listening ? ' listening' : ''}`}
+                  onClick={toggleVoiceInput}
+                  disabled={!activeTask || activeArchived || Boolean(activeRequestId) || sourceImporting || pendingInteraction?.kind === 'paper_selection'}
+                  aria-pressed={listening}
+                  aria-label={listening ? text('Stop voice input', '停止语音输入') : text('Start voice input', '开始语音输入')}
+                  title={listening ? text('Stop voice input', '停止语音输入') : text('Voice input', '语音输入')}
+                ><Mic size={17} /></button>
+              </div>
+              {activeRequestId ? <button className="send-button stop" onClick={cancel} disabled={stoppingRequestId === activeRequestId} aria-label={stoppingRequestId === activeRequestId ? text('Stopping task', '正在停止任务') : text('Stop task', '停止任务')} title={stoppingRequestId === activeRequestId ? text('Stopping…', '正在停止…') : text('Stop task', '停止任务')}>{stoppingRequestId === activeRequestId ? <LoaderCircle className="spin" size={17} /> : <Square size={15} />}</button> : <button className="send-button" onClick={submit} disabled={(!prompt.trim() && !pendingImage) || !activeTask || activeArchived || sourceImporting}><SendHorizontal size={17} /></button>}
+            </div>
           </div>}
         </div>
       </div> : null}
     </section>
     {resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} error={resultError} onClose={closeResult} />}
     <DesktopSettingsDialog open={settingsOpen} status={status} projectName={projectName} runtime={runtime} modelProvider={modelProvider} modelProviderSaving={modelSaving} displayDensity={density} onDisplayDensity={setDensity} appearanceTheme={appearanceTheme} onAppearanceTheme={setAppearanceTheme} onConfigureModelProvider={configureModel} update={update} onCheckForUpdate={() => void window.oceanDesktop.checkForUpdate().then(setUpdate)} onInstallUpdate={() => void window.oceanDesktop.installPreparedUpdate().then(setUpdate)} onClose={() => setSettingsOpen(false)} />
+    <ResearchLessonsDialog open={lessonsOpen} onClose={() => setLessonsOpen(false)} onPendingCount={setPendingLessons} request={lessonRequest} taskId={activeTask?.task_id ?? null} />
     <TaskDeleteDialog task={deleteCandidate?.task ?? null} onCancel={() => setDeleteCandidate(null)} onConfirm={deleteTask} />
     <ProjectRemoveDialog project={projectRemoveCandidate} onCancel={() => setProjectRemoveCandidate(null)} onConfirm={() => void removeProject()} />
   </main>;

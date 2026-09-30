@@ -13,6 +13,7 @@ export type MarkdownArtifactLink = {
 
 export type MarkdownResultLink = {
   keys: string[];
+  keyLabels?: Record<string, string>;
   label: string;
   summary?: string;
   kind: 'interactive_view' | 'report' | 'file' | 'table';
@@ -21,6 +22,8 @@ export type MarkdownResultLink = {
 };
 
 const RESULT_MARKER_RE = /\[\[(?:result|output):([^\]|\r\n]+)(?:\|([^\]\r\n]+))?\]\]/g;
+const RESULT_SHORTHAND_RE = /\[([A-Za-z][A-Za-z0-9_.\/-]{0,159})\](?!\()/g;
+const RESULT_IMAGE_RE = /!\[([^\]\r\n]*)\]\(([^)\r\n]+)\)/g;
 const LABELED_RESULT_ITEM_RE = /^\s*\[\[(?:result|output):([^\]\r\n]+)\]\]\s*[（(]([^）)\r\n]+)[）)]\s*[。.]*\s*$/;
 
 function resultLookup(items: MarkdownResultLink[]): Map<string, MarkdownResultLink | null> {
@@ -66,7 +69,10 @@ export function normalizeLabeledResultLists(content: string): string {
 }
 
 export function referencedResultKeys(content: string): Set<string> {
-  return new Set(Array.from(content.matchAll(RESULT_MARKER_RE), (match) => match[1].trim().split('#')[0]!));
+  return new Set([
+    ...Array.from(content.matchAll(RESULT_MARKER_RE), (match) => match[1].trim().split('#')[0]!),
+    ...Array.from(content.matchAll(RESULT_SHORTHAND_RE), (match) => match[1].trim()),
+  ]);
 }
 
 export function safeExternalHref(value: string | undefined): string | null {
@@ -103,11 +109,64 @@ const baseComponents: Components = {
   ),
 };
 
+/** Render compact trusted prose without allowing block layout or nested interactive links. */
+export function InlineMarkdown({content}: {content: string}) {
+  return <span className="inline-markdown">
+    <Markdown
+      allowedElements={['strong', 'em', 'del', 'code']}
+      components={{code: ({children}) => <code>{children}</code>}}
+      remarkPlugins={[remarkGfm]}
+      skipHtml
+      unwrapDisallowed
+    >
+      {content.replace(/\s+/g, ' ').trim()}
+    </Markdown>
+  </span>;
+}
+
+const compactLogComponents: Components = {
+  ...baseComponents,
+  p: ({children}) => <>{children}{' '}</>,
+  h1: ({children}) => <><strong>{children}</strong>{' — '}</>,
+  h2: ({children}) => <><strong>{children}</strong>{' — '}</>,
+  h3: ({children}) => <><strong>{children}</strong>{' — '}</>,
+  h4: ({children}) => <><strong>{children}</strong>{' — '}</>,
+  ul: ({children}) => <>{children}</>,
+  ol: ({children}) => <>{children}</>,
+  li: ({children}) => <span className="compact-log-list-item">{children}</span>,
+  blockquote: ({children}) => <>{children}{' '}</>,
+  pre: ({children}) => <span className="compact-log-code">{children}</span>,
+  table: ({children}) => <span className="compact-log-table">{children}</span>,
+  thead: ({children}) => <>{children}</>,
+  tbody: ({children}) => <>{children}</>,
+  tr: ({children}) => <span className="compact-log-table-row">{children}</span>,
+  th: ({children}) => <span className="compact-log-table-cell">{children}</span>,
+  td: ({children}) => <span className="compact-log-table-cell">{children}</span>,
+};
+
+/** Preserve useful Markdown semantics while keeping every research-log update in one text flow. */
+export function CompactLogMarkdown({content}: {content: string}) {
+  return <span className="compact-log-markdown">
+    <Markdown
+      components={compactLogComponents}
+      rehypePlugins={[rehypeKatex]}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      skipHtml
+    >
+      {content}
+    </Markdown>
+  </span>;
+}
+
 function artifactKeys(ref: ArtifactRef): string[] {
   return [
     `${ref.artifact_id}@v${ref.version}`,
     `${ref.artifact_id}@v${String(ref.version).padStart(4, '0')}`,
   ];
+}
+
+function plainResultText(value: string): string {
+  return value.replace(/[*_~`]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 export function MessageMarkdown({
@@ -124,15 +183,37 @@ export function MessageMarkdown({
   const markerTokens = new Map<string, {key: string; label?: string}>();
   let markerIndex = 0;
   const renderedContent = deduplicateResultLinks(normalizeLabeledResultLists(content), resultLinks)
-    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/).map((part, index) => index % 2 ? part : part.replace(
-    RESULT_MARKER_RE,
-    (_match, key: string, label?: string) => {
-      const token = `ocean-result-${markerIndex}`;
-      markerIndex += 1;
-      markerTokens.set(token, {key: key.trim(), label: label?.trim() || undefined});
-      return `\`${token}\``;
-    },
-  )).join('');
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/).map((part, index) => {
+      if (index % 2) return part;
+      const linkedImages = part.replace(RESULT_IMAGE_RE, (match, alt: string, source: string) => {
+        const fileName = source.trim().split(/[\\/]/).at(-1) ?? '';
+        const key = fileName.replace(/\.preview\.[A-Za-z0-9]+$/i, '').replace(/\.[A-Za-z0-9]+$/i, '');
+        if (!results.get(key)) return match;
+        const token = `ocean-result-${markerIndex}`;
+        markerIndex += 1;
+        markerTokens.set(token, {key, label: alt.trim() || undefined});
+        return `\`${token}\``;
+      });
+      const explicit = linkedImages.replace(RESULT_MARKER_RE, (_match, key: string, label?: string) => {
+        const normalizedKey = key.trim();
+        const baseKey = normalizedKey.split('#')[0]!;
+        const token = `ocean-result-${markerIndex}`;
+        markerIndex += 1;
+        markerTokens.set(token, {
+          key: normalizedKey,
+          label: label?.trim() || results.get(baseKey)?.keyLabels?.[baseKey],
+        });
+        return `\`${token}\``;
+      });
+      return explicit.replace(RESULT_SHORTHAND_RE, (match, key: string) => {
+        const result = results.get(key);
+        if (!result) return match;
+        const token = `ocean-result-${markerIndex}`;
+        markerIndex += 1;
+        markerTokens.set(token, {key, label: result.keyLabels?.[key] ?? key});
+        return `\`${token}\``;
+      });
+    }).join('');
   const components: Components = {
     ...baseComponents,
     code: ({className, children}) => {
@@ -146,13 +227,14 @@ export function MessageMarkdown({
         return <span className="markdown-result-unavailable" role="status" title={`Unknown result object: ${featureId}`}>Result object unavailable: {featureId || '(empty)'}</span>;
       }
       if (result) {
+        const accessibleLabel = plainResultText(feature?.label ?? result.label);
         return (
           <button
-            aria-label={`Open ${feature?.label ?? result.label}`}
+            aria-label={`Open ${accessibleLabel}`}
             className="markdown-result-link"
             type="button"
             onClick={() => result.onOpen(featureId)}
-            title={result.summary ? `${result.label} — ${result.summary}` : result.label}
+            title={[baseKey, plainResultText(result.label), result.summary ? plainResultText(result.summary) : undefined].filter(Boolean).join(' — ')}
           >
             {feature?.label ?? marker?.label ?? result.label}
           </button>

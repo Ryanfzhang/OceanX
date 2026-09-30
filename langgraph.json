@@ -1,0 +1,8 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "coordinator": "./src/oceanx/research/graphs.py:coordinator"
+  },
+  "http": {"app": "./src/oceanx/research/app.py:app"},
+  "auth": {"path": "./src/oceanx/research/auth.py:auth"}
+}

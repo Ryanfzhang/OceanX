@@ -2,7 +2,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from oceanx.agent import OceanAgentBudget
 from oceanx.agent_contract import (
     AssistantTurnComplete,
     ConversationMessage,
@@ -58,9 +57,6 @@ async def test_final_answer_survives_cumulative_token_threshold(tmp_path, monkey
     class Engine:
         max_turns = 200
 
-        def set_max_turns(self, value):
-            self.max_turns = value
-
         async def submit_message(self, text, *, request_id):
             yield AssistantTurnComplete(
                 message=ConversationMessage(
@@ -85,8 +81,6 @@ async def test_final_answer_survives_cumulative_token_threshold(tmp_path, monkey
             client=client,
             request=request,
             agent_session=session,
-            context_audit_ids=(),
-            budget=OceanAgentBudget(),
             submitted_text="Finish",
             visible_text="Finish",
         )

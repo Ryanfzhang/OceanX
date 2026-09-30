@@ -1,0 +1,5 @@
+{
+  "id": "independent-observation-and-literature",
+  "query": "Using the supplied one-year dataset, what is the seasonal temperature structure in the Bay of Campeche? Separately, what explanations for seasonal warmth in this region have published studies reported? Keep the dataset findings and the literature evidence distinct; the literature survey concerns published findings and does not require the new analysis results. Do not download additional datasets. Return paper candidates before reading full text.",
+  "datasets": ["/Users/ryanzhang/Code/CMEMS_oceanmind"]
+}

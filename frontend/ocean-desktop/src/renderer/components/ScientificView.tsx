@@ -1,10 +1,13 @@
 import {useEffect, useId, useMemo, useRef, useState} from 'react';
 import {FEATURE_COLORS, MASK_STYLE, categoryColor, featureBounds, featurePoints, prepareResultFeature, type ResultFeature} from './result-features.js';
 import {Focus, ZoomIn, ZoomOut} from 'lucide-react';
+import {resolveScientificPalette} from './scientific-palettes.js';
 
 import {
   isScientificPayload,
   normalizeScientificFigure,
+  conciseScientificLabel,
+  scientificDisplayUnits,
   type ScientificAxis,
   type Field2DLayer,
   type ScientificFigurePayload,
@@ -23,20 +26,25 @@ const MARGIN = {left: 70, right: 78, top: 24, bottom: 58};
 const PLOT_WIDTH = WIDTH - MARGIN.left - MARGIN.right;
 const PLOT_HEIGHT = HEIGHT - MARGIN.top - MARGIN.bottom;
 
-const DEFAULT_SERIES = ['#154f70', '#4a8e92', '#bd6840', '#7775a7', '#5d7e68', '#9d7b36'];
-const PALETTES: Record<string, string[]> = {
-  depth: ['#f3edc9', '#cdddc8', '#93c4bd', '#5a9ea5', '#477992', '#455777', '#66516d'],
-  thermal: ['#243c62', '#47759a', '#82afb5', '#e8e2cd', '#da9a70', '#a94b42'],
-  haline: ['#f4f0e5', '#c6dcd5', '#83b9b2', '#47888e', '#27536d'],
-  diverging: ['#315f91', '#8cb5ca', '#f4f3ed', '#dda17d', '#9f443f'],
-  chlorophyll: ['#f1edc8', '#c8dda7', '#83b984', '#4b8c6c', '#285c56'],
-  default: ['#edf0d6', '#bdd7c1', '#7db5ad', '#518d98', '#4b6282', '#70566f'],
-  categorical: ['#154f70', '#bd6840', '#4a8e92', '#7775a7', '#9d7b36', '#5d7e68', '#a64f68', '#52719b'],
-};
-
+const DEFAULT_SERIES = ['#147d78', '#245f82', '#bd6840', '#766fc1', '#507b66', '#9d7b36'];
 type Viewport = {x?: [number, number]; y?: [number, number]};
 type Hover = {x: number; y: number; title: string; value: string};
 type HoverPointRef = {x: number; y: number; layerIndex: number; pointIndex: number};
+
+export function scientificScatterAppearance(
+  style: NonNullable<ScientificLayer['style']> | undefined,
+  pointCount: number,
+): {radius: number; opacity: number} {
+  const authoredRadius = style?.radius ?? 1.25;
+  const authoredOpacity = style?.opacity ?? .5;
+  if (pointCount <= 64) {
+    return {radius: Math.max(authoredRadius, 3.4), opacity: Math.max(authoredOpacity, .84)};
+  }
+  if (pointCount <= 512) {
+    return {radius: Math.max(authoredRadius, 2.1), opacity: Math.max(authoredOpacity, .64)};
+  }
+  return {radius: Math.max(authoredRadius, .9), opacity: authoredOpacity};
+}
 
 function finiteNumbers(values: ScientificScalar[]): number[] {
   return values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
@@ -79,6 +87,28 @@ export function scientificAxisExtent(values: number[], axis: ScientificAxis): [n
   return paddedExtent(values);
 }
 
+export function clampScientificDomain(
+  domain: [number, number],
+  bounds: [number, number],
+): [number, number] {
+  const lower = Math.min(bounds[0], bounds[1]);
+  const upper = Math.max(bounds[0], bounds[1]);
+  const span = Math.abs(domain[1] - domain[0]);
+  const available = upper - lower;
+  if (!Number.isFinite(span) || span >= available) return [lower, upper];
+  let start = Math.min(domain[0], domain[1]);
+  let end = start + span;
+  if (start < lower) {
+    end += lower - start;
+    start = lower;
+  }
+  if (end > upper) {
+    start -= end - upper;
+    end = upper;
+  }
+  return [Math.max(lower, start), Math.min(upper, end)];
+}
+
 function logExtent(values: number[]): [number, number] {
   let minimum = Number.POSITIVE_INFINITY;
   let maximum = Number.NEGATIVE_INFINITY;
@@ -108,6 +138,19 @@ function categories(values: ScientificScalar[]): Map<string, number> {
     if (!result.has(key)) result.set(key, result.size);
   });
   return result;
+}
+
+export function scientificCategoryTicks(
+  values: Map<string, number>,
+  maximum = 10,
+): Array<{label: string; value: number}> {
+  const entries = [...values.entries()].map(([label, value]) => ({label, value}));
+  if (entries.length <= maximum) return entries;
+  const step = Math.ceil(entries.length / maximum);
+  const selected = entries.filter((_, index) => index % step === 0);
+  const last = entries.at(-1);
+  if (last && selected.at(-1)?.value !== last.value) selected.push(last);
+  return selected;
 }
 
 function axisNumber(value: ScientificScalar, axis: ScientificAxis, categoryValues: Map<string, number> | null): number | null {
@@ -172,12 +215,7 @@ function paletteColor(palette: string[], ratio: number): string {
 }
 
 function paletteFor(layer: ScientificLayer | undefined): string[] {
-  const palette = layer?.style?.palette;
-  if (Array.isArray(palette)) {
-    const valid = palette.filter((color) => /^#[0-9a-f]{6}$/i.test(color));
-    if (valid.length >= 2) return valid;
-  }
-  return PALETTES[typeof palette === 'string' ? palette : 'default'] ?? PALETTES.default!;
+  return resolveScientificPalette(layer?.style?.palette);
 }
 
 function numericCoordinate(
@@ -401,6 +439,16 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
   const scatterCanvas = useRef<HTMLCanvasElement | null>(null);
   const xAxis = panel.axes.x;
   const yAxis = panel.axes.y;
+  const axisCaption = (axis: ScientificAxis, maxLength: number) => {
+    const fullLabel = axis.label ?? axis.field;
+    const units = scientificDisplayUnits(axis.units);
+    return {
+      full: `${fullLabel}${units ? ` (${units})` : ''}`,
+      visible: `${conciseScientificLabel(fullLabel, maxLength)}${units ? ` (${units})` : ''}`,
+    };
+  };
+  const xCaption = axisCaption(xAxis, 52);
+  const yCaption = axisCaption(yAxis, 40);
   const data = figure.data;
   const features = useMemo(() => (figure.features ?? [])
     .filter(f => f.panel_id === panel.id || (!f.panel_id && figure.panels.length === 1))
@@ -460,19 +508,25 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
         (layer.axis === 'x' ? xValues : yValues).push(layer.value);
       }
     });
+    const comparableScatter = panel.layers.some((layer) => layer.type === 'scatter')
+      && xAxis.scale !== 'category' && xAxis.scale !== 'time' && xAxis.scale !== 'log'
+      && yAxis.scale !== 'category' && yAxis.scale !== 'time' && yAxis.scale !== 'log'
+      && Boolean(xAxis.units?.trim())
+      && xAxis.units?.trim().toLowerCase() === yAxis.units?.trim().toLowerCase();
+    const comparisonDomain = comparableScatter ? paddedExtent([...xValues, ...yValues]) : null;
     const field = panel.layers.find((layer) => layer.type === 'heatmap' || layer.type === 'field2d');
     const axisFieldValues = (field: string, axis: ScientificAxis, map: Map<string, number> | null) => (data[field] ?? []).flatMap((value) => {
       const numeric = axisNumber(value, axis, map);
       return numeric === null ? [] : [numeric];
     });
-    const baseX: [number, number] = xAxis.range ?? (xCategories
+    const baseX: [number, number] = xAxis.range ?? (comparisonDomain ?? (xCategories
       ? [-.5, Math.max(.5, xCategories.size - .5)]
       : field ? (isDepthAxis(xAxis) ? scientificAxisExtent(axisFieldValues(field.x, xAxis, xCategories), xAxis) : cellExtent(axisFieldValues(field.x, xAxis, xCategories)))
-        : xAxis.scale === 'log' ? logExtent(xValues) : scientificAxisExtent(xValues, xAxis));
-    const baseY: [number, number] = yAxis.range ?? (yCategories
+        : xAxis.scale === 'log' ? logExtent(xValues) : scientificAxisExtent(xValues, xAxis)));
+    const baseY: [number, number] = yAxis.range ?? (comparisonDomain ?? (yCategories
       ? [-.5, Math.max(.5, yCategories.size - .5)]
       : field ? (isDepthAxis(yAxis) ? scientificAxisExtent(axisFieldValues(field.y, yAxis, yCategories), yAxis) : cellExtent(axisFieldValues(field.y, yAxis, yCategories)))
-        : yAxis.scale === 'log' ? logExtent(yValues) : scientificAxisExtent(yValues, yAxis));
+        : yAxis.scale === 'log' ? logExtent(yValues) : scientificAxisExtent(yValues, yAxis)));
     const xDomain = viewport.x ?? baseX;
     const yDomain = viewport.y ?? baseY;
     const transform = (value: number, domain: [number, number], scale: ScientificAxis['scale']) => {
@@ -495,12 +549,12 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
       return MARGIN.top + (yAxis.reverse ? ratio : 1 - ratio) * PLOT_HEIGHT;
     };
     const xTicks = xCategories
-      ? [...xCategories.entries()].filter((_, tickIndex, all) => tickIndex % Math.max(1, Math.ceil(all.length / 7)) === 0).map(([label, value]) => ({label, value}))
+      ? scientificCategoryTicks(xCategories)
       : scientificAxisTicks(xDomain, xAxis);
     const yTicks = yCategories
       ? [...yCategories.entries()].filter((_, tickIndex, all) => tickIndex % Math.max(1, Math.ceil(all.length / 6)) === 0).map(([label, value]) => ({label, value}))
       : scientificAxisTicks(yDomain, yAxis);
-    return {baseX, baseY, xDomain, yDomain, px, py, xTicks, yTicks};
+    return {baseX, baseY, xDomain, yDomain, px, py, xTicks, yTicks, comparableScatter};
   }, [data, panel.layers, viewport, xAxis, yAxis]);
 
   const colorLayer = panel.layers.find((layer) => layer.type === 'field2d' || layer.type === 'heatmap' || ((layer.type === 'scatter' || layer.type === 'line') && !!layer.color));
@@ -574,8 +628,10 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
         // A sub-pixel authored radius is legitimate for exported vector figures,
         // but disappears on an interactive display. Keep every point and enforce
         // only a visibility floor; density remains encoded by alpha accumulation.
-        const radius = Math.max(style.radius ?? 1.25, .9);
-        const opacity = style.opacity ?? (layer.type === 'scatter' ? .5 : .48);
+        const appearance = layer.type === 'scatter'
+          ? scientificScatterAppearance(style, length)
+          : {radius: Math.max(style.radius ?? 1.25, .9), opacity: style.opacity ?? .48};
+        const {radius, opacity} = appearance;
         const addPoint = (color: string, pointIndex: number) => {
           const x = geometry.px(xs[pointIndex] ?? null);
           const y = geometry.py(ys[pointIndex] ?? null);
@@ -735,15 +791,19 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
       const center = domain[0] + (domain[1] - domain[0]) * anchor;
       return [center + (domain[0] - center) * factor, center + (domain[1] - center) * factor];
     };
-    setViewport({x: scaled(geometry.xDomain, anchorX), y: scaled(geometry.yDomain, anchorY)});
+    setViewport({
+      x: clampScientificDomain(scaled(geometry.xDomain, anchorX), geometry.baseX),
+      y: clampScientificDomain(scaled(geometry.yDomain, anchorY), geometry.baseY),
+    });
   };
 
   const legendPosition = panel.display?.legend_position ?? 'top';
-  const inferredTitle = panel.title ?? panel.display?.colorbar_label ?? (figure.panels.length > 1
+  const fullInferredTitle = panel.title ?? panel.display?.colorbar_label ?? (figure.panels.length > 1
     ? (figure.plot_kind === 'profile' ? xAxis.label : (panel.layers[0] ? layerLabel(panel.layers[0]) : undefined))
     : undefined);
+  const inferredTitle = fullInferredTitle ? conciseScientificLabel(fullInferredTitle, 72) : undefined;
   const showLegend = (legendLayers.length > 1 || categoryLegend.length > 0) && panel.display?.legend !== false;
-  const legend = showLegend ? <div className="scientific-panel-legend" aria-label={`${inferredTitle ?? panel.id} series`}>
+  const legend = showLegend ? <div className="scientific-panel-legend" aria-label={`${fullInferredTitle ?? panel.id} series`}>
     {legendLayers.map(({layer, id, index: layerIndex}) => <button type="button" aria-pressed={!hidden.has(id)} className={hidden.has(id) ? 'is-muted' : ''} key={id} onClick={() => setHidden((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -756,10 +816,13 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
     })}><i style={{background: entry.color}} />{entry.label}</button>)}
   </div> : null;
 
-  return <article ref={panelRef} className="scientific-panel" style={{aspectRatio: panel.display?.aspect_ratio}}>
+  const colorbarCaption = panel.display?.colorbar_label
+    ? conciseScientificLabel(panel.display.colorbar_label, 40)
+    : null;
+  return <article ref={panelRef} className="scientific-panel">
     {(panel.label || inferredTitle || panel.subtitle || figure.panels.length > 1) ? <header className="scientific-panel-heading">
       <span className="scientific-panel-letter">{panel.label ?? String.fromCharCode(97 + index)}</span>
-      <div>{inferredTitle ? <strong>{inferredTitle}</strong> : null}{panel.subtitle ? <small>{panel.subtitle}</small> : null}</div>
+      <div>{inferredTitle ? <strong title={fullInferredTitle}>{inferredTitle}</strong> : null}{panel.subtitle ? <small title={panel.subtitle}>{conciseScientificLabel(panel.subtitle, 96)}</small> : null}</div>
     </header> : null}
     {legendPosition === 'top' ? legend : null}
     <div className="scientific-panel-canvas">
@@ -803,8 +866,14 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
             const xShift = dx / PLOT_WIDTH * xSpan * (xAxis.reverse ? 1 : -1);
             const yShift = dy / PLOT_HEIGHT * ySpan * (yAxis.reverse ? -1 : 1);
             setViewport({
-              x: [drag.current.viewport.x[0] + xShift, drag.current.viewport.x[1] + xShift],
-              y: [drag.current.viewport.y[0] + yShift, drag.current.viewport.y[1] + yShift],
+              x: clampScientificDomain(
+                [drag.current.viewport.x[0] + xShift, drag.current.viewport.x[1] + xShift],
+                geometry.baseX,
+              ),
+              y: clampScientificDomain(
+                [drag.current.viewport.y[0] + yShift, drag.current.viewport.y[1] + yShift],
+                geometry.baseY,
+              ),
             });
             setHover(null);
             return;
@@ -841,8 +910,24 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
         {geometry.xTicks.map((tick, tickIndex) => <g key={`x-${tickIndex}`}>
           {xAxis.grid ? <line x1={geometry.px(tick.value)} y1={MARGIN.top} x2={geometry.px(tick.value)} y2={MARGIN.top + PLOT_HEIGHT} className="scientific-grid" /> : null}
           <line x1={geometry.px(tick.value)} y1={MARGIN.top + PLOT_HEIGHT} x2={geometry.px(tick.value)} y2={MARGIN.top + PLOT_HEIGHT + 5} className="scientific-tick-mark" />
-          <text x={geometry.px(tick.value)} y={MARGIN.top + PLOT_HEIGHT + 20} textAnchor="middle" className="scientific-tick">{tick.label}</text>
+          <text
+            x={geometry.px(tick.value)}
+            y={MARGIN.top + PLOT_HEIGHT + 18 + (xAxis.scale === 'category' && geometry.xTicks.length > 6 ? tickIndex % 2 * 11 : 0)}
+            textAnchor="middle"
+            className={`scientific-tick${xAxis.scale === 'category' && geometry.xTicks.length > 6 ? ' scientific-category-tick' : ''}`}
+          ><title>{tick.label}</title>{conciseScientificLabel(tick.label, 16)}</text>
         </g>)}
+        {xAxis.scale === 'category' && geometry.yDomain[0] < 0 && geometry.yDomain[1] > 0
+          ? <line x1={MARGIN.left} y1={geometry.py(0)} x2={MARGIN.left + PLOT_WIDTH} y2={geometry.py(0)} className="scientific-zero-reference" />
+          : null}
+        {geometry.comparableScatter ? <line
+          x1={geometry.px(Math.max(geometry.xDomain[0], geometry.yDomain[0]))}
+          y1={geometry.py(Math.max(geometry.xDomain[0], geometry.yDomain[0]))}
+          x2={geometry.px(Math.min(geometry.xDomain[1], geometry.yDomain[1]))}
+          y2={geometry.py(Math.min(geometry.xDomain[1], geometry.yDomain[1]))}
+          className="scientific-identity-reference"
+          clipPath={`url(#${clipId})`}
+        /> : null}
         <path d={`M${MARGIN.left},${MARGIN.top} V${MARGIN.top + PLOT_HEIGHT} H${MARGIN.left + PLOT_WIDTH}`} className="scientific-axis" />
         <g clipPath={`url(#${clipId})`}>
           {panel.layers.map((layer, layerIndex) => {
@@ -1008,8 +1093,8 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
             </g>;
           })}
         </g>
-        <text x={MARGIN.left + PLOT_WIDTH / 2} y={HEIGHT - 13} textAnchor="middle" className="scientific-axis-label">{xAxis.label ?? xAxis.field}{xAxis.units ? ` (${xAxis.units})` : ''}</text>
-        <text x="17" y={MARGIN.top + PLOT_HEIGHT / 2} textAnchor="middle" transform={`rotate(-90 17 ${MARGIN.top + PLOT_HEIGHT / 2})`} className="scientific-axis-label">{yAxis.label ?? yAxis.field}{yAxis.units ? ` (${yAxis.units})` : ''}</text>
+        <text x={MARGIN.left + PLOT_WIDTH / 2} y={HEIGHT - 13} textAnchor="middle" className="scientific-axis-label"><title>{xCaption.full}</title>{xCaption.visible}</text>
+        <text x="17" y={MARGIN.top + PLOT_HEIGHT / 2} textAnchor="middle" transform={`rotate(-90 17 ${MARGIN.top + PLOT_HEIGHT / 2})`} className="scientific-axis-label"><title>{yCaption.full}</title>{yCaption.visible}</text>
         {!fieldCategories.length && colorValues.length && panel.display?.colorbar !== false ? <g><rect className="scientific-colorbar" x={WIDTH - 45} y={MARGIN.top + 8} width="9" height={PLOT_HEIGHT - 16} fill={`url(#${gradientId})`} />
           <line x1={WIDTH - 35} y1={MARGIN.top + 8} x2={WIDTH - 31} y2={MARGIN.top + 8} className="scientific-tick-mark" />
           <line x1={WIDTH - 35} y1={MARGIN.top + PLOT_HEIGHT / 2} x2={WIDTH - 31} y2={MARGIN.top + PLOT_HEIGHT / 2} className="scientific-tick-mark" />
@@ -1017,7 +1102,7 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
           <text x={WIDTH - 28} y={MARGIN.top + 12} className="scientific-colorbar-tick">{decimalText(colorDomain[1])}</text>
           <text x={WIDTH - 28} y={MARGIN.top + PLOT_HEIGHT / 2 + 4} className="scientific-colorbar-tick">{decimalText((colorDomain[0] + colorDomain[1]) / 2)}</text>
           <text x={WIDTH - 28} y={MARGIN.top + PLOT_HEIGHT - 4} className="scientific-colorbar-tick">{decimalText(colorDomain[0])}</text>
-          {panel.display?.colorbar_label ? <text x={WIDTH - 3} y={MARGIN.top + PLOT_HEIGHT / 2} textAnchor="middle" transform={`rotate(-90 ${WIDTH - 3} ${MARGIN.top + PLOT_HEIGHT / 2})`} className="scientific-colorbar-label">{panel.display.colorbar_label}</text> : null}</g> : null}
+          {panel.display?.colorbar_label && colorbarCaption ? <text x={WIDTH - 3} y={MARGIN.top + PLOT_HEIGHT / 2} textAnchor="middle" transform={`rotate(-90 ${WIDTH - 3} ${MARGIN.top + PLOT_HEIGHT / 2})`} className="scientific-colorbar-label"><title>{panel.display.colorbar_label}</title>{colorbarCaption}</text> : null}</g> : null}
         {hover ? <g pointerEvents="none"><line x1={hover.x} y1={MARGIN.top} x2={hover.x} y2={MARGIN.top + PLOT_HEIGHT} className="scientific-hover-line" /><circle cx={hover.x} cy={hover.y} r="4" className="scientific-hover-point" /></g> : null}
       </svg>
       <div className="scientific-panel-controls" role="group" aria-label="Chart zoom controls">
@@ -1035,6 +1120,8 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
 
 export function ScientificView({payload, compactHeader = false, featureId}: {payload: ScientificPayload; compactHeader?: boolean; featureId?: string}): React.JSX.Element {
   const figure = useMemo(() => normalizeScientificFigure(payload), [payload]);
+  const visibleFigureTitle = figure.title ? conciseScientificLabel(figure.title, 120) : undefined;
+  const visibleFigureSubtitle = figure.subtitle ? conciseScientificLabel(figure.subtitle, 120) : undefined;
   const columns = figure.layout?.columns ?? (figure.panels.length === 1 ? 1 : 2);
   const autoHeroLayout = figure.panels.length === 3 && !figure.panels.some((panel) => panel.grid);
   const themeStyle = {
@@ -1046,8 +1133,8 @@ export function ScientificView({payload, compactHeader = false, featureId}: {pay
   } as React.CSSProperties;
   return <section className={`scientific-figure scientific-columns-${columns}${autoHeroLayout ? ' scientific-auto-hero' : ''}${compactHeader ? ' scientific-compact' : ''}`} style={themeStyle}>
     {!compactHeader && (figure.title || figure.subtitle) ? <header className="scientific-figure-heading">
-      {figure.title ? <h2>{figure.title}</h2> : null}
-      {figure.subtitle ? <p>{figure.subtitle}</p> : null}
+      {visibleFigureTitle ? <h2 title={figure.title}>{visibleFigureTitle}</h2> : null}
+      {visibleFigureSubtitle ? <p title={figure.subtitle}>{visibleFigureSubtitle}</p> : null}
     </header> : null}
     <div className="scientific-panel-grid">
       {figure.panels.map((panel, index) => <div key={panel.id} className="scientific-panel-slot" style={{

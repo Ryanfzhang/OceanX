@@ -1,4 +1,4 @@
-"""Frozen entry point for the Ocean Research Partner Desktop sidecar."""
+"""Frozen entry point for the OceanX Desktop sidecar."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
-"""Direct Jina Reader access for the Literature Expert.
+"""Direct Jina Reader access for the Search Expert.
 
 This is deliberately a thin provider connection.  It does not create a paper
-record, normalize a corpus, index text, or copy full text into OceanMind's
+record, normalize a corpus, index text, or copy full text into OceanX's
 database.  The returned Markdown remains ordinary tool context.
 """
 
@@ -22,7 +22,7 @@ from oceanx.agent_tools import (
 )
 
 JINA_READER_ENDPOINT = "https://r.jina.ai"
-# A whole paper must still leave room for the WorkOrder, prior evidence, and
+# A whole paper must still leave room for the delegated question, prior evidence, and
 # the Expert's answer in the next model turn.  This is a context bound, not a
 # stored or preprocessed representation.
 MAX_JINA_MARKDOWN_CHARS = 160_000
@@ -74,7 +74,7 @@ class JinaReaderTool(BaseTool):
     description = (
         "Read one selected public paper or web source directly through Jina Reader and return "
         "its Markdown. Use only after the acquisition preference permits reading that source. "
-        "This is direct reading context, not an OceanMind paper database or normalized corpus."
+        "This is direct reading context, not an OceanX paper database or normalized corpus."
     )
     input_model = JinaReaderInput
 
@@ -131,7 +131,7 @@ class JinaReaderTool(BaseTool):
         if len(markdown) > MAX_JINA_MARKDOWN_CHARS:
             markdown = (
                 markdown[:MAX_JINA_MARKDOWN_CHARS].rstrip()
-                + "\n\n[OceanMind context limit: Jina Markdown was truncated. "
+                + "\n\n[OceanX context limit: Jina Markdown was truncated. "
                 "Do not describe this source as fully reviewed.]"
             )
         return ToolResult(

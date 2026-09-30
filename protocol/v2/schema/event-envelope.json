@@ -1367,7 +1367,7 @@
     },
     "PaperSelectionOptionPayload": {
       "additionalProperties": false,
-      "description": "One Literature Expert-curated paper presented by the Coordinator.",
+      "description": "One Search Expert-curated paper presented by the Coordinator.",
       "properties": {
         "citation": {
           "anyOf": [
@@ -1493,7 +1493,6 @@
             "task_not_found",
             "task_revision_conflict",
             "task_active_request_conflict",
-            "task_checkpoint_incompatible",
             "store_error",
             "cancelled"
           ],
@@ -2771,11 +2770,6 @@
     "TaskSnapshotPayload": {
       "additionalProperties": false,
       "properties": {
-        "checkpoint": {
-          "additionalProperties": true,
-          "title": "Checkpoint",
-          "type": "object"
-        },
         "delivery_manifests": {
           "default": [],
           "items": {
@@ -2852,7 +2846,6 @@
           "items": {
             "$ref": "#/$defs/TeamSnapshotPayload"
           },
-          "maxItems": 100,
           "title": "Team Snapshots",
           "type": "array"
         },
@@ -2900,27 +2893,9 @@
           "default": null,
           "title": "Active Request Id"
         },
-        "conversation_generation": {
-          "minimum": 0,
-          "title": "Conversation Generation",
-          "type": "integer"
-        },
         "created_at": {
           "title": "Created At",
           "type": "string"
-        },
-        "stable_checkpoint_id": {
-          "anyOf": [
-            {
-              "pattern": "^chk_[A-Za-z0-9_-]+$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Stable Checkpoint Id"
         },
         "status": {
           "enum": [
@@ -2965,7 +2940,6 @@
         "title",
         "status",
         "task_revision",
-        "conversation_generation",
         "created_at",
         "updated_at"
       ],
@@ -3076,6 +3050,19 @@
           "title": "Agent Id",
           "type": "string"
         },
+        "agent_run_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Run Id"
+        },
         "authority": {
           "enum": [
             "coordinator",
@@ -3084,6 +3071,18 @@
           ],
           "title": "Authority",
           "type": "string"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
         },
         "expert_key": {
           "anyOf": [
@@ -3120,10 +3119,9 @@
           "default": null,
           "title": "Profile Id"
         },
-        "result_summary": {
+        "report_path": {
           "anyOf": [
             {
-              "maxLength": 8000,
               "type": "string"
             },
             {
@@ -3131,7 +3129,19 @@
             }
           ],
           "default": null,
-          "title": "Result Summary"
+          "title": "Report Path"
+        },
+        "report_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report Title"
         },
         "semantic_role": {
           "maxLength": 256,
@@ -3168,10 +3178,9 @@
           "default": null,
           "title": "Task Goal"
         },
-        "work_order_id": {
+        "updated_at": {
           "anyOf": [
             {
-              "maxLength": 128,
               "type": "string"
             },
             {
@@ -3179,7 +3188,7 @@
             }
           ],
           "default": null,
-          "title": "Work Order Id"
+          "title": "Updated At"
         }
       },
       "required": [
@@ -3205,12 +3214,9 @@
         },
         "category": {
           "enum": [
-            "framing",
-            "data",
             "science",
             "methods",
             "evidence",
-            "visualization",
             "discussion"
           ],
           "title": "Category",
@@ -3440,7 +3446,6 @@
           "items": {
             "$ref": "#/$defs/TeamAgentPayload"
           },
-          "maxItems": 13,
           "minItems": 1,
           "title": "Agents",
           "type": "array"
@@ -3450,7 +3455,6 @@
           "items": {
             "$ref": "#/$defs/TeamDependencyPayload"
           },
-          "maxItems": 16,
           "title": "Dependencies",
           "type": "array"
         },
@@ -3459,7 +3463,6 @@
           "items": {
             "$ref": "#/$defs/TeamInteractionPayload"
           },
-          "maxItems": 16,
           "title": "Interactions",
           "type": "array"
         },
@@ -3518,7 +3521,6 @@
           "items": {
             "$ref": "#/$defs/TeamTodoPayload"
           },
-          "maxItems": 6,
           "title": "Todos",
           "type": "array"
         }
@@ -3535,6 +3537,31 @@
       "additionalProperties": false,
       "description": "Coordinator-authored plan item with execution progress only.\n\n``state`` deliberately stops at ``result_returned``. Whether that result is\nsufficient, needs a follow-up, or completes the user's request remains a\nCoordinator decision.",
       "properties": {
+        "agent_run_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Run Id"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
         "depends_on": {
           "default": [],
           "items": {
@@ -3580,10 +3607,9 @@
           "title": "Question",
           "type": "string"
         },
-        "result_summary": {
+        "report_path": {
           "anyOf": [
             {
-              "maxLength": 8000,
               "type": "string"
             },
             {
@@ -3591,7 +3617,19 @@
             }
           ],
           "default": null,
-          "title": "Result Summary"
+          "title": "Report Path"
+        },
+        "report_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report Title"
         },
         "session_round": {
           "anyOf": [
@@ -3624,10 +3662,9 @@
           "title": "Todo Id",
           "type": "string"
         },
-        "work_order_id": {
+        "updated_at": {
           "anyOf": [
             {
-              "maxLength": 128,
               "type": "string"
             },
             {
@@ -3635,7 +3672,7 @@
             }
           ],
           "default": null,
-          "title": "Work Order Id"
+          "title": "Updated At"
         }
       },
       "required": [

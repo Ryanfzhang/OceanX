@@ -6,15 +6,49 @@ import asyncio
 import inspect
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from oceanx.backend.auth import Principal
-from oceanx.protocol.v2.models import ClientKind, EventEnvelope
-
+from oceanx.protocol.v2.models import ClientKind, EventEnvelope, RequestCompletedEvent
 
 EventSender = Callable[[EventEnvelope], Awaitable[None] | None]
 HandshakeValidator = Callable[[str | None, str | None], Awaitable[bool] | bool]
+
+
+def _delivery_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Project a terminal result for transport, without mutating durable records.
+
+    Full plans, Expert reports and code execution logs already live in the
+    request/team/execution stores. They are not rendering inputs: the desktop
+    gets its Canvas from team snapshots and loads participant transcripts on
+    demand. Repeating the full audit trail here can drop the *entire* final
+    answer at the desktop's frame-size guard. Keep usage for batch consumers.
+    """
+    projected = dict(result)
+    provenance = result.get("team_provenance")
+    if isinstance(provenance, dict):
+        detail_keys = ("work_plan", "work", "code_executions")
+        omitted = [key for key in detail_keys if key in provenance]
+        if omitted:
+            summary = {key: value for key, value in provenance.items() if key not in detail_keys}
+            for key, count_key in (("work", "work_count"), ("code_executions", "code_execution_count")):
+                if isinstance(provenance.get(key), list):
+                    summary[count_key] = len(provenance[key])
+            summary["details_omitted"] = omitted
+            projected["team_provenance"] = summary
+
+    # request.status.get wraps a persisted terminal event. Apply the same
+    # projection to old oversized records on replay, never rewriting the DB.
+    terminal = result.get("terminal_event")
+    if isinstance(terminal, dict) and terminal.get("type") == "request.completed":
+        payload = terminal.get("payload")
+        if isinstance(payload, dict) and isinstance(payload.get("result"), dict):
+            projected["terminal_event"] = {
+                **terminal,
+                "payload": {**payload, "result": _delivery_result(payload["result"])},
+            }
+    return projected
 
 
 @dataclass
@@ -24,6 +58,7 @@ class BackendClient:
     transport: Literal["stdio", "websocket"]
     expected_client_kind: ClientKind
     sender: EventSender
+    verified_local_desktop: bool = False
     handshake_validator: HandshakeValidator | None = None
     connection_id: str = field(default_factory=lambda: f"conn_{uuid4().hex}")
     client_id: str | None = None
@@ -118,6 +153,14 @@ class EventBus:
     async def _send(self, client: BackendClient, event: EventEnvelope) -> None:
         if client.closed:
             return
+        # All delivery paths (live, reconnect replay, request status, stdio and
+        # websocket) share this boundary. Keep the committed event unmodified.
+        if isinstance(event, RequestCompletedEvent):
+            event = event.model_copy(update={
+                "payload": event.payload.model_copy(update={
+                    "result": _delivery_result(event.payload.result),
+                }),
+            })
         client.sequence += 1
         sequenced = event.model_copy(update={"sequence": client.sequence})
         result = client.sender(sequenced)

@@ -6,7 +6,7 @@
 
 ## Context
 
-Ocean Research Partner must be able to cancel an agent request, safely stop an
+OceanX must be able to cancel an agent request, safely stop an
 analysis attempt, and survive a backend restart without turning a client retry
 into a second mutation.  These behaviors cannot be inferred from a stream of
 assistant text.  The first implementation deliberately has one foreground

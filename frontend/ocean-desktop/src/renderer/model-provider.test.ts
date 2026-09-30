@@ -4,8 +4,8 @@ import {editableModelId, isConcreteModelId, isModelProviderReady} from './model-
 
 describe('model provider readiness', () => {
   const status = (model: string, configured: boolean) => {
-    const role = {profile: 'role-api', label: 'Role API', provider: 'openai', model, configured};
-    return {coordinator: role, expert: role, skillCurator: role, configured};
+    const role = {profile: 'role-api', label: 'Role API', provider: 'openai', model, configured, imageInputs: false};
+    return {coordinator: role, expert: role, configured};
   };
   it('does not treat the inherited default model as callable', () => {
     expect(isConcreteModelId('default')).toBe(false);

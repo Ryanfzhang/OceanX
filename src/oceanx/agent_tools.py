@@ -1,4 +1,4 @@
-"""OceanMind tool contracts and LangChain adapters.
+"""OceanX tool contracts and LangChain adapters.
 
 Domain tools remain ordinary Python objects. This module is the only place
 that knows how LangChain invokes a tool, keeping scientific services independent
@@ -34,6 +34,7 @@ class ToolResult:
     output: str
     is_error: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
+    content: list[dict[str, Any]] | None = None
 
 
 class ToolEffect(str, Enum):
@@ -110,7 +111,7 @@ def _adapt_tool(
     cwd: Path,
     operation_id_factory: Any,
 ) -> LangChainBaseTool:
-    async def invoke(config: RunnableConfig, **raw: Any) -> str:
+    async def invoke(config: RunnableConfig, **raw: Any) -> str | list[dict[str, Any]]:
         tool_call_id = str(raw.pop("tool_call_id"))
         arguments = tool.input_model.model_validate(raw)
         configurable = dict(config.get("configurable", {}))
@@ -131,7 +132,7 @@ def _adapt_tool(
         )
         if result.is_error:
             raise ToolException(result.output)
-        return result.output
+        return result.content if result.content is not None else result.output
 
     invoke.__name__ = f"invoke_{tool.name}"
     invoke.__doc__ = tool.description

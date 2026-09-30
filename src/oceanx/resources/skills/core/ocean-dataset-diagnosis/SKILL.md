@@ -1,16 +1,17 @@
 ---
 name: ocean-dataset-diagnosis
-description: Diagnose coordinate conventions, units, masks, grids, and missingness before an Ocean analysis is designed or run.
+description: Establish what supplied Ocean data contain and resolve coordinate, unit, grid or coverage uncertainties relevant to a research question.
 metadata:
   origin: oceanmind
   roles:
-    - data_reproducibility_expert
+    - ocean_process_expert
+    - statistical_inference_expert
 ---
 
 # Ocean Dataset Diagnosis
 
 ## when_to_use
-Use before a computation depends on a new NetCDF, Zarr, gridded product, station collection, or model output.
+Use for data familiarization or when an analysis depends on unresolved metadata in a supplied dataset.
 
 ## research_objective
 Establish what the data can represent and which coordinate or metadata ambiguities could invalidate an analysis.
@@ -21,10 +22,10 @@ Establish what the data can represent and which coordinate or metadata ambiguiti
 - What are resolution, chunks, missing ratio, and plausible land or boundary contamination risks?
 
 ## evidence_requirements
-Keep dataset identity, materialization level, coordinate summary, units, and a bounded diagnostic result as DatasetArtifact and DatasetDiagnosisArtifact evidence.
+Link the relevant metadata findings to the supplied files and state what remains unknown.
 
 ## process_checkpoints
-Separate metadata inspection from numerical analysis. Flag uncertainty rather than guessing a CF convention.
+Distinguish metadata facts from derived quantities. Flag uncertainty rather than guessing a CF convention.
 
 Establish product identity from file attributes, source-variable and source-file records, and
 available processing provenance, not the directory name or a label in the query. Distinguish
@@ -33,14 +34,11 @@ grid after interpolation, regridding, or temporal averaging. If metadata conflic
 report the discrepancy and its implications for the planned diagnostic. If lineage is incomplete,
 keep identity unresolved rather than assigning a familiar product name.
 
-## expected_artifacts
-DatasetArtifact and DatasetDiagnosisArtifact.
-
 ## quality_gates
 Never assume a positive-down depth, Gregorian calendar, regular grid, or Celsius/Kelvin conversion without evidence.
 
 ## stop_or_escalation_conditions
-Escalate when coordinate semantics, units, grid metrics, or calendar cannot be established from the dataset and source documentation.
+Explain which conclusions are limited if material coordinate semantics, units, grid metrics or calendar remain unresolved.
 
 ## relevant_references
 `references/data/cf-conventions.md`, `references/data/calendars.md`, `references/data/grids-and-coordinates.md`, `references/data/common-variables-and-units.md`.

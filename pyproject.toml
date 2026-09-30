@@ -14,8 +14,13 @@ authors = [
 ]
 
 dependencies = [
-    "deepagents~=0.7.6",
-    "langgraph-checkpoint-sqlite>=3.0",
+    "deepagents==0.7.9",
+    "langgraph-cli[inmem]>=0.4.31,<0.5",
+    "langgraph-api==0.13.3",
+    "langgraph-runtime-inmem==0.33.4",
+    "jupyter-client>=8.6,<9",
+    "ipykernel>=6.29,<8",
+    "websockets>=14,<17",
     "langchain-openai>=1.2",
     "langchain-anthropic>=1.5",
     "langchain-deepseek>=1.1",
@@ -30,6 +35,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "langgraph-checkpoint-sqlite>=3.0", # isolated checkpoint unit tests, not the product runner
     "pexpect>=4.9.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",

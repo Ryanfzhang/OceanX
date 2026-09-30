@@ -90,6 +90,20 @@ def _array_metadata(name: str, variable: Any, *, coordinate: bool = False) -> di
         extent = _coordinate_extent(variable)
         if extent is not None:
             result["extent"] = extent
+        if variable.ndim == 1 and 1 < variable.size <= 100_000:
+            import numpy as np
+            values = np.asarray(variable.values)
+            units = attrs.get("units", "unspecified")
+            if np.issubdtype(values.dtype, np.datetime64):
+                steps = np.diff(values) / np.timedelta64(1, "s")
+                units = "seconds"
+            elif np.issubdtype(values.dtype, np.number):
+                steps = np.diff(values.astype(float))
+            else:
+                steps = np.array([])
+            if steps.size and np.isfinite(steps).all():
+                result["spacing"] = {"min": float(steps.min()), "max": float(steps.max()),
+                    "units": units, "regular": bool(np.allclose(steps, steps[0], rtol=1e-6, atol=1e-12))}
     return result
 
 
@@ -126,22 +140,19 @@ def _inspect_xarray(path: Path, format_hint: str) -> dict[str, Any]:
 def _collection_candidates(path: Path) -> list[tuple[Path, str]]:
     zarr = sorted(
         child for child in path.iterdir()
-        if child.is_dir()
+        if not child.is_symlink() and child.is_dir()
         and (
             child.suffix.lower() == ".zarr"
             or (child / ".zgroup").is_file()
             or (child / "zarr.json").is_file()
         )
     )
-    # Equivalent Zarr stores are the preferred task input; avoid describing the
-    # same variables a second time from large NetCDF siblings.
-    if zarr:
-        return [(child, "zarr") for child in zarr[:24]]
     arrays = sorted(
         child for child in path.iterdir()
-        if child.is_file() and child.suffix.lower() in _ARRAY_FORMATS
+        if not child.is_symlink() and child.is_file() and child.suffix.lower() in _ARRAY_FORMATS
     )
-    return [(child, child.suffix.lstrip(".") or "netcdf") for child in arrays[:24]]
+    return sorted([(child, "zarr") for child in zarr]
+                  + [(child, child.suffix.lstrip(".") or "netcdf") for child in arrays])
 
 
 def _spatial_context(coordinates: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -177,7 +188,7 @@ def _inspect_collection(path: Path) -> dict[str, Any]:
     members: list[dict[str, Any]] = []
     shared_coordinates: list[dict[str, Any]] | None = None
     shared_dimensions: dict[str, int] | None = None
-    for member_path, format_hint in candidates:
+    for member_path, format_hint in candidates[:24]:
         try:
             metadata = _inspect_xarray(member_path, format_hint)
         except Exception as exc:  # noqa: BLE001 - normalize individual engine failures
@@ -213,7 +224,11 @@ def _inspect_collection(path: Path) -> dict[str, Any]:
         raise ValueError("No supported dataset member could be inspected")
     result: dict[str, Any] = {
         "dataset_layout": "collection",
+        "coordinate_scope": "first_inspected_member; differing member coordinates are recorded separately",
         "member_count": len(members),
+        "candidate_count": len(candidates),
+        "omitted_members": max(0, len(candidates) - len(members)),
+        "member_selection": "Direct NetCDF files and Zarr stores, up to 24; no nested folders or symbolic links",
         "dimensions": shared_dimensions or {},
         "coordinates": shared_coordinates,
         "members": members,

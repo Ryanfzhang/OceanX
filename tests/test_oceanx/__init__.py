@@ -1,2 +1,2 @@
-"""Tests for the Ocean Research Partner application layer."""
+"""Tests for the OceanX application layer."""
 

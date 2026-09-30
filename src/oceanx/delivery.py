@@ -1,4 +1,4 @@
-"""Project task outputs into the two OceanMind result capabilities."""
+"""Project task outputs into the two OceanX result capabilities."""
 
 from __future__ import annotations
 

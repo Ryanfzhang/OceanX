@@ -2,7 +2,7 @@
 
 ## Current Scope
 
-Ocean Research Partner Desktop is a local-first research workbench under active
+OceanX Desktop is a local-first research workbench under active
 development. A macOS packaged-dir build and frozen-sidecar handshake are
 verified in this repository. The Windows package CI spike builds the target
 bundle, includes the native `ocean-sandbox-broker.exe` next to the frozen

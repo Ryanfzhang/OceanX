@@ -14,10 +14,9 @@ from oceanx.desktop_contract import (
     DESKTOP_RUNTIME_CONNECTIONS,
 )
 from oceanx.sandbox import (
-    SandboxUnavailableError,
-    current_python_runtime,
     get_sandbox_execution_capabilities,
 )
+from oceanx.sandbox.runtime_probe import runtime_capabilities
 from oceanx.scientific_runtime import frozen_scientific_runtime_capability
 from oceanx.skills import ocean_skill_metadata
 
@@ -38,39 +37,39 @@ def ocean_doctor() -> dict[str, Any]:
     """Describe the exact local execution capabilities without attempting installation."""
 
     sandbox = get_sandbox_execution_capabilities()
-    interpreter_error: str | None = None
-    selected_runtime = None
-    try:
-        selected_runtime = current_python_runtime()
-        interpreter_executable = str(selected_runtime.executable)
-    except (OSError, RuntimeError, SandboxUnavailableError) as exc:
-        interpreter_executable = None
-        interpreter_error = str(exc)
-    expert_execution_available = sandbox.available and interpreter_executable is not None
+    facts = runtime_capabilities()
+    interpreter = facts.get("interpreter") or {}
+    # Availability here means the execution tool can be attempted. A pending
+    # diagnostic must not disable it; real launches validate their interpreter.
+    expert_execution_available = sandbox.available
     frozen_runtime = frozen_scientific_runtime_capability()
     extras = {
         name: {
-            "available": selected_runtime is not None
-            and name in selected_runtime.available_modules,
+            "available": {"available": True, "unavailable": False}.get(
+                facts["modules"].get(name, {}).get("status")
+            ),
+            "status": facts["modules"].get(name, {}).get("status", "unknown"),
             "purpose": purpose,
         }
         for name, purpose in _OPTIONAL_EXTRAS.items()
     }
-    netcdf_available = extras["netCDF4"]["available"] or (
-        extras["h5netcdf"]["available"] and extras["h5py"]["available"]
+    nc, h5nc, h5 = (extras[name]["available"] for name in ("netCDF4", "h5netcdf", "h5py"))
+    netcdf_available = (
+        True if nc is True or (h5nc is True and h5 is True)
+        else False if nc is False and (h5nc is False or h5 is False)
+        else None
     )
     return {
         "schema_version": "ocean-doctor/v1",
         "backend_schema": DESKTOP_BACKEND_SCHEMA,
         "interpreter": {
-            "executable": interpreter_executable,
+            "executable": interpreter.get("executable"),
             "implementation": platform.python_implementation(),
-            "version": selected_runtime.version if selected_runtime is not None else None,
-            "environment": (
-                selected_runtime.environment_name if selected_runtime is not None else "ocean"
-            ),
-            "prefix": str(selected_runtime.prefix) if selected_runtime is not None else None,
+            "version": interpreter.get("version"),
+            "environment": interpreter.get("environment"),
+            "prefix": interpreter.get("prefix"),
         },
+        "capability_probe": facts,
         "sandbox": asdict(sandbox),
         "frozen_scientific_runtime": frozen_runtime,
         "extras": extras,
@@ -87,24 +86,22 @@ def ocean_doctor() -> dict[str, Any]:
             "expert_code_execution": (
                 None
                 if expert_execution_available
-                else interpreter_error or sandbox.reason
+                else sandbox.reason
             ),
             "web_search": None,
             "jina_reader": None,
-            "maps": None if extras["cartopy"]["available"] else "cartopy is not installed",
-            "zarr": None if extras["zarr"]["available"] else "zarr is not installed",
-            "gsw": None if extras["gsw"]["available"] else "gsw is not installed",
+            "maps": facts["modules"].get("cartopy", {}).get("error"),
+            "zarr": facts["modules"].get("zarr", {}).get("error"),
+            "gsw": facts["modules"].get("gsw", {}).get("error"),
             "netcdf": (
                 None
-                if netcdf_available
-                else "install h5netcdf with h5py or install netCDF4"
+                if netcdf_available is not False
+                else "Neither probed NetCDF backend is usable; see extras and capability_probe."
             ),
         },
         "runtime": {
             "backend_sys_prefix": sys.prefix,
-            "sandbox_sys_prefix": (
-                str(selected_runtime.prefix) if selected_runtime is not None else None
-            ),
+            "sandbox_sys_prefix": interpreter.get("prefix"),
         },
     }
 

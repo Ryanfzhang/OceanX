@@ -98,6 +98,64 @@ def test_session_submit_accepts_a_typed_literature_acquisition_preference() -> N
     assert request.payload.literature_acquisition_mode == "search_only"
 
 
+def test_session_submit_accepts_an_explicit_workflow_mode() -> None:
+    request = parse_request(
+        {
+            "protocol_version": 2,
+            "request_id": "req_direct_mode",
+            "type": "session.submit",
+            "payload": {
+                "text": "Summarize the available variables",
+                "workflow_mode": "standard",
+            },
+            "context": {
+                "session_id": "session_direct",
+                "workspace_id": "workspace_direct",
+                "client_id": "desktop_direct",
+                "task_id": "task_direct",
+            },
+            "expected_workspace_revision": 0,
+        }
+    )
+
+    assert request.payload.workflow_mode == "standard"
+
+
+def test_source_import_accepts_one_neutral_file_or_folder_locator() -> None:
+    request = parse_request(
+        {
+            "protocol_version": 2,
+            "request_id": "req_source_import",
+            "type": "source.import",
+            "payload": {
+                "relative_path": "materials/experiment",
+                "title": "Experiment materials",
+            },
+            "context": {
+                "session_id": "session_source",
+                "workspace_id": "workspace_source",
+                "client_id": "desktop_source",
+                "task_id": "task_source",
+            },
+            "expected_workspace_revision": 0,
+        }
+    )
+
+    assert request.type == "source.import"
+    assert request.payload.relative_path == "materials/experiment"
+    assert request.payload.local_path is None
+    with pytest.raises(ValidationError):
+        parse_request(
+            {
+                **request.model_dump(mode="json"),
+                "payload": {
+                    **request.payload.model_dump(mode="json"),
+                    "local_path": "/tmp/duplicate",
+                },
+            }
+        )
+
+
 def test_paper_selection_interaction_has_a_typed_unique_shortlist() -> None:
     payload = InteractionRequestedPayload(
         interaction_id="int_paper_selection",
@@ -147,7 +205,7 @@ def test_agent_transcript_request_is_task_scoped_and_read_only() -> None:
                 "task_id": "task_history",
                 "parent_request_id": "req_analysis",
                 "agent_id": "job_temperature",
-                "work_order_id": "work_temperature_round_1",
+                "agent_run_id": "run_temperature_round_1",
             },
             "context": {
                 "session_id": "session_history",
@@ -246,7 +304,7 @@ def test_team_snapshot_event_carries_real_topology_and_interaction_state():
                     },
                     {
                         "agent_id": "work_data",
-                        "profile_id": "data_reproducibility_expert",
+                        "profile_id": "ocean_process_expert",
                         "semantic_role": "Data & Reproducibility Expert",
                         "authority": "expert",
                         "status": "working",

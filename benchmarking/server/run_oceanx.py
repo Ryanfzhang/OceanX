@@ -1,17 +1,14 @@
-"""Run OceanX with a benchmark-only file delivery adapter.
+"""Run OceanX through its production Agent Server path.
 
-Q07–Q30 append an explicit research-tree instruction to OceanX's submitted prompt.
-The scientific query and execution sandbox are unchanged. All model roles use the
+The scientific query is submitted unchanged, without a research-tree instruction. All model roles use the
 root benchmark.yaml API configuration in this process only.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
 import json
 import os
-import re
 import sys
 from pathlib import Path
 from uuid import uuid4
@@ -22,12 +19,6 @@ _original_interaction_answer = batch.interaction_answer
 
 
 def oceanx_prompt(case):
-    if re.fullmatch(r"Q(?:0[7-9]|[12][0-9]|30)", case.id):
-        return case.query + (
-            "\n\nUse Research Tree to guide this investigation. As Coordinator, create and "
-            "maintain the tree as the research progresses, and include the saved tree "
-            "in your final answer."
-        )
     return case.query
 
 
@@ -73,7 +64,6 @@ class BenchmarkClient(batch.BatchClient):
 
 def main():
     if len(sys.argv) == 3 and sys.argv[1] == "--backend":
-        from oceanx_delivery import install
         from benchmark_models import install_oceanx_models
 
         model_policy = install_oceanx_models()
@@ -81,24 +71,15 @@ def main():
         from oceanx.cli import app
 
         attempt = Path(sys.argv[2]).resolve()
-        install(attempt)
         batch._write_json(attempt / "model_protocol.json", model_policy)
-        batch._write_json(attempt / "delivery_protocol.json", {
-            "delivery_mode": "benchmark_files", "schema_version": 1,
-            "desktop_publication_bypassed": True,
-            "paper_selection": "select_all",
-            "adapter_sha256": hashlib.sha256(
-                Path(__file__).with_name("oceanx_delivery.py").read_bytes()
-            ).hexdigest(),
-        })
-        app(args=["backend", "--state-dir", str(attempt / "state"), "--no-skill-curator"])
+        app(args=["backend", "--state-dir", str(attempt / "state")])
         return
     parser = argparse.ArgumentParser(description=__doc__)
     query_input = parser.add_mutually_exclusive_group(required=True)
     query_input.add_argument("--queries", type=Path)
     query_input.add_argument("--query", help="A single ad-hoc test question")
     parser.add_argument("--dataset", action="append", default=[], type=Path)
-    parser.add_argument("--timeout", type=float, default=3600)
+    parser.add_argument("--timeout", type=float, default=None)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--config", type=Path, help="Root benchmark.yaml by default")

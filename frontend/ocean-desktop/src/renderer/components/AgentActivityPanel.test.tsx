@@ -11,23 +11,22 @@ const expert: TeamAgent = {
   authority: 'expert',
   status: 'completed',
   activity: '## Annual Oceanographic Baseline — Gulf of Mexico\n\nCompleted the baseline.',
-  work_order_id: 'wo-1',
+  agent_run_id: 'wo-1',
 };
 
 function transcriptWith(text: string): TeamAgentTranscript {
   return {
     agent_id: 'agent-1',
-    work_order_id: 'wo-1',
-    compaction_generation: 0,
+    agent_run_id: 'wo-1',
     messages: [
       {message_id: 'm1', role: 'coordinator', blocks: [{type: 'text', text}]},
     ],
   };
 }
 
-function renderPanel(transcript: TeamAgentTranscript): string {
+function renderPanel(transcript: TeamAgentTranscript, agent: TeamAgent = expert): string {
   return renderToStaticMarkup(<AgentActivityPanel
-    agent={expert}
+    agent={agent}
     profiles={[]}
     todos={[]}
     transcript={transcript}
@@ -37,38 +36,36 @@ function renderPanel(transcript: TeamAgentTranscript): string {
 }
 
 describe('AgentActivityPanel', () => {
-  it('renders a work-order JSON envelope as a structured assignment card', () => {
-    const text = 'Accept this assignment and return one compact candidate answer.\n\n' + JSON.stringify({
-      task_goal: '基于 CMEMS_oceanmind 数据集分析温盐结构',
-      done_when: '已核实数据集变量、空间与时间覆盖并写入报告',
-      outcome_intents: ['answer', 'report'],
-      sources: [{handle: 'source_1', kind: 'dataset', title: 'CMEMS_oceanmind'}],
+  it('uses the current profile name when opening an older Expert snapshot', () => {
+    const markup = renderPanel(transcriptWith('Completed.'));
+    expect(markup).toContain('Ocean Expert');
+    expect(markup).not.toContain('Ocean Process &amp; Mechanism Expert');
+  });
+
+  it('labels interrupted partial delivery without implying a scientific verdict', () => {
+    const markup = renderPanel(transcriptWith('Partial analysis'), {
+      ...expert, status: 'incomplete', activity: 'Execution interrupted; saved one result.',
     });
-    const markup = renderPanel(transcriptWith(text));
-
-    expect(markup).toContain('class="agent-assignment-card"');
-    expect(markup).toContain('基于 CMEMS_oceanmind 数据集分析温盐结构');
-    expect(markup).toContain('Done when');
-    expect(markup).toContain('已核实数据集变量、空间与时间覆盖并写入报告');
-    expect(markup).toContain('CMEMS_oceanmind (dataset)');
-    expect(markup).toContain('Full instructions');
-    // The raw JSON envelope must not be dumped into the conversation.
-    expect(markup).not.toContain('"task_goal"');
+    expect(markup).toContain('Partial result');
+    expect(markup).toContain('Execution interrupted');
+    expect(markup).not.toContain('>Incomplete<');
   });
 
-  it('folds unrecognized JSON payloads into a collapsible block', () => {
-    const markup = renderPanel(transcriptWith(JSON.stringify({findings: 'some structured note'})));
-
-    expect(markup).toContain('Structured payload');
-    expect(markup).not.toContain('agent-assignment-card');
+  it('keeps an evidence-limit answer completed and execution errors failed', () => {
+    const completed = renderPanel(transcriptWith('No independent climatology is available.'), expert);
+    expect(completed).toContain('>Completed<');
+    expect(completed).not.toContain('Partial result');
+    const failed = renderPanel(transcriptWith('API connection failed'), {
+      ...expert, status: 'failed', activity: 'API connection failed',
+    });
+    expect(failed).toContain('>Failed<');
+    expect(failed).toContain('API connection failed');
   });
 
-  it('keeps plain prose messages on the markdown path', () => {
+  it('renders native task questions as ordinary messages without a second assignment schema', () => {
     const markup = renderPanel(transcriptWith('分析已完成，结论如下。'));
 
     expect(markup).toContain('分析已完成，结论如下。');
-    expect(markup).not.toContain('agent-assignment-card');
-    expect(markup).not.toContain('Structured payload');
   });
 
   it('strips markdown noise from the header activity line', () => {
@@ -76,5 +73,18 @@ describe('AgentActivityPanel', () => {
 
     expect(markup).toContain('Annual Oceanographic Baseline');
     expect(markup).not.toContain('##');
+  });
+
+  it('renders saved Coordinator and Expert messages in timestamp order', () => {
+    const markup = renderPanel({
+      agent_id: 'agent-1',
+      agent_run_id: 'wo-1',
+      messages: [
+        {message_id: 'late', role: 'coordinator', created_at: '2026-09-17T11:20:00Z', blocks: [{type: 'text', text: 'Later follow-up'}]},
+        {message_id: 'early', role: 'expert', created_at: '2026-09-17T11:10:00Z', blocks: [{type: 'text', text: 'Earlier result'}]},
+      ],
+    });
+
+    expect(markup.indexOf('Earlier result')).toBeLessThan(markup.indexOf('Later follow-up'));
   });
 });

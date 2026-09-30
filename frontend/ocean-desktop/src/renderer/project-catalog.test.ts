@@ -9,7 +9,6 @@ const task = (id: string, status: ResearchTask['status'] = 'active'): ResearchTa
   title: `Task ${id}`,
   status,
   task_revision: 1,
-  conversation_generation: 0,
 });
 
 describe('project catalog', () => {

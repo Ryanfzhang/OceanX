@@ -234,7 +234,7 @@ export function App({config}: {config: OceanTerminalConfig}): React.JSX.Element 
 	return (
 		<Box flexDirection="column" paddingX={1}>
 			<Box borderStyle="single" borderColor="cyan" paddingX={1}>
-				<Text bold color="cyan">Ocean Research Partner</Text>
+				<Text bold color="cyan">OceanX</Text>
 				<Text> </Text>
 				<Text color={backend.session ? 'green' : 'yellow'}>
 					{backend.session ? 'connected' : 'connecting'}

@@ -1,5 +1,6 @@
 import {existsSync} from 'node:fs';
 import {posix, win32} from 'node:path';
+import process from 'node:process';
 
 // Both local desktop startup and sidecar builds use the activated environment.
 // A checkout's stale .venv must never override Conda activation.

@@ -14,7 +14,7 @@ retain the resulting record beside that candidate's release metadata.
 - The update configuration inside A is enabled, names the reviewed HTTPS
   manifest/feed hosts, and contains the approved Ed25519 public keys.
 - Each machine starts with no project workspace, no Python/Node development
-  runtime on `PATH`, and no previous Ocean Research Partner installation.
+  runtime on `PATH`, and no previous OceanX installation.
 - Use a disposable local workspace for lifecycle tests. Do not send a real
   research workspace or model credential to a release test machine.
 

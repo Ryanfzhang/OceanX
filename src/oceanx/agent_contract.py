@@ -1,4 +1,4 @@
-"""OceanMind-owned message and streaming contracts.
+"""OceanX-owned message and streaming contracts.
 
 The desktop protocol must not depend on a particular agent harness.  Deep
 Agents/LangGraph messages are translated into these small product-level types
@@ -34,7 +34,7 @@ class ToolResultBlock(BaseModel):
 
 
 class ConversationMessage(BaseModel):
-    """Serializable, provider-neutral task memory exposed to OceanMind."""
+    """Serializable, provider-neutral task memory exposed to OceanX."""
 
     role: Literal["user", "assistant", "tool"]
     content: list[TextBlock | ToolUseBlock | ToolResultBlock] = Field(default_factory=list)

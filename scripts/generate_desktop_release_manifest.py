@@ -272,7 +272,7 @@ def main() -> int:
         default=Path("frontend/ocean-desktop"),
         help="Desktop package directory containing package-lock.json",
     )
-    parser.add_argument("--name", default="Ocean Research Partner")
+    parser.add_argument("--name", default="OceanX")
     parser.add_argument("--version", required=True)
     arguments = parser.parse_args()
     try:

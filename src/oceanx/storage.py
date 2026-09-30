@@ -101,7 +101,7 @@ class OceanPaths:
     @classmethod
     def for_project(cls, project_root: Path) -> "OceanPaths":
         project = project_root.resolve()
-        root = project / ".oceanmind"
+        root = project / ".oceanx"
         return cls(
             project_root=project,
             root=root,

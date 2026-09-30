@@ -1,8 +1,37 @@
 安装与环境配置见 [INSTALL.md](INSTALL.md)；测评见 [benchmarking/INSTALL.md](benchmarking/INSTALL.md)。
 
-# OceanMind
+# OceanX
 
-OceanMind is a local-first multi-agent workbench for ocean-science research. It supports
+## Native release: start with a new workspace state
+
+This release intentionally does not import old tasks, result formats, or database versions.
+Project state now lives in `.oceanx/`; `.oceanmind/` databases and old task folders are left
+untouched and are not opened by the new application. Select the project again, create a new
+task, and attach its datasets. Dataset attachment remains read-only and does not require
+copying the original scientific files. Existing API credentials/settings are retained.
+
+The database is created from `src/oceanx/backend/schema.sql`, with no historical migration
+chain. Explicitly pointing `--state-dir` at an old database is rejected, not upgraded.
+Agent Server owns native conversation checkpoints. Native Expert tasks have isolated model
+contexts. Questions under the same root research branch reuse one backend-assigned workspace and
+persistent Python kernel, while independent roots remain isolated. Old local execution checkpoints
+are not imported.
+
+Interactive figures use self-describing NetCDF files saved through
+`oceanx.scientific_view.ScientificFigure`. Ordinary NetCDF files are not user-facing figures.
+Their previews and interactive views are generated deterministically; there is no Visualization
+Expert or model-authored figure specification. Old
+JSON/column payloads and previous scientific figure schemas are not converted. The former
+Research Tree scheduler and async-tool wrappers have been removed. The current tree is a
+question/evidence document edited by the Coordinator; it has no agent lifecycle state. Its decision
+log, outcomes and labels feed a human-gated research-policy improvement loop (see
+[research-policy operations](docs/research-policy-operations.md)).
+
+After updating, close the running desktop and run `npm start` in `frontend/ocean-desktop`
+from the activated OceanX conda environment. It rebuilds an outdated sidecar and frontend.
+Do not use an already-running old backend to evaluate these changes.
+
+OceanX is a local-first multi-agent workbench for ocean-science research. It supports
 ordinary conversation, paper and dataset inspection, reproducible scientific analysis,
 interactive results, and longer autoresearch workflows through one Coordinator-led loop.
 
@@ -17,31 +46,72 @@ orchestration behavior are unchanged by this additional client.
 ```text
 Electron Desktop
     ↕ Ocean protocol v2
-OceanMind backend
-    ├─ Coordinator (Deep Agents + LangGraph)
-    ├─ Expert threads (Deep Agents + LangGraph)
+Local Agent Server (automatically launched)
+    ├─ Coordinator (Deep Agents)
+    ├─ Native synchronous Expert tasks (Deep Agents)
     ├─ Ocean domain tools
-    ├─ ResultBundle + conclusion/evidence bindings
-    ├─ SQLite task and LangGraph checkpoints
-    └─ fail-closed scientific Python sandbox
+    ├─ report.md summaries + self-describing NetCDF results
+    ├─ Native server checkpoints + SQLite UI/file projections
+    └─ Isolated persistent scientific Python kernels
 ```
 
-The Coordinator decides whether to answer directly or create a bounded TodoPlan. Independent
-todos are dispatched concurrently; each todo owns one persistent Expert thread. An Expert uses
-ordinary model tool calls and returns one normal final answer. There is no second handoff protocol
-or result-formatting agent loop.
+For open research, the Coordinator selects a bounded subquestion whose answer informs the next
+direction, rather than outsourcing the whole investigation as a diagnostic checklist. It updates
+a compact backend-owned question tree from returned report summaries, deepening a question,
+opening another direction, or concluding. The tree records scientific questions and observations;
+it does not schedule agents or duplicate their run state. Simple output requests can be delegated
+directly. Delegation uses DeepAgents' native synchronous `task` tool. Independent questions on the
+same research-tree frontier can be issued in one Coordinator turn and run concurrently; dependent
+questions remain sequential. The server owns task execution, checkpoints and cancellation; the old
+orchestrator is deleted, not wrapped inside another scheduler.
+There is no separate Data Expert: each analysis Expert inspects the supplied data while answering
+its question. The backend supplies DatasetContext and the original user request. Native task model
+contexts are isolated; questions in the same root branch reuse its fixed working/output directory
+and live kernel. Experts choose their methods and
+write the canonical `report.md`, beginning with a short `## Summary`; no second result summary is
+generated. Scheduling, cancellation and child completion remain native DeepAgents/Agent Server
+state. OceanX does not mirror them into a second database lifecycle. There is no automatic
+author/reviewer loop. The Coordinator may explicitly ask another Expert or the read-only Discussion
+Partner when a scientific disagreement warrants it. A native task returns its report Summary,
+report path and saved `.nc` outputs to the same Coordinator run.
+Dependencies determine question order, not an instruction to merge the whole project into one task.
+Scale reasoning is part of the physics method guide; there is no separate scale-framing Skill.
 
-Scientific code execution persists valid outputs as they are produced. `ExpertResult` combines
-plain text, result references, and conclusions bound to the visual or report outputs that support
-them. A provider interruption therefore does not erase completed figures or rerun finished code.
+Scientific code execution persists valid outputs as they are produced. The canonical child
+handoff is its backend-assigned `report.md`. A provider interruption therefore does not erase
+completed figures or rerun finished code.
 
-LangGraph SQLite checkpoints are the source of truth for participant conversation state. The
-OceanMind task database stores product state, result bundles, progress, and a compact transcript
-projection for the Desktop UI.
+Agent Server checkpoints are the source of truth for participant conversation state. The
+OceanX task database stores product state, final task results, code-execution provenance, and a
+compact user-facing transcript for the Desktop UI.
 
 Python and sandbox checks run when an Expert actually invokes code execution, not when a
 text-only or literature assignment starts. Code execution still fails closed if its runtime
 is unavailable.
+
+Python RAM is not part of a graph checkpoint: kernel/server loss is reported and recovery
+uses durable files. Cancellation stops the actual kernel. Current persistent-kernel sandbox
+support is macOS/Linux; Windows kernel support has not yet been migrated.
+
+The embedded server uses pinned LangGraph API 0.13.3 and persistent single-host local runtime,
+not a PostgreSQL/Redis production cluster. No manual server launch is required. It binds
+loopback and uses ephemeral authentication; desktop file attachment requires a separate token.
+Install updated dependencies in the selected environment with
+`python -m pip install -r requirements.txt`, then rebuild/restart the desktop.
+See [current migration design](refine.md) for boundaries and validation.
+
+Transient provider failures are retried at the failed model call without replaying the graph or
+Python tools. DeepAgents owns conversation summarization; OceanX does not generate a second result
+summary or replace native message history. Authentication, exhausted provider
+credit and invalid requests fail explicitly; user cancellation interrupts provider waits.
+Each Expert task has at most 60 effective model calls, including native summarization and handoff.
+After 48 calls the same DeepAgents run can only read existing evidence and write its assigned report;
+one final no-tool call is reserved for delivery. Retryable provider failures (including
+API timeouts) do not consume this allowance; their attempts and elapsed time remain
+logged. Code execution defaults to a 300-second per-call limit. Kernel death returns
+an execution failure immediately instead of waiting indefinitely for an idle message.
+Each native task receives its own allowance. These are execution boundaries, not a
+scientific acceptance test or a whole-research token budget.
 
 Each analysis round has one editable `supplementary/analysis-*/analysis.ipynb`. A later round
 gets a separate notebook; retries do not overwrite existing files or user edits. Notebooks
@@ -51,12 +121,33 @@ unsupported layers raise an error rather than silently disappear.
 
 ## Experience and Skills
 
-Agents can explicitly save a short reusable experience. The periodic Skill Curator receives
-these notes plus an all-role Skill metadata catalog, chooses relevant documents with `read_skill`,
-and submits structured decisions. Full Skill bodies are not preloaded. An update requires reading
-the current document and a version-checked commit. Scientific judgment remains with the Curator;
-the backend checks document structure, identity and write safety. Successful commits notify the
-Desktop to refresh the affected task's results without restarting its research workflow.
+Coordinator and executing Experts have DeepAgents' native `ls`, `glob`, `grep`, `read_file`, `write_file`,
+`edit_file`, `delete` and `execute` tools. Attached data and shared evidence use real absolute
+paths; shell and persistent Python share each Expert's fixed outputs directory. Native shell
+execution uses the configured scientific Python environment and existing OS sandbox, not an
+unrestricted host shell. Sources, shared evidence and Skills remain read-only. Commands do not
+inherit server credentials. Native filesystem operations do not count as scientific executions;
+explicit Expert commands use the existing execution records and artifact snapshots.
+Agents choose how to inspect data (e.g. a short xarray script), without a required startup scan.
+The duplicate OceanX listing, dataset-inspection and text-reading tools have been removed.
+Shell processes are fresh; the existing Python tool retains kernel variables within a root branch.
+Discussion Partner is read-only: only native `ls`, `glob`, `grep` and `read_file` are exposed,
+with no shell/Python execution or file-modification tools.
+
+Research agents use DeepAgents' native `skills=` discovery and `read_file` loading.
+Their initial context contains the role's Skill names/descriptions, not all document bodies.
+The selected document and references are read on demand from read-only `/skills/` and
+`/references/` mounts. The former `ocean_list_skills` / `ocean_load_skill` tools are removed.
+Task-role libraries are immutable, content-addressed snapshots of the current bundled files.
+Changing bundled guidance selects a new snapshot. Database-generated Skill revisions are not part
+of the runtime.
+
+`xarray-array-ops` covers indexing, dimension order, broadcasting and masks. Its optional
+`oceanx_array_ops` module is available in the persistent Python kernel; it is not imported or
+executed automatically. Small structural checks do not establish scientific correctness.
+
+Runtime guidance changes require an explicit edit to the bundled Skill files. Agents load only the
+role-appropriate method documents they need; no background process rewrites Skills from prior runs.
 
 ## Model providers
 
@@ -70,9 +161,8 @@ previous configuration location during migration.
 New projects use:
 
 ```text
-<project>/.oceanmind/
+<project>/.oceanx/
     workspace.sqlite3
-    langgraph.sqlite3
     artifacts/
     datasets/
     runs/
@@ -112,25 +202,27 @@ by default; `OCEAN_CONDA_ENV` and `OCEAN_SANDBOX_PYTHON` remain explicit scienti
 runtime overrides. Without activation, scientific execution still looks for the
 named `oceanx` environment.
 
+### CARTO basemap key
+
+Copy `frontend/ocean-desktop/.env.example` to `.env.local` in the same directory
+and set `VITE_CARTO_BASEMAPS_API_KEY` to your project's
+[CARTO Basemaps key](https://carto.com/basemaps/apikey/). The local file is ignored
+by Git. Vite reads it for both development and production builds; CI can instead
+set the same environment variable. Restart the development server or rebuild the
+desktop after changing the key (`npm start` rebuilds; `npm run start:cached` does not).
+The key is included in the renderer bundle and sent to CARTO with tile requests.
+Keep the existing CARTO and OpenStreetMap map attribution visible.
+
 ### Runtime context summaries
 
-All Coordinator and Expert graphs reuse DeepAgents' built-in summarization.
-OceanX starts summarizing at 24,000 context tokens **and** 12 messages, retaining
-the latest six messages; models with a known context window also retain an
-earlier 65%-of-window safety trigger. These are initial cost-oriented settings,
-not scientific completion criteria or a promised benchmark speedup.
-Short conversations remain unsummarized. Summaries preserve scientific quantities,
-statistical definitions, evidence IDs, working-file locations and unresolved work.
-The same configured model/API produces the summary with at most 4,096 output
-tokens, and its usage counts toward the existing cumulative budget. Internal
-summary text is not emitted as an agent answer.
+Coordinator and Expert graphs use DeepAgents' native conversation summarization unchanged.
+OceanX does not maintain a second summary state or copy another agent's transcript into a model
+prompt. Expert handoff is instead file-backed: the parent receives the short `## Summary` from
+`report.md`, its path and any saved `.nc` results. It reads the full report only when the next
+scientific decision or final synthesis needs the detail. Internal summarization prose is metered
+but never presented as a participant answer.
 
-DeepAgents archives evicted history in the thread's checkpointed state.
-`ocean_read_context_archive` can retrieve bounded text excerpts from that archive
-after a restart; it cannot read local files or another expert's thread. Existing
-code/log retrieval, research-tree decisions, and output publication are unchanged.
-
-Run the OceanMind backend tests:
+Run the OceanX backend tests:
 
 ```bash
 python -m pytest -q tests/test_oceanx

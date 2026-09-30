@@ -61,8 +61,12 @@ pub struct JobLimits {
 
 impl JobLimits {
     pub fn validate(self) -> Result<(), String> {
-        user_time_ticks(self.cpu_time_seconds)?;
-        memory_limit_bytes(self.memory_bytes)?;
+        if self.cpu_time_seconds != 0.0 {
+            user_time_ticks(self.cpu_time_seconds)?;
+        }
+        if self.memory_bytes != 0.0 {
+            memory_limit_bytes(self.memory_bytes)?;
+        }
         Ok(())
     }
 }
@@ -122,18 +126,22 @@ impl SandboxJob {
             return Err("Broker could not create a Job Object".to_owned());
         }
         let mut information: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
-        information.BasicLimitInformation.PerJobUserTimeLimit =
-            user_time_ticks(limits.cpu_time_seconds)?;
-        information.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-            | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
-            | JOB_OBJECT_LIMIT_JOB_TIME
-            | JOB_OBJECT_LIMIT_PROCESS_MEMORY
-            | JOB_OBJECT_LIMIT_JOB_MEMORY;
+        information.BasicLimitInformation.LimitFlags =
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
+        if limits.cpu_time_seconds != 0.0 {
+            information.BasicLimitInformation.PerJobUserTimeLimit =
+                user_time_ticks(limits.cpu_time_seconds)?;
+            information.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_JOB_TIME;
+        }
         // Protocol v1 disallows child processes. The active-process limit is
         // deliberately stricter than a renderer-provided numeric preference.
         information.BasicLimitInformation.ActiveProcessLimit = 1;
-        information.ProcessMemoryLimit = memory_limit_bytes(limits.memory_bytes)?;
-        information.JobMemoryLimit = memory_limit_bytes(limits.memory_bytes)?;
+        if limits.memory_bytes != 0.0 {
+            information.ProcessMemoryLimit = memory_limit_bytes(limits.memory_bytes)?;
+            information.JobMemoryLimit = memory_limit_bytes(limits.memory_bytes)?;
+            information.BasicLimitInformation.LimitFlags |=
+                JOB_OBJECT_LIMIT_PROCESS_MEMORY | JOB_OBJECT_LIMIT_JOB_MEMORY;
+        }
         let configured = unsafe {
             SetInformationJobObject(
                 handle,

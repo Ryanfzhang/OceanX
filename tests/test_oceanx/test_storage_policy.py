@@ -25,7 +25,7 @@ def test_project_layout_is_private_and_uses_only_ocean_uris(tmp_path: Path):
     manifest = paths.artifacts / "report" / "report_fixture" / "v0001" / "manifest.json"
     write_private_json(manifest, {"artifact_id": "report_fixture"})
 
-    assert paths.database == tmp_path / ".oceanmind" / "workspace.sqlite3"
+    assert paths.database == tmp_path / ".oceanx" / "workspace.sqlite3"
     assert paths.uri_for(manifest) == "ocean://artifacts/report/report_fixture/v0001/manifest.json"
     assert paths.resolve_uri(paths.uri_for(manifest)) == manifest
     if os.name == "posix":

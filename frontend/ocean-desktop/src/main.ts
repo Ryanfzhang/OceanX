@@ -1,6 +1,6 @@
 import {app, BrowserWindow, dialog, ipcMain, powerMonitor, protocol, session, shell, type IpcMainInvokeEvent, type Session} from 'electron';
 import {spawn, type ChildProcessWithoutNullStreams} from 'node:child_process';
-import {createHash} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync} from 'node:fs';
 import {createInterface} from 'node:readline';
 import {dirname, extname, isAbsolute, join, relative, resolve} from 'node:path';
@@ -68,7 +68,7 @@ type GrantedArtifactResource = {
 };
 
 function projectCatalogPath(): string {
-  return join(app.getPath('userData'), 'oceanmind-projects.json');
+  return join(app.getPath('userData'), 'oceanx-projects-native-v1.json');
 }
 
 function readDesktopProjects(): DesktopProjectEntry[] {
@@ -182,7 +182,7 @@ async function configureDesktopUpdates(): Promise<void> {
   try {
     parsed = parseStrictJsonBytes(readFileSync(updateConfigPath()));
   } catch (error) {
-    console.warn('OceanMind desktop update configuration could not be read:', error);
+    console.warn('OceanX desktop update configuration could not be read:', error);
     return;
   }
   try {
@@ -198,7 +198,7 @@ async function configureDesktopUpdates(): Promise<void> {
     });
     desktopUpdateStatus = withUpdateHandoff({configured: true, state: 'idle'});
   } catch (error) {
-    console.error('OceanMind desktop update configuration was rejected:', error);
+    console.error('OceanX desktop update configuration was rejected:', error);
   }
 }
 
@@ -220,14 +220,14 @@ async function recoverUpdateHandoff(): Promise<void> {
   try {
     latestUpdateHandoff = await updateHandoffStore.observeLaunch(updateRuntime());
     if (latestUpdateHandoff.state === 'previous_runtime_resumed') {
-      console.warn(`OceanMind update handoff returned to previous runtime ${latestUpdateHandoff.version}.`);
+      console.warn(`OceanX update handoff returned to previous runtime ${latestUpdateHandoff.version}.`);
     } else if (latestUpdateHandoff.state === 'unexpected_runtime') {
-      console.error(`OceanMind update handoff expected ${latestUpdateHandoff.expectedVersion} but launched ${latestUpdateHandoff.observedVersion}.`);
+      console.error(`OceanX update handoff expected ${latestUpdateHandoff.expectedVersion} but launched ${latestUpdateHandoff.observedVersion}.`);
     } else if (latestUpdateHandoff.state === 'discarded') {
-      console.warn('OceanMind discarded an invalid pending update handoff record.');
+      console.warn('OceanX discarded an invalid pending update handoff record.');
     }
   } catch (error) {
-    console.error('OceanMind update handoff recovery did not complete:', error);
+    console.error('OceanX update handoff recovery did not complete:', error);
   }
 }
 
@@ -240,7 +240,7 @@ async function checkForDesktopUpdate(): Promise<DesktopUpdateStatus> {
     const prepared = await desktopUpdateService.checkAndPrepare();
     desktopUpdateStatus = withUpdateHandoff({configured: true, state: 'prepared', version: prepared.update.version});
   } catch (error) {
-    console.error('OceanMind desktop update check failed:', error);
+    console.error('OceanX desktop update check failed:', error);
     desktopUpdateStatus = withUpdateHandoff({configured: true, state: 'failed'});
   }
   return desktopUpdateStatus;
@@ -255,7 +255,7 @@ async function installPreparedDesktopUpdate(): Promise<DesktopUpdateStatus> {
     await updateHandoffStore.recordInstallIntent(updateRuntime(), target);
     await desktopUpdateService.installPrepared();
   } catch (error) {
-    console.error('OceanMind desktop update installation could not start:', error);
+    console.error('OceanX desktop update installation could not start:', error);
     await updateHandoffStore?.clear().catch(() => undefined);
     desktopUpdateStatus = withUpdateHandoff({configured: true, state: 'failed'});
   }
@@ -275,7 +275,7 @@ function defaultPythonExecutable(): string {
       process.platform === 'win32' ? 'ocean-backend.exe' : 'ocean-backend',
     );
     if (!existsSync(executable)) {
-      throw new Error('Packaged OceanMind Python sidecar is missing. Reinstall the complete application.');
+      throw new Error('Packaged OceanX Python sidecar is missing. Reinstall the complete application.');
     }
     return executable;
   }
@@ -301,7 +301,7 @@ function parseModelProviderSetup(value: unknown): ModelProviderSetup {
     throw new Error('Model provider setup is invalid.');
   }
   const setup = value as Record<string, unknown>;
-  if (Object.keys(setup).some((key) => !['coordinator', 'expert', 'skillCurator'].includes(key))) {
+  if (Object.keys(setup).some((key) => !['coordinator', 'expert'].includes(key))) {
     throw new Error('Model provider setup contains unsupported fields.');
   }
   const parseRole = (role: string): ModelRoleProviderSetup => {
@@ -343,7 +343,7 @@ function parseModelProviderSetup(value: unknown): ModelProviderSetup {
     }
     return result;
   };
-  return {coordinator: parseRole('coordinator'), expert: parseRole('expert'), skillCurator: parseRole('skillCurator')};
+  return {coordinator: parseRole('coordinator'), expert: parseRole('expert')};
 }
 
 function parseModelProviderStatus(value: unknown): ModelProviderStatus {
@@ -365,9 +365,9 @@ function parseModelProviderStatus(value: unknown): ModelProviderStatus {
       if (typeof candidate !== 'string' || !candidate || candidate.length > maximum) throw new Error('Model provider role is invalid.');
       return candidate;
     };
-    if (typeof item.configured !== 'boolean') throw new Error('Model provider role is invalid.');
+    if (typeof item.configured !== 'boolean' || typeof item.image_inputs !== 'boolean') throw new Error('Model provider role is invalid.');
     const result: ModelRoleProviderStatus = {
-      profile: roleString('profile', 128), label: roleString('label', 256), provider: roleString('provider', 128), model: roleString('model', 256), configured: item.configured,
+      profile: roleString('profile', 128), label: roleString('label', 256), provider: roleString('provider', 128), model: roleString('model', 256), configured: item.configured, imageInputs: item.image_inputs,
     };
     if (item.base_url !== undefined && item.base_url !== null) {
       if (typeof item.base_url !== 'string' || item.base_url.length > 2048) throw new Error('Model provider role endpoint is invalid.');
@@ -377,10 +377,9 @@ function parseModelProviderStatus(value: unknown): ModelProviderStatus {
   };
   const coordinator = parseRoleStatus('coordinator');
   const expert = parseRoleStatus('expert');
-  const skillCurator = parseRoleStatus('skill_curator');
   return {
-    coordinator, expert, skillCurator,
-    configured: coordinator.configured && expert.configured && skillCurator.configured,
+    coordinator, expert,
+    configured: coordinator.configured && expert.configured,
   };
 }
 
@@ -432,8 +431,9 @@ class OceanBackendSidecar {
         provider: 'desktop_checkpoint_fixture',
         model: 'fixture',
         configured: true,
+        imageInputs: false,
       };
-      return {coordinator: fixture, expert: fixture, skillCurator: fixture, configured: true};
+      return {coordinator: fixture, expert: fixture, configured: true};
     }
     return this.runProviderHelper('desktop-provider-status');
   }
@@ -486,7 +486,6 @@ class OceanBackendSidecar {
         roles: {
           coordinator: {provider: setup.coordinator.provider, model: setup.coordinator.model, base_url: setup.coordinator.baseUrl ?? null, api_key: setup.coordinator.apiKey ?? null},
           expert: {provider: setup.expert.provider, model: setup.expert.model, base_url: setup.expert.baseUrl ?? null, api_key: setup.expert.apiKey ?? null},
-          skill_curator: {provider: setup.skillCurator.provider, model: setup.skillCurator.model, base_url: setup.skillCurator.baseUrl ?? null, api_key: setup.skillCurator.apiKey ?? null},
         },
       }) : '');
     });
@@ -495,7 +494,7 @@ class OceanBackendSidecar {
   private launch(options: DesktopBackendLaunch): void {
     this.readyEvent = null;
     const workspacePath = resolve(options.workspacePath);
-    const stateDirectory = join(workspacePath, '.oceanmind');
+    const stateDirectory = join(workspacePath, '.oceanx');
     const executable = defaultPythonExecutable();
     const usesFrozenSidecar = app.isPackaged;
     const testBackendScript = desktopTestBackendScript();
@@ -532,7 +531,7 @@ class OceanBackendSidecar {
       this.publish({kind: 'exit', code});
       if (!this.stopping && this.child === null && this.launchOptions && this.restartAttempts < 1) {
         this.restartAttempts += 1;
-        this.publish({kind: 'diagnostic', message: 'OceanMind backend stopped unexpectedly. Restarting.'});
+        this.publish({kind: 'diagnostic', message: 'OceanX backend stopped unexpectedly. Restarting.'});
         this.restartTimer = setTimeout(() => {
           this.restartTimer = null;
           if (!this.stopping && this.launchOptions && this.child === null) {
@@ -576,7 +575,7 @@ class OceanBackendSidecar {
 
   async send(payload: Record<string, unknown>): Promise<void> {
     if (!this.child || this.child.stdin.destroyed) {
-      throw new Error('OceanMind backend is not running');
+      throw new Error('OceanX backend is not running');
     }
     const line = JSON.stringify(payload);
     if (Buffer.byteLength(line, 'utf8') > maxFrameBytes) {
@@ -618,7 +617,7 @@ class OceanBackendSidecar {
         else resolveWrite();
       };
       const onError = (error: Error) => finish(error);
-      const onExit = () => finish(new Error('OceanMind backend exited before receiving the request bytes'));
+      const onExit = () => finish(new Error('OceanX backend exited before receiving the request bytes'));
       stdin.once('error', onError);
       child.once('exit', onExit);
       stdin.write(`${line}\n`, 'utf8', (error) => finish(error));
@@ -664,13 +663,13 @@ class OceanBackendSidecar {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
     }
-    this.publish({kind: 'diagnostic', message: 'System resumed. Recovering OceanMind backend.'});
+    this.publish({kind: 'diagnostic', message: 'System resumed. Recovering OceanX backend.'});
     this.launch(this.launchOptions);
   }
 
   async artifactResponse(requestUrl: string): Promise<Response> {
     if (!this.stateDirectory) {
-      return new Response('OceanMind backend is not running', {status: 503});
+      return new Response('OceanX backend is not running', {status: 503});
     }
     let url: URL;
     try {
@@ -768,23 +767,22 @@ class OceanBackendSidecar {
     return {opened: false, revealed: true, message};
   }
 
-  async chooseWorkspaceSource(kind: 'dataset' | 'paper'): Promise<{relativePath?: string; localPath?: string} | null> {
+  async chooseWorkspaceSource(allowImages: boolean): Promise<{kind: 'file' | 'folder'; relativePath?: string; localPath?: string} | null> {
     if (!this.workspacePath) {
       throw new Error('Open a project before importing a local source.');
     }
-    const result = await dialog.showOpenDialog(kind === 'dataset'
-      ? {
-          title: 'Choose local data',
-          buttonLabel: 'Use selected path',
-          message: 'Select a data file, or select the current folder to import the complete directory.',
-          properties: ['openFile', 'openDirectory'],
-        }
-      : {
-          title: 'Choose local PDF paper',
-          buttonLabel: 'Import paper',
-          properties: ['openFile'],
-          filters: [{name: 'PDF', extensions: ['pdf']}],
-        });
+    const extensions = [
+      'pdf', 'txt', 'md', 'csv', 'tsv', 'json', 'yaml', 'yml', 'xml',
+      'doc', 'docx', 'rtf', 'nc', 'nc4', 'cdf', 'h5', 'hdf5', 'grib',
+      'grb', 'grb2', 'zarr', 'zip', 'gz', 'parquet', 'feather', 'xlsx', 'xls',
+      ...(allowImages ? ['png', 'jpg', 'jpeg', 'webp', 'gif'] : []),
+    ];
+    const result = await dialog.showOpenDialog({
+      title: 'Select a research file, or select the current folder to import the complete directory.',
+      buttonLabel: 'Use selected path',
+      properties: ['openFile', 'openDirectory'],
+      filters: [{name: allowImages ? 'Research files' : 'Research files (images unavailable)', extensions}],
+    });
     if (result.canceled || !result.filePaths[0]) return null;
     let workspaceRoot: string;
     let selected: string;
@@ -794,28 +792,46 @@ class OceanBackendSidecar {
       selected = realpathSync(resolve(result.filePaths[0]));
       sourceRelativePath = relative(workspaceRoot, selected);
       const selectedStat = statSync(selected);
-      if (kind === 'paper') {
-        if (
-          !isSafeContainedRelativePath(sourceRelativePath)
-          || !selectedStat.isFile()
-          || extname(selected).toLowerCase() !== '.pdf'
-        ) {
-          throw new Error('unsafe project source');
-        }
-        return {relativePath: sourceRelativePath.split('\\').join('/')};
+      if (!selectedStat.isFile() && !selectedStat.isDirectory()) throw new Error('unsafe local source');
+      const kind = selectedStat.isDirectory() ? 'folder' : 'file';
+      if (!allowImages && selectedStat.isFile() && ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.tif', '.tiff', '.svg'].includes(extname(selected).toLowerCase())) {
+        throw new Error('The configured analysis model cannot read images.');
       }
-      // A dataset remains at its user-owned location. The backend records one
-      // Task-scoped read-only reference and mounts that path for Experts.
-      if (!selectedStat.isFile() && !selectedStat.isDirectory()) throw new Error('unsafe data source');
       if (!isSafeContainedRelativePath(sourceRelativePath)) {
-        return {localPath: selected};
+        return {kind, localPath: selected};
       }
-    } catch {
-      throw new Error(kind === 'paper'
-        ? 'The selected paper must remain inside the open project.'
-        : 'The selected local data could not be referenced safely.');
+      return {kind, relativePath: sourceRelativePath.split('\\').join('/')};
+    } catch (error) {
+      if (error instanceof Error && error.message === 'The configured analysis model cannot read images.') {
+        throw error;
+      }
+      throw new Error('The selected local source could not be referenced safely.');
     }
-    return {relativePath: sourceRelativePath.split('\\').join('/')};
+  }
+
+  stageImageAttachment(value: unknown): {kind: 'file'; relativePath: string} {
+    if (!this.workspacePath) throw new Error('Open a project before adding an image.');
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Image attachment is invalid.');
+    }
+    const attachment = value as Record<string, unknown>;
+    const mimeTypes = new Map([
+      ['image/png', '.png'], ['image/jpeg', '.jpg'], ['image/webp', '.webp'], ['image/gif', '.gif'],
+    ]);
+    const extension = typeof attachment.mimeType === 'string' ? mimeTypes.get(attachment.mimeType) : undefined;
+    if (!extension || !(attachment.bytes instanceof Uint8Array)) {
+      throw new Error('Only PNG, JPEG, WebP, and GIF images can be pasted.');
+    }
+    if (attachment.bytes.byteLength === 0 || attachment.bytes.byteLength > 16 * 1024 * 1024) {
+      throw new Error('Pasted image must be between 1 byte and 16 MB.');
+    }
+    const rawName = typeof attachment.fileName === 'string' ? attachment.fileName : 'pasted-image';
+    const stem = rawName.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'pasted-image';
+    const folder = join(this.workspacePath, '.oceanx', 'imports', 'images');
+    mkdirSync(folder, {recursive: true});
+    const fileName = `${stem}-${randomUUID()}${extension}`;
+    writeFileSync(join(folder, fileName), Buffer.from(attachment.bytes));
+    return {kind: 'file', relativePath: `.oceanx/imports/images/${fileName}`};
   }
 
   revealPortableExport(exportId: string): void {
@@ -878,7 +894,7 @@ class OceanBackendSidecar {
     if (!resourceGrant) return;
     const webContentsId = this.activeRendererId();
     if (webContentsId === null) {
-      this.publish({kind: 'diagnostic', message: 'Discarded an artifact resource grant without an active OceanMind window.'});
+      this.publish({kind: 'diagnostic', message: 'Discarded an artifact resource grant without an active OceanX window.'});
       delete grant.resource_token;
       delete grant.resource_uri;
       return;
@@ -1005,7 +1021,7 @@ const sidecar = new OceanBackendSidecar((frame) => {
 
 function assertMainRenderer(event: IpcMainInvokeEvent): void {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender.id !== mainWindow.webContents.id) {
-    throw new Error('Desktop host IPC is available only to the active OceanMind window.');
+    throw new Error('Desktop host IPC is available only to the active OceanX window.');
   }
 }
 
@@ -1016,7 +1032,7 @@ if (!hasSingleInstanceLock) {
 
 function createWindow(): void {
   if (!desktopSession) {
-    throw new Error('OceanMind desktop session is unavailable.');
+    throw new Error('OceanX desktop session is unavailable.');
   }
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -1074,11 +1090,11 @@ function recoverUpdateStaging(): void {
     .then(({discardedDirectories}) => {
       if (discardedDirectories.length) {
         const noun = discardedDirectories.length === 1 ? 'directory' : 'directories';
-        console.warn(`Discarded ${discardedDirectories.length} incomplete OceanMind update staging ${noun}.`);
+        console.warn(`Discarded ${discardedDirectories.length} incomplete OceanX update staging ${noun}.`);
       }
     })
     .catch((error: unknown) => {
-      console.error('OceanMind update staging recovery did not complete:', error);
+      console.error('OceanX update staging recovery did not complete:', error);
     });
 }
 
@@ -1086,6 +1102,36 @@ app.whenReady().then(() => {
   // Persistent partition keeps renderer localStorage (theme, density, pane width)
   // across restarts; isolated test profiles stay on a per-process in-memory partition.
   desktopSession = session.fromPartition(isolatedTestProfile ? `ocean-desktop-${process.pid}` : 'persist:ocean-desktop', {cache: false});
+  const isTrustedMainRenderer = (webContentsId: number, requestingUrl: string): boolean => {
+    if (!mainWindow || mainWindow.isDestroyed() || webContentsId !== mainWindow.webContents.id) return false;
+    const developmentUrl = process.env.ELECTRON_RENDERER_URL;
+    if (developmentUrl) {
+      try {
+        return new URL(requestingUrl).origin === new URL(developmentUrl).origin;
+      } catch {
+        return false;
+      }
+    }
+    const packagedPage = pathToFileURL(join(moduleDirectory, '..', 'dist', 'renderer', 'index.html')).toString();
+    return requestingUrl === packagedPage;
+  };
+  desktopSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const mediaTypes = 'mediaTypes' in details ? details.mediaTypes ?? [] : [];
+    callback(
+      permission === 'media'
+      && details.isMainFrame
+      && mediaTypes.length === 1
+      && mediaTypes[0] === 'audio'
+      && isTrustedMainRenderer(webContents.id, details.requestingUrl)
+    );
+  });
+  desktopSession.setPermissionCheckHandler((webContents, permission, _origin, details) => (
+    permission === 'media'
+    && details.isMainFrame
+    && details.mediaType === 'audio'
+    && webContents !== null
+    && isTrustedMainRenderer(webContents.id, details.requestingUrl ?? '')
+  ));
   updateHandoffStore = new UpdateHandoffStore(join(app.getPath('userData'), 'update-handoff'));
   desktopUpdatesReady = recoverUpdateHandoff().then(configureDesktopUpdates);
   desktopSession.protocol.handle('ocean-artifact', (request) => sidecar.artifactResponse(request.url));
@@ -1111,12 +1157,14 @@ app.whenReady().then(() => {
     }
     return forgetDesktopProject(projectPath);
   });
-  ipcMain.handle('ocean:choose-workspace-source', (event, kind: unknown) => {
+  ipcMain.handle('ocean:choose-workspace-source', (event, allowImages: unknown) => {
     assertMainRenderer(event);
-    if (kind !== 'dataset' && kind !== 'paper') {
-      throw new Error('Unknown local source kind.');
-    }
-    return sidecar.chooseWorkspaceSource(kind);
+    if (typeof allowImages !== 'boolean') throw new Error('Image capability is required.');
+    return sidecar.chooseWorkspaceSource(allowImages);
+  });
+  ipcMain.handle('ocean:stage-image-attachment', (event, attachment: unknown) => {
+    assertMainRenderer(event);
+    return sidecar.stageImageAttachment(attachment);
   });
   ipcMain.handle('ocean:start-backend', (event, options: unknown) => {
     assertMainRenderer(event);
@@ -1194,7 +1242,7 @@ app.on('before-quit', (event) => {
   stoppingForQuit = true;
   void sidecar.stop()
     .catch((error: unknown) => {
-      console.error('OceanMind backend sidecar did not stop cleanly before quit:', error);
+      console.error('OceanX backend sidecar did not stop cleanly before quit:', error);
     })
     .finally(() => app.quit());
 });
@@ -1209,6 +1257,6 @@ app.on('will-quit', () => {
   try {
     rmSync(isolatedTestProfile, {recursive: true, force: true});
   } catch (error) {
-    console.warn('OceanMind test profile cleanup did not complete:', error);
+    console.warn('OceanX test profile cleanup did not complete:', error);
   }
 });

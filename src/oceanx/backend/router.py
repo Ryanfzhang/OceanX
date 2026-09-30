@@ -11,39 +11,33 @@ import os
 import re
 import shutil
 import stat
-import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import ValidationError
 
-from langgraph.errors import GraphRecursionError
-
-from oceanx.agent_contract import (
-    AssistantTextDelta,
-    AssistantTurnComplete,
-    CompactProgressEvent,
-    ConversationMessage,
-    ErrorEvent,
-    StatusEvent,
-    StreamEvent,
-    ToolExecutionCompleted,
-    ToolExecutionStarted,
-)
 from oceanx import __version__
-from oceanx.desktop_contract import DESKTOP_BACKEND_SCHEMA
 from oceanx.agent import (
-    OceanAgentBudget,
     OceanAgentRuntime,
     OceanAgentRuntimeError,
     OceanAgentRuntimeFactory,
     build_default_ocean_agent_runtime,
     configured_model_id,
     configured_provider_id,
+)
+from oceanx.agent_contract import (
+    AssistantTextDelta,
+    AssistantTurnComplete,
+    CompactProgressEvent,
+    ErrorEvent,
+    StatusEvent,
+    StreamEvent,
+    ToolExecutionCompleted,
+    ToolExecutionStarted,
 )
 from oceanx.artifacts.files import ArtifactFileError
 from oceanx.artifacts.models import (
@@ -61,99 +55,71 @@ from oceanx.backend.store import (
     RequestRecord,
     RequestStore,
     RequestStoreError,
-    TaskCheckpointIncompatible,
     TaskNotFound,
     TaskRevisionConflict,
     TaskWorkflowState,
-    TeamWorkRecord,
     WorkspaceRevisionConflict,
     WorkspaceSnapshot,
 )
-from oceanx.context import ContextPolicyError, ModelDataDisclosurePolicy, OceanContextBuilder
+from oceanx.context import ModelDataDisclosurePolicy
+from oceanx.desktop_contract import DESKTOP_BACKEND_SCHEMA
 from oceanx.doctor import desktop_runtime_capabilities
-from oceanx.exports import PortableExportError, PortableExportService
 from oceanx.expert_deliverables import (
     ExpertDeliverableError,
     interactive_view_cache,
 )
-from oceanx.exploration import ExplorationInput, begin_tests, exploration_action
-from oceanx.figure_reproduction import (
-    FigureReproductionSource,
-    build_figure_reproduction_notebook,
-)
-from oceanx.permissions import OceanExecutionPermissionChecker
-from oceanx.skills import LITERATURE_CAPABILITY
-from oceanx.skill_curator import SkillCurator
-from oceanx.storage import is_safe_cross_platform_relative_path
-from oceanx.team.models import (
-    ChildAuthority,
-    CoordinatorAnswerBasis,
-    CoordinatorDecision,
-    CoordinatorResult,
-    CoordinatorTodo,
-    EvidenceRef,
-    ExpertDecision,
-    WorkBudget,
-    WorkOrder,
-    WorkPlan,
-    ExpertResultOrigin,
-    WorkStatus,
-    WorkstreamPhase,
-)
-from oceanx.team.profiles import AGENT_PROFILES, bind_agent_profile
-from oceanx.team.orchestrator import (
-    OceanTeamOrchestrator,
-    capabilities_for_authority,
-)
-from oceanx.task_workspace import TaskWorkspaceProjector
-from oceanx.task_results import TaskResultError, TaskResultRef, TaskResultStore
-from oceanx.tools import OceanToolServices
-from oceanx.runtime import OCEAN_RUNTIME_PROFILE_VERSION
+from oceanx.exports import PortableExportError, PortableExportService
 from oceanx.protocol.v2.models import (
+    ArtifactCreatedEvent,
+    ArtifactCreatedPayload,
+    ArtifactCreateRequest,
+    ArtifactGetRequest,
+    ArtifactListRequest,
+    ArtifactResourceGrantRequest,
+    ArtifactSummaryPayload,
+    ArtifactVersionCreatedEvent,
+    ArtifactVersionsRequest,
     AssistantDeltaEvent,
     AssistantDeltaPayload,
     AssistantTurnCompletedEvent,
     AssistantTurnCompletedPayload,
-    ArtifactCreateRequest,
+    ContextCompactionProgressEvent,
+    ContextCompactionProgressPayload,
     DatasetImportRequest,
     DisclosurePolicyGetRequest,
     DisclosurePolicySetRequest,
     DisclosurePolicySummary,
+    ResearchLabelSetRequest,
+    ResearchLessonDecideRequest,
+    ResearchLessonRetireRequest,
+    ResearchLessonsConsolidateRequest,
+    ResearchLessonsListRequest,
+    ResearchPolicyActivateRequest,
+    ResearchReviewGetRequest,
     DisclosurePolicyUpdatedEvent,
     DisclosurePolicyUpdatedPayload,
-    HypothesisActivateRequest,
-    ArtifactCreatedEvent,
-    ArtifactCreatedPayload,
-    ArtifactGetRequest,
-    ArtifactResourceGrantRequest,
-    TaskResultResourceGrantRequest,
-    TaskResultInteractiveViewGetRequest,
-    ArtifactListRequest,
-    ArtifactVersionsRequest,
-    ArtifactSummaryPayload,
-    ArtifactVersionCreatedEvent,
-    ContextCompactionProgressEvent,
-    ContextCompactionProgressPayload,
     ErrorCode,
     EventEnvelope,
+    HypothesisActivateRequest,
     InteractionRequestedEvent,
     InteractionRequestedPayload,
     InteractionRespondRequest,
+    LocalSourceImportRequest,
     PaperImportRequest,
     PaperRegisterRequest,
+    PortableExportCreateRequest,
     ProtocolErrorPayload,
     RequestAcceptedEvent,
     RequestAcceptedPayload,
-    RequestCancelRequest,
     RequestCancelledEvent,
     RequestCancelledPayload,
+    RequestCancelRequest,
     RequestCompletedEvent,
     RequestCompletedPayload,
     RequestEnvelope,
     RequestFailedEvent,
     RequestFailedPayload,
     RequestStatusGetRequest,
-    PortableExportCreateRequest,
     SessionOpenRequest,
     SessionSubmitRequest,
     SystemErrorEvent,
@@ -164,14 +130,17 @@ from oceanx.protocol.v2.models import (
     SystemShutdownEvent,
     SystemShutdownPayload,
     SystemShutdownRequest,
-    TaskArchiveRequest,
     TaskAgentTranscriptGetRequest,
+    TaskReportReadRequest,
+    TaskArchiveRequest,
     TaskCreateRequest,
     TaskDeleteRequest,
     TaskGetRequest,
     TaskListRequest,
     TaskOutputListRequest,
     TaskRenameRequest,
+    TaskResultInteractiveViewGetRequest,
+    TaskResultResourceGrantRequest,
     TaskSnapshotEvent,
     TaskSnapshotGetRequest,
     TaskSnapshotPayload,
@@ -197,6 +166,17 @@ from oceanx.protocol.v2.models import (
     new_event_id,
     parse_request,
 )
+from oceanx.research.services import ResearchServices
+from oceanx.skills import LITERATURE_CAPABILITY
+from oceanx.storage import is_safe_cross_platform_relative_path
+from oceanx.task_results import TaskResultError, TaskResultStore
+from oceanx.task_workspace import TaskWorkspaceProjector
+from oceanx.team.models import (
+    CoordinatorResult,
+    EvidenceRef,
+)
+from oceanx.team.profiles import AGENT_PROFILES
+from oceanx.tools import OceanToolServices
 
 
 def _local_dataset_format(path: Path) -> str:
@@ -248,19 +228,9 @@ class _AgentSession:
     runtime: OceanAgentRuntime
 
 
-class _AgentBudgetExceeded(RuntimeError):
-    """A backend-owned foreground agent budget reached a hard limit."""
-
-
-class _AgentToolWaitExceeded(RuntimeError):
-    """An independently budgeted tool exceeded its wait safety ceiling."""
-
-
 async def _coordinator_events(engine, text: str, request_id: str):
-    """Use the same bounded model-delivery policy as Experts."""
-    from oceanx.model_recovery import model_events
-
-    stream = model_events(engine, text, request_id)
+    """Project the native server stream; model retries belong inside the graph."""
+    stream = engine.submit_message(text, request_id=request_id)
     try:
         async for event in stream:
             yield event
@@ -278,23 +248,20 @@ class OceanRequestRouter:
         event_bus: EventBus,
         artifact_service: ArtifactService | None = None,
         portable_export_service: PortableExportService | None = None,
-        team_orchestrator: OceanTeamOrchestrator | None = None,
+        research_services: ResearchServices | None = None,
         agent_runtime_factory: OceanAgentRuntimeFactory | None = None,
-        agent_budget: OceanAgentBudget | None = None,
         provider_id_resolver: Callable[[], str] = configured_provider_id,
         model_id_resolver: Callable[[], str] | None = None,
         after_terminal_commit: TerminalCommitHook | None = None,
         task_workspace_projector: TaskWorkspaceProjector | None = None,
         task_results: TaskResultStore | None = None,
-        skill_curator: SkillCurator | None = None,
     ) -> None:
         self.store = store
         self.event_bus = event_bus
         self.artifact_service = artifact_service
         self.portable_export_service = portable_export_service
-        self.team_orchestrator = team_orchestrator
+        self.research_services = research_services
         self.agent_runtime_factory = agent_runtime_factory or build_default_ocean_agent_runtime
-        self.agent_budget = agent_budget or OceanAgentBudget()
         self.provider_id_resolver = provider_id_resolver
         # Production sessions must be rebuilt when the user changes only the
         # Coordinator model under the same provider. Injected runtimes keep
@@ -309,17 +276,19 @@ class OceanRequestRouter:
         self.after_terminal_commit = after_terminal_commit
         self.task_workspace_projector = task_workspace_projector
         self.task_results = task_results
-        self.skill_curator = skill_curator
         self.shutdown_requested = False
         self._agent_sessions: dict[str, _AgentSession] = {}
         self._agent_tasks: dict[str, asyncio.Task[None]] = {}
         self._agent_request_sessions: dict[str, str] = {}
         self._agent_request_clients: dict[str, BackendClient] = {}
         self._team_snapshot_revisions: dict[str, int] = {}
+        # UI projection of native synchronous ``task`` calls. This is not a
+        # scheduler or source of truth; execution and completion remain inside
+        # DeepAgents and the durable products are report.md/.nc files.
+        self._native_task_activity: dict[str, dict[str, dict[str, Any]]] = {}
         # Internal callers such as the frozen evaluator can lower a single
         # follow-up request's remaining budget without changing the user-facing
         # Protocol v2 payload or the router-wide default.
-        self._agent_request_budgets: dict[str, OceanAgentBudget] = {}
         self._cancelling_agent_requests: set[str] = set()
         self._pending_questions: dict[str, tuple[str, str, asyncio.Future[str]]] = {}
         self._closing = False
@@ -373,8 +342,6 @@ class OceanRequestRouter:
         self._agent_sessions.clear()
         for session in sessions:
             await session.runtime.close()
-        if self.team_orchestrator is not None:
-            await self.team_orchestrator.close()
 
     async def handle(self, client: BackendClient, request: RequestEnvelope) -> None:
         """Process one typed request from a registered transport connection."""
@@ -482,15 +449,6 @@ class OceanRequestRouter:
                 recoverable=True,
                 details={"current_task_revision": exc.current_revision},
             )
-        except TaskCheckpointIncompatible as exc:
-            await self._fail_request(
-                client,
-                request,
-                code="task_checkpoint_incompatible",
-                message="The saved task conversation cannot be restored safely",
-                recoverable=True,
-                details={"reason": str(exc)},
-            )
         except TaskNotFound:
             await self._fail_request(
                 client,
@@ -570,19 +528,6 @@ class OceanRequestRouter:
                 recoverable=True,
                 details={"reason": str(exc)},
             )
-
-    def set_request_agent_budget(self, request_id: str, budget: OceanAgentBudget) -> None:
-        """Lower one not-yet-submitted agent request's backend-owned limits.
-
-        This is intentionally an internal router control rather than a Protocol
-        v2 field: a client cannot raise its own limits. The frozen evaluator
-        uses it to make a bounded continuation consume only the originating
-        task's remaining budget.
-        """
-
-        if request_id in self._agent_tasks or self.store.get_request(request_id) is not None:
-            raise RequestStoreError("Agent request budget must be set before request submission")
-        self._agent_request_budgets[request_id] = budget
 
     async def _handle_handshake(
         self,
@@ -691,6 +636,9 @@ class OceanRequestRouter:
         if isinstance(request, TaskAgentTranscriptGetRequest):
             await self._task_agent_transcript(client, request)
             return
+        if isinstance(request, TaskReportReadRequest):
+            await self._task_report_read(client, request)
+            return
         if isinstance(request, TaskOutputListRequest):
             await self._task_output_list(client, request)
             return
@@ -730,6 +678,9 @@ class OceanRequestRouter:
         if isinstance(request, DatasetImportRequest):
             await self._dataset_import(client, request)
             return
+        if isinstance(request, LocalSourceImportRequest):
+            await self._local_source_import(client, request)
+            return
         if isinstance(request, PaperImportRequest):
             await self._paper_import(client, request)
             return
@@ -741,6 +692,12 @@ class OceanRequestRouter:
             return
         if isinstance(request, PortableExportCreateRequest):
             await self._portable_export_create(client, request)
+            return
+        if isinstance(request, (ResearchLessonsListRequest, ResearchLessonDecideRequest,
+                                ResearchLessonRetireRequest, ResearchLessonsConsolidateRequest,
+                                ResearchReviewGetRequest, ResearchLabelSetRequest,
+                                ResearchPolicyActivateRequest)):
+            await self._research_review(client, request)
             return
         if isinstance(request, DisclosurePolicyGetRequest):
             await self._disclosure_policy_get(client, request)
@@ -1082,7 +1039,8 @@ class OceanRequestRouter:
                 relative_path=request.payload.relative_path,
                 local_path=request.payload.local_path,
                 allow_external=(
-                    client.transport == "stdio" and client.expected_client_kind == "desktop"
+                    (client.transport == "stdio" or client.verified_local_desktop)
+                    and client.expected_client_kind == "desktop"
                 ),
             )
         )
@@ -1211,6 +1169,82 @@ class OceanRequestRouter:
         if request.payload.desktop_staged:
             assert relative_path is not None
             self._discard_desktop_staged_dataset(workspace.path, relative_path)
+        await self._run_terminal_commit_hook(commit.terminal_event)
+        await self.event_bus.emit_workspace(commit.domain_event)
+        await self.event_bus.emit_local(client, commit.terminal_event)
+
+    async def _local_source_import(
+        self, client: BackendClient, request: LocalSourceImportRequest
+    ) -> None:
+        """Attach a neutral local file/directory; Agents determine how it is used."""
+
+        if self.artifact_service is None:
+            raise RequestStoreError("Artifact service is not configured")
+        workspace_id = self._workspace_id(request)
+        workspace = self.store.workspace_snapshot(workspace_id)
+        if not workspace.path:
+            raise RequestStoreError("Open a project-local workspace before importing a source")
+        source, relative_path, source_format, source_kind, source_scope = (
+            self._local_dataset_source(
+                workspace_path=workspace.path,
+                relative_path=request.payload.relative_path,
+                local_path=request.payload.local_path,
+                allow_external=(
+                    (client.transport == "stdio" or client.verified_local_desktop)
+                    and client.expected_client_kind == "desktop"
+                ),
+            )
+        )
+        source_stat = source.stat(follow_symlinks=False)
+        artifact_id = request.payload.artifact_id or self.artifact_service.new_artifact_id(
+            "source"
+        )
+        locator = (
+            {"source_relative_path": relative_path}
+            if relative_path is not None
+            else {"source_path": str(source)}
+        )
+        draft = ArtifactVersionDraft(
+            workspace_id=workspace_id,
+            artifact_id=artifact_id,
+            artifact_type="project_context",
+            schema_version="ocean-local-source/v1",
+            title=request.payload.title or source.name,
+            summary=f"Read-only local {source_kind}",
+            created_by="user",
+            content={
+                "schema_version": "ocean-local-source/v1",
+                "materialization_level": "local_reference",
+                **locator,
+                "source_scope": source_scope,
+                "source_kind": source_kind,
+                "format": source_format,
+                "registered_fingerprint": {
+                    "size_bytes": source_stat.st_size,
+                    "modified_ns": source_stat.st_mtime_ns,
+                },
+            },
+            provenance={
+                "schema_version": "ocean-local-source-import/v1",
+                "source_scope": source_scope,
+                **locator,
+            },
+        )
+        commit = self.artifact_service.commit(
+            draft,
+            request_id=request.request_id,
+            task_id=self._task_id(request),
+            task_relation="source" if self._task_id(request) is not None else None,
+            expected_workspace_revision=request.expected_workspace_revision,
+            files=None,
+            event_factory=self._artifact_event_factory(
+                client=client,
+                request=request,
+                workspace_id=workspace_id,
+            ),
+        )
+        if commit.terminal_event is None:
+            raise RequestStoreError("Request-backed source import has no terminal event")
         await self._run_terminal_commit_hook(commit.terminal_event)
         await self.event_bus.emit_workspace(commit.domain_event)
         await self.event_bus.emit_local(client, commit.terminal_event)
@@ -1397,6 +1431,109 @@ class OceanRequestRouter:
                 "local_paper_pdfs_included": False,
             },
         )
+        self.store.commit_terminal(request.request_id, terminal)
+        await self._broadcast_committed_terminal(client, terminal)
+
+    # --- research memory and human-approved lessons ------------------------------
+    def _project_research(self):
+        from oceanx.research.review import ProjectResearch
+        if self.task_workspace_projector is None:
+            raise RequestStoreError("Research memory requires an open project.")
+        return ProjectResearch(self.task_workspace_projector.paths)
+
+    def _task_research_tree(self, request: RequestEnvelope, task_id: str):
+        from oceanx.research.tree import ResearchTree
+        self._task_in_workspace(task_id, request)
+        return ResearchTree(self.task_workspace_projector.ensure_task_root(task_id)
+                            / "agents" / "coordinator" / "research_tree.json")
+
+    def _research_tree_stores(self, workspace_id: str) -> list[Path]:
+        stores = []
+        for task in self.store.list_research_tasks(
+                workspace_id=workspace_id, include_archived=True, limit=500):
+            try:
+                root = self.task_workspace_projector.ensure_task_root(task.task_id)
+            except Exception:  # noqa: BLE001 - a broken task folder must not block cleanup
+                continue
+            candidate = root / "agents" / "coordinator" / "research_tree.sqlite3"
+            if candidate.is_file():
+                stores.append(candidate)
+        return stores
+
+    def _consolidate_research(self, workspace_id: str, *, force: bool = False) -> dict | None:
+        project = self._project_research()
+        if not force and not project.memory.due():
+            return None
+        result = project.memory.consolidate(self._research_tree_stores(workspace_id),
+                                            protected_keys=project.lessons.protected_task_keys())
+        result["review_proposals"] = len(project.lessons.review_stale())
+        return result
+
+    def _schedule_research_consolidation(self, request: RequestEnvelope) -> None:
+        """Regular cleanup after research requests: digests + retention, no model calls."""
+        if self._closing or self.task_workspace_projector is None:
+            return
+        try:
+            workspace_id = self._workspace_id(request)
+        except RequestStoreError:
+            return
+
+        async def run() -> None:
+            try:
+                await asyncio.to_thread(self._consolidate_research, workspace_id)
+            except Exception:  # noqa: BLE001 - maintenance must never affect research
+                _LOGGER.exception("Research memory consolidation failed")
+
+        asyncio.get_running_loop().create_task(run())
+
+    async def _research_review(self, client: BackendClient, request: RequestEnvelope) -> None:
+        """Human review of lessons, node labels and research policies for one project."""
+        from oceanx.research.llm import default_llm
+        from oceanx.research.review import REVIEWER
+        run = asyncio.to_thread
+        try:
+            project = self._project_research()
+            book, payload = project.lessons, request.payload
+            result: dict[str, Any] = {}
+            if isinstance(request, ResearchLessonDecideRequest):
+                result["proposal"] = await run(
+                    book.decide, payload.proposal_id, approve=payload.decision == "approve",
+                    reviewer=REVIEWER, text=payload.text, applies_when=payload.applies_when,
+                    reason=payload.reason)
+            elif isinstance(request, ResearchLessonRetireRequest):
+                await run(book.retire, payload.lesson_id, reviewer=REVIEWER, reason=payload.reason)
+            elif isinstance(request, ResearchLessonsConsolidateRequest):
+                result["consolidation"] = await run(
+                    self._consolidate_research, self._workspace_id(request), force=True)
+                if payload.propose:
+                    mined = await run(book.mine, default_llm())
+                    result["mining"] = {"created": len(mined["created"]),
+                                        "rejected": mined["rejected"],
+                                        "tasks_considered": mined["tasks_considered"]}
+            elif isinstance(request, ResearchLabelSetRequest):
+                tree = self._task_research_tree(request, payload.task_id)
+                await run(project.set_label, tree, payload.node_id, payload.label)
+            elif isinstance(request, ResearchPolicyActivateRequest):
+                await run(project.activate_policy, payload.name)
+            if isinstance(request, (ResearchReviewGetRequest, ResearchLabelSetRequest,
+                                    ResearchPolicyActivateRequest)):
+                task_id = getattr(payload, "task_id", None)
+                result["policies"] = await run(project.policies)
+                result["labels"] = (await run(project.label_review,
+                                              self._task_research_tree(request, task_id))
+                                    if task_id else [])
+            else:
+                result["lessons"] = await run(book.overview)
+        except (ValueError, RequestStoreError, OSError) as exc:
+            await self._fail_request(client, request, code="invalid_request", message=str(exc),
+                                     recoverable=True, details={})
+            return
+        except Exception as exc:  # noqa: BLE001 - e.g. model not configured for the meta-agent
+            await self._fail_request(client, request, code="model_error",
+                                     message="Meta model request failed",
+                                     recoverable=True, details={"reason": str(exc)})
+            return
+        terminal = self._completed_event(client, request, result=result)
         self.store.commit_terminal(request.request_id, terminal)
         await self._broadcast_committed_terminal(client, terminal)
 
@@ -1607,7 +1744,7 @@ class OceanRequestRouter:
     @staticmethod
     def _assert_desktop_staged_dataset_path(relative_path: str) -> None:
         parts = PurePosixPath(relative_path).parts
-        if parts[:3] == (".oceanmind", "staging", "desktop-imports"):
+        if parts[:3] == (".oceanx", "staging", "desktop-imports"):
             import_index = 3
         else:
             raise RequestStoreError("Desktop-staged dataset path is invalid")
@@ -1621,7 +1758,7 @@ class OceanRequestRouter:
     @staticmethod
     def _discard_desktop_staged_dataset(workspace_path: str, relative_path: str) -> None:
         parts = PurePosixPath(relative_path).parts
-        if parts[:3] == (".oceanmind", "staging", "desktop-imports"):
+        if parts[:3] == (".oceanx", "staging", "desktop-imports"):
             import_index = 3
         else:
             return
@@ -1785,8 +1922,6 @@ class OceanRequestRouter:
             )
             return
 
-        budget = self._agent_request_budgets.get(request.request_id, self.agent_budget)
-
         try:
             provider_id = self.provider_id_resolver()
             expected_model_id = (
@@ -1821,7 +1956,6 @@ class OceanRequestRouter:
             )
             return
 
-        checkpoint = None
         if task_id is not None:
             current_task_record = self._task_in_workspace(task_id, request)
             if effective_task_revision != current_task_record.task_revision:
@@ -1842,7 +1976,7 @@ class OceanRequestRouter:
                 task_id=task_id,
                 workspace_id=workspace_id,
             )
-            checkpoint = self.store.get_task_checkpoint(task_id)
+
 
         try:
             agent_session = await self._agent_session_for(
@@ -1851,26 +1985,9 @@ class OceanRequestRouter:
                 workspace_path=Path(workspace.path),
                 provider_id=provider_id,
                 expected_model_id=expected_model_id,
-                budget=budget,
                 task_id=task_id,
-                checkpoint_messages=list(checkpoint.messages) if checkpoint is not None else None,
-                checkpoint_compaction_generation=(
-                    checkpoint.compaction_generation if checkpoint is not None else 0
-                ),
-                checkpoint_runtime_profile_fingerprint=(
-                    checkpoint.runtime_profile_fingerprint if checkpoint is not None else None
-                ),
-                checkpoint_system_prompt_fingerprint=(
-                    checkpoint.system_prompt_fingerprint if checkpoint is not None else None
-                ),
             )
-            context_snapshot = OceanContextBuilder(store=self.store).build(
-                workspace_id=workspace_id,
-                provider_id=provider_id,
-                task_id=task_id,
-                routing_only=True,
-            )
-        except (ContextPolicyError, OceanAgentRuntimeError, OSError, ValueError) as exc:
+        except (OceanAgentRuntimeError, OSError, ValueError) as exc:
             await self._fail_request(
                 client,
                 request,
@@ -1881,23 +1998,12 @@ class OceanRequestRouter:
             )
             return
 
-        agent_session.runtime.engine.set_system_prompt(
-            self._system_prompt_with_workspace_context(
-                agent_session.runtime.base_system_prompt,
-                context_snapshot.payload,
-                literature_acquisition_mode=request.payload.literature_acquisition_mode,
-            )
-        )
-        agent_session.runtime.engine.set_ask_user_prompt(
-            lambda question: self._ask_agent_interaction(client, request, question, kind="question")
-        )
-        agent_session.runtime.engine.set_permission_checker(OceanExecutionPermissionChecker())
-        agent_session.runtime.engine.set_permission_prompt(
-            lambda tool_name, reason: self._ask_execution_permission(
-                client, request, tool_name, reason
-            )
+        agent_session.runtime.engine.set_request_options(
+            literature_acquisition_mode=request.payload.literature_acquisition_mode,
+            workflow_mode=request.payload.workflow_mode,
         )
         self._agent_request_clients[request.request_id] = client
+        self._agent_request_sessions[request.request_id] = agent_session.runtime_key
         if revision_refreshed:
             # This is concurrency bookkeeping, not part of the research
             # conversation.  Keep it in backend diagnostics instead of
@@ -1917,36 +2023,13 @@ class OceanRequestRouter:
                 client=client,
                 request=request,
                 agent_session=agent_session,
-                context_audit_ids=context_snapshot.audit_ids,
-                budget=budget,
                 submitted_text=submitted_text,
                 visible_text=request.payload.text,
             ),
             name=f"ocean-agent-{request.request_id}",
         )
         self._agent_tasks[request.request_id] = task
-        self._agent_request_sessions[request.request_id] = agent_session.runtime_key
 
-    async def _ask_agent_interaction(
-        self,
-        client: BackendClient,
-        request: SessionSubmitRequest,
-        question: str,
-        *,
-        kind: Literal["question", "permission"],
-        tool_name: str | None = None,
-    ) -> str:
-        """Route one model question only to its owning local Desktop session."""
-
-        return await self._ask_interaction_for_request(
-            client,
-            request_id=request.request_id,
-            task_id=self._task_id(request),
-            workspace_id=self._workspace_id(request),
-            question=question,
-            kind=kind,
-            tool_name=tool_name,
-        )
 
     async def _ask_interaction_for_request(
         self,
@@ -2005,18 +2088,6 @@ class OceanRequestRouter:
         finally:
             self._pending_questions.pop(interaction_id, None)
 
-    async def _ask_execution_permission(
-        self, client: BackendClient, request: SessionSubmitRequest, tool_name: str, reason: str
-    ) -> bool:
-        response = await self._ask_agent_interaction(
-            client,
-            request,
-            f"Allow {tool_name} to start this sandboxed analysis execution? {reason}",
-            kind="permission",
-            tool_name=tool_name,
-        )
-        return response.strip().lower() in {"allow", "approve", "approved", "yes"}
-
     async def _request_paper_selection(
         self,
         *,
@@ -2025,7 +2096,7 @@ class OceanRequestRouter:
         payload: dict[str, Any],
         context: Any,
     ) -> dict[str, Any]:
-        """Return an explicit paper shortlist selection to the active Coordinator tool call."""
+        """Return an explicit paper shortlist selection to the active Search Expert call."""
 
         request_id = str(context.request_id or "").strip()
         if not request_id:
@@ -2115,12 +2186,7 @@ class OceanRequestRouter:
         workspace_path: Path,
         provider_id: str,
         expected_model_id: str | None,
-        budget: OceanAgentBudget,
         task_id: str | None,
-        checkpoint_messages: list[dict[str, Any]] | None,
-        checkpoint_compaction_generation: int,
-        checkpoint_runtime_profile_fingerprint: str | None,
-        checkpoint_system_prompt_fingerprint: str | None,
     ) -> _AgentSession:
         """Reuse a conversation only while its workspace/provider binding remains valid."""
 
@@ -2160,39 +2226,13 @@ class OceanRequestRouter:
             artifacts=self.artifact_service,
             task_id=task_id,
             resource_access="routing",
+            expert_code_execution=(
+                self.research_services.expert_code_execution if self.research_services else None
+            ),
             skill_capabilities=(LITERATURE_CAPABILITY,),
             skill_role="coordinator",
             domain_event_emitter=self.event_bus.emit_workspace,
-            paper_selection_sink=(
-                lambda payload, context: self._request_paper_selection(
-                    workspace_id=workspace_id,
-                    task_id=task_id,
-                    payload=payload,
-                    context=context,
-                )
-            ),
-            team_assign_sink=(
-                (
-                    lambda payload, context: self._assign_team_work(
-                        workspace_id=workspace_id,
-                        workspace_path=workspace_path,
-                        provider_id=provider_id,
-                        task_id=task_id,
-                        payload=payload,
-                        context=context,
-                    )
-                )
-                if self.team_orchestrator is not None
-                else None
-            ),
-            # Experts persist immutable candidate files. The Coordinator alone
-            # receives the publication service used to promote reviewed
-            # candidates into task-local results.
-            expert_deliverables=(
-                self.team_orchestrator.expert_deliverables
-                if self.team_orchestrator is not None
-                else None
-            ),
+            coordinator_enabled=True,
             agent_thread_id=(
                 f"task:{workspace_id}:{task_id}"
                 if task_id is not None
@@ -2202,7 +2242,6 @@ class OceanRequestRouter:
         runtime = await self.agent_runtime_factory(
             services,
             workspace_path.resolve(),
-            budget,
             self._operation_id,
         )
         if runtime.provider_id != provider_id:
@@ -2210,36 +2249,6 @@ class OceanRequestRouter:
             raise OceanAgentRuntimeError(
                 "Ocean runtime provider does not match the confirmed disclosure policy"
             )
-        current_runtime_fingerprint = hashlib.sha256(
-            OCEAN_RUNTIME_PROFILE_VERSION.encode("utf-8")
-        ).hexdigest()
-        current_prompt_fingerprint = hashlib.sha256(
-            runtime.base_system_prompt.encode("utf-8")
-        ).hexdigest()
-        checkpoint_is_current = (
-            checkpoint_messages is not None
-            and checkpoint_runtime_profile_fingerprint == current_runtime_fingerprint
-            and checkpoint_system_prompt_fingerprint == current_prompt_fingerprint
-        )
-        if checkpoint_messages is not None and not checkpoint_is_current:
-            _LOGGER.info(
-                "Ignoring stale task model checkpoint after Ocean runtime policy change",
-                extra={"task_id": task_id, "runtime_profile": OCEAN_RUNTIME_PROFILE_VERSION},
-            )
-        if checkpoint_is_current:
-            try:
-                runtime.engine.load_messages(
-                    [
-                        ConversationMessage.model_validate(message)
-                        for message in checkpoint_messages
-                    ],
-                    compaction_generation=checkpoint_compaction_generation,
-                )
-            except ValidationError as exc:
-                await runtime.close()
-                raise TaskCheckpointIncompatible(
-                    "Task checkpoint messages no longer match the OceanMind message schema"
-                ) from exc
         session = _AgentSession(
             session_id=client.session_id,
             runtime_key=runtime_key,
@@ -2250,35 +2259,6 @@ class OceanRequestRouter:
         self._agent_sessions[runtime_key] = session
         return session
 
-    @staticmethod
-    def _agent_job_key(payload: dict[str, Any], *, task_scope: str) -> str:
-        """Derive one persistent participant identity per task and Expert instance.
-
-        Goals, source selections, expected outputs, retries, and foreground
-        requests are assignment state. ``todo_id`` belongs to the Coordinator's
-        scientific plan; it never creates another instance. ``expert_key`` is
-        the only Coordinator-authored discriminator within one profile.
-        """
-
-        raw_authority = payload.get("authority", "")
-        try:
-            authority = ChildAuthority(raw_authority).value
-        except ValueError:
-            authority = str(raw_authority)
-        normalized = {
-            "task_scope": task_scope,
-            "profile_id": payload.get("profile_id"),
-            "authority": authority,
-        }
-        expert_key = payload.get("expert_key")
-        if expert_key:
-            # Keep the legacy/default singleton hash unchanged for existing
-            # tasks while giving explicitly parallel siblings isolated jobs.
-            normalized["expert_key"] = str(expert_key)
-        digest = hashlib.sha256(
-            json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
-        return f"job_{digest[:40]}"
 
     def _task_source_refs(
         self,
@@ -2310,1030 +2290,8 @@ class OceanRequestRouter:
                 refs.append(evidence)
         return tuple(refs)
 
-    def _agent_job_records(
-        self,
-        *,
-        workspace_id: str,
-        task_id: str | None,
-        parent_request_id: str,
-        job_key: str,
-        profile_id: str,
-        authority: str,
-        expert_key: str | None,
-    ) -> list[TeamWorkRecord]:
-        records = (
-            self.store.list_task_team_work(
-                workspace_id=workspace_id,
-                task_id=task_id,
-            )
-            if task_id is not None
-            else self.store.list_team_work(
-                workspace_id=workspace_id,
-                parent_request_id=parent_request_id,
-            )
-        )
-        return [
-            record
-            for record in records
-            if record.work_order.job_key == job_key
-            or (
-                # Legacy releases created several todo-derived job keys for
-                # the default singleton profile. Recover only those unkeyed
-                # records; never absorb an explicitly named sibling Expert.
-                expert_key is None
-                and record.work_order.expert_key is None
-                and record.work_order.profile_id == profile_id
-                and record.work_order.authority.value == authority
-            )
-        ]
 
-    @staticmethod
-    def _agent_round_id(*, parent_request_id: str, job_key: str, operation_suffix: str) -> str:
-        """Derive one replay-stable WorkOrder id for a single session round."""
 
-        digest = hashlib.sha256(
-            f"{parent_request_id}\0{job_key}\0{operation_suffix}".encode()
-        ).hexdigest()
-        return f"work_{digest[:32]}"
-
-    @classmethod
-    def _agent_session_capsule(cls, records: list[TeamWorkRecord]) -> str:
-        """Pack complete context values; full reports remain readable by virtual path."""
-
-        terminal_records = [record for record in records if record.result is not None]
-        rounds: list[dict[str, Any]] = []
-        omitted = {"rounds": max(0, len(terminal_records) - 3), "items": 0, "fields": 0}
-        memory = {
-            "round_count": len(terminal_records),
-            "ordering": "most_recent_first",
-            "projection": (
-                "Compact excerpts, not complete reports. Use ocean_read_file on full_report_path "
-                "with offset/limit for omitted details. An omitted issue is not resolved."
-            ),
-            "rounds": rounds,
-            "earlier_open_items": [],
-            "omitted_counts": omitted,
-        }
-
-        def serialized() -> str:
-            return json.dumps(memory, ensure_ascii=False, sort_keys=True)
-
-        def add_field(target: dict, key: str, value: Any, budget: int = 9_800) -> bool:
-            target[key] = value
-            if len(serialized()) <= budget:
-                return True
-            target.pop(key)
-            omitted["fields"] += 1
-            return False
-
-        def add_item(target: list, value: Any, budget: int = 9_800) -> bool:
-            target.append(value)
-            if len(serialized()) <= budget:
-                return True
-            target.pop()
-            omitted["items"] += 1
-            return False
-
-        def excerpt(target: dict, key: str, text: str, limit: int = 700) -> None:
-            if not text:
-                return
-            if len(text) <= limit:
-                add_field(target, key, text)
-            else:
-                # Only prose gets excerpts. IDs, URLs, file paths and refs stay exact.
-                add_field(target, key + "_excerpt", text[:limit])
-                omitted["fields"] += 1
-
-        def pack_items(target: dict, key: str, values: list, budget: int = 9_800) -> None:
-            if not values:
-                return
-            if not add_field(target, key, [], budget):
-                omitted["items"] += len(values)
-                return
-            for value in values:
-                if add_item(target[key], value, budget):
-                    continue
-                if isinstance(value, dict) and "id" in value:
-                    summary = {"id": value["id"], "details_omitted": True}
-                    for name in ("statement", "observation", "proposed_question"):
-                        if isinstance(value.get(name), str) and value[name]:
-                            summary[name + "_excerpt"] = value[name][:240]
-                    add_item(target[key], summary, budget)
-
-        selected = list(enumerate(terminal_records, start=1))[-3:]
-        for number, record in reversed(selected):
-            result = record.result
-            rounds.append({
-                "round": number,
-                "work_order_id": record.work_order.work_order_id,
-                "full_report_path": f"expert-report:{record.work_order.work_order_id}",
-                "status": record.state.value,
-                "result": {
-                    "result_origin": result.result_origin.value if result.result_origin else None,
-                    "outputs": [],
-                },
-            })
-
-        # Reserve a bounded index for older declared open issues before recent
-        # output manifests consume the packet. This does not judge their importance.
-        for record in terminal_records[:-3]:
-            result = record.result
-            report = result.report
-            report_has_open_items = report is not None and (
-                report.answer.open_gaps or report.limitations or report.leads or report.open_conflicts
-            )
-            if not report_has_open_items and not result.unresolved_questions and not result.limitations:
-                continue
-            summary = {
-                "work_order_id": record.work_order.work_order_id,
-                "full_report_path": f"expert-report:{record.work_order.work_order_id}",
-            }
-            if not add_item(memory["earlier_open_items"], summary, 3_000):
-                continue
-            if report is not None:
-                for key, values in (
-                    ("open_gaps", list(report.answer.open_gaps)),
-                    ("limitations", [item.model_dump(mode="json", exclude_defaults=True) for item in report.limitations]),
-                    ("leads", [item.model_dump(mode="json", exclude_defaults=True) for item in report.leads]),
-                    ("open_conflicts", list(report.open_conflicts)),
-                ):
-                    pack_items(summary, key, values, 3_000)
-            else:
-                pack_items(summary, "unresolved_questions", list(result.unresolved_questions), 3_000)
-                pack_items(summary, "limitations", list(result.limitations), 3_000)
-
-        for entry, (_number, record) in zip(rounds, reversed(selected), strict=True):
-            result = record.result
-            target = entry["result"]
-            excerpt(entry, "goal", record.work_order.task_goal, 500)
-            add_field(entry, "requested_outcomes", list(record.work_order.outcome_intents))
-            if result.report is not None:
-                report = result.report.model_dump(mode="json", exclude_none=True, exclude_defaults=True)
-                target["report"] = {"answer": {}}
-                answer = target["report"]["answer"]
-                excerpt(answer, "statement", report["answer"]["statement"], 1_200)
-                for key in ("direction", "level"):
-                    if key in report["answer"]:
-                        add_field(answer, key, report["answer"][key])
-                pack_items(answer, "open_gaps", report["answer"].get("open_gaps", []))
-                for key in ("limitations", "leads", "open_conflicts", "required_outputs_status", "tests", "path_deviations"):
-                    pack_items(target["report"], key, report.get(key, []))
-                pack_items(answer, "evidence_refs", report["answer"].get("evidence_refs", []))
-            else:
-                excerpt(target, "text", result.text, 2_000)
-                target["conclusions"] = []
-                pack_items(target, "conclusions", [item.model_dump(mode="json") for item in result.conclusions])
-                pack_items(target, "limitations", list(result.limitations))
-                pack_items(target, "unresolved_questions", list(result.unresolved_questions))
-            if result.failure_code is not None:
-                add_field(target, "failure_code", result.failure_code.value)
-            if result.error:
-                excerpt(target, "error", result.error, 700)
-            pack_items(target, "outputs", [item.coordinator_payload() for item in result.outputs])
-            pack_items(target, "evidence_refs", [item.model_dump(mode="json") for item in result.evidence_refs])
-        return serialized()
-
-    @staticmethod
-    def _team_work_token_usage(records: list[TeamWorkRecord]) -> int:
-        """Return measured tokens for terminal participant rounds in one user turn."""
-
-        return sum(
-            record.result.usage.input_tokens + record.result.usage.output_tokens
-            for record in records
-            if record.result is not None
-        )
-
-    def _participant_work_budget(
-        self,
-        request_id: str,
-        *,
-        authority: ChildAuthority,
-        sibling_count: int = 1,
-        budget_tier: Literal["quick", "standard", "deep"] = "standard",
-    ) -> WorkBudget:
-        """Return the ceiling for one bounded Coordinator-to-Expert assignment.
-
-        Scientific completion remains a Coordinator decision. These limits only
-        bound one round. A focused Coordinator follow-up is a new assignment and
-        receives a fresh bounded envelope while the shared request budget remains
-        the hard upper limit across the team.
-        """
-
-        del authority, sibling_count
-        budget = self._agent_request_budgets.get(request_id, self.agent_budget)
-        tier_limits = {
-            "quick": (24, 12, 160_000, 32_000, 300.0),
-            "standard": (64, 32, 320_000, 64_000, 600.0),
-            "deep": (
-                budget.max_turns,
-                budget.max_tool_calls,
-                budget.max_input_tokens,
-                budget.max_output_tokens,
-                budget.max_wall_seconds,
-            ),
-        }
-        turns, tool_calls, input_tokens, output_tokens, wall_seconds = tier_limits[budget_tier]
-        return WorkBudget(
-            max_turns=min(budget.max_turns, turns),
-            max_tool_calls=min(budget.max_tool_calls, tool_calls),
-            max_input_tokens=min(budget.max_input_tokens, input_tokens),
-            max_output_tokens=min(budget.max_output_tokens, output_tokens),
-            max_wall_seconds=min(budget.max_wall_seconds, wall_seconds),
-        )
-
-    @staticmethod
-    def _remaining_participant_work_budget(
-        total: WorkBudget,
-        records: list[TeamWorkRecord],
-    ) -> WorkBudget | None:
-        """Return the unused envelope when resuming an interrupted assignment.
-
-        This does not judge whether the science is complete. It prevents a
-        backend-recovered continuation of the same WorkOrder from resetting the
-        resources already spent before transport failed.
-        """
-
-        used_turns = 0
-        used_tool_calls = 0
-        used_input_tokens = 0
-        used_output_tokens = 0
-        used_wall_seconds = 0.0
-        for record in records:
-            if record.result is None:
-                continue
-            usage = record.result.usage
-            used_turns += usage.turns
-            used_tool_calls += usage.tool_calls
-            used_input_tokens += usage.input_tokens
-            used_output_tokens += usage.output_tokens
-            used_wall_seconds += usage.wall_seconds
-
-        remaining = {
-            "max_turns": total.max_turns - used_turns,
-            "max_tool_calls": total.max_tool_calls - used_tool_calls,
-            "max_input_tokens": total.max_input_tokens - used_input_tokens,
-            "max_output_tokens": total.max_output_tokens - used_output_tokens,
-            "max_wall_seconds": total.max_wall_seconds - used_wall_seconds,
-        }
-        # A continuation needs enough room to read its compact assignment and
-        # return once. Below these transport minima another model call cannot
-        # produce a useful delivery.
-        if (
-            remaining["max_turns"] < 1
-            or remaining["max_tool_calls"] < 1
-            or remaining["max_input_tokens"] < 8_000
-            or remaining["max_output_tokens"] < 2_000
-            or remaining["max_wall_seconds"] < 30.0
-        ):
-            return None
-        return WorkBudget(**remaining)
-
-    async def _assign_team_work(
-        self,
-        *,
-        workspace_id: str,
-        workspace_path: Path,
-        provider_id: str,
-        task_id: str | None,
-        payload: dict[str, Any],
-        context,
-    ) -> dict[str, Any]:
-        """Route the Coordinator's single scheduling contract to backend orchestration."""
-
-        return await self._execute_team_plan(
-            workspace_id=workspace_id,
-            workspace_path=workspace_path,
-            provider_id=provider_id,
-            task_id=task_id,
-            payload=payload,
-            context=context,
-        )
-
-    async def _execute_team_plan(
-        self,
-        *,
-        workspace_id: str,
-        workspace_path: Path,
-        provider_id: str,
-        task_id: str | None,
-        payload: dict[str, Any],
-        context,
-    ) -> dict[str, Any]:
-        """Bind the Coordinator's dispatched todos to Expert work orders."""
-
-        orchestrator = self.team_orchestrator
-        if orchestrator is None:
-            raise RequestStoreError("Sparse Ocean team delegation is not configured")
-        if context.request_id is None or context.operation_id is None:
-            raise RequestStoreError("Team WorkPlan requires durable request correlation")
-        request_record = self.store.get_request(context.request_id)
-        if request_record is None or request_record.request_type != "session.submit":
-            raise RequestStoreError("Team WorkPlan parent is not a foreground Ocean request")
-        if request_record.workspace_id != workspace_id or request_record.task_id != task_id:
-            raise RequestStoreError("Team WorkPlan does not belong to this workspace task")
-        expected_revision = self.store.workspace_snapshot(workspace_id).revision
-
-        operation_suffix = hashlib.sha256(context.operation_id.encode("utf-8")).hexdigest()[:24]
-        plan_goal = str(payload.pop("plan_goal")).strip()
-        todos = list(payload.pop("todos"))
-        dispatch = tuple(str(todo_id) for todo_id in payload.pop("dispatch"))
-        research_test_ids = tuple(payload.pop("research_test_ids", ()))
-        if payload:
-            raise RequestStoreError(
-                "Team assignment contains unsupported fields: " + ", ".join(sorted(payload))
-            )
-        todo_by_id = {str(todo["todo_id"]): todo for todo in todos}
-        dispatched_todos = [dict(todo_by_id[todo_id]) for todo_id in dispatch]
-        dispatched_experts = [
-            (str(todo.get("profile_id")), str(todo.get("expert_key") or "default"))
-            for todo in dispatched_todos
-        ]
-        duplicate_experts = sorted(
-            expert
-            for expert in set(dispatched_experts)
-            if dispatched_experts.count(expert) > 1
-        )
-        if duplicate_experts:
-            raise RequestStoreError(
-                "Dispatch at most one todo per stable Expert instance in a wave. Sequence more "
-                "work through that instance or use distinct expert_key values: "
-                + ", ".join(
-                    f"{profile_id}/{expert_key}"
-                    for profile_id, expert_key in duplicate_experts
-                )
-            )
-        todo_plan = tuple(
-            CoordinatorTodo(
-                todo_id=str(todo["todo_id"]),
-                question=str(todo["question"]),
-                depends_on=tuple(todo.get("depends_on", ())),
-                profile_id=str(todo["profile_id"]),
-                expert_key=(str(todo["expert_key"]) if todo.get("expert_key") else None),
-                review=bool(todo.get("review", False)),
-                expected_outputs=tuple(todo.get("expected_outputs", ("answer",))),
-            )
-            for todo in todos
-        )
-        task_sources = self._task_source_refs(
-            workspace_id=workspace_id,
-            task_id=task_id,
-        )
-        explicit_source_selection = {
-            str(todo["todo_id"]): "source_handles" in todo for todo in dispatched_todos
-        }
-        for todo in dispatched_todos:
-            bind_agent_profile(todo)
-            authority = ChildAuthority(todo["authority"])
-            requested_handles = tuple(todo.pop("source_handles", ()))
-            selected_sources: tuple[EvidenceRef, ...]
-            if authority is not ChildAuthority.EXPERT:
-                if requested_handles:
-                    raise RequestStoreError(
-                        "Scientific Discussion Partner does not receive Task Sources; pass frozen "
-                        "Expert results through context in a later Coordinator wave"
-                    )
-                selected_sources = ()
-            elif requested_handles:
-                selected: list[EvidenceRef] = []
-                for handle in requested_handles:
-                    match = re.fullmatch(r"source_([1-9][0-9]*)", str(handle))
-                    if match is None or int(match.group(1)) > len(task_sources):
-                        raise RequestStoreError(f"Unknown Task Source handle: {handle}")
-                    source = task_sources[int(match.group(1)) - 1]
-                    if source not in selected:
-                        selected.append(source)
-                selected_sources = tuple(selected)
-            else:
-                # A task's source memory is the default assignment envelope. The
-                # Coordinator may narrow it with source_handles, but omitting that
-                # optional optimization must never dispatch an empty Expert job or
-                # trigger a response retry.
-                selected_sources = task_sources
-            todo["task_goal"] = todo.pop("question")
-            todo["question_ref"] = str(todo["todo_id"])
-            todo["context_summary"] = self._bounded_text("\n\n".join(
-                part
-                for part in (
-                    f"Why this Expert: {todo.pop('why_this_expert')}",
-                    str(todo.pop("context", "")).strip(),
-                )
-                if part
-            ), 16_000)
-            todo["outcome_intents"] = tuple(todo.pop("expected_outputs"))
-            # Experts receive backend-mounted Task Sources. The Scientific
-            # Discussion Partner receives only the Coordinator's question,
-            # hypotheses, and explicitly supplied context.
-            todo["input_refs"] = tuple(item.model_dump(mode="json") for item in selected_sources)
-        job_keys = {
-            todo["todo_id"]: self._agent_job_key(
-                todo,
-                task_scope=task_id or context.request_id,
-            )
-            for todo in dispatched_todos
-        }
-        dispatched_by_id = {str(todo["todo_id"]): todo for todo in dispatched_todos}
-        job_records = {
-            todo_id: self._agent_job_records(
-                workspace_id=workspace_id,
-                task_id=task_id,
-                parent_request_id=context.request_id,
-                job_key=job_key,
-                profile_id=str(dispatched_by_id[todo_id]["profile_id"]),
-                authority=ChildAuthority(dispatched_by_id[todo_id]["authority"]).value,
-                expert_key=(
-                    str(dispatched_by_id[todo_id]["expert_key"])
-                    if dispatched_by_id[todo_id].get("expert_key")
-                    else None
-                ),
-            )
-            for todo_id, job_key in job_keys.items()
-        }
-        # Existing tasks may contain pre-instance-key records whose job_key
-        # included todo_id. The default unkeyed Expert adopts the latest stored
-        # key so its session workspace continues instead of being reinitialized.
-        for todo_id, records in job_records.items():
-            if records and records[-1].work_order.job_key is not None:
-                job_keys[todo_id] = records[-1].work_order.job_key
-        existing_jobs = {
-            todo_id: (records[-1] if records else None) for todo_id, records in job_records.items()
-        }
-        for latest in existing_jobs.values():
-            if latest is not None and latest.state in {
-                WorkStatus.QUEUED,
-                WorkStatus.RUNNING,
-            }:
-                raise RequestStoreError(
-                    "The selected Expert session already has an active round; wait for its result "
-                    "before assigning the next question"
-                )
-        todos_by_id = dispatched_by_id
-        continuations: dict[str, TeamWorkRecord] = {}
-        for todo_id, latest in existing_jobs.items():
-            if (
-                latest is None
-                or todos_by_id[todo_id].get("continuation") is not None
-                or latest.work_order.parent_request_id != context.request_id
-                or latest.work_order.todo_id != todo_id
-                or latest.result is None
-                or latest.result.result_origin is not ExpertResultOrigin.BACKEND_RECOVERED
-                or latest.state
-                not in {
-                    WorkStatus.COMPLETED,
-                    WorkStatus.INCOMPLETE,
-                    WorkStatus.FAILED,
-                    WorkStatus.CANCELLED,
-                }
-            ):
-                continue
-            todo = todos_by_id[todo_id]
-            continuation_budget = self._remaining_participant_work_budget(
-                self._participant_work_budget(
-                    context.request_id,
-                    authority=ChildAuthority(todo["authority"]),
-                    budget_tier=todo.get("budget_tier", "standard"),
-                ),
-                [latest],
-            )
-            if continuation_budget is not None:
-                continuations[todo_id] = latest
-        request_work_records = self.store.list_team_work(
-            workspace_id=workspace_id,
-            parent_request_id=context.request_id,
-        )
-        agent_budget = self._agent_request_budgets.get(context.request_id, self.agent_budget)
-        team_tokens_before_wave = self._team_work_token_usage(request_work_records)
-        new_round_cutoff = max(
-            0,
-            agent_budget.max_team_tokens - agent_budget.delivery_reserve_tokens,
-        )
-        starts_new_round = any(
-            str(todo["todo_id"]) not in continuations for todo in dispatched_todos
-        )
-        if starts_new_round and team_tokens_before_wave >= new_round_cutoff:
-            raise RequestStoreError(
-                "The shared team budget is now reserved for Coordinator delivery. "
-                "Do not start another Expert round; synthesize the answer from the "
-                "durable results already returned in this user turn."
-            )
-        key_to_id = {
-            todo["todo_id"]: (
-                continuations[str(todo["todo_id"])].work_order.work_order_id
-                if str(todo["todo_id"]) in continuations
-                else self._agent_round_id(
-                    parent_request_id=context.request_id,
-                    job_key=job_keys[todo["todo_id"]],
-                    operation_suffix=operation_suffix,
-                )
-            )
-            for todo in dispatched_todos
-        }
-        bound_revision = expected_revision
-        orders: list[WorkOrder] = []
-        for dispatched_todo in dispatched_todos:
-            todo = dict(dispatched_todo)
-            todo_id = str(todo["todo_id"])
-            authority = ChildAuthority(todo["authority"])
-            prior_records = job_records[todo_id]
-            continuation = continuations.get(todo_id)
-            total_job_budget = self._participant_work_budget(
-                context.request_id,
-                authority=authority,
-                budget_tier=todo.get("budget_tier", "standard"),
-            )
-            remaining_job_budget = self._remaining_participant_work_budget(
-                total_job_budget,
-                [continuation] if continuation is not None else [],
-            )
-            if remaining_job_budget is None:
-                raise RequestStoreError(
-                    "This interrupted assignment has no delivery capacity left. Review its "
-                    "durable outputs and either issue a new focused follow-up assignment or "
-                    "synthesize the supported answer with its remaining limitation."
-                )
-            if continuation is not None:
-                # An implicit recovery retries the same unfinished assignment;
-                # an explicit Coordinator continuation takes the new-round path
-                # below so its approved question and scope are not discarded.
-                orders.append(
-                    continuation.work_order.model_copy(
-                        update={
-                            "workspace_revision": bound_revision,
-                            "budget": remaining_job_budget,
-                        }
-                    )
-                )
-                continue
-            prior_terminal_records = [
-                record for record in prior_records if record.result is not None
-            ]
-            todo["mode"] = "continue" if prior_terminal_records else "new"
-            if prior_terminal_records and todo.get("continuation"):
-                source_ref = todo["continuation"].get("source_report_ref")
-                source_records = [
-                    record for record in prior_terminal_records
-                    if source_ref is None or record.work_order.work_order_id == source_ref
-                ]
-                if not source_records:
-                    raise RequestStoreError(
-                        "continuation.source_report_ref must name a returned work_order_id "
-                        "in this Expert session"
-                    )
-                previous_order = source_records[-1].work_order
-                # A short authorized follow-up inherits the existing scientific
-                # envelope unless the Coordinator explicitly replaces it.
-                for field in (
-                    "answer_standard", "required_outputs", "target_node",
-                    "alternative_nodes", "suggested_path", "hints", "constraints",
-                ):
-                    if field not in todo:
-                        previous_value = getattr(previous_order, field)
-                        todo[field] = previous_value
-                todo["question_ref"] = previous_order.question_ref or previous_order.todo_id or todo_id
-                if not explicit_source_selection[todo_id]:
-                    todo["input_refs"] = previous_order.input_refs
-                todo["context_summary"] = (
-                    f"Continuing scientific question: {previous_order.task_goal}\n\n"
-                    + todo["context_summary"]
-                )
-            if prior_terminal_records:
-                todo["context_summary"] = "\n\n".join(
-                        part
-                        for part in (
-                            self._bounded_text(str(todo.get("context_summary", "")).strip(), 4_000),
-                            "This is a new Coordinator follow-up round in the same logical Expert "
-                            "session. Reuse the durable results and execution evidence below. "
-                            "Answer the new incremental question; do not repeat or recompute "
-                            "already supported outcomes unless the new goal requires correction.\n"
-                            + self._agent_session_capsule(prior_terminal_records),
-                        )
-                        if part
-                    )
-            candidate = WorkOrder(
-                work_order_id=key_to_id[todo_id],
-                task_id=task_id,
-                job_key=job_keys[todo_id],
-                session_round=len(prior_terminal_records) + 1,
-                parent_request_id=context.request_id,
-                workspace_revision=bound_revision,
-                allowed_capabilities=tuple(sorted(capabilities_for_authority(authority))),
-                budget=remaining_job_budget,
-                **todo,
-            )
-            orders.append(candidate)
-        plan = WorkPlan(
-            plan_id=f"plan_{operation_suffix}",
-            parent_request_id=context.request_id,
-            workspace_revision=bound_revision,
-            reason_codes=("coordinator_assignment",),
-            plan_goal=plan_goal,
-            todos=todo_plan,
-            dispatch=dispatch,
-            work_orders=tuple(orders),
-            preserve_disagreements=True,
-        )
-        if research_test_ids:
-            # Reserve once per actual Expert round, including stable identities
-            # reused after interruption. Discussion has no scientific execution.
-            execution_ids = [
-                order.work_order_id for order in orders if order.authority is ChildAuthority.EXPERT
-            ]
-            if execution_ids:
-                begin_tests(
-                    self.store, workspace_id, task_id, research_test_ids,
-                    execution_ids=execution_ids,
-                )
-        results = await orchestrator.execute_plan(
-            workspace_id=workspace_id,
-            workspace_path=workspace_path,
-            provider_id=provider_id,
-            task_id=task_id,
-            plan=plan,
-            progress_sink=lambda: self._emit_team_snapshot(
-                workspace_id=workspace_id,
-                parent_request_id=context.request_id,
-                task_id=task_id,
-            ),
-        )
-        records_by_id = {
-            record.work_order.work_order_id: record
-            for record in self.store.list_team_work(
-                workspace_id=workspace_id,
-                parent_request_id=context.request_id,
-            )
-        }
-        cumulative_team_tokens = self._team_work_token_usage(list(records_by_id.values()))
-        results_by_id = {result.work_order_id: result for result in results}
-        return {
-            # The Coordinator already authored the WorkPlan. Do not echo it or
-            # return backend bookkeeping inside the semantic ExpertResult.
-            # Work state remains in work_records/todo_progress; scientific
-            # handoff is one scientific report plus fully described outputs.
-            "expert_results": [result.coordinator_payload() for result in results],
-            "work_records": [
-                (
-                    self._team_work_activity_summary(
-                        records_by_id[order.work_order_id],
-                        todo_id=str(todo["todo_id"]),
-                    )
-                    if order.work_order_id in records_by_id
-                    else {
-                        "todo_id": str(todo["todo_id"]),
-                        "work_order_id": order.work_order_id,
-                        "semantic_role": order.semantic_role,
-                        "authority": order.authority.value,
-                        "state": results_by_id[order.work_order_id].status.value,
-                        "result": {
-                            "status": results_by_id[order.work_order_id].status.value,
-                            "failure_code": (
-                                results_by_id[order.work_order_id].failure_code.value
-                                if results_by_id[order.work_order_id].failure_code is not None
-                                else None
-                            ),
-                            "error": results_by_id[order.work_order_id].error,
-                        },
-                    }
-                )
-                for order, todo in zip(orders, dispatched_todos, strict=True)
-            ],
-            "estimated_limits": {
-                "max_children": len(orders),
-                "shared_team_tokens": agent_budget.max_team_tokens,
-                "delivery_reserve_tokens": agent_budget.delivery_reserve_tokens,
-                "participant_max_input_tokens": agent_budget.max_input_tokens,
-                "participant_max_output_tokens": agent_budget.max_output_tokens,
-                "participant_max_tool_calls": agent_budget.max_tool_calls,
-            },
-            "actual_usage": {
-                "input_tokens": sum(result.usage.input_tokens for result in results),
-                "output_tokens": sum(result.usage.output_tokens for result in results),
-                "tool_calls": sum(result.usage.tool_calls for result in results),
-                "wall_seconds_sum": sum(result.usage.wall_seconds for result in results),
-                "team_tokens_before_wave": team_tokens_before_wave,
-                "cumulative_team_tokens": cumulative_team_tokens,
-                "shared_team_tokens_remaining": max(
-                    0, agent_budget.max_team_tokens - cumulative_team_tokens
-                ),
-            },
-            "workspace_revision": self.store.workspace_snapshot(workspace_id).revision,
-            "unresolved_disagreements_must_be_preserved": True,
-            # New work becomes visible only through task-local results. Legacy
-            # Artifact deliverables remain readable, but cannot turn a current
-            # Team round into a newly published result.
-            "canonical_mutation": any(result.result_refs for result in results),
-            "todo_progress": {
-                str(todo["todo_id"]): {
-                    "job_key": job_keys[str(todo["todo_id"])],
-                    "session_round": order.session_round,
-                    "prior_rounds": sum(
-                        1
-                        for record in job_records[str(todo["todo_id"])]
-                        if record.result is not None
-                        and record.result.result_origin is ExpertResultOrigin.AGENT_SUBMITTED
-                    ),
-                    "current_work_order_id": key_to_id[str(todo["todo_id"])],
-                    "depends_on": list(order.depends_on),
-                    "state": results_by_id[order.work_order_id].status.value,
-                    "round_result_returned_to_coordinator": (
-                        results_by_id[order.work_order_id].result_origin
-                        is ExpertResultOrigin.AGENT_SUBMITTED
-                    ),
-                }
-                for todo, order in zip(dispatched_todos, orders, strict=True)
-            },
-        }
-
-    @staticmethod
-    def _durable_team_result_refs(
-        records: list[TeamWorkRecord],
-    ) -> tuple[TaskResultRef, ...]:
-        """Return task-local results from the latest durable Expert round.
-
-        TaskResult creation and ResultBundle binding are backend-owned commits,
-        so their validity does not depend on the Expert managing to submit its
-        final prose.  Only the latest round for each persistent Expert session
-        is visible; older rounds remain durable history.
-        """
-
-        latest_durable_by_job: dict[str, TeamWorkRecord] = {}
-        for record in records:
-            if (
-                record.work_order.authority is not ChildAuthority.EXPERT
-                or record.result is None
-                or not record.result.result_refs
-            ):
-                continue
-            job_key = record.work_order.job_key or record.work_order.work_order_id
-            current = latest_durable_by_job.get(job_key)
-            if (
-                current is None
-                or record.work_order.session_round > current.work_order.session_round
-            ):
-                latest_durable_by_job[job_key] = record
-
-        return tuple(
-            dict.fromkeys(
-                ref
-                for record in latest_durable_by_job.values()
-                for ref in record.result.result_refs
-                if record.result is not None
-            )
-        )
-
-    def _task_result_records(
-        self,
-        refs: tuple[TaskResultRef, ...],
-    ) -> tuple[Any, ...]:
-        """Resolve only result refs that still belong to their immutable task."""
-
-        if self.task_results is None:
-            return ()
-        records: list[Any] = []
-        for ref in refs:
-            try:
-                records.append(self.task_results.get(ref))
-            except TaskResultError:
-                continue
-        return tuple(records)
-
-    @staticmethod
-    def _coordinator_report_requested(records: list[TeamWorkRecord]) -> bool:
-        """Return whether the user-facing team plan requested a final report."""
-
-        return any(
-            record.work_order.authority is ChildAuthority.EXPERT
-            and "report" in record.work_order.outcome_intents
-            for record in records
-        )
-
-    def _materialize_coordinator_report(
-        self,
-        *,
-        workspace_id: str,
-        task_id: str | None,
-        request_id: str,
-        answer_markdown: str,
-        result_refs: tuple[TaskResultRef, ...],
-    ) -> TaskResultRef | None:
-        """Persist the Coordinator synthesis without asking an Expert to publish it."""
-
-        if task_id is None or self.task_results is None or not answer_markdown.strip():
-            return None
-        existing_reports = [
-            record for record in self._task_result_records(result_refs) if record.kind == "report"
-        ]
-        if existing_reports:
-            return max(
-                existing_reports,
-                key=lambda item: (item.created_at, item.ref.result_id),
-            ).ref
-
-        source_refs = tuple(ref.model_dump(mode="json") for ref in result_refs)
-        result_records = {record.ref.key: record for record in self._task_result_records(result_refs)}
-        from oceanx.result_citations import canonical_result_citations
-
-        markdown = canonical_result_citations(answer_markdown.strip(), list(result_records.values())) + "\n"
-        uncited_refs = []
-        for ref in result_refs:
-            record = result_records.get(ref.key)
-            output_path = record.content.get("output_path") if record is not None else None
-            if ref.result_id not in markdown and not (
-                isinstance(output_path, str) and f"[[output:{output_path}" in markdown
-            ):
-                uncited_refs.append(ref)
-        if uncited_refs:
-            markdown += "\n## Supporting results\n\n"
-            for ref in uncited_refs:
-                key = f"{ref.task_id}/{ref.result_id}@v{ref.version}"
-                markdown += f"- [[result:{key}|{ref.result_id}]]\n"
-        markdown = canonical_result_citations(markdown, list(result_records.values()))
-
-        task = self.store.get_research_task(task_id, workspace_id=workspace_id)
-        task_title = task.title if task is not None else "OceanMind analysis"
-        record = self.task_results.put(
-            workspace_id=workspace_id,
-            task_id=task_id,
-            kind="report",
-            title=f"{task_title} — research report",
-            summary="Coordinator synthesis of accepted Expert conclusions and evidence.",
-            content={
-                "role": "coordinator_report",
-                "markdown_file": "report.md",
-                "source_result_refs": list(source_refs),
-                "conclusion_export_allowed": True,
-            },
-            files={"report.md": markdown.encode("utf-8")},
-            source_refs=source_refs,
-            origin_request_id=request_id,
-            materialization_key=f"coordinator-report:{request_id}",
-        )
-        return record.ref
-
-    def _materialize_figure_reproduction_notebook(
-        self,
-        *,
-        workspace_id: str,
-        task_id: str | None,
-        request_id: str,
-        result_refs: tuple[TaskResultRef, ...],
-    ) -> TaskResultRef | None:
-        """Create a notebook that re-renders accepted, already-saved result data."""
-
-        if task_id is None or self.task_results is None:
-            return None
-        materialization_key = f"supplementary-analysis-v4:{request_id}"
-        existing = self.task_results.find_by_materialization_key(
-            task_id=task_id,
-            materialization_key=materialization_key,
-        )
-        if existing is not None:
-            return existing.ref
-        projector = self.task_workspace_projector or self.task_results.task_workspaces
-        supplementary_root = projector.supplementary_notebook_path(task_id, request_id).parent
-        sources: list[FigureReproductionSource] = []
-        provenance_refs: list[dict[str, Any]] = []
-        for record in self._task_result_records(result_refs):
-            if record.kind != "interactive_view":
-                continue
-            data_file = record.content.get("dataset_file") or record.content.get(
-                "data_file"
-            )
-            if not isinstance(data_file, str) or not data_file.strip():
-                continue
-            declared = next(
-                (item for item in record.files if item.path == data_file),
-                None,
-            )
-            if declared is None or Path(declared.path).suffix.lower() != ".nc":
-                continue
-            try:
-                path = self.task_results.file_path(
-                    ref=record.ref,
-                    relative_path=data_file,
-                )
-            except (OSError, ValueError, TaskResultError):
-                continue
-            view_kind = record.content.get("view_kind")
-            sources.append(
-                FigureReproductionSource(
-                    result_ref=record.ref.model_dump(mode="json"),
-                    title=record.title,
-                    summary=record.summary,
-                    view_kind=view_kind if isinstance(view_kind, str) else "interactive_view",
-                    data_reference=Path(
-                        os.path.relpath(path, supplementary_root)
-                    ).as_posix(),
-                )
-            )
-            for source_ref in record.source_refs:
-                if source_ref not in provenance_refs:
-                    provenance_refs.append(source_ref)
-        if not sources:
-            return None
-
-        notebook, data_index = build_figure_reproduction_notebook(
-            request_id=request_id,
-            sources=tuple(sources),
-        )
-        notebook_path = projector.write_supplementary_notebook(
-            task_id=task_id,
-            request_id=request_id,
-            content=(
-                json.dumps(notebook, ensure_ascii=False, indent=2) + "\n"
-            ).encode("utf-8"),
-        )
-        record = self.task_results.put(
-            workspace_id=workspace_id,
-            task_id=task_id,
-            kind="file",
-            title="Analysis notebook",
-            summary="One editable notebook for this analysis, linked to its accepted result data.",
-            content={
-                "role": "supplementary_figure_notebook",
-                "file": "analysis.ipynb",
-                "source_result_refs": [source.result_ref for source in sources],
-                "data_files": data_index,
-                "renderer": "nature-python-templates/v3",
-            },
-            workspace_files={"analysis.ipynb": notebook_path},
-            source_refs=tuple(provenance_refs),
-            origin_request_id=request_id,
-            materialization_key=materialization_key,
-        )
-        return record.ref
-
-    def _explicit_research_outcome(
-        self, workspace_id: str, task_id: str | None, request_id: str
-    ) -> Literal["answered", "insufficient_evidence", "partial", "blocked"] | None:
-        """Copy an explicit current-turn scientific decision, never infer one.
-
-        Message delivery still completes normally if no research label was set.
-        A previous turn's tree decision is not a verdict about this answer.
-        """
-        if task_id is None:
-            return None
-        try:
-            tree = exploration_action(
-                self.store, workspace_id, task_id, ExplorationInput(action="read")
-            )
-        except (RequestStoreError, ValueError):
-            return None
-        if tree.get("stop_request_id") != request_id:
-            return None
-        decision = tree.get("stop_decision")
-        if not isinstance(decision, dict):
-            return None
-        return {
-            "answered": "answered",
-            "unable_to_answer": "insufficient_evidence",
-        }.get(decision.get("exit"))
-
-    def _canonical_user_answer(
-        self,
-        *,
-        candidate: str,
-        decision: CoordinatorDecision,
-        result_refs: tuple[TaskResultRef, ...],
-    ) -> str:
-        """Prefer the published report when final prose is not result-bound.
-
-        A Coordinator's ordinary prose remains authoritative when it actually
-        cites durable results.  If it does not, a published report is a safer
-        user-facing boundary than the latest repair round's filenames, API
-        diagnostics, or advisory self-assessment.
-        """
-
-        records = self._task_result_records(result_refs)
-        reports = [record for record in records if record.kind == "report"]
-        has_result_binding = "[[result:" in candidate or "[[output:" in candidate
-        answer = candidate.strip()
-        if reports and (not has_result_binding or decision is not CoordinatorDecision.ANSWERED):
-            report = max(reports, key=lambda item: (item.created_at, item.ref.result_id))
-            markdown_file = report.content.get("markdown_file")
-            if isinstance(markdown_file, str):
-                try:
-                    answer = (
-                        self.task_results.file_path(
-                            ref=report.ref,
-                            relative_path=markdown_file,
-                        )
-                        .read_text(encoding="utf-8")
-                        .strip()
-                    )
-                except (OSError, TaskResultError):
-                    pass
-        if not answer:
-            answer = "The available results could not be presented as a complete answer."
-        if reports:
-            report = max(reports, key=lambda item: (item.created_at, item.ref.result_id))
-            report_key = f"{report.ref.task_id}/{report.ref.result_id}@v{report.ref.version}"
-            if report_key not in answer and report.ref.result_id not in answer:
-                answer = (
-                    f"{answer.rstrip()}\n\n## Research report\n\n"
-                    f"- [[result:{report_key}|Open the complete research report]]"
-                )
-        from oceanx.result_citations import canonical_result_citations
-
-        return canonical_result_citations(answer, records)
 
     async def _execute_agent_request(
         self,
@@ -3341,8 +2299,6 @@ class OceanRequestRouter:
         client: BackendClient,
         request: SessionSubmitRequest,
         agent_session: _AgentSession,
-        context_audit_ids: tuple[str, ...],
-        budget: OceanAgentBudget,
         submitted_text: str,
         visible_text: str,
     ) -> None:
@@ -3354,10 +2310,6 @@ class OceanRequestRouter:
         turn_count = 0
         last_assistant_text = ""
         model_error: ErrorEvent | None = None
-        active_tool_calls = 0
-        prior_max_turns = agent_session.runtime.engine.max_turns
-        agent_session.runtime.engine.set_max_turns(budget.max_turns)
-
         # API latency is not a model-resource budget. Token/turn limits bound
         # reasoning; cancellation and tool-progress checks remain independent.
         try:
@@ -3373,13 +2325,10 @@ class OceanRequestRouter:
             stream = _coordinator_events(
                 agent_session.runtime.engine, submitted_text, request.request_id,
             ).__aiter__()
+            native_team_tools = {"task"}
             while True:
                 try:
-                    if active_tool_calls:
-                        async with asyncio.timeout(budget.max_tool_wait_seconds):
-                            event = await anext(stream)
-                    else:
-                        event = await anext(stream)
+                    event = await anext(stream)
                 except StopAsyncIteration:
                     break
                 except asyncio.CancelledError:
@@ -3387,20 +2336,40 @@ class OceanRequestRouter:
                     # decision. Never synthesize or accept them in backend
                     # recovery when Coordinator reasoning is interrupted.
                     raise
-                except TimeoutError as exc:
-                    raise _AgentToolWaitExceeded(
-                        "tool execution did not report completion within "
-                        f"{budget.max_tool_wait_seconds:g} seconds"
-                    ) from exc
 
-                if isinstance(event, ToolExecutionStarted):
-                    active_tool_calls += 1
-                elif isinstance(event, ToolExecutionCompleted):
-                    active_tool_calls = max(0, active_tool_calls - 1)
-                    if event.tool_name == "ocean_assign":
+                if isinstance(event, ToolExecutionCompleted):
+                    if event.tool_name == "task":
                         # Text before the assignment is progress narration, not
                         # a conclusion. The next assistant answer is synthesis.
                         last_assistant_text = ""
+
+                if isinstance(event, ToolExecutionStarted) and event.tool_name == "task":
+                    now = datetime.now(UTC).isoformat()
+                    self._native_task_activity.setdefault(request.request_id, {})[
+                        event.tool_call_id
+                    ] = {
+                        "task_id": event.tool_call_id,
+                        "request_id": request.request_id,
+                        "agent_name": str(event.tool_input.get("subagent_type") or "expert"),
+                        "description": str(event.tool_input.get("description") or "Research subquestion"),
+                        "status": "running",
+                        "created_at": now,
+                        "last_updated_at": now,
+                    }
+                elif isinstance(event, ToolExecutionCompleted) and event.tool_name == "task":
+                    item = self._native_task_activity.setdefault(request.request_id, {}).setdefault(
+                        event.tool_call_id,
+                        {"task_id": event.tool_call_id, "request_id": request.request_id,
+                         "agent_name": "expert", "description": "Research subquestion"},
+                    )
+                    item["status"] = "failed" if event.is_error else "completed"
+                    item["last_updated_at"] = datetime.now(UTC).isoformat()
+                    item["output"] = event.output
+                    if not event.is_error:
+                        from oceanx.research.services import parse_expert_receipt
+                        summary, report_path = parse_expert_receipt(event.output)
+                        item["report_path"] = report_path
+                        item["summary"] = summary
 
                 if isinstance(event, AssistantTurnComplete):
                     turn_count += 1
@@ -3408,17 +2377,30 @@ class OceanRequestRouter:
                     usage_output_tokens += event.usage.output_tokens
                     if event.message.text and not event.message.tool_uses:
                         last_assistant_text = event.message.text
-                    # Token wind-down and hard limits are enforced by the model
-                    # middleware; this stream records usage without a second timer.
+                    # Usage is telemetry, never a reason to stop this research.
                 elif isinstance(event, ToolExecutionStarted):
                     tool_call_count += 1
-                    if tool_call_count > budget.max_tool_calls:
-                        raise _AgentBudgetExceeded("tool call budget reached")
                 elif isinstance(event, ErrorEvent):
                     model_error = event
 
                 self._update_task_workflow_for_event(request, event)
                 await self._emit_agent_stream_event(client, request, event)
+                # The model turn announcing a ``task`` arrives before the
+                # native tool-start event has created its activity record.
+                # Project the team exactly when DeepAgents starts and finishes
+                # the task; an earlier snapshot would still contain only the
+                # Coordinator and hide a running Expert until completion.
+                refresh_team = (
+                    isinstance(event, (ToolExecutionStarted, ToolExecutionCompleted))
+                    and event.tool_name in native_team_tools
+                )
+                if refresh_team:
+                    await self._emit_team_snapshot(
+                        workspace_id=agent_session.workspace_id,
+                        parent_request_id=request.request_id,
+                        task_id=agent_session.task_id,
+                        heartbeat=False,
+                    )
 
             if request.request_id in self._cancelling_agent_requests or self._closing:
                 return
@@ -3436,110 +2418,22 @@ class OceanRequestRouter:
                              else "interrupted"},
                 )
                 return
-            if (
-                agent_session.task_id is not None
-                and agent_session.runtime.engine.has_pending_continuation()
-            ):
-                await self._fail_request(
-                    client,
-                    request,
-                    code="model_error",
-                    message="Model stream ended before completing its pending tool continuation",
-                    recoverable=True,
-                    details={},
-                )
-                return
-            team_plan = (
-                self.team_orchestrator.plan_for(request.request_id)
-                if self.team_orchestrator is not None
-                else None
-            )
-            if self.team_orchestrator is not None:
-                # Coordinator prose ends scheduling. Any leftover round is
-                # first settled to a durable partial/cancelled ExpertResult so
-                # the fallback request status reflects actual returned evidence
-                # rather than generation stopping alone.
-                await self.team_orchestrator.settle_request(request.request_id)
-            team_records = (
-                self.store.list_team_work(
-                    workspace_id=agent_session.workspace_id,
-                    parent_request_id=request.request_id,
-                )
-                if self.team_orchestrator is not None
-                else []
-            )
+            native_tasks = list(self._native_task_activity.get(request.request_id, {}).values())
             coordinator_result = self.store.get_coordinator_result(request.request_id)
             if coordinator_result is None:
-                # The ordinary final assistant answer is the Coordinator's
-                # only handoff boundary. Durable Expert results are attached
-                # by the backend without another formatting turn.
+                # Agent Server closes its stream after file-backed Coordinator
+                # delivery. Its last answer is report text, not the model's
+                # interim waiting message or final "saved" acknowledgement.
                 fallback_text = last_assistant_text.strip()
                 if fallback_text:
-                    fallback_evidence = tuple(
-                        dict.fromkeys(
-                            evidence
-                            for record in team_records
-                            if record.result is not None
-                            for evidence in record.result.evidence_refs
-                        )
-                    )
-                    fallback_results = self._durable_team_result_refs(team_records)
-                    if self._coordinator_report_requested(team_records):
-                        try:
-                            report_ref = self._materialize_coordinator_report(
-                                workspace_id=agent_session.workspace_id,
-                                task_id=agent_session.task_id,
-                                request_id=request.request_id,
-                                answer_markdown=fallback_text,
-                                result_refs=fallback_results,
-                            )
-                        except (OSError, TaskResultError, ValueError) as exc:
-                            _LOGGER.warning(
-                                "Could not materialize Coordinator report for %s: %s",
-                                request.request_id,
-                                exc,
-                            )
-                            report_ref = None
-                        if report_ref is not None and report_ref not in fallback_results:
-                            fallback_results = (*fallback_results, report_ref)
-                    try:
-                        supplementary_notebook = self._materialize_figure_reproduction_notebook(
-                            workspace_id=agent_session.workspace_id,
-                            task_id=agent_session.task_id,
-                            request_id=request.request_id,
-                            result_refs=fallback_results,
-                        )
-                    except (OSError, TaskResultError, ValueError) as exc:
-                        _LOGGER.warning(
-                            "Could not materialize supplementary figure notebook for %s: %s",
-                            request.request_id,
-                            exc,
-                        )
-                        supplementary_notebook = None
-                    if (
-                        supplementary_notebook is not None
-                        and supplementary_notebook not in fallback_results
-                    ):
-                        fallback_results = (*fallback_results, supplementary_notebook)
-                    # Reaching an ordinary no-tool answer is the Coordinator's
-                    # own stop decision. The backend attaches durable evidence,
-                    # but never reclassifies that decision from Expert states.
-                    fallback_decision = CoordinatorDecision.ANSWERED
+                    fallback_evidence = ()
+                    fallback_results = ()
+                    # The graph already read the backend-assigned Coordinator
+                    # report and delivered that exact file content. Keep that
+                    # file as the single report instead of copying it into a
+                    # second result store or manufacturing a notebook.
                     coordinator_result = CoordinatorResult(
-                        answer_markdown=self._canonical_user_answer(
-                            candidate=fallback_text,
-                            decision=fallback_decision,
-                            result_refs=fallback_results,
-                        ),
-                        decision=fallback_decision,
-                        research_outcome=self._explicit_research_outcome(
-                            agent_session.workspace_id, agent_session.task_id, request.request_id
-                        ),
-                        answer_basis=(
-                            CoordinatorAnswerBasis.EXPERT_EVIDENCE
-                            if team_records
-                            else CoordinatorAnswerBasis.GENERAL_KNOWLEDGE
-                        ),
+                        answer_markdown=fallback_text,
                         evidence_refs=fallback_evidence,
                         result_refs=fallback_results,
                     )
@@ -3552,7 +2446,7 @@ class OceanRequestRouter:
                     client,
                     request,
                     code="model_error",
-                    message="OceanMind stopped without a user-facing conclusion",
+                    message="OceanX stopped without a user-facing conclusion",
                     recoverable=True,
                     details={},
                 )
@@ -3562,29 +2456,10 @@ class OceanRequestRouter:
                 if coordinator_result is not None
                 else last_assistant_text
             )
-            outcome_status = (
-                {
-                    CoordinatorDecision.ANSWERED: "completed",
-                    CoordinatorDecision.INSUFFICIENT_EVIDENCE: "incomplete",
-                    CoordinatorDecision.GOAL_MISMATCH: "incomplete",
-                    CoordinatorDecision.BLOCKED: "blocked",
-                }[coordinator_result.decision]
-                if coordinator_result is not None
-                else "completed"
-            )
             if agent_session.task_id is not None:
                 self.store.update_task_workflow_progress(
                     request_id=request.request_id,
-                    activity="Coordinator conclusion ready",
-                    checkpoint={
-                        "phase": "coordinator_result",
-                        "outcome_status": outcome_status,
-                        "decision": (
-                            coordinator_result.decision.value
-                            if coordinator_result is not None
-                            else CoordinatorDecision.ANSWERED.value
-                        ),
-                    },
+                    activity="Coordinator response received",
                 )
             await self._append_transcript_item(
                 client,
@@ -3593,89 +2468,39 @@ class OceanRequestRouter:
                 text=final_assistant_text,
             )
             team_provenance = {
-                "architecture": "coordinator_owned_expert_runtime",
-                "activation_count": len(team_records),
+                "architecture": "deepagents_native_task",
+                "activation_count": len(native_tasks),
                 "routing_decision": {
                     "strategy": (
                         "direct"
-                        if not team_records
+                        if not native_tasks
                         else "single_delegate"
-                        if len(team_records) == 1
+                        if len(native_tasks) == 1
                         else "team_with_discussion"
                         if any(
-                            record.work_order.authority is ChildAuthority.DISCUSSION
-                            for record in team_records
+                            str(item.get("agent_name")) == "scientific_discussion_partner"
+                            for item in native_tasks
                         )
                         else "parallel_team"
                     ),
-                    "worker_count": len(team_records),
-                    "reason_codes": (
-                        list(team_plan.reason_codes)
-                        if team_plan is not None
-                        else ["lead_direct" if not team_records else "single_bounded_delegation"]
-                    ),
+                    "worker_count": len(native_tasks),
                 },
-                "work_plan": team_plan.model_dump(mode="json") if team_plan is not None else None,
-                "actual_usage": {
-                    "turns": sum(
-                        record.result.usage.turns
-                        for record in team_records
-                        if record.result is not None
-                    ),
-                    "tool_calls": sum(
-                        record.result.usage.tool_calls
-                        for record in team_records
-                        if record.result is not None
-                    ),
-                    "input_tokens": sum(
-                        record.result.usage.input_tokens
-                        for record in team_records
-                        if record.result is not None
-                    ),
-                    "output_tokens": sum(
-                        record.result.usage.output_tokens
-                        for record in team_records
-                        if record.result is not None
-                    ),
-                    "wall_seconds_sum": sum(
-                        record.result.usage.wall_seconds
-                        for record in team_records
-                        if record.result is not None
-                    ),
-                },
-                "budget_limits": {
-                    "max_input_tokens": sum(
-                        record.work_order.budget.max_input_tokens for record in team_records
-                    ),
-                    "max_output_tokens": sum(
-                        record.work_order.budget.max_output_tokens for record in team_records
-                    ),
-                    "max_tool_calls": sum(
-                        record.work_order.budget.max_tool_calls for record in team_records
-                    ),
-                },
+                "actual_usage": {"input_tokens": usage_input_tokens,
+                                 "output_tokens": usage_output_tokens,
+                                 "turns": turn_count, "tool_calls": tool_call_count},
                 "code_executions": [
                     {
                         "execution_id": execution.execution_id,
-                        "work_order_id": execution.work_order_id,
+                        "agent_thread_id": execution.agent_thread_id,
+                        "server_run_id": execution.server_run_id,
                         "state": execution.state,
                         "result": execution.result,
                     }
-                    for record in team_records
-                    for execution in self.store.list_code_executions(
-                        record.work_order.work_order_id
-                    )
+                    for execution in (self.store.list_task_code_executions(
+                        workspace_id=agent_session.workspace_id,
+                        task_id=agent_session.task_id) if agent_session.task_id else ())
                 ],
-                "work": [
-                    {
-                        "work_order": record.work_order.model_dump(mode="json"),
-                        "state": record.state.value,
-                        "result": record.result.model_dump(mode="json")
-                        if record.result is not None
-                        else None,
-                    }
-                    for record in team_records
-                ],
+                "work": native_tasks,
                 # Scientific discussion is advisory. Human approval is a
                 # separate user decision and is never inferred from consulting
                 # the Discussion Partner.
@@ -3695,7 +2520,6 @@ class OceanRequestRouter:
                         "input_tokens": usage_input_tokens,
                         "output_tokens": usage_output_tokens,
                     },
-                    "context_audit_ids": list(context_audit_ids),
                     "team_provenance": team_provenance,
                 },
                 workspace_revision=self.store.workspace_snapshot(
@@ -3705,29 +2529,9 @@ class OceanRequestRouter:
             if agent_session.task_id is None:
                 self.store.commit_terminal(request.request_id, terminal)
             else:
-                self.store.commit_task_terminal_with_checkpoint(
+                self.store.commit_task_terminal(
                     request_id=request.request_id,
-                    task_id=agent_session.task_id,
                     terminal_event=terminal,
-                    messages=[
-                        message.model_dump(mode="json")
-                        for message in agent_session.runtime.engine.messages
-                    ],
-                    provider_id=agent_session.runtime.provider_id,
-                    model_id=agent_session.runtime.model_id,
-                    runtime_profile_fingerprint=hashlib.sha256(
-                        OCEAN_RUNTIME_PROFILE_VERSION.encode("utf-8")
-                    ).hexdigest(),
-                    system_prompt_fingerprint=hashlib.sha256(
-                        agent_session.runtime.base_system_prompt.encode("utf-8")
-                    ).hexdigest(),
-                    compaction_generation=agent_session.runtime.engine.compaction_generation,
-                    usage_summary={
-                        "input_tokens": usage_input_tokens,
-                        "output_tokens": usage_output_tokens,
-                        "turn_count": turn_count,
-                        "tool_call_count": tool_call_count,
-                    },
                 )
             await self._emit_team_snapshot(
                 workspace_id=agent_session.workspace_id,
@@ -3736,40 +2540,6 @@ class OceanRequestRouter:
                 heartbeat=False,
             )
             await self._broadcast_committed_terminal(client, terminal)
-        except _AgentBudgetExceeded as exc:
-            if request.request_id not in self._cancelling_agent_requests and not self._closing:
-                await self._fail_request(
-                    client,
-                    request,
-                    code="budget_exhausted",
-                    message="Ocean agent request reached a configured hard budget",
-                    recoverable=True,
-                    details={"reason": str(exc)},
-                )
-        except _AgentToolWaitExceeded as exc:
-            if request.request_id not in self._cancelling_agent_requests and not self._closing:
-                await self._fail_request(
-                    client,
-                    request,
-                    code="tool_error",
-                    message="A background operation stopped reporting progress",
-                    recoverable=True,
-                    details={
-                        "reason": str(exc),
-                        "max_tool_wait_seconds": budget.max_tool_wait_seconds,
-                        "recovery_state": "incomplete",
-                    },
-                )
-        except GraphRecursionError as exc:
-            if request.request_id not in self._cancelling_agent_requests and not self._closing:
-                await self._fail_request(
-                    client,
-                    request,
-                    code="budget_exhausted",
-                    message="Ocean agent request reached its model-turn budget",
-                    recoverable=True,
-                    details={"max_turns": exc.max_turns},
-                )
         except asyncio.CancelledError:
             if request.request_id in self._cancelling_agent_requests or self._closing:
                 return
@@ -3787,14 +2557,11 @@ class OceanRequestRouter:
                     details={"reason": str(exc)},
                 )
         finally:
-            if self.team_orchestrator is not None:
-                await self.team_orchestrator.close_request(request.request_id)
-            agent_session.runtime.engine.set_max_turns(prior_max_turns)
             self._agent_tasks.pop(request.request_id, None)
             self._agent_request_sessions.pop(request.request_id, None)
-            self._agent_request_budgets.pop(request.request_id, None)
             self._agent_request_clients.pop(request.request_id, None)
             self._team_snapshot_revisions.pop(request.request_id, None)
+            self._schedule_research_consolidation(request)
 
     def _update_task_workflow_for_event(
         self,
@@ -3807,30 +2574,17 @@ class OceanRequestRouter:
             return
         state: TaskWorkflowState | None = None
         activity: str | None = None
-        checkpoint: dict[str, Any] | None = None
         failure_fingerprint: str | None = None
         if isinstance(event, ToolExecutionStarted):
-            checkpoint = {
-                "tool_name": event.tool_name,
-                "tool_call_id": event.tool_call_id,
-                "operation_id": event.operation_id,
-            }
             if event.tool_name == "ocean_expert_run_code":
                 state, activity = "working", "Expert running code"
             elif event.tool_name == "web_search":
                 state, activity = "working", "Searching external scientific evidence"
             elif event.tool_name == "jina_reader":
                 state, activity = "working", "Reading a selected scientific source"
-            elif event.tool_name == "ocean_assign":
-                state, activity = "working", "Waiting for Expert results"
+            elif event.tool_name == "task":
+                state, activity = "working", "Delegating a research subquestion"
         elif isinstance(event, ToolExecutionCompleted):
-            checkpoint = {
-                "tool_name": event.tool_name,
-                "tool_call_id": event.tool_call_id,
-                "operation_id": event.operation_id,
-                "is_error": event.is_error,
-                "duration_seconds": event.duration_seconds,
-            }
             if event.is_error:
                 state = "working"
                 activity = "Expert adjusting its method after a tool failure"
@@ -3843,8 +2597,8 @@ class OceanRequestRouter:
                 state, activity = "working", "Reviewing external search evidence"
             elif event.tool_name == "jina_reader":
                 state, activity = "working", "Interpreting the selected paper"
-            elif event.tool_name == "ocean_assign":
-                state, activity = "working", "Coordinator integrating Expert results"
+            elif event.tool_name == "task":
+                state, activity = "working", "Expert result returned"
         elif isinstance(event, AssistantTurnComplete) and not event.message.tool_uses:
             state, activity = "working", "Preparing the final answer"
         if state is not None and activity is not None:
@@ -3852,7 +2606,6 @@ class OceanRequestRouter:
                 request_id=request.request_id,
                 state=state,
                 activity=activity,
-                checkpoint=checkpoint,
                 failure_fingerprint=failure_fingerprint,
             )
 
@@ -4059,7 +2812,7 @@ class OceanRequestRouter:
         task = self._agent_tasks.get(target_request_id)
         if task is not None and not task.done():
             # The foreground asyncio Task owns the Coordinator stream and any
-            # currently awaited ocean_assign/Expert subtree. Cancelling that
+            # currently awaited task/Expert subtree. Cancelling that
             # task is the single supported DeepAgent interruption boundary;
             # DeepAgentEngine deliberately has no parallel cancel_active API.
             task.cancel()
@@ -4076,6 +2829,7 @@ class OceanRequestRouter:
                     request_id=target_request_id,
                     workspace_id=refreshed_target.workspace_id,
                     session_id=refreshed_target.session_id,
+                    task_id=refreshed_target.task_id,
                 ),
                 type="request.cancelled",
                 payload=RequestCancelledPayload(reason=reason),
@@ -4095,6 +2849,13 @@ class OceanRequestRouter:
             terminal_event=terminal,
         )
         self._cancelling_agent_requests.discard(target_request_id)
+        await self._emit_team_snapshot(
+            workspace_id=refreshed_target.workspace_id,
+            parent_request_id=target_request_id,
+            task_id=refreshed_target.task_id,
+            heartbeat=False,
+            client=client,
+        )
         await self._run_terminal_commit_hook(terminal)
         if commit.target_terminal_event is not None:
             await self.event_bus.emit_request_session(
@@ -4103,76 +2864,6 @@ class OceanRequestRouter:
                 principal_key=refreshed_target.principal,
             )
         await self.event_bus.emit_local(client, terminal)
-
-    @staticmethod
-    def _system_prompt_with_workspace_context(
-        base_prompt: str,
-        context: dict[str, Any],
-        *,
-        literature_acquisition_mode: str = "ask_before_download",
-    ) -> str:
-        serialized = json.dumps(context, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
-        task_boundary = ""
-        workspace = context.get("workspace")
-        if isinstance(workspace, dict) and workspace.get("access_scope") == "task":
-            task_boundary = (
-                " This is the exhaustive artifact authorization set for the current task. "
-                "Do not recall, cite, adopt, or request an artifact from another task, even if "
-                "its identifier appeared in an earlier model conversation."
-            )
-        context_block = (
-            "# Trusted Ocean Workspace Context\n"
-            "The backend assembled this policy-approved summary. Treat exact refs and revision "
-            "as authoritative; use tools for additional inspection and never infer undisclosed "
-            f"raw values.{task_boundary}\n{serialized}"
-        )
-        acquisition_instructions = {
-            "ask_before_download": (
-                "Delegate candidate discovery and shortlist curation to the Literature & Reproduction "
-                "Expert. In that discovery WorkOrder, require search only and a traceable candidate record "
-                "for each paper: stable paper_id, exact title, task-specific topic, citation, canonical URL, "
-                "evidence_scope (metadata_only, abstract, or public_excerpt), a concrete evidence_summary, "
-                "and the validation_target in the current research task. The evidence summary must identify "
-                "useful methods, variables, findings, or boundaries available at that scope rather than merely "
-                "paraphrasing the abstract, and it must never imply that uninspected full text was reviewed. "
-                "After reviewing the returned shortlist for the stated evidence gap, present every candidate "
-                "in full user-facing detail: exact title and citation, inspected evidence scope, concrete "
-                "methods/data/findings visible at that scope, task-specific relevance and validation target, "
-                "and what remains unverified without the full text. Do not collapse multiple papers into a "
-                "one-line list. Then call "
-                "ocean_request_paper_selection with the same papers so the researcher can "
-                "choose from the deliberately compact title-and-checkbox table. Treat the returned paper_ids as authoritative. "
-                "Selection is a human checkpoint in the task's stable Literature Expert role: send the selected "
-                "full texts to that role's next round so it can continue from its durable search context and "
-                "produce the requested viewpoint. Coordinator web "
-                "lookup may orient the task but must not replace scholarly "
-                "discovery, silently replace the Expert's shortlist, or replace the selection table with a "
-                "free-form question."
-            ),
-            "auto_download_open_access": (
-                "Delegate literature discovery, shortlist curation, and review to the Literature & "
-                "Reproduction Expert. Open-access full texts may be acquired automatically. Ask the user "
-                "before any source that requires credentials, payment, or a user-provided file."
-            ),
-            "search_only": (
-                "Delegate search and candidate curation to the Literature & Reproduction Expert, then "
-                "present its traceable shortlist. Do not download, import, or read full texts."
-            ),
-        }
-        acquisition_block = (
-            "# Literature Acquisition Preference\n"
-            f"Mode: {literature_acquisition_mode}. "
-            f"{acquisition_instructions.get(literature_acquisition_mode, acquisition_instructions['ask_before_download'])} "
-            "This preference controls acquisition only; it does not lower evidence standards. "
-            "Always distinguish discovered metadata, abstract-only evidence, and reviewed full text."
-        )
-        return "\n\n".join(
-            (
-                base_prompt,
-                context_block,
-                acquisition_block,
-            )
-        )
 
     @staticmethod
     def _operation_id(request_id: str, turn_id: str, tool_call_id: str) -> str:
@@ -4185,360 +2876,165 @@ class OceanRequestRouter:
             return value
         return value[: max(0, limit - 3)] + "..."
 
-    def _team_snapshot_payload(
-        self,
-        *,
-        workspace_id: str,
-        parent_request_id: str,
-        revision: int,
+    async def _task_report_read(self, client, request):
+        workspace_id = self._workspace_id(request)
+        self._task_in_workspace(request.payload.task_id, request)
+        del workspace_id
+        root = (self.task_workspace_projector.ensure_task_root(request.payload.task_id) /
+                "agents").resolve()
+        report = Path(request.payload.report_path).resolve()
+        if (not report.is_relative_to(root) or report.name != "report.md"
+                or report.is_symlink() or not report.is_file()):
+            raise RequestStoreError("Report is unavailable in this task")
+        # UI-only paging keeps long Markdown out of snapshot frames and model context.
+        with report.open(encoding="utf-8") as stream:
+            remaining = request.payload.offset
+            while remaining:
+                skipped = stream.read(min(remaining, 16_000))
+                if not skipped:
+                    break
+                remaining -= len(skipped)
+            text = stream.read(16_000)
+            more = bool(stream.read(1))
+        terminal = self._completed_event(client, request, result={
+            "text": text, "next_offset": request.payload.offset + len(text) if more else None})
+        self.store.commit_terminal(request.request_id, terminal)
+        await self._broadcast_committed_terminal(client, terminal)
+
+    async def _native_team_snapshot_payload(
+        self, *, workspace_id: str, parent_request_id: str,
+        task_id: str | None, revision: int,
+        native_tasks: list[dict[str, Any]] | None = None,
+        include_unassigned: bool = True,
     ) -> TeamSnapshotPayload:
-        """Project durable WorkOrders into a transport-safe collaboration topology."""
-
-        records = self.store.list_team_work(
-            workspace_id=workspace_id,
-            parent_request_id=parent_request_id,
+        """Project native ``task`` events for the UI; never persist a scheduler."""
+        request = self.store.get_request(parent_request_id)
+        terminal = request is not None and request.state in {"completed", "failed", "cancelled", "interrupted"}
+        team_status = (
+            "completed" if request and request.state == "completed"
+            else "failed" if request and request.state == "failed"
+            else "incomplete" if terminal
+            else "working"
         )
-        request_record = self.store.get_request(parent_request_id)
-        workflow = self.store.get_task_workflow(parent_request_id)
-        coordinator_result = self.store.get_coordinator_result(parent_request_id)
-        active_plan = (
-            self.team_orchestrator.plan_for(parent_request_id)
-            if self.team_orchestrator is not None
-            else None
+        coordinator_activity = (
+            "Task completed" if team_status == "completed"
+            else "Task failed" if team_status == "failed"
+            else "Task stopped before completion" if team_status == "incomplete"
+            else "Coordinating research"
         )
-        # Durable records contain every successive Coordinator wave.  The
-        # in-memory plan is only the most recent wave and must not hide agents
-        # consulted earlier in the same request.
-        raw_orders = [record.work_order for record in records]
-        records_by_order_id = {record.work_order.work_order_id: record for record in records}
-
-        canonical_order_ids: dict[str, str] = {}
-        visible_orders: list[WorkOrder] = []
-        visible_records: dict[str, TeamWorkRecord | None] = {}
-        visible_index: dict[str, int] = {}
-
-        def logical_key(order: WorkOrder) -> str:
-            if order.profile_id is not None and order.expert_key is not None:
-                return (
-                    f"instance:{order.authority.value}:{order.profile_id}:"
-                    f"{order.expert_key}"
-                )
-            if order.profile_id is not None:
-                # Preserve the legacy/default singleton visual identity.
-                return f"role:{order.authority.value}:{order.profile_id}"
-            if order.job_key is not None:
-                return f"job:{order.job_key}"
-            return f"work:{order.work_order_id}"
-
-        for order in raw_orders:
-            key = logical_key(order)
-            record = records_by_order_id.get(order.work_order_id)
-            index = visible_index.get(key)
-            if index is None:
-                visible_index[key] = len(visible_orders)
-                visible_orders.append(order)
-                canonical_id = order.job_key or order.work_order_id
-                canonical_order_ids[order.work_order_id] = canonical_id
-                visible_records[canonical_id] = record
+        agents = [TeamAgentPayload(
+            agent_id="coordinator", profile_id=None, semantic_role="Coordinator",
+            authority="coordinator", status=team_status,
+            activity=coordinator_activity,
+            created_at=request.created_at if request is not None else None,
+            updated_at=request.updated_at if request is not None else None,
+        )]
+        dependencies = []
+        interactions = []
+        todos = []
+        native: list[dict[str, Any]] = []
+        if native_tasks is not None:
+            native = [
+                item for item in native_tasks
+                if item.get("request_id") == parent_request_id
+                or (include_unassigned and not item.get("request_id"))
+            ]
+        else:
+            native = list(self._native_task_activity.get(parent_request_id, {}).values())
+        from oceanx.research.services import expert_agent_key, expert_result_preview
+        participants: dict[str, TeamAgentPayload] = {}
+        for item in native:
+            call_id = str(item.get("task_id") or item.get("thread_id") or "")
+            if not call_id:
                 continue
-            canonical_id = canonical_order_ids[visible_orders[index].work_order_id]
-            canonical_order_ids[order.work_order_id] = canonical_id
-            # Records are durable round history in creation order. One explicit
-            # Expert instance has one Canvas node; unkeyed legacy role rounds are
-            # still folded into their default singleton. The newest round wins.
-            visible_orders[index] = order
-            visible_records[canonical_id] = record
-
-        orders = visible_orders
-        strategy: Literal["direct", "single_delegate", "parallel_team", "team_with_discussion"]
-        if not orders:
-            strategy = "direct"
-        elif len(orders) == 1:
-            strategy = "single_delegate"
-        elif any(order.authority is ChildAuthority.DISCUSSION for order in orders):
-            strategy = "team_with_discussion"
-        else:
-            strategy = "parallel_team"
-
-        active_states = {
-            WorkStatus.QUEUED,
-            WorkStatus.RUNNING,
-        }
-        projected_records = [record for record in visible_records.values() if record is not None]
-        checkpoint_status = (
-            str(workflow.checkpoint.get("outcome_status", "")) if workflow is not None else ""
-        )
-        # The request record remains the commit point for user-visible terminal
-        # state. A durable Coordinator receipt can finish an interrupted commit
-        # during startup, but it must not make the canvas claim completion before
-        # that request settlement occurs.
-        if request_record is not None and request_record.state == "completed":
-            if checkpoint_status in {
-                "completed",
-                "incomplete",
-                "blocked",
-                "failed",
-            }:
-                team_status = checkpoint_status
-            elif coordinator_result is not None:
-                team_status = {
-                    CoordinatorDecision.ANSWERED: "completed",
-                    CoordinatorDecision.INSUFFICIENT_EVIDENCE: "incomplete",
-                    CoordinatorDecision.GOAL_MISMATCH: "incomplete",
-                    CoordinatorDecision.BLOCKED: "blocked",
-                }[coordinator_result.decision]
-            else:
-                team_status = "completed"
-        elif request_record is not None and request_record.state in {
-            "failed",
-            "cancelled",
-            "interrupted",
-        }:
-            if workflow is not None and workflow.state == "incomplete":
-                team_status = "incomplete"
-            else:
-                team_status = "failed"
-        elif request_record is None:
-            # Defensive fallback for imported legacy snapshots that predate
-            # durable request records.  New requests always take the branch
-            # above and therefore have one authoritative terminal source.
-            if workflow is not None and workflow.state == "completed":
-                team_status = "completed"
-            elif workflow is not None and workflow.state == "incomplete":
-                team_status = "incomplete"
-            elif workflow is not None and workflow.state in {"failed", "cancelled"}:
-                team_status = "failed"
-            else:
-                team_status = "working"
-        else:
-            team_status = "working"
-
-        if team_status != "working":
-            coordinator_status = team_status
-            coordinator_activity = {
-                "completed": "Task completed",
-                "incomplete": "Concluded with explicitly limited evidence",
-                "blocked": "Concluded that progress is blocked",
-                "failed": "Task stopped before a reliable conclusion",
-            }[team_status]
-        elif workflow is not None and workflow.state == "completed":
-            coordinator_status = "completed"
-            coordinator_activity = workflow.activity or "Request completed"
-        elif not orders:
-            coordinator_status = "working"
-            coordinator_activity = "Assessing the task and selecting the smallest sufficient team"
-        elif any(record.state in active_states for record in projected_records):
-            active_count = sum(record.state in active_states for record in projected_records)
-            coordinator_status = "working"
-            coordinator_activity = f"Coordinating {active_count} active team member(s)"
-        else:
-            coordinator_status = "working"
-            coordinator_activity = "Synthesizing Expert results and deciding the next step"
-
-        agents: list[TeamAgentPayload] = [
-            TeamAgentPayload(
-                agent_id="coordinator",
-                profile_id=None,
-                semantic_role="Coordinator",
-                authority="coordinator",
-                status=coordinator_status,
-                activity=coordinator_activity,
-            )
-        ]
-        dependencies: list[TeamDependencyPayload] = []
-        interactions: list[TeamInteractionPayload] = []
-        dependency_keys: set[tuple[str, str, str]] = set()
-        for order in orders:
-            agent_id = canonical_order_ids[order.work_order_id]
-            record = visible_records.get(agent_id)
-            if record is None:
-                status = "planning"
-                activity = "Queued by Coordinator"
-            elif record.state is WorkStatus.RUNNING:
-                status = "discussing" if order.authority is ChildAuthority.DISCUSSION else "working"
-                if order.authority is ChildAuthority.DISCUSSION:
-                    activity = "Discussing hypotheses, mechanisms, and alternatives"
-                elif record.checkpoint.phase in {
-                    WorkstreamPhase.RESULT_READY,
-                    WorkstreamPhase.DELIVERING,
-                }:
-                    activity = "Delivering the saved result"
-                else:
-                    activity = "Investigating the assigned question"
-            elif record.state is WorkStatus.INCOMPLETE:
-                if (
-                    record.result is not None
-                    and record.result.expert_decision is ExpertDecision.BLOCKED
-                ):
-                    status = "blocked"
-                    activity = "Reported a material blocker to the Coordinator"
-                else:
-                    status = "incomplete"
-                    activity = "Returned a useful but incomplete result"
-            elif record.state is WorkStatus.COMPLETED:
-                # The returned candidate closes this assignment round.  The
-                # logical Expert session remains available to the Coordinator
-                # until the foreground request itself reaches a terminal state.
-                status = "waiting" if team_status == "working" else "completed"
-                activity = (
-                    "Waiting for Coordinator feedback"
-                    if team_status == "working"
-                    else (
-                        record.result.text
-                        if record.result is not None and record.result.text
-                        else "Expert session completed"
-                    )
-                )
-            elif record.state is WorkStatus.SKIPPED:
-                status = "skipped"
-                activity = "Skipped because a dependency did not complete"
-            elif record.state in {WorkStatus.FAILED, WorkStatus.CANCELLED}:
+            profile_id = str(item.get("agent_name") or item.get("subagent_type") or "expert")
+            question = str(item.get("description") or item.get("input") or "Research subquestion")
+            child_id = str(item.get("agent_key") or expert_agent_key(task_id or "", profile_id, question))
+            question = self._bounded_text(question, 8_000)
+            profile = next((p for p in AGENT_PROFILES if p.profile_id == profile_id), None)
+            raw_status = str(item.get("status") or "pending").lower()
+            if raw_status in {"completed", "success", "succeeded", "done"}:
+                status = "completed"
+            elif raw_status in {"failed", "error", "timeout"}:
                 status = "failed"
-                activity = "Expert workstream stopped"
+            elif raw_status == "cancelled":
+                status = "skipped"
+            elif raw_status == "interrupted":
+                status = "incomplete"
+            elif raw_status in {"pending", "queued"}:
+                status = "planning"
             else:
-                status = "waiting"
-                activity = "Waiting"
-
-            authority = order.authority.value
-            agents.append(
-                TeamAgentPayload(
-                    agent_id=agent_id,
-                    profile_id=order.profile_id,
-                    expert_key=order.expert_key,
-                    semantic_role=order.semantic_role,
-                    authority=authority,
-                    status=status,
-                    activity=self._bounded_text(activity, 512),
-                    work_order_id=(
-                        record.work_order.work_order_id
-                        if record is not None
-                        else order.work_order_id
-                    ),
-                    task_goal=order.task_goal,
-                    result_summary=(
-                        record.result.text
-                        if record is not None and record.result is not None and record.result.text
-                        else None
-                    ),
-                    limitations=(
-                        record.result.limitations
-                        if record is not None and record.result is not None
-                        else ()
-                    ),
-                )
+                status = "working"
+            # A terminal parent cannot still be waiting for a synchronous task.
+            # Missing task-end events mean interrupted work, not successful delivery.
+            if terminal and status in {"working", "planning"}:
+                status = "incomplete"
+            report_path = item.get("report_path") if isinstance(item.get("report_path"), str) else None
+            summary = item.get("summary") if isinstance(item.get("summary"), str) else ""
+            report_preview = expert_result_preview(summary)
+            run_id = str(item.get("run_id") or call_id)
+            activity = (
+                self._bounded_text(report_preview, 320) if status == "completed" and report_preview
+                else "Result returned" if status == "completed"
+                else "Expert run failed" if status == "failed"
+                else "Expert run was cancelled" if status == "skipped"
+                else "Expert run was interrupted" if status == "incomplete"
+                else self._bounded_text(question, 512)
             )
-            from_agent_id = "coordinator"
-            key = (from_agent_id, agent_id, "delegation")
-            if key not in dependency_keys:
-                dependency_keys.add(key)
-                dependencies.append(
-                    TeamDependencyPayload(
-                        from_agent_id=from_agent_id,
-                        to_agent_id=agent_id,
-                        kind="delegation",
-                    )
-                )
-            if status in {"working", "discussing"}:
-                interaction_from = "coordinator"
-                interactions.append(
-                    TeamInteractionPayload(
-                        interaction_id=f"interaction_{agent_id}_{revision}",
-                        from_agent_id=interaction_from,
-                        to_agent_id=agent_id,
-                        kind=(
-                            "handoff"
-                            if order.authority is ChildAuthority.DISCUSSION
-                            else "delegation"
-                        ),
-                        summary=activity,
-                        state="active",
-                    )
-                )
-
-        latest_record_by_todo: dict[str, TeamWorkRecord] = {}
-        for record in records:
-            todo_id = record.work_order.todo_id
-            if todo_id is not None:
-                latest_record_by_todo[todo_id] = record
-
-        if active_plan is not None:
-            todo_definitions = active_plan.todos
-        else:
-            # Terminal and legacy snapshots may outlive the request-scoped
-            # in-memory plan. They can still show every durable dispatched item,
-            # but only an active plan knows about not-yet-dispatched todos.
-            todo_definitions = tuple(
-                CoordinatorTodo(
-                    todo_id=todo_id,
-                    question=record.work_order.task_goal,
-                    depends_on=record.work_order.depends_on,
-                    profile_id=record.work_order.profile_id or "legacy_expert",
-                    expert_key=record.work_order.expert_key,
-                    review=record.work_order.review,
-                    expected_outputs=record.work_order.outcome_intents,
-                )
-                for todo_id, record in latest_record_by_todo.items()
+            participant = TeamAgentPayload(
+                agent_id=child_id, expert_key=child_id, profile_id=profile_id,
+                semantic_role=profile.display_name if profile else profile_id,
+                authority=(profile.authority.value if profile else "expert"),
+                status=status, activity=activity,
+                agent_run_id=run_id, task_goal=question, report_path=report_path,
+                report_title=(self._bounded_text(report_preview, 220) or "Research report")
+                if report_path else None,
+                created_at=str(item.get("run_created_at") or item.get("created_at") or "") or None,
+                updated_at=str(
+                    item.get("run_updated_at") or item.get("last_updated_at")
+                    or item.get("last_checked_at") or ""
+                ) or None,
             )
-
-        todos: list[TeamTodoPayload] = []
-        for todo in todo_definitions:
-            record = latest_record_by_todo.get(todo.todo_id)
-            if record is None:
-                progress_state = (
-                    "queued"
-                    if active_plan is not None and todo.todo_id in active_plan.dispatch
-                    else "pending"
-                )
-            elif record.state is WorkStatus.QUEUED:
-                progress_state = "queued"
-            elif record.state is WorkStatus.RUNNING:
-                progress_state = "working"
-            elif record.state is WorkStatus.SKIPPED:
-                progress_state = "skipped"
-            elif (
-                record.result is not None
-                and record.result.result_origin is ExpertResultOrigin.AGENT_SUBMITTED
-            ):
-                progress_state = "result_returned"
-            else:
-                progress_state = "stopped"
-            todos.append(
-                TeamTodoPayload(
-                    todo_id=todo.todo_id,
-                    question=todo.question,
-                    depends_on=todo.depends_on,
-                    profile_id=todo.profile_id,
-                    expert_key=todo.expert_key,
-                    expected_outputs=todo.expected_outputs,
-                    state=progress_state,
-                    work_order_id=(record.work_order.work_order_id if record is not None else None),
-                    session_round=(record.work_order.session_round if record is not None else None),
-                    result_summary=(
-                        self._bounded_text(record.result.text, 8_000)
-                        if record is not None and record.result is not None and record.result.text
-                        else None
-                    ),
-                )
-            )
-
+            previous = participants.get(child_id)
+            # Keep one participant for repeat assignments. A still-active call
+            # takes precedence over another call's completion, regardless of
+            # completion order. Otherwise the latest assignment is displayed.
+            if previous is None or status in {"working", "planning"} or previous.status not in {"working", "planning"}:
+                participants[child_id] = participant
+            todos.append(TeamTodoPayload(
+                todo_id=call_id, expert_key=child_id, question=question, depends_on=(), profile_id=profile_id,
+                expected_outputs=(), state=("result_returned" if status == "completed"
+                                            else "stopped" if status in {"failed", "skipped", "incomplete"}
+                                            else "pending" if status == "planning" else "working"),
+                agent_run_id=run_id, session_round=None, report_path=report_path,
+                report_title=(self._bounded_text(report_preview, 220) or "Research report")
+                if report_path else None,
+                created_at=str(item.get("run_created_at") or item.get("created_at") or "") or None,
+                updated_at=str(
+                    item.get("run_updated_at") or item.get("last_updated_at")
+                    or item.get("last_checked_at") or ""
+                ) or None,
+            ))
+            interactions.append(TeamInteractionPayload(
+                interaction_id=f"interaction_{call_id}",
+                from_agent_id="coordinator", to_agent_id=child_id,
+                kind="delegation", summary=self._bounded_text(question, 512),
+                state="active" if status in {"working", "planning"} else "completed"))
+        agents.extend(participants.values())
+        dependencies = [TeamDependencyPayload(
+            from_agent_id="coordinator", to_agent_id=key, kind="delegation") for key in participants]
+        strategy = ("direct" if not participants else "single_delegate" if len(participants) == 1
+                    else "team_with_discussion" if any(
+                        str(item.get("agent_name")) == "scientific_discussion_partner" for item in native)
+                    else "parallel_team")
         return TeamSnapshotPayload(
-            request_id=parent_request_id,
-            revision=max(1, revision),
-            status=team_status,
+            request_id=parent_request_id, revision=max(1, revision), status=team_status,
             strategy=strategy,
-            role_pool=tuple(
-                TeamAgentProfilePayload(
-                    profile_id=profile.profile_id,
-                    display_name=profile.display_name,
-                    authority=profile.authority.value,
-                    category=profile.category,
-                    summary=profile.summary,
-                )
-                for profile in AGENT_PROFILES
-            ),
-            agents=tuple(agents),
-            todos=tuple(todos),
-            dependencies=tuple(dependencies),
+            role_pool=tuple(TeamAgentProfilePayload(
+                profile_id=p.profile_id, display_name=p.display_name,
+                authority=p.authority.value, category=p.category, summary=p.summary)
+                for p in AGENT_PROFILES),
+            agents=tuple(agents), todos=tuple(todos), dependencies=tuple(dependencies),
             interactions=tuple(interactions),
         )
 
@@ -4549,15 +3045,15 @@ class OceanRequestRouter:
         parent_request_id: str,
         task_id: str | None,
         heartbeat: bool = True,
+        client: BackendClient | None = None,
     ) -> None:
-        client = self._agent_request_clients.get(parent_request_id)
+        client = client or self._agent_request_clients.get(parent_request_id)
         if client is None:
             return
         if heartbeat:
             self.store.update_task_workflow_progress(
                 request_id=parent_request_id,
                 activity="Coordinating active team members",
-                checkpoint={"phase": "team_work", "task_id": task_id},
             )
         revision = self._team_snapshot_revisions.get(parent_request_id, 0) + 1
         self._team_snapshot_revisions[parent_request_id] = revision
@@ -4571,47 +3067,14 @@ class OceanRequestRouter:
                     task_id=task_id,
                 ),
                 type="team.snapshot",
-                payload=self._team_snapshot_payload(
+                payload=await self._native_team_snapshot_payload(
                     workspace_id=workspace_id,
                     parent_request_id=parent_request_id,
+                    task_id=task_id,
                     revision=revision,
                 ),
             ),
         )
-
-    @classmethod
-    def _team_work_activity_summary(
-        cls,
-        record: TeamWorkRecord,
-        *,
-        todo_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Return bounded execution state for UI activity, not model-facing evidence."""
-
-        return {
-            "todo_id": todo_id,
-            "work_order_id": record.work_order.work_order_id,
-            "semantic_role": record.work_order.semantic_role,
-            "authority": record.work_order.authority.value,
-            "state": record.state.value,
-            "result": (
-                {
-                    "status": record.result.status.value,
-                    "failure_code": (
-                        record.result.failure_code.value
-                        if record.result.failure_code is not None
-                        else None
-                    ),
-                    "error": (
-                        cls._bounded_text(record.result.error, 320)
-                        if record.result.error is not None
-                        else None
-                    ),
-                }
-                if record.result is not None
-                else None
-            ),
-        }
 
     async def _session_open(self, client: BackendClient, request: SessionOpenRequest) -> None:
         terminal = self._completed_event(
@@ -4810,50 +3273,38 @@ class OceanRequestRouter:
             ]
             result = {
                 "agent_id": "coordinator",
-                "work_order_id": None,
+                "agent_run_id": "coordinator",
                 "messages": messages,
-                "compaction_generation": 0,
                 "updated_at": messages[-1]["created_at"] if messages else None,
             }
         else:
-            work_order_id = request.payload.work_order_id
-            if not work_order_id:
-                raise RequestStoreError("Expert transcript requires a work_order_id")
-            record = self.store.get_team_work(work_order_id)
-            if record is None:
-                raise RequestStoreError("Selected Expert work order was not found")
-            order = record.work_order
-            visible_agent_id = order.job_key or order.work_order_id
-            if (
-                record.workspace_id != workspace_id
-                or order.task_id != task_id
-                or order.parent_request_id != request.payload.parent_request_id
-                or visible_agent_id != request.payload.agent_id
-            ):
-                raise RequestStoreError("Selected Expert does not belong to this task request")
-            participant_key = order.profile_id or (f"{order.authority.value}:{order.semantic_role}")
-            checkpoint = self.store.get_expert_session_checkpoint(
-                workspace_id=workspace_id,
-                task_scope=task_id,
-                participant_key=participant_key,
-                job_key=order.job_key or order.work_order_id,
+            task = self._native_task_activity.get(request.payload.parent_request_id, {}).get(
+                request.payload.agent_run_id or request.payload.agent_id
             )
-            history = self.store.get_expert_session_message_history(
-                workspace_id=workspace_id,
-                task_scope=task_id,
-                participant_key=participant_key,
-                job_key=order.job_key or order.work_order_id,
-            )
+            if task is None:
+                raise RequestStoreError("Selected native Expert task was not found")
+            created_at = task.get("created_at")
+            updated_at = task.get("last_updated_at")
+            messages = [{
+                "message_id": f"{request.payload.agent_id}:assignment",
+                "role": "coordinator",
+                "blocks": [{"type": "text", "text": str(task.get("description") or "")}],
+                "created_at": created_at,
+                "interrupted": False,
+            }]
+            if task.get("output"):
+                messages.append({
+                    "message_id": f"{request.payload.agent_id}:receipt",
+                    "role": "expert",
+                    "blocks": [{"type": "text", "text": str(task["output"])}],
+                    "created_at": updated_at,
+                    "interrupted": task.get("status") != "completed",
+                })
             result = {
-                "agent_id": visible_agent_id,
-                "work_order_id": work_order_id,
-                "messages": self._renderer_agent_messages(
-                    history if history else checkpoint.messages if checkpoint is not None else ()
-                ),
-                "compaction_generation": (
-                    checkpoint.compaction_generation if checkpoint is not None else 0
-                ),
-                "updated_at": checkpoint.updated_at if checkpoint is not None else None,
+                "agent_id": request.payload.agent_id,
+                "agent_run_id": str(request.payload.agent_run_id or request.payload.agent_id),
+                "messages": messages,
+                "updated_at": updated_at,
             }
 
         terminal = self._completed_event(client, request, result=result)
@@ -4863,21 +3314,44 @@ class OceanRequestRouter:
     @staticmethod
     def _renderer_agent_messages(
         messages: tuple[dict[str, Any], ...],
+        *,
+        message_times: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         """Remove binary image bodies while preserving every conversational block."""
 
         rendered: list[dict[str, Any]] = []
+        message_times = message_times or {}
         for message_index, message in enumerate(messages):
-            role = "coordinator" if message.get("role") == "user" else "expert"
+            raw_role = str(message.get("role") or message.get("type") or "")
+            role = (
+                "coordinator" if raw_role in {"user", "human"}
+                else "tool" if raw_role == "tool"
+                else "system" if raw_role == "system"
+                else "expert"
+            )
             blocks: list[dict[str, Any]] = []
             raw_blocks = message.get("content")
-            if not isinstance(raw_blocks, list):
+            if isinstance(raw_blocks, str):
+                if raw_role == "tool":
+                    blocks.append({
+                        "type": "tool_result",
+                        "tool_call_id": str(message.get("tool_call_id") or ""),
+                        "text": raw_blocks,
+                        "is_error": str(message.get("status") or "") == "error",
+                    })
+                elif raw_blocks:
+                    blocks.append({"type": "text", "text": raw_blocks})
+                raw_blocks = []
+            elif not isinstance(raw_blocks, list):
                 raw_blocks = []
             for block in raw_blocks:
+                if isinstance(block, str):
+                    blocks.append({"type": "text", "text": block})
+                    continue
                 if not isinstance(block, dict):
                     continue
                 block_type = block.get("type")
-                if block_type == "text":
+                if block_type in {"text", "output_text", "input_text"}:
                     blocks.append({"type": "text", "text": str(block.get("text", ""))})
                 elif block_type == "tool_use":
                     blocks.append(
@@ -4907,13 +3381,25 @@ class OceanRequestRouter:
                             "source_path": str(block.get("source_path", "")),
                         }
                     )
-            rendered.append(
-                {
-                    "message_id": f"agent-message-{message_index + 1}",
-                    "role": role,
-                    "blocks": blocks,
-                }
-            )
+            for call in message.get("tool_calls") or ():
+                if not isinstance(call, dict):
+                    continue
+                blocks.append({
+                    "type": "tool_call",
+                    "tool_call_id": str(call.get("id") or ""),
+                    "tool_name": str(call.get("name") or "Tool"),
+                    "input": call.get("args") if isinstance(call.get("args"), dict) else {},
+                })
+            native_message_id = str(message.get("id") or "")
+            rendered_message = {
+                "message_id": native_message_id or f"agent-message-{message_index + 1}",
+                "role": role,
+                "blocks": blocks,
+            }
+            created_at = message_times.get(native_message_id) if native_message_id else None
+            if created_at:
+                rendered_message["created_at"] = created_at
+            rendered.append(rendered_message)
         return rendered
 
     async def _task_output_list(
@@ -4974,35 +3460,24 @@ class OceanRequestRouter:
         team_request_id = snapshot.task.active_request_id or (
             snapshot.workflow.request_id if snapshot.workflow is not None else None
         )
-        visible_request_ids = list(
-            dict.fromkeys(
-                item.request_id
-                for item in snapshot.transcript
-                if item.request_id is not None
-            )
-        )
-        team_request_ids = {
-            record.work_order.parent_request_id
-            for record in self.store.list_task_team_work(
+        team_snapshots = []
+        for workflow in self.store.list_task_workflows(task_id):
+            team_snapshots.append(await self._native_team_snapshot_payload(
                 workspace_id=snapshot.task.workspace_id,
+                parent_request_id=workflow.request_id,
                 task_id=task_id,
-            )
-        }
-        payload_data["team_snapshots"] = [
-            self._team_snapshot_payload(
-                workspace_id=snapshot.task.workspace_id,
-                parent_request_id=request_id,
-                revision=self._team_snapshot_revisions.get(request_id, 1),
-            ).model_dump(mode="json")
-            for request_id in visible_request_ids
-            if request_id in team_request_ids
-        ]
-        if team_request_id is not None:
-            payload_data["team_snapshot"] = self._team_snapshot_payload(
-                workspace_id=snapshot.task.workspace_id,
-                parent_request_id=team_request_id,
-                revision=self._team_snapshot_revisions.get(team_request_id, 1),
-            ).model_dump(mode="json")
+                revision=self._team_snapshot_revisions.get(workflow.request_id, 1),
+                native_tasks=list(self._native_task_activity.get(workflow.request_id, {}).values()),
+                include_unassigned=False,
+            ))
+        payload_data["team_snapshots"] = [item.model_dump(mode="json") for item in team_snapshots]
+        current_team = next(
+            (item for item in team_snapshots if item.request_id == team_request_id),
+            None,
+        )
+        payload_data["team_snapshot"] = (
+            current_team.model_dump(mode="json") if current_team is not None else None
+        )
         payload = TaskSnapshotPayload.model_validate(payload_data)
         snapshot_event = TaskSnapshotEvent(
             **self._event_fields(
@@ -5118,7 +3593,7 @@ class OceanRequestRouter:
         record = self.store.get_request(request.request_id)
         if record is not None and not record.terminal:
             if isinstance(request, SessionSubmitRequest) and record.task_id is not None:
-                self.store.commit_task_terminal_without_checkpoint(
+                self.store.commit_task_terminal(
                     request_id=request.request_id, terminal_event=event
                 )
             else:
@@ -5131,9 +3606,6 @@ class OceanRequestRouter:
                     heartbeat=False,
                 )
             await self._broadcast_committed_terminal(client, event)
-        if isinstance(request, SessionSubmitRequest):
-            self._agent_request_budgets.pop(request.request_id, None)
-
     async def _broadcast_committed_terminal(
         self,
         client: BackendClient,
@@ -5162,7 +3634,7 @@ class OceanRequestRouter:
             # Canonical SQLite/artifact/run state has already committed at each call site.
             # A recoverable user-facing projection must never turn that success into a
             # misleading request failure; task.open retries this idempotently.
-            _LOGGER.exception("Could not refresh OceanMind task folder for %s", task_id)
+            _LOGGER.exception("Could not refresh OceanX task folder for %s", task_id)
 
     async def _ensure_task_workspace_root(self, task_id: str) -> None:
         """Create only the stable task-folder shell required for navigation."""
@@ -5172,7 +3644,7 @@ class OceanRequestRouter:
         try:
             await asyncio.to_thread(self.task_workspace_projector.ensure_task_root, task_id)
         except Exception:
-            _LOGGER.exception("Could not ensure OceanMind task folder for %s", task_id)
+            _LOGGER.exception("Could not ensure OceanX task folder for %s", task_id)
 
     async def _emit_system_error(
         self,
@@ -5266,7 +3738,7 @@ class OceanRequestRouter:
             task_id=record.task_id,
             request_id=record.request_id,
             sequence=0,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             type="request.failed",
             payload=RequestFailedPayload(
                 error=ProtocolErrorPayload(
@@ -5293,7 +3765,7 @@ class OceanRequestRouter:
             task_id=record.task_id,
             request_id=record.request_id,
             sequence=0,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             type="request.completed",
             payload=RequestCompletedPayload(
                 result={
@@ -5322,7 +3794,7 @@ class OceanRequestRouter:
             "task_id": task_id,
             "request_id": request_id,
             "sequence": 0,
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": datetime.now(UTC),
         }
 
     @staticmethod
@@ -5346,9 +3818,8 @@ class OceanRequestRouter:
         """Attach the task's durable source memory to every Coordinator turn.
 
         The renderer may add exact immutable references for a single turn, but the task's
-        source links are server-owned and automatically inherited. This prevents the
-        conversation checkpoint, sidebar, and Expert WorkOrder from disagreeing about
-        which inputs belong to the task.
+        source links are server-owned and automatically inherited. This keeps the
+        sidebar and task source set aligned on which inputs belong to the task.
         """
 
         refs: list[ArtifactRef] = []
