@@ -91,6 +91,17 @@ def test_hypotheses_need_a_policy_that_enables_them(tmp_path):
         tree.update([{"action": "add", "target": "B1", "kind": "hypothesis", "question": "H."}])
     assert "set_verdict" not in research_tree_tool(tree).description
 
+    def change_schema(name):
+        tool = research_tree_tool(ResearchTree(tmp_path / name / "research_tree.json",
+                                               policy=policy(name)))
+        return json.dumps(tool.args_schema.model_json_schema()["$defs"])
+
+    # The model is offered hypothesis options only where the policy accepts them.
+    words = ("set_verdict", "refutes", "hypothesis", "verdict")
+    for name in ("v0-coordinator-bfs", "v2-nested"):
+        assert not any(word in change_schema(name) for word in words)
+    assert all(word in change_schema("v1-hypotheses") for word in words)
+
 
 def test_hypotheses_are_claims_never_frontier_or_reports(tmp_path):
     tree = mechanism_tree(tmp_path)
@@ -169,6 +180,28 @@ def test_proposals_are_the_numbered_further_analysis_items():
     assert proposals_from_summary("Further analysis: None") == []
 
 
+def test_numbered_items_run_together_on_one_line_are_separate_proposals():
+    # Two of nine v2-nested reports wrote their list on one line, as "1. .. 2." and "(1) .. (2)".
+    inline = ("Further analysis: 1. Is the cap local? — it decides generality. 2. Can the +20 "
+              "to +70 W m-2 residual be closed? — else forcing stays inferred. 3. Does +30.4 W "
+              "m-2 survive? — the one term large enough to matter.")
+    assert proposals_from_summary(inline) == [
+        "Is the cap local? — it decides generality.",
+        "Can the +20 to +70 W m-2 residual be closed? — else forcing stays inferred.",
+        "Does +30.4 W m-2 survive? — the one term large enough to matter."]
+    bracketed = ("Further analysis: (1) Does a flux budget close? — the untested candidate. "
+                 "(2) Do other years agree? — is 2025 typical. "
+                 "(3) Is the shelf cooling upwelling?")
+    assert [item[:12] for item in proposals_from_summary(bracketed)] == [
+        "Does a flux ", "Do other yea", "Is the shelf"]
+    # A number mid-sentence ("item (2)") is text, not the next item.
+    cited = ("Further analysis: (1) Re-diagnose the budget (this is B1.3's item (2) and the key "
+             "step). (2) Test the divergence. (3) Add surface flux.")
+    assert proposals_from_summary(cited) == [
+        "Re-diagnose the budget (this is B1.3's item (2) and the key step).",
+        "Test the divergence.", "Add surface flux."]
+
+
 def test_bold_summary_labels_parse_like_plain_ones():
     assert proposals_from_summary(BOLD) == [
         ("**Can the increment be measured?** Two routes, both need approval. — decides flux "
@@ -211,6 +244,11 @@ def test_proposals_become_nodes_only_when_the_coordinator_adopts_one(tmp_path):
     with pytest.raises(ValueError, match=r"Valid proposal IDs: B1\.3#1, B1\.3#2, B1\.3#3\."):
         tree.update([{"action": "add", "target": "B1.3", "question": "Q?",
                       "from_proposal": "B1.4#1"}])
+    # A proposal named only in free text would go uncounted, so it must use from_proposal.
+    with pytest.raises(ValueError, match=r"with from_proposal .* Valid proposal IDs: B1\.3#1"):
+        tree.update([{"action": "add", "target": "B1.3", "question": "Q?",
+                      "origin_type": "expert_proposal",
+                      "origin_refs": ["B1.3 further analysis 2"]}])
     assert set(tree.document()["nodes"]) == before
     tree.update([{"action": "add", "target": "B1.3", "from_proposal": "B1.3#2",
                   "question": "Is the mixed-layer depth biased?"}])

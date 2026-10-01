@@ -246,6 +246,13 @@ class OceanContextBuilder:
                         )
                     except LocalSourceError as exc:
                         entry["path_error"] = str(exc)
+                    # The task's one-time data description, once the first Expert has created it.
+                    described = source_metadata_summary(artifact, dataset_context_root)
+                    if described.get("inspection") == "ready":
+                        detailed = entry | {k: v for k, v in described.items() if k not in entry}
+                        fits = {**base, "task_sources": [*task_sources, detailed]}
+                        if _estimate_tokens(fits) <= token_budget:
+                            entry = detailed
                     candidate = {**base, "task_sources": [*task_sources, entry]}
                     if _estimate_tokens(candidate) <= token_budget:
                         task_sources.append(entry)

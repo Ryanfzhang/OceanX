@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 _ARRAY_FORMATS = {".nc", ".nc4", ".cdf", ".netcdf"}
+_TABLE_SUFFIXES = {".csv", ".parquet", ".pq"}
 
 
 def _json_value(value: Any) -> Any:
@@ -155,6 +156,14 @@ def _collection_candidates(path: Path) -> list[tuple[Path, str]]:
                   + [(child, child.suffix.lstrip(".") or "netcdf") for child in arrays])
 
 
+def _holds_data(path: Path) -> bool:
+    """Whether a linked local file or folder holds data this probe can describe."""
+    if path.is_dir():
+        return ((path / ".zgroup").is_file() or (path / "zarr.json").is_file()
+                or bool(_collection_candidates(path)))
+    return path.suffix.lower() in _ARRAY_FORMATS | _TABLE_SUFFIXES
+
+
 def _spatial_context(coordinates: list[dict[str, Any]]) -> dict[str, Any] | None:
     by_role = {
         item.get("coordinate_role"): item.get("extent")
@@ -278,12 +287,16 @@ def inspect_source(source: dict[str, Any]) -> dict[str, Any]:
         "path": source.get("path"),
         "format": source.get("format"),
     }
-    if source.get("kind") != "dataset" or not source.get("path"):
+    # A registered dataset, or a linked local file or folder (project_context).
+    if source.get("kind") not in {"dataset", "project_context"} or not source.get("path"):
         result["inspection"] = "not_a_dataset"
         return result
     path = Path(str(source["path"]))
     format_hint = str(source.get("format") or path.suffix.lstrip("."))
     try:
+        if source["kind"] == "project_context" and not _holds_data(path):
+            result["inspection"] = "not_a_dataset"
+            return result
         if path.is_dir() and not (
             (path / ".zgroup").is_file() or (path / "zarr.json").is_file()
         ):

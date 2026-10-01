@@ -8,9 +8,11 @@ bounded: models propose, logs and a frozen A/B test measure, and a human decides
 - **Backend**: saves and maintains the tree and its log. It never writes the Research Tree section
   and never creates nodes on its own.
 - **Experts**: answer their node. The numbered items under `Further analysis` in their Summary
-  (at most 3) are saved on the node as proposals `B1.2#1`, `B1.2#2`, …; they are not nodes.
+  (at most 3, one per line or run together as `1. … 2. …` or `(1) … (2) …`) are saved on the node
+  as proposals `B1.2#1`, `B1.2#2`, …; they are not nodes.
 - **Coordinator**: every decision. It adopts a proposal only by adding a node with
-  `from_proposal: "B1.2#1"` (wording may change); unadopted proposals lapse. It selects,
+  `from_proposal: "B1.2#1"` (wording may change); a node whose origin is an Expert proposal is
+  refused without it, so adoption is always counted. Unadopted proposals lapse. It selects,
   declines (which closes the candidate with its reason), closes and sets verdicts, binds each
   `task` call to a node with `node_id`, reads
   `view=full` once and writes the final `## Research Tree` section.
@@ -19,7 +21,8 @@ bounded: models propose, logs and a frozen A/B test measure, and a human decides
 
 A policy is a small bundled folder (`resources/policies/<name>/`): `policy.yaml` with
 `hypotheses` (enable hypothesis nodes and verdicts) and `frontier` (`shallowest` | `any_depth`),
-plus `guidance.md` appended to the Coordinator prompt.
+plus `guidance.md` appended to the Coordinator prompt. With `hypotheses: false` the tree tool does
+not offer `set_verdict`, `refutes`/`inconclusive` links or hypothesis nodes at all.
 
 | Policy | Purpose |
 |---|---|

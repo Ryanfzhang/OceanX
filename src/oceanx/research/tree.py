@@ -160,16 +160,29 @@ def summary_field(summary: str, label: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+# An item number at a line start, or mid-line just after a sentence or clause ends
+# ("... this year. 2. Can ...").
+_ITEM_NUMBER = re.compile(r"(?:^[ \t]*|(?<=[.;:,?!)]\s))\(?(\d{1,2})[.)](?=\s)", re.MULTILINE)
+
+
 def proposals_from_summary(summary: str) -> list[str]:
     """An Expert's proposed follow-up sub-questions: the numbered items of Further analysis.
 
     They are saved on the node's result and become nodes only when the Coordinator
     adds one with ``from_proposal`` (e.g. ``B1.2#1``); unadopted proposals simply lapse.
-    An item may wrap onto following lines; it ends at the next item or a blank line.
+    Items are numbered ``1.``, ``1)`` or ``(1)``, one per line or run together on one
+    line. An item may wrap onto following lines; it ends at the next item or a blank line.
     """
-    items = re.findall(r"(?ms)^[ \t]*\d+[.)][ \t]+(.+?)(?=^[ \t]*\d+[.)][ \t]|\n[ \t]*\n|\Z)",
-                       summary_field(summary, "Further analysis"))
-    return [" ".join(item.split()) for item in items][:MAX_PROPOSALS]
+    text = summary_field(summary, "Further analysis")
+    starts = []
+    for match in _ITEM_NUMBER.finditer(text):
+        if int(match.group(1)) == len(starts) + 1:  # 1, 2, 3 in order; other numbers are text
+            starts.append(match)
+    items = []
+    for i, start in enumerate(starts):
+        end = starts[i + 1].start() if i + 1 < len(starts) else len(text)
+        items.append(re.split(r"\n[ \t]*\n", text[start.end():end], maxsplit=1)[0])
+    return [" ".join(item.split()) for item in items if item.strip()][:MAX_PROPOSALS]
 
 
 def frontier(tree: dict) -> list[str]:
@@ -228,6 +241,11 @@ def _waits_for(found: dict[str, dict], node_id: str, other: str) -> bool:
     return False
 
 
+def _proposal_ids(found: dict[str, dict]) -> str:
+    return ", ".join(f"{key}#{number}" for key, item in found.items() for number in
+                     range(1, len((item.get("result") or {}).get("proposals") or []) + 1)) or "none"
+
+
 def _descendants(tree: dict, node_id: str) -> set[str]:
     result: set[str] = set()
     pending = _children(tree, node_id)
@@ -268,13 +286,17 @@ def apply_changes(tree: dict, changes: list[dict]) -> tuple[dict, list[str], lis
                 source, _, index = str(change["from_proposal"]).partition("#")
                 offered = ((found.get(source) or {}).get("result") or {}).get("proposals") or []
                 if not index.isdigit() or not 1 <= int(index) <= len(offered):
-                    valid = [f"{key}#{number}" for key, item in found.items() for number in
-                             range(1, len((item.get("result") or {}).get("proposals") or []) + 1)]
                     raise ValueError(f"Unknown Expert proposal: {change['from_proposal']}. "
-                                     f"Valid proposal IDs: {', '.join(valid) or 'none'}.")
+                                     f"Valid proposal IDs: {_proposal_ids(found)}.")
                 change = {**change, "origin_type": "expert-proposal",
                           "origin_refs": [change["from_proposal"]]}
                 origin_refs = change["origin_refs"]
+            elif (str(change.get("origin_type") or "").lower().replace("_", "-")
+                  == "expert-proposal"):
+                # Adoption is counted from from_proposal, so a free-text origin would go unrecorded.
+                raise ValueError(
+                    "Add a question that pursues an Expert proposal with from_proposal (e.g. "
+                    f"B1.2#1). Valid proposal IDs: {_proposal_ids(found)}.")
             node_kind = str(change.get("kind") or "question")
             if node_kind not in KINDS:
                 raise ValueError(f"Unknown node kind: {node_kind}.")

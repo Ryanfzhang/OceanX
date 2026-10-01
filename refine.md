@@ -60,14 +60,17 @@ node identifier. The Coordinator normally decides from the Summary and opens the
 when synthesis or the next scientific choice needs more evidence. Report completion automatically
 observes the referenced tree node; the model does not repeat that update.
 
-Analysis Experts inspect attached data themselves. There is no Data Expert. The Literature &
+There is no Data Expert. The backend reads attached data's metadata once, before the first analysis
+Expert starts, and every later agent sees its variables, dimensions, units and time ranges; Experts
+inspect further detail themselves. The Literature &
 Reproduction Expert handles literature and explicitly requested acquisition. The Scientific
 Discussion Partner is read-only and can challenge a Coordinator interpretation on demand. There is
 no automatic Reviewer or author/reviewer loop.
 
 ## Results and visualization
 
-Experts persist ordinary reusable arrays as ordinary data files. A user-facing figure is declared
+Experts keep arrays labeled by dimension name and persist reusable arrays as ordinary NetCDF files
+with their dimensions and coordinates. A user-facing figure is declared
 explicitly with `oceanx.scientific_view.ScientificFigure`: the Expert supplies the computed arrays,
 axes, panels, layers and scientific scales, and `figure.save()` writes one self-describing NetCDF.
 The Workbench supplies good default styling and interaction unless the Expert deliberately overrides
