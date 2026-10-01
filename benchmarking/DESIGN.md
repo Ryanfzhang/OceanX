@@ -34,7 +34,7 @@ Everything runs on the Linux server, never on macOS.
 | Typical problems, several regions | The open problems are standard research problems: marine heatwaves, coastal upwelling, hypoxia, blooms, primary production, air-sea carbon exchange, oxygen minimum zones, deep ventilation, water-mass spreading, boundary currents and eddy shedding, river plumes, ocean heat content, fronts. |
 | Few multi-product questions | Only 3 of 30 combine products: Q10 (OISST, GLORYS12 and ERA5), Q19 (biogeochemical and physical reanalyses) and Q22 (CMOMS and MODIS). Q14 and Q16 add diagnostics from the same CMOMS model, not another product. |
 | Download as little as possible | The Gulf of Mexico, East China Sea, ERA5, OISST and MODIS groups are already on the server (MODIS is extended to 2020). New downloads are two monthly Arabian Sea groups (about 2 GB) and the evolution suite's California Current and Tasman Sea groups (about 2-3 GB each). The two evolution sets use the same three products, so no new product is added. The monthly winds are no longer needed. |
-| Paper verification needs real papers | The 10 papers were checked against Crossref (title, authors, volume, pages, DOI) and their abstracts on 2026-10-01. The findings in each query paraphrase the abstract. Five were also read in full (Q02, Q04, Q05, Q07, Q10); see "Papers". |
+| Paper verification needs real papers | The 10 papers were checked against Crossref (title, authors, volume, pages, DOI) and their abstracts on 2026-10-01. The findings in each query paraphrase the abstract. Six were also read in full (Q02, Q04, Q05, Q07, Q08, Q10); see "Papers". |
 | Different rubrics for the two types | Paper verification scores whether each finding of the paper was actually verified. Open problems are scored more broadly and deeply, on seven dimensions, against a hidden answer key (see "Rubrics"). |
 | No evaluator material reaches the agent | Rubrics live in `tasks/<task>/evaluator/`. Answer-key data lives under `_evaluator_only/` on the server. Query preparation refuses both. |
 | No evolution while benchmarking | Each attempt starts from empty OceanX state. An arm fixes the research policy and an optional frozen lesson set, and every attempt verifies its lessons were unchanged. |
@@ -125,14 +125,18 @@ Each paper was chosen so that its study period lies inside the supplied data.
 | Q10 | Oh et al. (2024), Late-arriving 2023 summer marine heatwave in the East China Sea, npj Climate and Atmospheric Science 7. doi:10.1038/s41612-024-00846-4 | 2023 event, 1982-2011 baseline, 1993-2011 budget reference; OISST, GLORYS12, ERA5 | the same three products, same periods |
 
 How far each paper was checked:
-- **Read in full (five):** Q02, Q04, Q05, Q07 and Q10. For Q07 the full text supplied the paper's own
-  definitions, now in its rubric: the water-mass criteria, the mixed-layer criteria, the sea-surface-height
-  classes and the potential vorticity. That vorticity is the Coriolis parameter divided by the thickness
-  below the 6 C isotherm, which needs the water depth. No bathymetry is supplied, so finding 5 of Q07 is now
-  partly testable.
-- **Abstract only (five):** Q01, Q03, Q06, Q08 and Q09. The publisher's site refuses automated reading. Open
-  repository copies exist for Q01 (Woods Hole), Q08 (Ifremer) and Q09 (HAL); none was found for Q03 and Q06.
-  Their regions, windows and definitions must be confirmed from the paper before their rubrics are frozen.
+- **Read in full (six):** Q02, Q04, Q05, Q07, Q08 and Q10. The full text supplied each paper's own
+  definitions, now in its rubric.
+  - Q07: the water-mass criteria, the mixed-layer criteria, the sea-surface-height classes and the
+    potential vorticity. That vorticity is the Coriolis parameter divided by the thickness below the 6 C
+    isotherm, which needs the water depth. No bathymetry is supplied, so finding 5 of Q07 is partly testable.
+  - Q08: the eddy detached on 15 April 2016; anomalies are taken against a mean profile of Gulf water
+    outside Loop Current eddies in April-November 2016; the geostrophic velocity is referenced to the
+    glider's depth-averaged velocity, which the agents do not have.
+- **Abstract only (four):** Q01, Q03, Q06 and Q09. The publisher's site refuses automated reading. Open
+  repository copies exist for Q01 (Woods Hole) and Q09 (HAL), but both repositories also answer automated
+  requests with a bot check; none was found for Q03 and Q06. Their regions, windows and definitions must be
+  confirmed from the paper before their rubrics are frozen.
 
 What still differs from the papers:
 - **The product.** Nine papers used observations or another model. Here CMOMS or the GLORYS12 reanalysis

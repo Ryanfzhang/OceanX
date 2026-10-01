@@ -32,11 +32,11 @@
     "pages": "6070-6090",
     "doi": "10.1029/2018JC013801",
     "url": "https://doi.org/10.1029/2018JC013801",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
+    "verification": "Crossref metadata and abstract checked 2026-10-01; full text (published version in the Ifremer repository) read 2026-10-01"
   },
   "period_match": {
-    "paper_period": "August to November 2016",
-    "paper_data": "underwater glider sections, altimetry and Argo",
+    "paper_period": "5 August to 15 November 2016 (two glider crossings); the eddy detached on 15 April 2016",
+    "paper_data": "underwater glider sections to 1,000 dbar, altimetry (absolute dynamic topography) and Argo profiles",
     "paper_window": [
       "2016-08",
       "2016-11"

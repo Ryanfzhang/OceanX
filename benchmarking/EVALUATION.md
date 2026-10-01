@@ -51,9 +51,61 @@ $EVAL_ROOT/lessons/L1/lessons.json (+ SHA256, approvals.json)   frozen after rou
 $EVAL_ROOT/lessons/L2/lessons.json (+ SHA256, approvals.json)   frozen after round 2
 ```
 
-Every attempt folder holds `query.json`, `result.json` (status, time, tokens), `answer.md`,
-`model_protocol.json` and the task workspace. `arm.json` records arm, policy, lesson version and SHA-256,
-git commit (and whether the tree was dirty), OceanX version and the parallel-Expert limit.
+`arm.json` records arm, policy, lesson version and SHA-256, git commit (and whether the tree was dirty),
+OceanX version, library versions and the parallel-Expert limit.
+
+### What every attempt keeps
+
+The rubric score is one reading of a run. Everything needed for another reading is kept in the attempt
+folder, so a later evaluation needs no new runs.
+
+| Kept | Where in the attempt folder | What it gives |
+|---|---|---|
+| Query, status and wall time | `query.json`, `result.json` | Time consumed: setup, analysis and total |
+| Final answer | `answer.md` | What the judge scores |
+| Every agent's files | `workspace/OceanX Tasks/<task>/agents/` | The final report, one `report.md` per answered question, the code, its logs and the outputs |
+| Earlier versions of a report | `agents/<agent>/.runtime/report-history/<question>/<attempt>.md` | What each attempt delivered, when a question was asked again and its report rewritten |
+| Research tree | `agents/coordinator/research_tree.sqlite3` | Every question, each decision with its time and reason, every attempt, the cost per question and the labels |
+| Model-call ledger | `state/workspace.sqlite3`, table `model_call_observations` | Tokens (input, cached input, output), duration, role, question and skills opened for every model call, failed ones included |
+| Code runs | `state/workspace.sqlite3`, table `code_executions` | State and duration of every code run |
+| Agent conversations, whole | `state/.langgraph_api/.langgraph_checkpoint.*.pckl` | Every message and tool call, in the agent framework's own format; read them with the library versions in `arm.json` |
+| Agent conversations, readable part | `agents/<agent>/.runtime/context/conversation_history/session_*.md` | The messages an agent's context dropped when it was compacted, as text. A short conversation has no such file |
+| Event stream and logs | `events.jsonl`, `backend.log`, `state/agent-server.log` | What the desktop would have shown, and server diagnostics |
+| Arm identity | `arm.json`, `arm_lessons.json`, `model_protocol.json` | Policy, lessons, commit, library versions and model |
+
+```bash
+python benchmarking/evaluation/evaluate.py inventory --runs <arm folders> --out <report folder>
+```
+
+`inventory` writes `run_record.json` and `run_record.md` into every attempt:
+- time (total, model calls, code runs) and tokens by role;
+- one row per question of the research tree: who answered it, its label, its attempts, its minutes and
+  tokens (an attempt that returned no report is counted), the skills its Expert opened, and the path of
+  its report;
+- every Markdown file by kind, the size of the saved conversations, and the disk use;
+- what is missing.
+
+`inventory.md` lists every attempt with these totals. Run it after each phase; a completed attempt with
+something missing is a finding to report before any more runs are made.
+
+Four rules follow:
+- **Keep attempt folders whole.** Do not prune `state/` or `workspace/`: the ledger, the conversations, the
+  reports and the code live there.
+- **Tokens come from the ledger.** The total OceanX reports when a run ends covers the Coordinator's own
+  stream only and is zero in practice, and a failed or timed-out attempt reports none. `blind`, `summarize`
+  and `inventory` therefore sum the ledger. Most input tokens are served from the provider's cache, so the
+  record keeps cached input separately.
+- **Conversations are complete only after the Agent Server stops cleanly.** The framework's periodic write
+  is not reliable: the desktop's checkpoint files went 22 hours without one while a two-hour task ran.
+  `run_oceanx.py` therefore waits up to two minutes for the backend to stop before it kills it; the backend
+  gives its Agent Server 30 seconds. `inventory` reports "agent conversations" as missing when the
+  checkpoint files hold almost nothing, and "end of agent conversations" when they were last written
+  before the last model call ended. The checkpoints stay in the framework's format; no portable export is
+  made.
+- **Scratch arrays are most of the size.** In a two-hour pilot run they were 3.4 of 3.5 GB. `inventory`
+  reports each attempt's disk use and its scratch share. Scratch can be recomputed from the kept code and
+  the data; if the disk cannot hold it, the owner decides whether to delete `scratch/` folders, and only
+  after `inventory` has run.
 
 ## Running arms
 
@@ -98,8 +150,8 @@ frozen copy per task under `$EVAL_ROOT/<experiment>/rubrics/`:
    - `expected` and the final `tolerance` for every finding and every answer-key item (the suggested
      tolerances unless the owner changes them);
    - for disagreement questions, the expected verdict of each candidate cause.
-3. Paper tasks: confirm each finding against the paper text. Q02, Q04, Q05, Q07 and Q10 were read in full
-   when the catalogue was written. Q01, Q03, Q06, Q08 and Q09 were checked from the abstract only: confirm
+3. Paper tasks: confirm each finding against the paper text. Q02, Q04, Q05, Q07, Q08 and Q10 were read in
+   full when the catalogue was written. Q01, Q03, Q06 and Q09 were checked from the abstract only: confirm
    their regions, windows and definitions from the paper (the owner provides the PDF) and record where in
    the paper each was confirmed. Otherwise the abstract wording in the rubric stands. Two rubrics name a
    detail to confirm first: the transport section of Q03 and the typhoon's passage dates in Q06.
@@ -131,8 +183,8 @@ python benchmarking/evaluation/evaluate.py summarize --prereg $EVAL_ROOT/<experi
 ```
 
 For each comparison, the per-task score difference is averaged over repeats. The report gives the mean
-difference over tasks with a 95% bootstrap interval, wins and losses, token reduction, and whether the
-pre-registered rule is met. It also gives the difference by question type (paper verification, open
+difference over tasks with a 95% bootstrap interval, wins and losses, the reduction in tokens and in time,
+and whether the pre-registered rule is met. It also gives the difference by question type (paper verification, open
 problem) and by data access (private CMOMS, public). Read these rows before concluding:
 - a policy can help open problems and do nothing for paper verification;
 - lessons learned on public reanalyses may help public questions more than the unseen CMOMS questions.

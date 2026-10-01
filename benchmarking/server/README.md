@@ -32,9 +32,10 @@ python benchmarking/server/run_oceanx.py --queries <file.jsonl> --output <arm fo
 ```
 
 Output per case: `<arm folder>/<task>/attempt-*/` containing:
-- `query.json`, `submitted_prompt.txt`, `result.json` (status, time, tokens) and `answer.md`;
+- `query.json`, `submitted_prompt.txt`, `result.json` (status and time) and `answer.md`;
 - `model_protocol.json`;
-- `workspace/` (the task's Agent folders, reports and outputs) and `state/` (that attempt's own OceanX state);
+- `workspace/` (the task's Agent folders, reports and outputs) and `state/` (that attempt's own OceanX
+  state: the ledger of model calls, the code runs and the agents' conversations);
 - `arm_lessons.json`, for lesson arms only.
 
 `<arm folder>/arm.json` records arm, policy, lesson version, git commit and OceanX version. `--resume`

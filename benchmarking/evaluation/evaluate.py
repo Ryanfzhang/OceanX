@@ -8,6 +8,9 @@
     summarize  join scores with the map, apply the pre-registered comparisons, write report.md
     process    measure how each attempt's research tree went (needs OceanX importable), compare arms
                on the pre-registered process metric, write process.md
+    inventory  write run_record.json and run_record.md into every attempt (time, tokens, code runs, what
+               each question of the tree cost, every .md file, disk use) and check that nothing needed
+               for a later evaluation is missing
 
 Nothing here runs an agent, a model or the agents' code.
 """
@@ -16,10 +19,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import random
 import secrets
 import shutil
+import sqlite3
 import statistics
+from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 
 BENCH = Path(__file__).resolve().parents[1]
@@ -117,21 +124,67 @@ def blind(args) -> dict:
             query = json.loads((attempt / "query.json").read_text())["query"]
             write_json(target / "task.json", {"blind_id": blind_id, "task_id": task_id, "query": query,
                                               "status": result.get("status")})
+            spent = usage(attempt, result)
             mapping[blind_id] = {"task_id": task_id, "arm": arm["arm"], "policy": arm.get("policy"),
                                  "lessons_version": (arm.get("lessons") or {}).get("version"),
                                  "arm_dir": str(arm_dir), "attempt": str(attempt), "status": result.get("status"),
-                                 "elapsed_seconds": result.get("elapsed_seconds"), "tokens": tokens(result)}
+                                 "elapsed_seconds": result.get("elapsed_seconds"),
+                                 "tokens": spent["input_tokens"] + spent["output_tokens"], "usage": spent}
             created += 1
     write_json(mapping_path, mapping)
     return {"created": created, "total": len(mapping), "blind_folder": str(out), "map": str(mapping_path)}
 
 
-def tokens(result: dict) -> int:
-    usages = [result.get("coordinator_usage") or {}]
-    if isinstance(result.get("expert_usage"), dict):
-        usages += list(result["expert_usage"].values())
-    return sum(int(u.get("input_tokens") or 0) + int(u.get("output_tokens") or 0)
-               for u in usages if isinstance(u, dict))
+def state_rows(attempt: Path, sql: str) -> list[tuple]:
+    """Rows from the attempt's own state database, read-only; empty when it has none."""
+    database = attempt / "state" / "workspace.sqlite3"
+    if not database.is_file():
+        return []
+    try:
+        with closing(sqlite3.connect(f"file:{database}?mode=ro", uri=True)) as connection:
+            return connection.execute(sql).fetchall()
+    except sqlite3.Error:
+        return []
+
+
+def ledger(attempt: Path) -> list[dict]:
+    """Every model call of the attempt, oldest first."""
+    return [json.loads(row[0]) for row in state_rows(
+        attempt, "SELECT record_json FROM model_call_observations ORDER BY rowid")]
+
+
+def call_tokens(call: dict, key: str) -> int:
+    return int((call.get("usage") or {}).get(key) or 0)
+
+
+def usage(attempt: Path, result: dict, calls: list[dict] | None = None) -> dict:
+    """Tokens and model time of one attempt, from its ledger of model calls.
+
+    The total a run reports when it ends covers the Coordinator's own stream and can be zero,
+    and a failed or timed-out attempt reports none. The ledger has every call of every agent.
+    result.json is used only when the attempt has no state database.
+    """
+    calls = ledger(attempt) if calls is None else calls
+    if not calls:
+        reported = result.get("coordinator_usage") or {}
+        return {"source": "result.json", "calls": None, "failed_calls": None,
+                "input_tokens": int(reported.get("input_tokens") or 0), "cached_input_tokens": None,
+                "output_tokens": int(reported.get("output_tokens") or 0), "model_seconds": None, "by_role": {}}
+    by_role = {}
+    for call in calls:
+        role = by_role.setdefault(call.get("role") or "unknown", {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+        role["calls"] += 1
+        role["input_tokens"] += call_tokens(call, "input_tokens")
+        role["output_tokens"] += call_tokens(call, "output_tokens")
+    return {"source": "ledger", "calls": len(calls),
+            "failed_calls": sum(call.get("state") != "completed" for call in calls),
+            "input_tokens": sum(call_tokens(call, "input_tokens") for call in calls),
+            # Part of the input that the provider served from its cache; it is billed at a lower rate.
+            "cached_input_tokens": sum(int(((call.get("usage") or {}).get("input_token_details") or {})
+                                           .get("cache_read") or 0) for call in calls),
+            "output_tokens": sum(call_tokens(call, "output_tokens") for call in calls),
+            "model_seconds": round(sum(float(call.get("duration_seconds") or 0) for call in calls), 1),
+            "by_role": by_role}
 
 
 # ------------------------------------------------------------------------------------------ validate
@@ -250,10 +303,13 @@ def summarize(args) -> dict:
         low, high = bootstrap_ci(diffs, int(boot.get("resamples", 10000)), int(boot.get("seed", 7)))
         tokens_t = sum(cell[(treat, t)]["tokens"] for t in tasks)
         tokens_c = sum(cell[(control, t)]["tokens"] for t in tasks)
+        elapsed_t = sum(cell[(treat, t)]["elapsed"] for t in tasks)
+        elapsed_c = sum(cell[(control, t)]["elapsed"] for t in tasks)
         comparison = {"name": spec["name"], "treatment": treat, "control": control, "tasks": len(tasks),
                       "mean_diff": statistics.fmean(diffs), "ci_low": low, "ci_high": high,
                       "wins": sum(d > 0 for d in diffs), "losses": sum(d < 0 for d in diffs),
                       "token_reduction": (tokens_c - tokens_t) / tokens_c if tokens_c else None,
+                      "time_reduction": (elapsed_c - elapsed_t) / elapsed_c if elapsed_c else None,
                       "by_type": breakdown(diffs, tasks, "type"), "by_data": breakdown(diffs, tasks, "data_access")}
         comparison["decision"] = decide(spec["rule"], comparison)
         comparisons.append(comparison)
@@ -264,15 +320,15 @@ def summarize(args) -> dict:
     lines = [f"# {prereg['experiment']}", "", "| Arm | Mean score | Failures | Tokens | Hours |", "|---|---|---|---|---|"]
     lines += [f"| {a} | {v['mean_score']:.1f} | {v['failures']} | {v['tokens']:.3g} | {v['elapsed_hours']:.1f} |"
               for a, v in per_arm.items()]
-    lines += ["", "| Comparison | Tasks | Mean diff | 95% CI | Wins/losses | Token cut | Decision |",
-              "|---|---|---|---|---|---|---|"]
+    lines += ["", "| Comparison | Tasks | Mean diff | 95% CI | Wins/losses | Token cut | Time cut | Decision |",
+              "|---|---|---|---|---|---|---|---|"]
     for c in comparisons:
         if c.get("decision") is None:
-            lines.append(f"| {c['name']} | 0 | | | | | no paired tasks |")
+            lines.append(f"| {c['name']} | 0 | | | | | | no paired tasks |")
             continue
-        cut = f"{c['token_reduction']:.0%}" if c["token_reduction"] is not None else "n/a"
+        cut, faster = (f"{c[key]:.0%}" if c[key] is not None else "n/a" for key in ("token_reduction", "time_reduction"))
         lines.append(f"| {c['name']} ({c['treatment']} vs {c['control']}) | {c['tasks']} | {c['mean_diff']:+.1f} | "
-                     f"[{c['ci_low']:+.1f}, {c['ci_high']:+.1f}] | {c['wins']}/{c['losses']} | {cut} | "
+                     f"[{c['ci_low']:+.1f}, {c['ci_high']:+.1f}] | {c['wins']}/{c['losses']} | {cut} | {faster} | "
                      f"{'meets rule' if c['decision'] else 'does not meet rule'} |")
     for c in comparisons:
         for field in ("by_type", "by_data"):
@@ -406,6 +462,244 @@ def process(args) -> dict:
             "comparisons": [(c["name"], c.get("decision")) for c in comparisons]}
 
 
+# ------------------------------------------------------------------------------------------ inventory
+# An empty checkpoint file is a few bytes; one saved conversation is far larger.
+MIN_CONVERSATION_BYTES = 1000
+
+
+def documents(attempt: Path) -> list[dict]:
+    """Every Markdown file the run wrote in its task workspace: the final report, the report of each
+    answered question, earlier versions of a report, what an agent said and read before its context
+    was compacted, and any other notes. The copies of skills and reference pages that each agent is
+    given are left out."""
+    root = attempt / "workspace" / "OceanX Tasks"
+    found = []
+    for path in sorted(root.rglob("*.md")) if root.is_dir() else []:
+        parts = path.relative_to(root).parts
+        written_by_the_run = {"report-history", "conversation_history"} & set(parts)
+        if path.is_symlink() or not path.is_file() or (".runtime" in parts and not written_by_the_run):
+            continue
+        kind, node = "other", None
+        if parts[1:] == ("agents", "coordinator", "report.md"):
+            kind = "final report"
+        elif "report-history" in parts:
+            kind, node = "report version", parts[-2]
+        elif "conversation_history" in parts:
+            kind = "conversation history"
+        elif len(parts) == 6 and parts[1] == "agents" and parts[3] == "reports" and parts[5] == "report.md":
+            kind, node = "question report", parts[4]
+        found.append({"path": str(path.relative_to(attempt)), "kind": kind, "node": node,
+                      "bytes": path.stat().st_size})
+    return found
+
+
+def wall_minutes(calls: list[dict]) -> float:
+    """Minutes the calls span, attempt by attempt. Code runs and waiting between calls are included,
+    and so is an attempt that returned no report."""
+    attempts = {}
+    for call in calls:
+        if call.get("started_at"):
+            attempts.setdefault(call.get("attempt_id"), []).append(call)
+    seconds = 0.0
+    for group in attempts.values():
+        start = min(datetime.fromisoformat(call["started_at"]) for call in group)
+        end = max(datetime.fromisoformat(call.get("ended_at") or call["started_at"]) for call in group)
+        seconds += (end - start).total_seconds()
+    return round(seconds / 60, 1)
+
+
+def questions(digest: dict, calls: list[dict], files: list[dict]) -> list[dict]:
+    """One row per node of the research tree, in the order the nodes were created: who answered it,
+    what it cost, and where its report is. The Coordinator's own calls are on the first root."""
+    by_node = {}
+    for call in calls:
+        by_node.setdefault(call.get("node_id"), []).append(call)
+    outline = digest["outline"]
+    root = next((n for n, node in outline.items() if node.get("parent") is None), None)
+    reports = {item["node"]: item["path"] for item in files if item["kind"] == "question report"}
+    versions = [item["node"] for item in files if item["kind"] == "report version"]
+    rows = []
+    for node_id, node in outline.items():
+        mine = by_node.get(None if node_id == root else node_id, [])
+        runs = node.get("attempts") or []
+        rows.append({
+            "node": node_id, "parent": node.get("parent"), "kind": node.get("kind"), "status": node.get("status"),
+            "expert": "coordinator" if node_id == root else node.get("expert"), "question": node.get("question"),
+            "label": (digest.get("labels", {}).get(node_id) or {}).get("label"),
+            "attempts": len(runs), "attempts_without_report": sum(run["end"] is None for run in runs),
+            "minutes": wall_minutes(mine),
+            "model_calls": len(mine),
+            "input_tokens": sum(call_tokens(call, "input_tokens") for call in mine),
+            "output_tokens": sum(call_tokens(call, "output_tokens") for call in mine),
+            "skills_read": sorted({name for call in mine for name in call.get("skills_read") or []}),
+            "report": reports.get(node_id), "report_versions": versions.count(node_id),
+        })
+    return rows
+
+
+def disk(attempt: Path) -> dict:
+    """Bytes in the attempt folder, and how many of them are arrays in the agents' scratch folders."""
+    total = scratch = 0
+    for folder, _, names in os.walk(attempt):
+        inside = Path(folder).relative_to(attempt).parts
+        for name in names:
+            path = Path(folder, name)
+            try:
+                size = 0 if path.is_symlink() else path.stat().st_size
+            except OSError:
+                continue
+            total += size
+            # workspace / OceanX Tasks / <task> / agents / <agent> / scratch
+            scratch += size if inside[3:4] == ("agents",) and inside[5:6] == ("scratch",) else 0
+    return {"total": total, "scratch": scratch}
+
+
+def run_record(attempt: Path, arm: dict) -> dict:
+    """What one attempt cost and kept, and what a later evaluation would find missing."""
+    result = json.loads((attempt / "result.json").read_text())
+    completed = result.get("status") == "completed"
+    calls = ledger(attempt)
+    spent = usage(attempt, result, calls)
+    code = [(state, json.loads(body or "{}")) for state, body in
+            state_rows(attempt, "SELECT state, result_json FROM code_executions")]
+    files = documents(attempt)
+    store, digest = tree_store(attempt), None
+    if store is not None:
+        from oceanx.research.memory import build_digest
+        digest = build_digest(store)
+    outline = (digest or {}).get("outline", {})
+    answered = [n for n, node in outline.items() if node.get("parent") is not None and node.get("result")]
+    reported = {item["node"] for item in files if item["kind"] == "question report"}
+    histories = [item for item in files if item["kind"] == "conversation history"]
+    saved = list((attempt / "state" / ".langgraph_api").glob(".langgraph_checkpoint.*.pckl"))
+    checkpoints = sum(p.stat().st_size for p in saved)
+    # The checkpoints are whole only if they were written after the last model call ended.
+    last_call = max((datetime.fromisoformat(call.get("ended_at") or call["started_at"]).timestamp()
+                     for call in calls if call.get("started_at")), default=0)
+    whole = checkpoints >= MIN_CONVERSATION_BYTES and max(p.stat().st_mtime for p in saved) >= last_call
+    answer = attempt / "answer.md"
+    missing = []
+    if completed and not (answer.is_file() and answer.read_text(encoding="utf-8").strip()):
+        missing.append("answer.md")
+    if completed and not any(item["kind"] == "final report" for item in files):
+        missing.append("final report")
+    if spent["source"] != "ledger":
+        missing.append("model-call ledger")
+    if digest is None:
+        missing.append("research tree")
+    elif completed and not digest.get("finished"):
+        missing.append("tree outcomes")
+    missing += [f"report of {node}" for node in answered if node not in reported]
+    if checkpoints < MIN_CONVERSATION_BYTES:
+        missing.append("agent conversations")
+    elif not whole:
+        missing.append("end of agent conversations")
+    if result.get("events_truncated"):
+        missing.append("part of events.jsonl")
+    return {
+        "task_id": attempt.parent.name, "attempt": attempt.name, "arm": arm.get("arm"),
+        "policy": arm.get("policy"), "lessons_version": (arm.get("lessons") or {}).get("version"),
+        "commit": arm.get("commit"), "status": result.get("status"),
+        "time": {key: result.get(key) for key in ("elapsed_seconds", "setup_seconds", "analysis_seconds")}
+        | {"model_seconds": spent["model_seconds"],
+           "code_seconds": round(sum(float(body.get("duration_seconds") or 0) for _, body in code), 1)},
+        "tokens": spent,
+        "code_runs": {"total": len(code),
+                      "by_state": {state: sum(s == state for s, _ in code) for state in sorted({s for s, _ in code})}},
+        "tree": None if digest is None else {
+            "finished": bool(digest.get("finished")), "nodes": len(outline), "questions_answered": len(answered),
+            "decisions": sum(digest.get("event_counts", {}).values()), "minutes": digest.get("wall_minutes")},
+        "questions": [] if digest is None else questions(digest, calls, files),
+        "documents": files,
+        # Checkpoints hold every agent's whole conversation in the framework's own format. The history
+        # files are readable text, written only for the part of a conversation that was compacted.
+        "conversations": {"checkpoint_bytes": checkpoints, "written_after_last_model_call": whole,
+                          "history_files": len(histories),
+                          "history_bytes": sum(item["bytes"] for item in histories)},
+        "disk": disk(attempt),
+        "complete": not missing, "missing": missing,
+    }
+
+
+def millions(value) -> str:
+    return "n/a" if value is None else f"{value / 1e6:.1f}M"
+
+
+def gigabytes(value) -> str:
+    return f"{value / 1e9:.1f} GB"
+
+
+def record_page(record: dict) -> str:
+    """The run record as a page: totals, then the research tree with what each question cost."""
+    time, tokens, runs, size = record["time"], record["tokens"], record["code_runs"], record["disk"]
+    kinds = [item["kind"] for item in record["documents"]]
+
+    def minutes(seconds):
+        return "n/a" if seconds is None else f"{seconds / 60:.0f} min"
+
+    spent_time = (f"- Time: {minutes(time['elapsed_seconds'])} in total, {minutes(time['model_seconds'])} of model "
+                  f"calls, {minutes(time['code_seconds'])} of code runs (agents work in parallel, so the parts can "
+                  "exceed the total)")
+    spent_tokens = (f"- Tokens: {millions(tokens['input_tokens'])} input ({millions(tokens['cached_input_tokens'])} "
+                    f"from cache), {millions(tokens['output_tokens'])} output, {tokens['calls']} model calls "
+                    f"({tokens['failed_calls']} failed)")
+    kept = (f"- Kept: {kinds.count('final report')} final report, {kinds.count('question report')} question "
+            f"reports, {kinds.count('report version')} report versions, {kinds.count('conversation history')} "
+            f"conversation histories, {gigabytes(size['total'])} on disk ({gigabytes(size['scratch'])} in scratch "
+            "folders)")
+    header = ("| Node | Question | Answered by | Status | Label | Attempts (without a report) | Minutes | "
+              "Input tokens | Output tokens | Skills opened | Report |")
+    lines = [f"# {record['task_id']}, arm {record['arm']}, {record['attempt']}: {record['status']}", "",
+             spent_time, spent_tokens,
+             f"- Code runs: {runs['total']} ({runs['total'] - runs['by_state'].get('succeeded', 0)} did not succeed)",
+             kept, f"- Missing: {'; '.join(record['missing']) or 'nothing'}", "",
+             header, "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for q in record["questions"]:
+        question = (q["question"] or "").replace("|", "/")
+        report = f"[report](<{q['report']}>)" if q["report"] else ""
+        if q["report_versions"] > 1:
+            report += f" ({q['report_versions']} versions)"
+        lines.append(
+            f"| {q['node']} | {question} | {q['expert'] or ''} | {q['status']} | {q['label'] or ''} | "
+            f"{q['attempts']} ({q['attempts_without_report']}) | {q['minutes']:.0f} | {millions(q['input_tokens'])} | "
+            f"{millions(q['output_tokens'])} | {', '.join(q['skills_read'])} | {report} |")
+    return "\n".join(lines) + "\n"
+
+
+def inventory(args) -> dict:
+    """Write run_record.json and run_record.md into every attempt and report the incomplete ones."""
+    records = []
+    for arm_dir in args.runs:
+        arm_dir = arm_dir.expanduser().resolve()
+        arm = json.loads((arm_dir / "arm.json").read_text())
+        for result in sorted(arm_dir.glob("*/attempt-*/result.json")):
+            record = run_record(result.parent, arm)
+            write_json(result.parent / "run_record.json", record)
+            (result.parent / "run_record.md").write_text(record_page(record), encoding="utf-8")
+            records.append({**record, "path": str(result.parent)})
+    out = args.out.expanduser().resolve()
+    write_json(out / "inventory.json", records)
+    lines = ["# What each attempt cost and kept", "",
+             "| Arm | Task | Status | Minutes | Input tokens (from cache) | Output tokens | Model calls (failed) | "
+             + "Code runs (failed) | Questions answered | Markdown files | On disk | Missing |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in records:
+        tokens, runs, tree = r["tokens"], r["code_runs"], r["tree"] or {}
+        failed_runs = runs["total"] - runs["by_state"].get("succeeded", 0)
+        lines.append(
+            f"| {r['arm']} | {r['task_id']} | {r['status']} | {(r['time']['elapsed_seconds'] or 0) / 60:.0f} | "
+            f"{millions(tokens['input_tokens'])} ({millions(tokens['cached_input_tokens'])}) | "
+            f"{millions(tokens['output_tokens'])} | {tokens['calls']} ({tokens['failed_calls']}) | "
+            f"{runs['total']} ({failed_runs}) | {tree.get('questions_answered', 'n/a')} | {len(r['documents'])} | "
+            f"{gigabytes(r['disk']['total'])} | {'; '.join(r['missing']) or 'nothing'} |")
+    (out / "inventory.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    incomplete = {r["path"]: r["missing"] for r in records if r["missing"]}
+    return {"attempts": len(records), "complete": len(records) - len(incomplete), "incomplete": incomplete,
+            "disk_gb": round(sum(r["disk"]["total"] for r in records) / 1e9, 1),
+            "scratch_gb": round(sum(r["disk"]["scratch"] for r in records) / 1e9, 1),
+            "report": str(out / "inventory.md")}
+
+
 def lessons_check(args) -> dict:
     """Every attempt of a lesson arm must report its lessons unchanged."""
     problems = []
@@ -435,11 +729,14 @@ def main(argv=None):
     p.add_argument("--runs", type=Path, nargs="+", required=True, help="Arm output folders (with arm.json)")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--prereg", type=Path, help="Frozen pre-registration with process_comparisons")
+    i = sub.add_parser("inventory")
+    i.add_argument("--runs", type=Path, nargs="+", required=True, help="Arm output folders (with arm.json)")
+    i.add_argument("--out", type=Path, required=True)
     lc = sub.add_parser("lessons-check")
     lc.add_argument("--runs", type=Path, required=True)
     args = parser.parse_args(argv)
     handler = {"blind": blind, "validate": validate, "freeze": freeze, "summarize": summarize,
-               "process": process, "lessons-check": lessons_check}[args.command]
+               "process": process, "inventory": inventory, "lessons-check": lessons_check}[args.command]
     print(json.dumps(handler(args), ensure_ascii=False, indent=2))
     return 0
 

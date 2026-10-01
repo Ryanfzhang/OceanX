@@ -31,7 +31,7 @@ tasks/Q01..Q30/evaluator/rubric.json     evaluator only: criteria, findings, ans
 evolution/E01..E24/task_info.json        evolution questions in two sets, A and B (no rubric)
 download/                                data_manifest.json and download_all.py
 server/                                  prepare_queries.py, run_oceanx.py (arms), research_cli.py, run_claude.py
-evaluation/                              evaluate.py (blind, validate, freeze, summarize, process), CODEX_JUDGE.md
+evaluation/                              evaluate.py (blind, validate, freeze, summarize, process, inventory), CODEX_JUDGE.md
 experiments/                             pre-registration template
 tests/                                   python -m pytest benchmarking/tests
 ```

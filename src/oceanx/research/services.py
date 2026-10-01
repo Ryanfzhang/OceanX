@@ -195,4 +195,16 @@ class ResearchServices:
         ):
             return "", None
         text = path.read_text(encoding="utf-8")
-        return (text, path) if text.strip() else ("", None)
+        if not text.strip():
+            return "", None
+        if run.attempt_id:
+            # report.md is rewritten when the same question is asked again, so keep what each
+            # attempt delivered. Never shown to a model; a failed copy must not block delivery.
+            version = (path.parents[2] / ".runtime" / "report-history" / path.parent.name
+                       / f"{run.attempt_id}.md")
+            try:
+                version.parent.mkdir(parents=True, exist_ok=True)
+                version.write_text(text, encoding="utf-8")
+            except OSError:
+                pass
+        return text, path

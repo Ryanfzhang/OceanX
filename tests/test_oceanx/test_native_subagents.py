@@ -148,6 +148,28 @@ def test_agent_report_collection_does_not_judge_report_content(tmp_path):
     assert text.startswith("## Summary")
 
 
+def test_each_attempt_keeps_the_report_it_delivered(tmp_path):
+    def root(_task_id, agent_key):
+        return tmp_path / "agents" / agent_key
+
+    services = ResearchServices(SimpleNamespace(
+        task_workspace_projector=SimpleNamespace(expert_session_root=root),
+        expert_code_execution=None,
+    ))
+    first = AgentRun("ws", "task", "request", "ocean-process-a1b2", "server", "physics",
+                     question="Question (node B1.2): depth of the layer", node_id="B1.2", attempt_id="a1")
+    second = AgentRun("ws", "task", "request", "ocean-process-a1b2", "server", "physics",
+                      question="Question (node B1.2): depth of the layer", node_id="B1.2", attempt_id="a2")
+    services.collect_report(first, materialize_text="## Summary\nFirst answer.")
+    text, path = services.collect_report(second, materialize_text="## Summary\nRevised answer.")
+    # report.md holds the latest answer; the earlier one is still on disk, outside the reports folder.
+    assert path.read_text() == text == "## Summary\nRevised answer."
+    history = root("task", first.thread_id) / ".runtime" / "report-history" / "B1.2"
+    assert {p.name: p.read_text() for p in history.iterdir()} == {
+        "a1.md": "## Summary\nFirst answer.", "a2.md": "## Summary\nRevised answer."}
+    assert [p.name for p in path.parent.iterdir()] == ["report.md"]
+
+
 def test_result_bindings_keep_document_order_without_duplicates():
     text = (
         "First [ocean-process-abc/result1], then [statistics-def/result2], "

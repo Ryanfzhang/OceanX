@@ -124,6 +124,10 @@ class NeedsInteraction(RuntimeError):
 class BatchClient:
     """One trusted local stdio client; no network listener and no UI changes."""
 
+    # How long the backend gets to stop by itself. The Agent Server writes the agents'
+    # conversation checkpoints while it stops; a kill before that loses them.
+    shutdown_seconds = 15
+
     def __init__(self, directory: Path, case: QueryCase) -> None:
         self.directory = directory
         self.case = case
@@ -249,7 +253,7 @@ class BatchClient:
             return
         try:
             if self.process.returncode is None:
-                async with asyncio.timeout(15):
+                async with asyncio.timeout(self.shutdown_seconds):
                     if self.active_request and self.context:
                         await self.request("request.cancel", {
                             "target_request_id": self.active_request,

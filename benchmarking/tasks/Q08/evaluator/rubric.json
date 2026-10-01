@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.2",
+  "rubric_version": "3.3",
   "task_id": "Q08",
   "type": "paper_reproduction",
   "title": "Vertical structure of a Loop Current eddy",
@@ -22,11 +22,11 @@
     "pages": "6070-6090",
     "doi": "10.1029/2018JC013801",
     "url": "https://doi.org/10.1029/2018JC013801",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
+    "verification": "Crossref metadata and abstract checked 2026-10-01; full text (published version in the Ifremer repository) read 2026-10-01"
   },
   "period_match": {
-    "paper_period": "August to November 2016",
-    "paper_data": "underwater glider sections, altimetry and Argo",
+    "paper_period": "5 August to 15 November 2016 (two glider crossings); the eddy detached on 15 April 2016",
+    "paper_data": "underwater glider sections to 1,000 dbar, altimetry (absolute dynamic topography) and Argo profiles",
     "paper_window": [
       "2016-08",
       "2016-11"
@@ -51,9 +51,9 @@
       "weight": 15,
       "title": "Finding 1",
       "claim": "The detached eddy is a large body of nearly homogeneous water between about 50 and 250 m, confined between the seasonal and main thermoclines.",
-      "paper_evidence": "Abstract: 'The LCE appeared as a large body of nearly homogeneous water between 50 and 250 m confined between the seasonal and main thermoclines'.",
+      "paper_evidence": "Abstract: 'The LCE appeared as a large body of nearly homogeneous water between 50 and 250 m confined between the seasonal and main thermoclines'. Full text, section 3.2: outside the eddy the 23.5 and 25 isopycnals are about 30-35 m apart; inside the core they are 190 and 160 m apart in the two sections, and the buoyancy frequency is below 5e-3 s-1.",
       "testability": "testable",
-      "how_to_test": "Core profiles for August-November 2016 of the eddy that detached in 2016 in the reanalysis; depth range of the low-stratification layer.",
+      "how_to_test": "Core profiles for August-November 2016 of the eddy that detached in April 2016 in the reanalysis: depth range of the low-stratification layer, from the buoyancy frequency or from the spacing of the 23.5 and 25 isopycnals inside and outside the eddy.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: thermostad top and bottom +/-50 m)",
       "anchors": {
@@ -70,11 +70,11 @@
       "weight": 15,
       "title": "Finding 2",
       "claim": "The core is up to 9.7 C warmer than the surrounding Gulf water.",
-      "paper_evidence": "Abstract.",
+      "paper_evidence": "Abstract. Full text, sections 2.3 and 3.2.1: the anomaly is the difference from a mean Gulf profile built from 39 Argo profiles of April-November 2016 outside this eddy and the remnants of earlier ones (outside the 0.5 m dynamic-topography contour; northern shelf and slope excluded). It reaches +9.7 C at 230 m in the first section and +8.7 C at 200 m in the second, and is still 4 C at 500 m.",
       "testability": "testable",
-      "how_to_test": "Maximum core temperature anomaly relative to a reference profile of surrounding Gulf water at the same depth (definition stated by the agent).",
+      "how_to_test": "Maximum core temperature anomaly, and its depth, relative to a mean profile of Gulf water outside Loop Current eddies in April-November 2016 (the paper's reference) or a stated alternative.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: +/-1.5 C under the agent's reference)",
+      "tolerance": "to freeze before judging (suggested: +/-1.5 C under the agent's reference; depth of the maximum +/-75 m)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -89,7 +89,7 @@
       "weight": 15,
       "title": "Finding 3",
       "claim": "Salinity has a double core: a subsurface fresh core (anomaly about -0.27) above a deeper saline core (anomaly up to 1.22).",
-      "paper_evidence": "Abstract.",
+      "paper_evidence": "Abstract. Full text, section 3.2.2: the fresh anomaly reaches -0.27 and -0.25 in the two sections, inside the 36.4 isohaline between about 30 and 200 m; the saline core extends from 220 to 650 m and reaches 36.97 (+1.22) near 230 m.",
       "testability": "testable",
       "how_to_test": "Core salinity-anomaly profile; depth and size of both cores.",
       "expected": "to freeze before judging",
@@ -108,9 +108,9 @@
       "weight": 10,
       "title": "Finding 4",
       "claim": "The saline core of Caribbean origin is conserved from the Yucatan Basin through the Loop Current and at least seven months after detachment; the fresh core forms by winter surface heat loss and mixing before detachment.",
-      "paper_evidence": "Abstract.",
+      "paper_evidence": "Abstract. Full text, sections 3.1 and 5: an Argo float followed the salinity maximum (36.95, between the 25.45 and 25.50 kg m-3 isopycnals) from the Yucatan Basin to the tip of the Loop Current between September 2015 and June 2016; the eddy detached on 15 April 2016, and the maximum was still 36.97 in the glider sections of August-November 2016. Just after detachment the homogeneous layer reached the surface.",
       "testability": "partly testable",
-      "how_to_test": "Testable: the salinity maximum along the path from the Yucatan Channel through the Loop Current and after detachment, and the winter mixed-layer evolution in the Loop Current. Not testable directly: surface heat and freshwater fluxes (not supplied).",
+      "how_to_test": "Testable: the salinity maximum and its density along the path from the Yucatan Basin through the Loop Current (September 2015-April 2016) and inside the eddy until November 2016, and the winter mixed layer in the Loop Current before the detachment of 15 April 2016. Not testable directly: surface heat and freshwater fluxes (not supplied).",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: salinity-maximum change over seven months within 0.1 of the reference)",
       "anchors": {
@@ -128,11 +128,11 @@
       "weight": 15,
       "title": "Finding 5",
       "claim": "The geostrophic velocity forms a subsurface-intensified vortex ring.",
-      "paper_evidence": "Abstract: 'The geostrophic velocity structure had the form of a subsurface intensified vortex ring'.",
+      "paper_evidence": "Abstract: 'The geostrophic velocity structure had the form of a subsurface intensified vortex ring'. Full text, sections 2.2 and 3.2.4: absolute geostrophic velocity from thermal wind, referenced to the glider's velocity averaged over the top 1,000 dbar; maxima of 0.8 to 1.55 m/s lie below the surface (about 70 m) on the outer edges of the eddy, with the strongest shear between 100 and 200 m.",
       "testability": "testable",
-      "how_to_test": "Geostrophic velocity section across the eddy from thermal wind referenced to the SSH-derived surface velocity; depth of the velocity maximum.",
+      "how_to_test": "Geostrophic velocity section across the eddy from thermal wind. The paper references it to the glider's depth-averaged velocity, which is not supplied: reference it to the surface velocity from sea surface height or to a deep level, and say so. Depth and radius of the velocity maximum.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: velocity maximum below the surface; depth +/-50 m)",
+      "tolerance": "to freeze before judging (suggested: velocity maximum below the surface at the eddy's edge; depth +/-50 m)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -146,7 +146,7 @@
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Identification of the eddy and its detachment date in the reanalysis; a reference profile for anomalies; thermostad and salinity-core definitions; geostrophic velocity from thermal wind referenced to SSH.",
+      "focus": "Identification of the eddy (the paper uses the 0.7 m dynamic-topography contour and its centroid) and its detachment date (15 April 2016); the reference profile for anomalies (Gulf water outside Loop Current eddies, April-November 2016); thermostad and salinity-core definitions; geostrophic velocity from thermal wind with a stated reference.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -158,7 +158,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "GLORYS12 reanalysis versus glider observations: assimilation constrains the eddy but smooths its structure; resolution; no surface fluxes supplied.",
+      "focus": "GLORYS12 reanalysis versus glider observations: assimilation constrains the eddy but smooths its structure; resolution; the paper's absolute dynamic topography versus the reanalysis sea surface height, so the 0.7 m contour does not transfer directly; the glider's depth-averaged velocity is not available as a reference; no surface fluxes supplied.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",

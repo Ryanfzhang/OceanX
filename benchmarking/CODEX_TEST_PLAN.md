@@ -165,18 +165,28 @@ Pass:
   `research/lessons/skills/research-trajectory-planning/SKILL.md` with the fixture lesson written in;
 - the answers cite only supplied data.
 
-Then check that the process measures can be read from these runs:
+Then check that each run kept everything, and that the process measures can be read:
 
 ```bash
+python benchmarking/evaluation/evaluate.py inventory --runs $RUNS_ROOT/smoke/arm-B $RUNS_ROOT/smoke/arm-C \
+  --out $RUNS_ROOT/smoke/report
 python benchmarking/evaluation/evaluate.py process --runs $RUNS_ROOT/smoke/arm-B $RUNS_ROOT/smoke/arm-C \
   --out $RUNS_ROOT/smoke/report
 ```
+
+`inventory.md` must show nothing missing for the completed attempts (`EVALUATION.md`, "What every attempt
+keeps"). If "agent conversations" or "end of agent conversations" is missing, the Agent Server did not
+write its checkpoints before it stopped: stop and report, because every later run would lose them too.
+Open one attempt's `run_record.md` and check that every question of the tree has tokens, minutes and a
+report path.
 
 Report:
 - wall time, tokens and failed code runs per attempt. These calibrate the time budget: the time limit must
   be at least 1.5 times the longest run;
 - from `process.md`: whether the Coordinator opened its planning skill in each run, and how many questions'
-  Experts opened an analysis skill.
+  Experts opened an analysis skill;
+- from `inventory.md`: tokens, model calls and disk use per attempt, and from `run_record.json` how much
+  of the disk use is scratch arrays, to plan storage.
 
 ## T4. References and frozen rubrics (evaluator work)
 
@@ -200,9 +210,9 @@ For the heat-budget answer keys, confirm the budget closes: rate equals the sum 
 the region and period used.
 
 Paper questions:
-- Q01, Q03, Q06, Q08 and Q09 were checked from the abstract only. With the PDF from the owner, confirm each
+- Q01, Q03, Q06 and Q09 were checked from the abstract only. With the PDF from the owner, confirm each
   finding, the region, the window and the paper's definitions in the text, and record the page. Open copies
-  exist for Q01, Q08 and Q09 (see `DESIGN.md`, "Papers").
+  exist for Q01 and Q09 (see `DESIGN.md`, "Papers").
 - Confirm the transport section of Q03 and the typhoon's passage dates in Q06 from the papers before
   freezing those two rubrics.
 - For Q05 and Q06, record whether the CMOMS forcing contains the typhoon. If it does not, the frozen
@@ -313,8 +323,16 @@ sha256sum $EVAL_ROOT/lessons/L1/lessons.json > $EVAL_ROOT/lessons/L1/SHA256
 chmod -R a-w $EVAL_ROOT/lessons/L1
 ```
 
+Check that the round kept everything before it is mined:
+
+```bash
+python benchmarking/evaluation/evaluate.py inventory --runs $RUNS_ROOT/$EXP/evolution/A/r*/arm-E1 \
+  --out $EVAL_ROOT/$EXP/report/evolution-A
+```
+
 Pass:
 - 24 attempts, or failures reported;
+- `inventory` shows nothing missing for the completed attempts;
 - labels done;
 - L1 frozen with at least one approved lesson.
 
@@ -330,6 +348,8 @@ for r in 1 2; do
     --output $RUNS_ROOT/$EXP/evolution/B/r$r/arm-E2 --arm E2 --policy v2-nested --lessons $EVAL_ROOT/lessons/L1
 done
 python benchmarking/evaluation/evaluate.py lessons-check --runs $RUNS_ROOT/$EXP/evolution/B
+python benchmarking/evaluation/evaluate.py inventory --runs $RUNS_ROOT/$EXP/evolution/B/r*/arm-E2 \
+  --out $EVAL_ROOT/$EXP/report/evolution-B
 for tree in $(find $RUNS_ROOT/$EXP/evolution/B -name research_tree.sqlite3); do
   python benchmarking/server/research_cli.py judge-labels --tree "$tree"
 done
@@ -359,6 +379,7 @@ cmp $EVAL_ROOT/lessons/L1/lessons.json $EVAL_ROOT/lessons/L2/lessons.json && ech
 
 Pass:
 - 24 attempts, or failures reported, and `lessons-check` reports nothing changed;
+- `inventory` shows nothing missing for the completed attempts;
 - labels done;
 - L2 frozen.
 
@@ -399,6 +420,8 @@ python benchmarking/server/run_oceanx.py --queries $J --output $RUNS_ROOT/$EXP/t
 python benchmarking/server/run_oceanx.py --queries $J --output $RUNS_ROOT/$EXP/test/r$r/arm-C2 --arm C2 --policy v2-nested --lessons $EVAL_ROOT/lessons/L2 &
 wait
 python benchmarking/evaluation/evaluate.py lessons-check --runs $RUNS_ROOT/$EXP/test
+python benchmarking/evaluation/evaluate.py inventory --runs $RUNS_ROOT/$EXP/test/r$r/arm-* \
+  --out $EVAL_ROOT/$EXP/report/test-r$r
 ```
 
 If memory is tight, run the arms one after another for each repeat. Watch the first repeat: if two or more
@@ -407,7 +430,12 @@ attempts in one arm fail for the same infrastructure reason, stop and report.
 Pass:
 - every attempt has a `result.json`;
 - every `arm.json` has the same commit;
-- `lessons-check` reports nothing changed.
+- `lessons-check` reports nothing changed;
+- `inventory` shows nothing missing for the completed attempts.
+
+Never prune an attempt folder: its `state/` holds the token ledger and the agents' conversations. If the
+disk runs short, report the scratch share that `inventory` printed and let the owner decide; delete nothing
+yourself.
 
 ## T12. Judging
 
@@ -446,7 +474,7 @@ python benchmarking/evaluation/evaluate.py process --runs $RUNS_ROOT/$EXP/test/r
 ```
 
 Send the owner:
-- `report.md` and `process.md`;
+- `report.md`, `process.md` and the `inventory.md` of each repeat;
 - the differences by question type and by data access (private CMOMS, public);
 - for each lesson comparison, the score result and the process result side by side, with the spread
   between control repeats;

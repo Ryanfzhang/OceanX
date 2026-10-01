@@ -1,5 +1,8 @@
 """Blinding, score validation and the paired summary; no models or agents."""
 import json
+import os
+import sqlite3
+from contextlib import closing
 
 import evaluate
 import pytest
@@ -98,6 +101,7 @@ def test_freeze_summarize_and_decisions(tmp_path):
     summary = json.loads((eval_root / "report" / "summary.json").read_text())
     policy = summary["comparisons"][0]
     assert policy["tasks"] == 4 and policy["mean_diff"] > 0 and policy["decision"] is True
+    assert policy["token_reduction"] == 0 and policy["time_reduction"] == 0  # both arms cost the same here
     assert set(policy["by_type"]) == {"paper_reproduction", "open_problem"}
     assert policy["by_data"]["public"]["tasks"] == 2 and policy["by_data"]["private"]["tasks"] == 2
     assert summary["arms"]["A"]["failures"] == 1  # Q01 failed in both arms and scored 0
@@ -171,3 +175,114 @@ def test_process_measures_compare_arms_on_the_research_tree(tmp_path):
     # Without a pre-registration the measures are still reported; nothing is decided.
     evaluate.main(["process", "--runs", str(runs[0]), "--out", str(tmp_path / "plain")])
     assert json.loads((tmp_path / "plain" / "process.json").read_text())["comparisons"] == []
+
+
+def make_state(attempt, calls, code=()):
+    """The parts of an attempt's own state that the evaluation reads: call ledger, code runs, conversations."""
+    state = attempt / "state"
+    (state / ".langgraph_api").mkdir(parents=True)
+    (state / ".langgraph_api" / ".langgraph_checkpoint.1.pckl").write_bytes(b"conversation" * 100)
+    with closing(sqlite3.connect(state / "workspace.sqlite3")) as db:
+        db.execute("CREATE TABLE model_call_observations (call_id TEXT PRIMARY KEY, request_id TEXT, "
+                   "thread_id TEXT NOT NULL, record_json TEXT NOT NULL)")
+        db.execute("CREATE TABLE code_executions (execution_id TEXT PRIMARY KEY, state TEXT NOT NULL, result_json TEXT)")
+        db.executemany("INSERT INTO model_call_observations VALUES (?,?,?,?)",
+                       [(str(i), "request", "thread", json.dumps(call)) for i, call in enumerate(calls)])
+        db.executemany("INSERT INTO code_executions VALUES (?,?,?)",
+                       [(str(i), state_, json.dumps({"duration_seconds": seconds}))
+                        for i, (state_, seconds) in enumerate(code)])
+        db.commit()
+
+
+CALLS = [
+    {"role": "coordinator", "state": "completed", "duration_seconds": 2.0,
+     "usage": {"input_tokens": 1000, "output_tokens": 50, "input_token_details": {"cache_read": 800}}},
+    {"role": "ocean_process_expert", "node_id": "B1.2", "attempt_id": "first", "state": "failed",
+     "duration_seconds": 1.0, "started_at": "2026-01-01T00:00:00+00:00", "ended_at": "2026-01-01T00:06:00+00:00"},
+    {"role": "ocean_process_expert", "node_id": "B1.2", "attempt_id": "b", "state": "completed", "duration_seconds": 3.5,
+     "usage": {"input_tokens": 9000, "output_tokens": 500}, "skills_read": ["ocean-analysis-design"],
+     "started_at": "2026-01-01T00:10:00+00:00", "ended_at": "2026-01-01T00:13:30+00:00"},
+]
+
+
+def test_tokens_come_from_the_call_ledger_not_the_end_of_run_report(tmp_path):
+    arm_dir = make_arm(tmp_path / "runs", "B", "v2-nested", {"Q07": 2, "Q17": 2})
+    attempt = arm_dir / "Q07" / "attempt-1"
+    # Like real runs, this one reported zero tokens when it ended. The ledger has every call.
+    result = {**json.loads((attempt / "result.json").read_text()),
+              "coordinator_usage": {"input_tokens": 0, "output_tokens": 0}}
+    (attempt / "result.json").write_text(json.dumps(result))
+    make_state(attempt, CALLS)
+    spent = evaluate.usage(attempt, result)
+    assert spent["source"] == "ledger"
+    assert (spent["input_tokens"], spent["cached_input_tokens"], spent["output_tokens"]) == (10000, 800, 550)
+    assert (spent["calls"], spent["failed_calls"], spent["model_seconds"]) == (3, 1, 6.5)
+    assert spent["by_role"]["ocean_process_expert"] == {"calls": 2, "input_tokens": 9000, "output_tokens": 500}
+    mapping = tmp_path / "eval" / "blind_map.json"
+    evaluate.main(["blind", "--runs", str(arm_dir), "--out", str(tmp_path / "eval" / "blind"), "--map", str(mapping)])
+    tokens = {entry["task_id"]: (entry["tokens"], entry["usage"]["source"])
+              for entry in json.loads(mapping.read_text()).values()}
+    # Without a state folder the end-of-run report is all there is.
+    assert tokens == {"Q07": (10550, "ledger"), "Q17": (1100, "result.json")}
+
+
+def test_inventory_records_what_each_attempt_cost_and_kept(tmp_path):
+    arm_dir = make_arm(tmp_path / "runs", "C1", "v2-nested", {"Q07": 2, "Q17": 2, "Q25": None})
+    attempt = arm_dir / "Q07" / "attempt-1"
+    make_tree(attempt, "Q07", side_tokens=1_000_000, planning_opened=True)
+    make_state(attempt, CALLS, code=[("succeeded", 4.0), ("failed", 1.5)])
+    task = attempt / "workspace" / "OceanX Tasks" / "Q07--abc"
+    agent = "agents/ocean-process-1"
+    for relative, body in (("agents/coordinator/report.md", "## Summary\nFinal."),
+                           (f"{agent}/reports/B1.2/report.md", "## Summary\nSide."),
+                           (f"{agent}/.runtime/report-history/B1.1/a.md", "## Summary\nEarlier."),
+                           (f"{agent}/.runtime/context/conversation_history/session_1.md", "## Summarized at ..."),
+                           (f"{agent}/.runtime/skills/x/skills/xarray-array-ops/SKILL.md", "skill"),
+                           (f"{agent}/scratch/field.npy", "x" * 2000)):
+        (task / relative).parent.mkdir(parents=True, exist_ok=True)
+        (task / relative).write_text(body)
+    out = tmp_path / "report"
+    assert evaluate.main(["inventory", "--runs", str(arm_dir), "--out", str(out)]) == 0
+    records = {r["task_id"]: r for r in json.loads((out / "inventory.json").read_text())}
+    full = records["Q07"]
+    assert full["complete"] and full["missing"] == [] and full["arm"] == "C1"
+    assert full == {**json.loads((attempt / "run_record.json").read_text()), "path": str(attempt)}
+    assert full["time"] == {"elapsed_seconds": 3600, "setup_seconds": None, "analysis_seconds": None,
+                            "model_seconds": 6.5, "code_seconds": 5.5}
+    assert (full["tokens"]["input_tokens"], full["tokens"]["output_tokens"]) == (10000, 550)
+    assert full["code_runs"] == {"total": 2, "by_state": {"failed": 1, "succeeded": 1}}
+    assert full["tree"]["finished"] and full["tree"]["questions_answered"] == 2
+    # Every Markdown file of the run is listed by kind; the agents' copies of skills are not.
+    kinds = sorted((d["kind"], d["node"]) for d in full["documents"])
+    assert kinds == [("conversation history", None), ("final report", None), ("question report", "B1.1"),
+                     ("question report", "B1.2"), ("report version", "B1.1")]
+    assert full["conversations"] == {"checkpoint_bytes": 1200, "written_after_last_model_call": True,
+                                     "history_files": 1, "history_bytes": 20}
+    assert full["disk"]["scratch"] == 2000 and full["disk"]["total"] > 2000
+    # Each question of the tree carries its own cost; the Coordinator's calls are on the root.
+    root, decisive, side = full["questions"]
+    assert (root["node"], root["expert"], root["model_calls"], root["input_tokens"]) == ("B1", "coordinator", 1, 1000)
+    assert (decisive["label"], decisive["model_calls"], decisive["report_versions"]) == ("decision-changing", 0, 1)
+    assert (side["node"], side["model_calls"], side["input_tokens"], side["output_tokens"]) == ("B1.2", 2, 9000, 500)
+    # Time on a question counts the attempt that returned no report: 6 minutes, then 3.5.
+    assert side["minutes"] == 9.5
+    assert side["skills_read"] == ["ocean-analysis-design"]
+    assert side["report"] == f"workspace/OceanX Tasks/Q07--abc/{agent}/reports/B1.2/report.md"
+    assert sum(q["input_tokens"] for q in full["questions"]) == full["tokens"]["input_tokens"]
+    page = (attempt / "run_record.md").read_text()
+    assert "# Q07, arm C1, attempt-1: completed" in page and "- Missing: nothing" in page
+    assert f"| ocean-analysis-design | [report](<{side['report']}>) |" in page
+    # An attempt without its state, tree and reports says exactly what a later evaluation would lack.
+    assert not records["Q17"]["complete"] and records["Q17"]["questions"] == []
+    assert records["Q17"]["missing"] == ["final report", "model-call ledger", "research tree",
+                                         "agent conversations"]
+    assert records["Q25"]["status"] == "failed" and "research tree" in records["Q25"]["missing"]
+    table = (out / "inventory.md").read_text()
+    assert "| C1 | Q07 | completed | 60 | 0.0M (0.0M) | 0.0M | 3 (1) | 2 (1) | 2 | 5 | 0.0 GB | nothing |" in table
+    # Conversations are written when the Agent Server stops. A server killed before that leaves checkpoints
+    # older than its last model call, or files of a few bytes.
+    checkpoint = attempt / "state" / ".langgraph_api" / ".langgraph_checkpoint.1.pckl"
+    os.utime(checkpoint, (0, 0))
+    assert evaluate.run_record(attempt, {"arm": "C1"})["missing"] == ["end of agent conversations"]
+    checkpoint.write_bytes(b"\x80\x02}q\x00.")
+    assert evaluate.run_record(attempt, {"arm": "C1"})["missing"] == ["agent conversations"]

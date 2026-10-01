@@ -74,6 +74,9 @@ def benchmark_interaction_answer(case, payload):
 
 
 class BenchmarkClient(batch.BatchClient):
+    # A benchmark attempt must keep its agents' conversations, so let the server finish writing them.
+    shutdown_seconds = 120
+
     async def send(self, kind, payload):
         if kind == "session.submit":
             payload = {**payload, "text": oceanx_prompt(self.case)}
@@ -121,8 +124,22 @@ class BenchmarkClient(batch.BatchClient):
 ARM: dict = {}
 
 
+def library_versions() -> dict:
+    """The libraries whose formats the saved conversation checkpoints depend on."""
+    from importlib import metadata
+    versions = {}
+    for name in ("langgraph", "langgraph-api", "langgraph-runtime-inmem", "langgraph-checkpoint",
+                 "deepagents", "langchain-core"):
+        try:
+            versions[name] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            versions[name] = None
+    return versions
+
+
 def arm_record(args) -> dict:
     return {"arm": args.arm, "policy": args.policy, "oceanx_version": __version__, **git_identity(),
+            "libraries": library_versions(),
             "lessons": None if LESSONS is None else {"snapshot": str(LESSONS), "version": lessons_version(LESSONS),
                                                     "sha256": file_sha256(LESSONS / "lessons.json")},
             "queries": str(args.queries) if args.queries else None,
