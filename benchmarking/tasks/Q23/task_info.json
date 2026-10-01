@@ -6,7 +6,7 @@
   "topic": "Loop Current",
   "title": "How often the Loop Current sheds eddies, and why estimates differ",
   "query": "Published estimates of how often the Loop Current sheds eddies differ. Using the supplied GLORYS12 daily sea surface height, temperature and salinity for 2011-2017 in the Gulf of Mexico, identify the Loop Current eddy separation events, their dates and intervals, and the state of the Loop Current before each separation, and diagnose why published estimates of separation intervals differ.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "GULF",

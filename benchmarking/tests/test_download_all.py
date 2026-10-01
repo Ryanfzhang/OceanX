@@ -24,14 +24,14 @@ import ncei_oisst as ncei
 
 def test_catalogue_groups_and_coverage():
     m = all_data.load_manifest()
-    assert len(m["tasks"]) == 42 and len(m["groups"]) == 15
+    assert len(m["tasks"]) == 54 and len(m["groups"]) == 18
     assert {g["adapter"] for g in m["groups"].values()} == {"cmems", "era5", "erddap", "ncei", "private"}
     assert all(not m["groups"][g].get("evaluator_only") for groups in m["tasks"].values() for g in groups)
     assert m["evaluator_groups"]["Q11"] == ["X_HEAT"]
     assert not all_data.coverage(m, {})["all_numerical_inputs_complete"]
     reports = {key: {"complete": True, "group_sha256": down.fingerprint(g)} for key, g in m["groups"].items()}
     status = all_data.coverage(m, reports)
-    assert status["all_numerical_inputs_complete"] and status["complete_tasks"] == 42
+    assert status["all_numerical_inputs_complete"] and status["complete_tasks"] == 54
     assert status["tasks"]["Q11"]["evaluator_inputs_complete"]
     reports["P_GULF"]["complete"] = False
     status = all_data.coverage(m, reports)
@@ -78,7 +78,7 @@ def test_requested_diagnostics_only_bind_and_block_their_question(tmp_path, key,
     reports = {k: {"complete": True, "group_sha256": down.fingerprint(g)} for k, g in m["groups"].items()}
     reports[key]["complete"] = False
     status = all_data.coverage(m, reports)
-    assert status["complete_tasks"] == 41
+    assert status["complete_tasks"] == 53
     assert status["tasks"][task]["missing_groups"] == [key]
     assert all(state["numerical_inputs_complete"] for t, state in status["tasks"].items() if t != task)
 
@@ -105,6 +105,41 @@ def test_evolution_groups_plan_correctly():
     bgc = all_data.group_plan(m["groups"]["P_CCS_BGC"])
     assert len(bgc) == 28 * 12 * 3 and all(c["expected_grid_step"] == 0.25 for c in bgc)
     assert {c["request"]["dataset_id"] for c in bgc} == {"cmems_mod_glo_bgc_my_0.25deg_P1M-m"}
+
+
+def test_second_evolution_set_groups_plan_correctly():
+    m = all_data.load_manifest()
+    box = [147, 162, -46, -26]
+    phy = all_data.group_plan(m["groups"]["P_TAS_PHY"])
+    assert len(phy) == 10 * 12 * 6 and all(c["bbox"] == box and c["expected_samples"] == 1 for c in phy)
+    assert all(c["relative_path"].startswith("CMEMS_TASMAN_MONTHLY/") for c in phy)
+    request = phy[0]["request"]
+    assert [request[k] for k in ("minimum_longitude", "maximum_longitude", "minimum_latitude",
+                                 "maximum_latitude")] == box
+    surface = all_data.group_plan(m["groups"]["P_TAS_SURF"])
+    assert len(surface) == 28 * 12 and all(c["request"]["maximum_depth"] == 1 for c in surface)
+    assert all(c["relative_path"].startswith("CMEMS_TASMAN_SURFACE_DAILY/thetao/") for c in surface)
+    bgc = all_data.group_plan(m["groups"]["P_TAS_BGC"])
+    assert len(bgc) == 28 * 12 * 3 and all(c["expected_grid_step"] == 0.25 for c in bgc)
+    assert m["masks"]["tasman_analysis"] == box
+
+
+def test_groups_option_downloads_only_the_named_groups(tmp_path, monkeypatch):
+    groups = {name: {"phase": phase, "adapter": adapter, "data_type": name.upper(), "folders": ["thetao"]}
+              for name, phase, adapter in (("a", "services", "cmems"), ("b", "services", "cmems"),
+                                           ("p", "public", "erddap"))}
+    m = {"version": "test", "groups": groups, "tasks": {"E13": ["a"], "E01": ["b"]}, "masks": {}}
+    monkeypatch.setattr(all_data, "load_manifest", lambda: m)
+    monkeypatch.setattr(all_data, "group_plan", lambda g: [{"relative_path": g["data_type"] + "/fixture.nc"}])
+    monkeypatch.setattr(down, "transfer", lambda chunk, root, **kw: {"path": str(root / chunk["relative_path"])})
+    monkeypatch.setattr(all_data.services, "transfer", down.transfer)
+    assert all_data.main(["services", "--output", str(tmp_path), "--execute", "--groups", "a"]) == 0
+    control = tmp_path / "_download_all"
+    assert (control / "a.report.json").exists() and not (control / "b.report.json").exists()
+    tasks = json.loads((control / "coverage.json").read_text())["tasks"]
+    assert tasks["E13"]["numerical_inputs_complete"] and not tasks["E01"]["numerical_inputs_complete"]
+    with pytest.raises(ValueError, match="Not groups of the services phase"):
+        all_data.main(["services", "--output", str(tmp_path), "--execute", "--groups", "p"])
 
 
 def test_private_check_requires_every_variable_year_and_name(tmp_path):

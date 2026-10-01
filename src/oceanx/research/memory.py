@@ -129,6 +129,52 @@ def build_digest(store_path: Path) -> dict | None:
     }
 
 
+def run_measures(digest: dict) -> dict:
+    """Process measures of one finished research tree (improvement data; never shown to a model).
+
+    A question counts as decisive when its effective label is decision-changing. Labels from
+    the log rules alone are crude, so judge or human labels should exist before these are read.
+    """
+    outline, outcomes, labels = digest["outline"], digest.get("outcomes", {}), digest.get("labels", {})
+    root = next((n for n, node in outline.items() if node.get("parent") is None), None)
+    ran = [n for n, node in outline.items() if n != root and node.get("attempts")]
+
+    def tokens(node_id: str) -> int:
+        outcome = outcomes.get(node_id, {})
+        return int(outcome.get("input_tokens", 0)) + int(outcome.get("output_tokens", 0))
+
+    labelled = [n for n in ran if n in labels]
+    decisive = [n for n in labelled if labels[n]["label"] == "decision-changing"]
+    spent = sum(tokens(n) for n in labelled)
+    ends = [run["end"] for n in decisive for run in outline[n]["attempts"] if run["end"] is not None]
+    proposals = [p for node in outline.values() for p in node.get("proposals", [])]
+    attempts = [run for n in ran for run in outline[n]["attempts"]]
+    wall = digest.get("wall_minutes")
+    expert_skills = [outcomes.get(n, {}).get("skills_read") for n in ran]
+    return {
+        "questions_run": len(ran),
+        "max_depth": max((n.count(".") for n in ran), default=0),
+        "tokens": int(digest.get("tokens", 0)),
+        "wall_minutes": wall,
+        # Share of the labelled questions' tokens spent on questions that did not change the answer.
+        "nondecisive_token_share": 1 - sum(tokens(n) for n in decisive) / spent if spent else None,
+        "last_decisive_minute": max(ends, default=None),
+        "last_decisive_fraction": max(ends) / wall if ends and wall else None,
+        "followups_proposed": len(proposals),
+        "followups_adopted": sum(bool(p["adopted_as"]) for p in proposals),
+        "attempts": len(attempts),
+        "attempts_without_report": sum(run["end"] is None for run in attempts),
+        "label_sources": {source: sum(labels[n]["source"] == source for n in labelled)
+                          for source in sorted({labels[n]["source"] for n in labelled})},
+        # None for runs recorded before skill reads were logged.
+        "coordinator_skills_read": outcomes.get(root, {}).get("skills_read"),
+        "questions_whose_expert_read_a_skill": (
+            sum(bool(names) for names in expert_skills) if all(n is not None for n in expert_skills)
+            else None),
+        "expert_skills_read": sorted({name for names in expert_skills for name in names or []}),
+    }
+
+
 def find_stores(roots) -> list[Path]:
     """Task stores under run or project directories."""
     found: list[Path] = []
@@ -233,4 +279,5 @@ class ResearchMemory:
                 "digests": state["digests"], "consolidated_at": state["last_consolidated_at"]}
 
 
-__all__ = ["DIGEST_SCHEMA", "ResearchMemory", "build_digest", "find_stores", "task_key"]
+__all__ = ["DIGEST_SCHEMA", "ResearchMemory", "build_digest", "find_stores", "run_measures",
+           "task_key"]

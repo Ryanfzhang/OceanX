@@ -6,7 +6,7 @@
   "topic": "coastal hypoxia",
   "title": "Year-to-year control of hypoxia off the Pearl River Estuary",
   "query": "Using the supplied CMOMS daily oxygen, temperature, salinity, chlorophyll and velocity for 2011-2020, quantify how summer bottom hypoxia (dissolved oxygen below 2 mg/L) on the shelf off the Pearl River Estuary varies from year to year and determine which physical and biological factors control it. River discharge, nutrients and winds are not supplied.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "SCS",

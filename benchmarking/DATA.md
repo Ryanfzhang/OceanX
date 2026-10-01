@@ -20,9 +20,12 @@ $DATA_ROOT/
   CMEMS_Gulf/..., CMEMS_ECS/..., ERA5/...       services (test suite)
   CMEMS_ARABIAN_MONTHLY/<var>/<year>/...        services (test suite)
   CMEMS_ARABIAN_BGC_MONTHLY/<var>/<year>/...    services (test suite)
-  CMEMS_CCS_MONTHLY/<var>/<year>/...            services (evolution suite)
-  CMEMS_CCS_SURFACE_DAILY/thetao/<year>/...     services (evolution suite)
-  CMEMS_CCS_BGC_MONTHLY/<var>/<year>/...        services (evolution suite)
+  CMEMS_CCS_MONTHLY/<var>/<year>/...            services (evolution set A)
+  CMEMS_CCS_SURFACE_DAILY/thetao/<year>/...     services (evolution set A)
+  CMEMS_CCS_BGC_MONTHLY/<var>/<year>/...        services (evolution set A)
+  CMEMS_TASMAN_MONTHLY/<var>/<year>/...         services (evolution set B)
+  CMEMS_TASMAN_SURFACE_DAILY/thetao/<year>/...  services (evolution set B)
+  CMEMS_TASMAN_BGC_MONTHLY/<var>/<year>/...     services (evolution set B)
   _download_all/                                plans, reports, coverage.json, data_bindings.json
 ```
 
@@ -48,9 +51,13 @@ The machine-readable source is `download/data_manifest.json`. Every task file li
 | P_CCS_PHY | services | GLORYS12 monthly `cmems_mod_glo_phy_my_0.083deg_P1M-m`, version 202311 | thetao, so, uo, vo, zos, mlotst | 2011-2020, 0-1000 m | 130-116 W, 30-48 N | E01, E06, E09, E10, E12 | new |
 | P_CCS_SURF | services | GLORYS12 daily, top level only (0.5 m), version 202311 | thetao | 1993-2020 | 130-116 W, 30-48 N | E02, E04, E05, E11 | new |
 | P_CCS_BGC | services | CMEMS global biogeochemical reanalysis monthly `cmems_mod_glo_bgc_my_0.25deg_P1M-m`, version 202406 | o2, chl, no3 | 1993-2020, 0-1000 m | 130-116 W, 30-48 N | E03, E04, E07, E08, E12 | new |
+| P_TAS_PHY | services | GLORYS12 monthly `cmems_mod_glo_phy_my_0.083deg_P1M-m`, version 202311 | thetao, so, uo, vo, zos, mlotst | 2011-2020, 0-1000 m | 147-162 E, 46-26 S | E13-E18, E24 | new |
+| P_TAS_SURF | services | GLORYS12 daily, top level only (0.5 m), version 202311 | thetao | 1993-2020 | 147-162 E, 46-26 S | E19, E20, E21 | new |
+| P_TAS_BGC | services | CMEMS global biogeochemical reanalysis monthly `cmems_mod_glo_bgc_my_0.25deg_P1M-m`, version 202406 | o2, chl, no3 | 1993-2020, 0-1000 m | 147-162 E, 46-26 S | E20, E22, E23, E24 | new |
 
 All dataset IDs, versions and variable names were checked against the providers' catalogues on
-2026-10-01. The NOAA MODIS server could not be reached from the planning machine, so the first download run
+2026-10-01. The three Tasman Sea groups request the same datasets, versions and variables as the
+California Current groups, for another box of these global products. The NOAA MODIS server could not be reached from the planning machine, so the first download run
 checks the extension to 2020. The downloader stops if any requested month is missing.
 
 The new diagnostic groups are owner-staged requests, not public downloads or data already on the server.
@@ -71,6 +78,13 @@ New transfer, roughly:
 - **P_CCS_PHY:** about 1-1.5 GB on disk (720 monthly requests).
 - **P_CCS_SURF:** about 0.7 GB (336 requests).
 - **P_CCS_BGC:** about 0.4 GB (1,008 small requests).
+- **P_TAS_PHY:** about 1.2-1.8 GB on disk (720 monthly requests). The box has 1.2 times the cells of the
+  California Current box.
+- **P_TAS_SURF:** about 0.8 GB (336 requests).
+- **P_TAS_BGC:** about 0.5 GB (1,008 small requests).
+
+The Tasman Sea sizes are scaled from the California Current estimates by the number of grid cells. Neither
+set has been downloaded yet, so the first transfer checks them.
 
 ## Staging CMOMS (owner)
 
@@ -139,6 +153,17 @@ python -u benchmarking/download/download_all.py services --output "$DATA_ROOT" -
 python benchmarking/download/download_all.py private  --output "$DATA_ROOT"            # checks CMOMS staging
 python benchmarking/download/download_all.py verify   --output "$DATA_ROOT"            # re-hash every download
 ```
+
+To download one part only, name its groups. The two evolution sets:
+
+```bash
+python -u benchmarking/download/download_all.py services --output "$DATA_ROOT" --execute --workers 2 \
+  --groups P_CCS_PHY P_CCS_SURF P_CCS_BGC                                              # set A, California Current
+python -u benchmarking/download/download_all.py services --output "$DATA_ROOT" --execute --workers 2 \
+  --groups P_TAS_PHY P_TAS_SURF P_TAS_BGC                                              # set B, Tasman Sea
+```
+
+Without `--execute` the same command prints the fixed scope of those groups and touches no network.
 
 - **Accounts:** `services` needs `copernicusmarine login` once. ERA5 uses the anonymous Google mirror.
 - **Running together:** `public` and `services` can run at the same time in two terminals. A re-run skips

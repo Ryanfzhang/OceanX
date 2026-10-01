@@ -6,7 +6,7 @@
   "topic": "sea level and hydrography",
   "title": "What sea surface height reveals about the subsurface",
   "query": "Using the supplied GLORYS12 daily sea surface height, temperature and salinity for 2011-2017 in the Gulf of Mexico, determine how much of the subsurface temperature and salinity variability can be inferred from sea surface height, at which depths and in which regions and seasons the relation holds or fails, and why.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "GULF",

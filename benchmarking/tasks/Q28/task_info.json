@@ -6,7 +6,7 @@
   "topic": "Kuroshio intrusion",
   "title": "Kuroshio intrusion onto the East China Sea shelf",
   "query": "Using the supplied GLORYS12 daily temperature and velocity for May-November of 1993-2011 and 2023 in the East China Sea, quantify the onshore intrusion of Kuroshio water onto the shelf northeast of Taiwan (its transport, depth, timing and pathway) and determine what controls its variability from month to month and year to year. Winds and salinity are not supplied.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "ECS",

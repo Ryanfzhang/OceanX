@@ -2,7 +2,7 @@
 
 | Script | Purpose |
 |---|---|
-| `prepare_queries.py` | Write a suite's runner input (JSONL) from the data root. Folders come from `download/data_manifest.json`. It refuses incomplete downloads and any evaluator material. |
+| `prepare_queries.py` | Write a suite's runner input (JSONL) from the data root. Folders come from `download/data_manifest.json`. `--set A` or `--set B` selects one evolution set. It refuses incomplete downloads and any evaluator material. |
 | `run_oceanx.py` | Run a JSONL as one arm: `--arm`, `--policy`, optional `--lessons <frozen snapshot>`. Writes `arm.json`; each attempt starts from empty OceanX state. |
 | `research_cli.py` | `ocean research ...` (show, label, judge-labels, judge-agreement, consolidate, lessons, lesson-decide) with the `benchmark.yaml` model. |
 | `collect_oceanx.py` | Collect finished attempts into `collected/` for reading (run automatically at the end of a run). |
@@ -14,11 +14,13 @@
 ```bash
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --output <file.jsonl>
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --tasks Q05 Q27 --output <file.jsonl>
-python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution --output <file.jsonl>
+python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution --set A --output <file.jsonl>
+python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution --set B --output <file.jsonl>
 ```
 
 - **Each case** holds the unchanged query, the bound data folders (read-only references, never copies),
-  `workflow_mode: research`, `literature_mode: search_only` and a 2-hour default timeout (`--timeout`).
+  `workflow_mode: research`, `literature_mode: search_only` and a 3-hour default timeout (`--timeout`).
+  Use the same timeout for every arm of an experiment: a timed-out attempt scores 0.
 - **Overrides:** `--bindings <json>` overrides folders per task (`{"Q01": {"datasets": ["CMOMS/temp", ...]}}`),
   under the same checks.
 
@@ -26,7 +28,7 @@ python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite e
 
 ```bash
 python benchmarking/server/run_oceanx.py --queries <file.jsonl> --output <arm folder> --arm A --policy v0-coordinator-bfs
-python benchmarking/server/run_oceanx.py --queries <file.jsonl> --output <arm folder> --arm C --policy v2-nested --lessons <snapshot>
+python benchmarking/server/run_oceanx.py --queries <file.jsonl> --output <arm folder> --arm C1 --policy v2-nested --lessons <snapshot>
 ```
 
 Output per case: `<arm folder>/<task>/attempt-*/` containing:

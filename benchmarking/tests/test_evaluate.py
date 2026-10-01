@@ -115,3 +115,59 @@ def test_lessons_check(tmp_path):
     (tmp_path / "b" / "arm_lessons.json").write_text(json.dumps({"sha256_before": "x"}))
     report = evaluate.lessons_check(type("A", (), {"runs": tmp_path})())
     assert report["checked"] == 2 and report["changed_or_unfinished"] == [str(tmp_path / "b" / "arm_lessons.json")]
+
+
+def make_tree(attempt, task, *, side_tokens, planning_opened):
+    """A finished research tree with one decisive question and one side question."""
+    from oceanx.research.outcomes import record_task_outcomes
+    from oceanx.research.tree import ResearchTree
+    path = attempt / "workspace" / "OceanX Tasks" / f"{task}--abc" / "agents" / "coordinator" / "research_tree.json"
+    path.unlink()  # the placeholder written by make_arm
+    tree = ResearchTree(path)
+    tree.update([{"action": "add", "target": "ROOT", "question": "Why?"},
+                 {"action": "add", "target": "B1", "question": "Decisive?", "status": "selected"},
+                 {"action": "add", "target": "B1", "question": "Side question?", "status": "selected"}])
+    summary = "Result: x.\nEvidence and limitations: y.\nFurther analysis: None"
+    for node, attempt_id in (("B1.1", "a"), ("B1.2", "b")):
+        tree.attach_result(node, summary=summary, agent_key="p", report_path=f"/{node}.md", attempt_id=attempt_id)
+    record_task_outcomes(tree, final_report="## Summary\nB1.1 decides it.", model_calls=[
+        {"attempt_id": "a", "usage": {"input_tokens": 1_000_000}, "skills_read": ["ocean-analysis-design"]},
+        {"attempt_id": "b", "usage": {"input_tokens": side_tokens}, "skills_read": []},
+        {"role": "coordinator", "usage": {"input_tokens": 100_000},
+         "skills_read": ["research-trajectory-planning"] if planning_opened else []}])
+    tree.label("B1.1", "decision-changing", labeler="model-judge", source="judge")
+    tree.label("B1.2", "informative-but-not-decisive", labeler="model-judge", source="judge")
+
+
+def test_process_measures_compare_arms_on_the_research_tree(tmp_path):
+    runs = []
+    for repeat, control_side in ((1, 3_000_000), (2, 2_000_000)):
+        for arm, side in (("B", control_side), ("C1", 1_000_000)):
+            arm_dir = make_arm(tmp_path / f"r{repeat}", arm, "v2-nested", {"Q07": 2, "Q17": 2, "Q25": None})
+            for task in ("Q07", "Q17"):
+                make_tree(arm_dir / task / "attempt-1", task, side_tokens=side, planning_opened=arm == "C1")
+            runs.append(arm_dir)
+    prereg = tmp_path / "preregistration.yaml"
+    prereg.write_text("experiment: unit\nbootstrap: {resamples: 200, seed: 1}\ncomparisons: []\n"
+                      "process_comparisons:\n  - {name: lessons-L1-process, metric: nondecisive_token_share, "
+                      "treatment: C1, control: B, rule: {type: lower, margin: 0}}\n")
+    evaluate.main(["freeze", "--prereg", str(prereg)])
+    out = tmp_path / "report"
+    assert evaluate.main(["process", "--runs", *map(str, runs), "--out", str(out), "--prereg", str(prereg)]) == 0
+    result = json.loads((out / "process.json").read_text())
+    control, treated = result["arms"]["B"], result["arms"]["C1"]
+    # Q25 failed without a tree: it is counted as an attempt and left out of the measures.
+    assert (control["attempts"], control["finished_trees"]) == (6, 4)
+    assert control["nondecisive_token_share"] == pytest.approx((0.75 + 2 / 3) / 2)
+    assert treated["nondecisive_token_share"] == pytest.approx(0.5)
+    assert control["repeat_noise"]["nondecisive_token_share"] == pytest.approx(0.75 - 2 / 3)
+    assert (control["planning_skill_opened"], treated["planning_skill_opened"]) == (0.0, 1.0)
+    assert treated["questions_reading_an_analysis_skill"] == 0.5 and treated["rule_only_labels"] == 0
+    [comparison] = result["comparisons"]
+    assert comparison["tasks"] == 2 and comparison["decision"] is True
+    assert comparison["mean_diff"] == pytest.approx(0.5 - (0.75 + 2 / 3) / 2)
+    assert comparison["control_repeat_noise"] == pytest.approx(0.75 - 2 / 3)
+    assert "meets rule" in (out / "process.md").read_text()
+    # Without a pre-registration the measures are still reported; nothing is decided.
+    evaluate.main(["process", "--runs", str(runs[0]), "--out", str(tmp_path / "plain")])
+    assert json.loads((tmp_path / "plain" / "process.json").read_text())["comparisons"] == []

@@ -1,6 +1,6 @@
 {
- "version": "2026-10-01-v5",
- "scope": "Inputs of the v5 test suite (Q01-Q30) and evolution suite (E01-E12). South China Sea questions use owner-staged CMOMS (2011-2020), two with requested diagnostic groups; the Gulf of Mexico, East China Sea and Arabian Sea questions and the California Current evolution questions use public products. Public groups are downloaded; private groups are owner-staged and checked; evaluator-only groups are never bound to agents.",
+ "version": "2026-10-01-v6",
+ "scope": "Inputs of the v6 test suite (Q01-Q30) and the two evolution sets (A: E01-E12, B: E13-E24). South China Sea questions use owner-staged CMOMS (2011-2020), two with requested diagnostic groups; the Gulf of Mexico, East China Sea and Arabian Sea questions, the California Current evolution questions (set A) and the Tasman Sea evolution questions (set B) use public products. Public groups are downloaded; private groups are owner-staged and checked; evaluator-only groups are never bound to agents.",
  "phases": {
   "public": "anonymous HTTPS downloads",
   "services": "Copernicus Marine (login) and Google ARCO-ERA5",
@@ -706,6 +706,208 @@
     0,
     1000
    ]
+  },
+  "P_TAS_PHY": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_TASMAN_MONTHLY",
+   "dataset": "cmems_mod_glo_phy_my_0.083deg_P1M-m",
+   "dataset_version": "202311",
+   "variables": [
+    "thetao",
+    "so",
+    "uo",
+    "vo",
+    "zos",
+    "mlotst"
+   ],
+   "folders": [
+    "thetao",
+    "so",
+    "uo",
+    "vo",
+    "zos",
+    "mlotst"
+   ],
+   "surface_variables": [
+    "zos",
+    "mlotst"
+   ],
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "bbox": [
+    147,
+    162,
+    -46,
+    -26
+   ],
+   "depth": [
+    0,
+    1000
+   ]
+  },
+  "P_TAS_SURF": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_TASMAN_SURFACE_DAILY",
+   "dataset": "cmems_mod_glo_phy_my_0.083deg_P1D-m",
+   "dataset_version": "202311",
+   "variables": [
+    "thetao"
+   ],
+   "folders": [
+    "thetao"
+   ],
+   "years": [
+    1993,
+    1994,
+    1995,
+    1996,
+    1997,
+    1998,
+    1999,
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "bbox": [
+    147,
+    162,
+    -46,
+    -26
+   ],
+   "depth": [
+    0,
+    1
+   ]
+  },
+  "P_TAS_BGC": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_TASMAN_BGC_MONTHLY",
+   "dataset": "cmems_mod_glo_bgc_my_0.25deg_P1M-m",
+   "dataset_version": "202406",
+   "variables": [
+    "o2",
+    "chl",
+    "no3"
+   ],
+   "folders": [
+    "o2",
+    "chl",
+    "no3"
+   ],
+   "grid_step": 0.25,
+   "years": [
+    1993,
+    1994,
+    1995,
+    1996,
+    1997,
+    1998,
+    1999,
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "bbox": [
+    147,
+    162,
+    -46,
+    -26
+   ],
+   "depth": [
+    0,
+    1000
+   ]
   }
  },
  "tasks": {
@@ -842,6 +1044,44 @@
   "E12": [
    "P_CCS_PHY",
    "P_CCS_BGC"
+  ],
+  "E13": [
+   "P_TAS_PHY"
+  ],
+  "E14": [
+   "P_TAS_PHY"
+  ],
+  "E15": [
+   "P_TAS_PHY"
+  ],
+  "E16": [
+   "P_TAS_PHY"
+  ],
+  "E17": [
+   "P_TAS_PHY"
+  ],
+  "E18": [
+   "P_TAS_PHY"
+  ],
+  "E19": [
+   "P_TAS_SURF"
+  ],
+  "E20": [
+   "P_TAS_SURF",
+   "P_TAS_BGC"
+  ],
+  "E21": [
+   "P_TAS_SURF"
+  ],
+  "E22": [
+   "P_TAS_BGC"
+  ],
+  "E23": [
+   "P_TAS_BGC"
+  ],
+  "E24": [
+   "P_TAS_PHY",
+   "P_TAS_BGC"
   ]
  },
  "evaluator_groups": {
@@ -894,6 +1134,12 @@
    116,
    20,
    23
+  ],
+  "tasman_analysis": [
+   147,
+   162,
+   -46,
+   -26
   ]
  },
  "mask_policy": "Coordinate boxes are benchmark-defined approximations, not original paper polygons or bathymetric shelf masks. Use native valid/ocean masks and coordinate-derived cell areas; no external bathymetry required.",

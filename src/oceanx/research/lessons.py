@@ -129,6 +129,8 @@ changed the conclusion (its label) and is cited, what was asked after a result t
 the question, and which follow-ups were dropped.""", """\
 Each task lists its questions in the order the Coordinator created them. An ID shows the parent:
 B1.3.2 is under B1.3, and B1 is the task's question. Minutes count from the start of the task.
+A task "run with lessons" had the lessons in the skills above (those with an id) when it ran; propose
+retiring a lesson that such runs contradict.
 "adopted from B1.3#1" means the question pursues follow-up 1 proposed by B1.3. Under "follow-ups",
 "-> B1.3.2" marks a proposal that became that question and "dropped" one that was never pursued.
 A label says whether the final conclusion would change without the node; a "rule" label comes from
@@ -146,7 +148,9 @@ The evidence is in each node's result and limits, and in later questions that ha
 earlier result. Each node names the Expert that analysed it; write a lesson into a skill that
 Expert reads.""", """\
 Each task lists the questions its Experts answered, in order. An ID shows the parent: B1.3.2 is under
-B1.3. "found" is the Expert's result and "limits" the limitations it reported. "why" is the
+B1.3. A task "run with lessons" had the lessons in the skills above (those with an id) when it ran;
+propose retiring a lesson that such runs contradict. "found" is the Expert's result and "limits" the
+limitations it reported. "why" is the
 Coordinator's reason for asking, which often names the earlier result that needed another look.
 A label says whether the final conclusion would change without the node; a "rule" label comes from
 citations only and is crude."""),
@@ -561,7 +565,9 @@ def _record(digest: dict, role: str) -> str:
     outline, outcomes = digest.get("outline", {}), digest.get("outcomes", {})
     questions = {n: node for n, node in outline.items() if node.get("parent") is not None}
     proposals = [p for node in outline.values() for p in node.get("proposals") or []]
-    policy = (digest.get("policy_versions") or ["?"])[-1].split("/")[-1].split("@")[0]
+    version = (digest.get("policy_versions") or ["?"])[-1]
+    policy = version.split("/")[-1].split("@")[0] + (
+        ", run with lessons" if "+lessons@" in version else ", run without lessons")
     answer = next((n.get("result") for n in outline.values() if n.get("parent") is None), None)
     answered = sum(bool(node.get("result")) for node in questions.values())
     adopted = sum(bool(p["adopted_as"]) for p in proposals)

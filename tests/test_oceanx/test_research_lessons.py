@@ -10,7 +10,7 @@ import pytest
 
 from oceanx.research import lessons
 from oceanx.research.lessons import MAX_WORDS, LessonBook
-from oceanx.research.memory import ResearchMemory, build_digest, task_key
+from oceanx.research.memory import ResearchMemory, build_digest, run_measures, task_key
 from oceanx.research.outcomes import record_task_outcomes
 from oceanx.research.tree import ResearchTree
 
@@ -131,6 +131,38 @@ def test_digest_keeps_the_decision_history(tmp_path):
     assert digest["started_at"] and digest["wall_minutes"] is not None
 
 
+def test_run_measures_summarise_a_finished_tree(tmp_path):
+    tree = decided_task(tmp_path, "t")
+    tree.record_delegation(SimpleNamespace(
+        node_id="B1.1.1", delegation_id="d-b", attempt_id="b", binding="structured",
+        subagent_type="ocean_process_expert"))
+    tree.attach_result("B1.1.1", summary=SUMMARY, agent_key="p", report_path="/r2", attempt_id="b")
+    record_task_outcomes(tree, final_report="## Summary\nB1.1 decides it.", model_calls=[
+        {"attempt_id": "a", "usage": {"input_tokens": 3_000_000}, "skills_read": [PHYSICS]},
+        {"attempt_id": "b", "usage": {"input_tokens": 1_000_000}, "skills_read": []},
+        {"role": "coordinator", "usage": {"input_tokens": 500_000}, "skills_read": [PLANNING]}])
+    for node, label in (("B1.1", "decision-changing"), ("B1.1.1", "informative-but-not-decisive")):
+        tree.label(node, label, labeler="model-judge", source="judge")
+    digest = build_digest(tree.store.path)
+    measures = run_measures(digest)
+    assert measures["questions_run"] == 2 and measures["max_depth"] == 2
+    assert measures["nondecisive_token_share"] == 0.25  # 1M of the 4M tokens spent by Experts
+    assert measures["tokens"] == 4_500_000  # the Coordinator's own calls count on the root
+    assert (measures["attempts"], measures["attempts_without_report"]) == (3, 1)
+    assert (measures["followups_proposed"], measures["followups_adopted"]) == (2, 1)
+    assert measures["last_decisive_minute"] is not None and measures["label_sources"] == {"judge": 2}
+    # Whether the skills that hold lessons were opened, by the Coordinator and by the Experts.
+    assert measures["coordinator_skills_read"] == [PLANNING]
+    assert measures["questions_whose_expert_read_a_skill"] == 1
+    assert measures["expert_skills_read"] == [PHYSICS]
+    # A run recorded before skill reads were logged says so instead of reporting zero.
+    for outcome in digest["outcomes"].values():
+        del outcome["skills_read"]
+    older = run_measures(digest)
+    assert older["coordinator_skills_read"] is None
+    assert older["questions_whose_expert_read_a_skill"] is None
+
+
 def test_the_meta_agent_reads_the_skills_it_writes_into_and_each_roles_records(tmp_path, memory):
     memory.digest(decided_task(tmp_path, "t").store.path)
     book = LessonBook(memory)
@@ -145,6 +177,7 @@ def test_the_meta_agent_reads_the_skills_it_writes_into_and_each_roles_records(t
     assert "A residual is not a measured forcing" in analysis_prompt  # so it is not proposed again
     assert PLANNING not in analysis_prompt
     # The Coordinator's lessons come from decisions: who proposed a question, retries, dropped follow-ups.
+    assert "policy v0-coordinator-bfs, run without lessons" in tree_prompt
     assert "- B1.1.1 | adopted from B1.1#1 |" in tree_prompt
     assert re.search(r"attempt 1 from min [\d.]+ returned no report; "
                      r"attempt 2 from min [\d.]+ reported at min [\d.]+ \| 2.0M tokens", tree_prompt)

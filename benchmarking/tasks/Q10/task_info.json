@@ -5,7 +5,7 @@
   "topic": "marine heatwaves",
   "title": "The late-arriving 2023 East China Sea marine heatwave",
   "query": "Using the supplied OISST daily sea surface temperature for 1982-2023, GLORYS12 daily temperature and velocity, and ERA5 hourly surface heat-flux components (net shortwave, net longwave, sensible and latent heat) for May-November of 1993-2011 and 2023 over the East China Sea, test the following findings of Oh et al. (2024, npj Climate and Atmospheric Science, doi:10.1038/s41612-024-00846-4): (1) a marine heatwave occurred in the East China Sea from 12 August to 13 October 2023, later than the typical July onset; (2) its early phase was driven by shortwave radiation and ocean dynamics; (3) in its later phase weaker northerly winds let warm, humid southerlies dominate, reducing the air-sea humidity difference and the ocean's latent heat loss, which prolonged the event; (4) CMIP6 projections link such delayed heatwaves to weak air-sea heat exchange. State your marine-heatwave definition and baseline, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "ECS",

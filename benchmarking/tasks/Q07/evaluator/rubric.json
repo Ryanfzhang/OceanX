@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.2",
+  "rubric_version": "3.3",
   "task_id": "Q07",
   "type": "paper_reproduction",
   "title": "Hydrography of the deep Gulf of Mexico, 2011-2015",
@@ -22,11 +22,11 @@
     "pages": "773-794",
     "doi": "10.1175/JPO-D-17-0205.1",
     "url": "https://doi.org/10.1175/JPO-D-17-0205.1",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
+    "verification": "Crossref metadata and abstract checked 2026-10-01; full text (publisher HTML) read 2026-10-01"
   },
   "period_match": {
     "paper_period": "July 2011 to August 2015",
-    "paper_data": "706 casts from 14 autonomous profiling floats, altimeter SSH",
+    "paper_data": "706 casts to at least 1000 m (489 of them to 1500 m) from 14 autonomous profiling floats; CCAR and AVISO altimeter SSH",
     "paper_window": [
       "2011-07",
       "2015-08"
@@ -51,9 +51,9 @@
       "weight": 15,
       "title": "Finding 1",
       "claim": "Subtropical Underwater, Antarctic Intermediate Water and North Atlantic Deep Water show east-west gradients consistent with sources in the Loop Current and the Yucatan Channel.",
-      "paper_evidence": "Abstract: 'Maps of characteristic water masses, including Subtropical Underwater, Antarctic Intermediate Water (AAIW), and North Atlantic Deep Water, showed gradients from east to west'.",
+      "paper_evidence": "Abstract: 'Maps of characteristic water masses, including Subtropical Underwater, Antarctic Intermediate Water (AAIW), and North Atlantic Deep Water, showed gradients from east to west'. Full text, section 3 and Figs. 7-9: Subtropical Underwater is the salinity maximum between sigma-t 24.5 and 26.5, present where it exceeds 36.6; Antarctic Intermediate Water is the salinity minimum; North Atlantic Deep Water is mapped by the depth of the 27.715 sigma-theta surface and the temperature at 1283 m, from the casts that reach 1500 m.",
       "testability": "testable",
-      "how_to_test": "Maps of the salinity maximum (Subtropical Underwater), the salinity minimum (Antarctic Intermediate Water) and properties near 1500-2000 m for July 2011-August 2015; east-minus-west differences. The supplied data reach 2000 m.",
+      "how_to_test": "Maps for July 2011-August 2015 of: the salinity maximum between sigma-t 24.5 and 26.5 (its depth and value, and the thickness of water with salinity of at least 36.6); the salinity minimum (depth and value); the depth of the 27.715 sigma-theta surface and the temperature near 1283 m. East-minus-west differences of each.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: signs exact; magnitudes +/-30%)",
       "anchors": {
@@ -70,9 +70,9 @@
       "weight": 15,
       "title": "Finding 2",
       "claim": "The deep Gulf has a two-layer structure: isotherms are deeper in the Loop Current and its eddies and shallower in cyclones.",
-      "paper_evidence": "Abstract: 'The two-layer nature of the deep Gulf shows isotherms being deeper in the warm anticyclonic LC and LC eddies and shallower in the cold cyclones.'",
+      "paper_evidence": "Abstract: 'The two-layer nature of the deep Gulf shows isotherms being deeper in the warm anticyclonic LC and LC eddies and shallower in the cold cyclones.' Full text, section 2: altimeter SSH, with the basin-mean steric signal removed, is interpolated to each cast; above 17 cm marks the Loop Current and its eddies and below -10 cm marks cyclones. The 6 C isotherm divides the upper and lower layers.",
       "testability": "testable",
-      "how_to_test": "Depths of selected isotherms composited by sea-surface-height class.",
+      "how_to_test": "Depth of the 6 C isotherm, and of other selected isotherms, composited by sea-surface-height class (above 17 cm; below -10 cm) after removing the basin-mean seasonal signal from sea surface height.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: signs exact)",
       "anchors": {
@@ -89,9 +89,9 @@
       "weight": 15,
       "title": "Finding 3",
       "claim": "The mean seasonal mixed-layer depth has a maximum of about 60 m in January and a minimum of about 20 m in June-July.",
-      "paper_evidence": "Abstract: 'Mixed layer depths have an average seasonal signal that shows maximum depths (~60 m) in January and a minimum in June-July (~20 m).'",
+      "paper_evidence": "Abstract: 'Mixed layer depths have an average seasonal signal that shows maximum depths (~60 m) in January and a minimum in June-July (~20 m).' Full text, sections 3 and 5: the mixed-layer depth follows de Boyer Montegut et al. (2004), searching down from the 10 m value to a temperature difference of 0.2 C or a density difference of 0.03 kg m-3. The temperature criterion gives slightly deeper values; both have maxima in December-January and minima in June-July.",
       "testability": "testable",
-      "how_to_test": "Deep-basin mixed-layer depth climatology for July 2011-August 2015 with the paper's criterion or a stated one.",
+      "how_to_test": "Deep-basin mixed-layer depth climatology for July 2011-August 2015 with both criteria from a 10 m reference (0.2 C; 0.03 kg m-3), or a stated alternative.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: months +/-1; depths +/-15 m)",
       "anchors": {
@@ -108,9 +108,9 @@
       "weight": 15,
       "title": "Finding 4",
       "claim": "Basin-mean steric height from 0-50 m dynamic height and sea surface height have a seasonal range of about 12 cm, with significant interannual variability.",
-      "paper_evidence": "Abstract: 'Basin-mean steric heights from 0-50-m dynamic heights and altimeter SSH show a seasonal range of ~12 cm, with significant interannual variability.'",
+      "paper_evidence": "Abstract: 'Basin-mean steric heights from 0-50-m dynamic heights and altimeter SSH show a seasonal range of ~12 cm, with significant interannual variability.' Full text, section 5 and Fig. 13: the steric signal of sea surface height is its daily deep-water average; it is compared with the monthly 0-50 m height equivalent (dynamic height divided by gravity) averaged over the float locations.",
       "testability": "testable",
-      "how_to_test": "Seasonal range of basin-mean 0-50 m steric height and of sea surface height.",
+      "how_to_test": "Seasonal range of the deep-water mean sea surface height and of the basin-mean 0-50 m height equivalent (dynamic height divided by gravity); year-to-year differences in the summer maxima and winter minima.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: +/-3 cm)",
       "anchors": {
@@ -127,17 +127,18 @@
       "weight": 10,
       "title": "Finding 5",
       "claim": "The translation of Loop Current eddies across the western basin produces a region of low, homogeneous potential vorticity over its deepest part.",
-      "paper_evidence": "Abstract: 'The translation of LC eddies across the western basin produces a region of low homogeneous potential vorticity centered over the deepest part of the western basin.'",
-      "testability": "testable",
-      "how_to_test": "Potential vorticity from stratification on mid-depth density layers; location and homogeneity of the western-basin minimum.",
+      "paper_evidence": "Abstract: 'The translation of LC eddies across the western basin produces a region of low homogeneous potential vorticity centered over the deepest part of the western basin.' Full text, section 6 and Fig. 16: lower-layer potential vorticity is f/h6, where h6 is the water depth minus the depth of the 6 C isotherm. The lowest values are nearly uniform and coincide with the deep cyclonic gyre; they result from the bowl-shaped bathymetry and the deepening of the mean deep isotherms along the eddy paths.",
+      "testability": "partly testable",
+      "how_to_test": "Testable: the mean depth of the 6 C isotherm and whether it deepens over the western basin along the paths of Loop Current eddies. Not testable directly: f/h6 itself needs the water depth, and the supplied fields stop at 2000 m with no bathymetry.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: location within 1.5 degrees; sign exact)",
+      "tolerance": "to freeze before judging (suggested: location of the deepest mean 6 C isotherm within 1.5 degrees; sign exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
         "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
         "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
       }
     },
     {
@@ -145,7 +146,7 @@
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Water-mass definitions (salinity extrema in stated density or depth ranges); the mixed-layer criterion; dynamic and steric height; potential vorticity from stratification; sea-surface-height classes for Loop Current, eddy and cyclone water; the deep-basin mask.",
+      "focus": "Water-mass definitions (the salinity maximum between sigma-t 24.5 and 26.5 above 36.6; the salinity minimum; the 27.715 sigma-theta surface); the mixed-layer criteria (0.2 C and 0.03 kg m-3 from the 10 m value); the 0-50 m height equivalent and the deep-water mean sea surface height; lower-layer potential vorticity f/h6 below the 6 C isotherm; sea-surface-height classes (above 17 cm, below -10 cm, steric signal removed); the deep-basin mask.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -157,7 +158,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "A gridded reanalysis versus 706 float casts (different sampling in space and time); the reanalysis assimilates such profiles, so agreement is not independent; reanalysis sea surface height versus altimetry; data reach 2000 m only.",
+      "focus": "A gridded reanalysis versus 706 float casts (different sampling in space and time); the reanalysis assimilates such profiles, so agreement is not independent; reanalysis sea surface height versus altimetry; the casts reach 1000 m (489 of them 1500 m) while the supplied fields reach 2000 m; no bathymetry is supplied.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",

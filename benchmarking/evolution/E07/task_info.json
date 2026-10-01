@@ -1,11 +1,12 @@
 {
   "id": "E07",
   "suite": "evolution",
+  "evolution_set": "A",
   "type": "open_problem",
   "open_kind": "checkable",
   "title": "Depth of the hypoxic boundary on the slope",
   "query": "Using the supplied CMEMS biogeochemical reanalysis monthly oxygen, nitrate and chlorophyll for 1993-2020 off California and Oregon (30-48 N, 130-116 W), determine how the depth of the hypoxic boundary (oxygen of about 60 umol/kg) on the continental slope varies by season, latitude and year, and what controls that variability.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "CCS",

@@ -5,7 +5,7 @@
   "topic": "coastal upwelling",
   "title": "The South Vietnam upwelling in summer 2018",
   "query": "Using the supplied CMOMS daily temperature, salinity and velocity for 2011-2020, test the following findings of Herrmann et al. (2023, Ocean Science, doi:10.5194/os-19-453-2023) on the South Vietnam upwelling in summer (June-September) 2018, which they simulated with a 1 km ensemble: (1) summer 2018 was a summer of exceptionally strong upwelling in the southern coastal, offshore and Mekong-shelf areas; (2) the southern coastal and Mekong-shelf upwelling are induced by the stable northeastward, then eastward, boundary current; (3) the offshore upwelling develops in July along the northern flank of the eastward jet and in August in the area of cyclonic eddies north of the jet; (4) in mid-summer the alongshore current of the jet and eddy dipole prevents the northern coastal upwelling, which develops in early and late summer when the flow is directed offshore; (5) the intraseasonal variability follows the wind to first order, and ocean intrinsic variability matters most for the offshore and northern areas. Winds are not supplied. State how you define the upwelling areas and the upwelling index, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",

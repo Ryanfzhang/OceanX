@@ -1,11 +1,12 @@
 {
   "id": "E06",
   "suite": "evolution",
+  "evolution_set": "A",
   "type": "open_problem",
   "open_kind": "checkable",
   "title": "The California Undercurrent",
   "query": "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer thickness for 2011-2020 off California and Oregon (30-48 N, 130-116 W), characterize the poleward California Undercurrent: its depth, strength, seasonal cycle and year-to-year changes, including during the 2014-2016 warm anomalies, and the water it carries.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "CCS",

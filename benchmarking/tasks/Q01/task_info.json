@@ -5,7 +5,7 @@
   "topic": "salinity change",
   "title": "Salinification of the South China Sea since late 2012",
   "query": "Using the supplied CMOMS daily salinity, temperature and velocity for 2011-2020, test the following findings of Zeng et al. (2018, Geophysical Research Letters, doi:10.1002/2017GL076574), who used satellite and Argo salinity for the South China Sea: (1) the upper ocean has become saltier since late 2012; (2) the salinification is strongest near the surface and extends below the seasonal thermocline to about 150 m; (3) it reverses a 20-year freshening that began in 1993 and coincides with the Pacific Decadal Oscillation turning from negative to positive; (4) the salinity budget attributes it to a growing net surface freshwater loss (less precipitation) and to salt advection through the Luzon Strait by the South China Sea throughflow, with enhanced Luzon Strait transport dominating the recent intense salinification. Surface freshwater fluxes are not supplied. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",

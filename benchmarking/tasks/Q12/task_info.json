@@ -6,7 +6,7 @@
   "topic": "coastal upwelling",
   "title": "Year-to-year control of the upwelling off eastern Hainan",
   "query": "Using the supplied CMOMS daily temperature, salinity and velocity for 2011-2020, quantify the summer (June-August) coastal upwelling off the east coast of Hainan Island in each year and determine what controls its year-to-year variability. Winds are not supplied.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "SCS",

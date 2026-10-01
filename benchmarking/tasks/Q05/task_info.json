@@ -5,7 +5,7 @@
   "topic": "coastal hypoxia",
   "title": "Destruction and return of hypoxia off the Pearl River Estuary, July 2018",
   "query": "Using the supplied CMOMS daily oxygen, temperature, salinity, chlorophyll and velocity for 2011-2020, test the following findings of Zhao et al. (2021, Biogeosciences, doi:10.5194/bg-18-2755-2021), who surveyed the shelf off the Pearl River Estuary in three cruise legs in July 2018 (8-14, 21-25 and 26-29 July) around the passage of Typhoon Son-Tinh (16-24 July): (1) before the typhoon the bottom water was severely hypoxic, with oxygen as low as 3.5 umol/kg and about 660 km2 below 63 umol/kg; (2) the typhoon destroyed the hypoxia completely; (3) hypoxia returned about 6 days later, with bottom-water oxygen consumption averaging 14.6 umol/kg per day; (4) shoreward intrusion of offshore subsurface water added about 8.6% to the oxygen loss; (5) freshwater input suppressed wind-driven mixing and stabilised the water column, helping hypoxia form. Winds and river discharge are not supplied. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper's observations.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",

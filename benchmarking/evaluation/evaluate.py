@@ -6,6 +6,8 @@
     validate   check score files against the task rubrics (criteria, 0-4 scores, weighted total)
     freeze     hash-lock a pre-registration file before any test run
     summarize  join scores with the map, apply the pre-registered comparisons, write report.md
+    process    measure how each attempt's research tree went (needs OceanX importable), compare arms
+               on the pre-registered process metric, write process.md
 
 Nothing here runs an agent, a model or the agents' code.
 """
@@ -187,19 +189,25 @@ def bootstrap_ci(values, resamples, seed):
 def decide(rule: dict, comparison: dict) -> bool:
     if rule["type"] == "superior":
         return comparison["ci_low"] > rule.get("margin", 0)
+    if rule["type"] == "lower":  # for measures where less is better, such as wasted effort
+        return comparison["ci_high"] < rule.get("margin", 0)
     if rule["type"] == "noninferior_and_better_or_cheaper":
         return comparison["ci_low"] >= rule["margin"] and (
             comparison["mean_diff"] > 0 or (comparison["token_reduction"] or 0) >= rule["token_reduction"])
     raise ValueError(f"unknown rule type {rule['type']}")
 
 
-def summarize(args) -> dict:
+def frozen_prereg(path: Path) -> dict:
     import yaml
-    prereg_text = args.prereg.read_bytes()
-    lock = args.prereg.with_name(args.prereg.name + ".sha256")
-    if not lock.exists() or lock.read_text().strip() != hashlib.sha256(prereg_text).hexdigest():
+    text = path.read_bytes()
+    lock = path.with_name(path.name + ".sha256")
+    if not lock.exists() or lock.read_text().strip() != hashlib.sha256(text).hexdigest():
         raise SystemExit("ERROR: the pre-registration is not frozen or changed after freezing")
-    prereg = yaml.safe_load(prereg_text)
+    return yaml.safe_load(text)
+
+
+def summarize(args) -> dict:
+    prereg = frozen_prereg(args.prereg)
     mapping = json.loads(args.map.read_text())
     scores = {}
     for path in sorted(args.scores.glob("*.json")):
@@ -275,6 +283,129 @@ def summarize(args) -> dict:
     return {"report": str(out / "report.md"), "comparisons": [(c["name"], c.get("decision")) for c in comparisons]}
 
 
+# ------------------------------------------------------------------------------------------ process
+# Measures averaged per arm; a pre-registered process metric must be one of them.
+PROCESS_MEASURES = ("nondecisive_token_share", "last_decisive_fraction", "tokens", "wall_minutes",
+                    "questions_run", "followups_adopted", "attempts_without_report")
+
+
+def tree_store(attempt: Path) -> Path | None:
+    stores = sorted((attempt / "workspace" / "OceanX Tasks").glob("*/agents/coordinator/research_tree.sqlite3"))
+    return stores[0] if stores else None
+
+
+def attempt_measures(attempt: Path) -> dict | None:
+    """Process measures of one attempt's research tree; None when it has no finished tree."""
+    from oceanx.research.lessons import WRITABLE
+    from oceanx.research.memory import build_digest, run_measures
+    store = tree_store(attempt)
+    digest = build_digest(store) if store else None
+    if not digest or not digest.get("finished"):
+        return None
+    measures = run_measures(digest)
+    # Whether the skills that lessons are written into were opened by the agents they are for.
+    opened = measures["coordinator_skills_read"]
+    measures["planning_skill_opened"] = None if opened is None else bool(set(opened) & set(WRITABLE["coordinator"]))
+    by_question = [digest["outcomes"].get(n, {}).get("skills_read") for n, node in digest["outline"].items()
+                   if node.get("parent") is not None and node.get("attempts")]
+    measures["questions_reading_an_analysis_skill"] = (
+        None if any(names is None for names in by_question)
+        else sum(bool(set(names) & set(WRITABLE["expert"])) for names in by_question))
+    return measures
+
+
+def mean(values) -> float | None:
+    values = [float(v) for v in values if v is not None]
+    return statistics.fmean(values) if values else None
+
+
+def process(args) -> dict:
+    """Process measures per attempt and arm, their spread between repeats, and the pre-registered
+    process comparisons (paired by task, like the score comparisons)."""
+    rows = []
+    for arm_dir in args.runs:
+        arm_dir = arm_dir.expanduser().resolve()
+        arm = json.loads((arm_dir / "arm.json").read_text())["arm"]
+        for task_id, attempt in latest_attempts(arm_dir):
+            rows.append({"arm": arm, "task_id": task_id, "attempt": str(attempt),
+                         "measures": attempt_measures(attempt)})
+    repeats = {}  # (arm, task, measure) -> the value of every repeat that has one
+    for row in rows:
+        for name in PROCESS_MEASURES:
+            value = (row["measures"] or {}).get(name)
+            if value is not None:
+                repeats.setdefault((row["arm"], row["task_id"], name), []).append(float(value))
+    cell = {key: statistics.fmean(values) for key, values in repeats.items()}
+    per_arm = {}
+    for arm in sorted({row["arm"] for row in rows}):
+        finished = [row["measures"] for row in rows if row["arm"] == arm and row["measures"]]
+        questions = sum(m["questions_run"] for m in finished)
+        reading = [m["questions_reading_an_analysis_skill"] for m in finished]
+        per_arm[arm] = {
+            "attempts": sum(row["arm"] == arm for row in rows), "finished_trees": len(finished),
+            **{name: mean(v for (a, _, n), v in cell.items() if a == arm and n == name)
+               for name in PROCESS_MEASURES},
+            # Mean over tasks of the spread between repeats: a difference between arms below this is noise.
+            "repeat_noise": {name: mean(max(v) - min(v) for (a, _, n), v in repeats.items()
+                                        if a == arm and n == name and len(v) > 1)
+                             for name in PROCESS_MEASURES},
+            "planning_skill_opened": mean(m["planning_skill_opened"] for m in finished),
+            "questions_reading_an_analysis_skill": (
+                sum(reading) / questions if questions and None not in reading else None),
+            "rule_only_labels": sum(m["label_sources"].get("auto", 0) for m in finished),
+        }
+    comparisons = []
+    prereg = frozen_prereg(args.prereg) if args.prereg else {}
+    boot = prereg.get("bootstrap", {})
+    for spec in prereg.get("process_comparisons", []):
+        metric, treat, control = spec["metric"], spec["treatment"], spec["control"]
+        if metric not in PROCESS_MEASURES:
+            raise SystemExit(f"ERROR: unknown process metric {metric}")
+        tasks = sorted(t for (a, t, n) in cell if a == treat and n == metric and (control, t, metric) in cell)
+        diffs = [cell[(treat, t, metric)] - cell[(control, t, metric)] for t in tasks]
+        if not diffs:
+            comparisons.append({**spec, "tasks": 0, "decision": None})
+            continue
+        low, high = bootstrap_ci(diffs, int(boot.get("resamples", 10000)), int(boot.get("seed", 7)))
+        comparison = {"name": spec["name"], "metric": metric, "treatment": treat, "control": control,
+                      "tasks": len(tasks), "mean_diff": statistics.fmean(diffs), "ci_low": low, "ci_high": high,
+                      "control_repeat_noise": per_arm[control]["repeat_noise"][metric]}
+        comparison["decision"] = decide(spec["rule"], comparison)
+        comparisons.append(comparison)
+    out = args.out.expanduser().resolve()
+    write_json(out / "process.json", {"arms": per_arm, "comparisons": comparisons, "attempts": rows})
+
+    def show(value, percent=False):
+        return "n/a" if value is None else f"{value:.0%}" if percent else f"{value:.3g}"
+
+    header = ("| Arm | Finished trees | Tokens in non-decisive questions | Last decisive result, share of run time | "
+              "Tokens | Minutes | Questions run | Follow-ups adopted | Attempts without a report | "
+              "Coordinator opened its planning skill | Questions whose Expert opened an analysis skill |")
+    lines = ["# Process measures", "", header, "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for arm, v in per_arm.items():
+        lines.append(f"| {arm} | {v['finished_trees']}/{v['attempts']} | {show(v['nondecisive_token_share'], True)} | "
+                     f"{show(v['last_decisive_fraction'], True)} | {show(v['tokens'])} | {show(v['wall_minutes'])} | "
+                     f"{show(v['questions_run'])} | {show(v['followups_adopted'])} | "
+                     f"{show(v['attempts_without_report'])} | {show(v['planning_skill_opened'], True)} | "
+                     f"{show(v['questions_reading_an_analysis_skill'], True)} |")
+    unjudged = {arm: v["rule_only_labels"] for arm, v in per_arm.items() if v["rule_only_labels"]}
+    if unjudged:
+        lines += ["", f"Questions labelled by the log rules only (run judge-labels first): {unjudged}"]
+    if comparisons:
+        lines += ["", "| Comparison | Metric | Tasks | Mean diff | 95% CI | Spread between control repeats | Decision |",
+                  "|---|---|---|---|---|---|---|"]
+    for c in comparisons:
+        if c.get("decision") is None:
+            lines.append(f"| {c['name']} | {c['metric']} | 0 | | | | no paired tasks |")
+            continue
+        lines.append(f"| {c['name']} ({c['treatment']} vs {c['control']}) | {c['metric']} | {c['tasks']} | "
+                     f"{c['mean_diff']:+.3g} | [{c['ci_low']:+.3g}, {c['ci_high']:+.3g}] | "
+                     f"{show(c['control_repeat_noise'])} | {'meets rule' if c['decision'] else 'does not meet rule'} |")
+    (out / "process.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"report": str(out / "process.md"), "arms": {arm: v["finished_trees"] for arm, v in per_arm.items()},
+            "comparisons": [(c["name"], c.get("decision")) for c in comparisons]}
+
+
 def lessons_check(args) -> dict:
     """Every attempt of a lesson arm must report its lessons unchanged."""
     problems = []
@@ -300,11 +431,15 @@ def main(argv=None):
     s.add_argument("--map", type=Path, required=True)
     s.add_argument("--scores", type=Path, required=True)
     s.add_argument("--out", type=Path, required=True)
+    p = sub.add_parser("process")
+    p.add_argument("--runs", type=Path, nargs="+", required=True, help="Arm output folders (with arm.json)")
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--prereg", type=Path, help="Frozen pre-registration with process_comparisons")
     lc = sub.add_parser("lessons-check")
     lc.add_argument("--runs", type=Path, required=True)
     args = parser.parse_args(argv)
     handler = {"blind": blind, "validate": validate, "freeze": freeze, "summarize": summarize,
-               "lessons-check": lessons_check}[args.command]
+               "process": process, "lessons-check": lessons_check}[args.command]
     print(json.dumps(handler(args), ensure_ascii=False, indent=2))
     return 0
 

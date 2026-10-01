@@ -1,11 +1,12 @@
 {
   "id": "E05",
   "suite": "evolution",
+  "evolution_set": "A",
   "type": "open_problem",
   "open_kind": "checkable",
   "title": "Timing of the spring transition to upwelling",
   "query": "Using the supplied GLORYS12 daily near-surface temperature for 1993-2020 off California and Oregon (30-48 N, 130-116 W), determine when the coastal upwelling season starts each year (the spring transition) along the coast, how its timing varies with latitude and from year to year, and what the variability suggests about its causes. Winds are not supplied.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "CCS",

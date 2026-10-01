@@ -6,7 +6,7 @@
   "topic": "phytoplankton blooms",
   "title": "The winter and summer blooms of the Arabian Sea",
   "query": "Using the supplied CMEMS global biogeochemical reanalysis monthly chlorophyll, nitrate and oxygen for 2011-2020 in the western and northern Arabian Sea (47-70 E, 4-26 N), characterize the two seasonal chlorophyll blooms, the winter bloom in the north and the summer bloom in the west: where and when each occurs, how large it is, how it varies from year to year, and what controls it. Temperature, mixing and winds are not supplied; state what that prevents you from concluding.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "ARAB",

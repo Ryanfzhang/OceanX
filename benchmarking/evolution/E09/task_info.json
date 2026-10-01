@@ -1,11 +1,12 @@
 {
   "id": "E09",
   "suite": "evolution",
+  "evolution_set": "A",
   "type": "open_problem",
   "open_kind": "checkable",
   "title": "Local or advected: subsurface anomalies of 2014-2016",
   "query": "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer thickness for 2011-2020 off California and Oregon (30-48 N, 130-116 W), determine whether the subsurface temperature and salinity anomalies during 2014-2016 were produced locally or advected into the region, and through which pathways.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "CCS",

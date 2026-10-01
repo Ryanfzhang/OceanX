@@ -18,6 +18,13 @@ python benchmarking/download/download_all.py private --output "$DATA_ROOT"
 python benchmarking/download/download_all.py verify  --output "$DATA_ROOT"
 ```
 
+`--groups` limits a phase to the named groups. For example, the second evolution set (Tasman Sea) alone:
+
+```bash
+python -u benchmarking/download/download_all.py services --output "$DATA_ROOT" --execute --workers 2 \
+  --groups P_TAS_PHY P_TAS_SURF P_TAS_BGC
+```
+
 How the downloader behaves:
 - **Layout:** one variable per file, `<data type>/<variable>/<year>/...`; native time sampling and values
   are kept.

@@ -6,7 +6,7 @@
   "topic": "river plume",
   "title": "Offshore export of river water from the northern Gulf shelf",
   "query": "Using the supplied GLORYS12 daily salinity, temperature and sea surface height for 2011-2017 in the Gulf of Mexico, determine how much low-salinity river water from the northern Gulf shelf is exported offshore into the deep Gulf, when and where this happens, and which circulation features (the Loop Current, its eddies or others) carry it. River discharge and winds are not supplied; explain how this limits your conclusions.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "GULF",

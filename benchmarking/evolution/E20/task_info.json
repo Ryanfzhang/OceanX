@@ -1,0 +1,27 @@
+{
+  "id": "E20",
+  "suite": "evolution",
+  "evolution_set": "B",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "Two marine heatwaves compared: 2015-2016 and 2017-2018",
+  "query": "Using the supplied GLORYS12 daily near-surface temperature and CMEMS biogeochemical reanalysis monthly chlorophyll and nitrate for 1993-2020 in the western Tasman Sea off south-eastern Australia (46-26 S, 147-162 E), compare the marine heatwaves of 2015-2016 and 2017-2018: their extent, intensity, duration and timing, how chlorophyll responded, and why the two events differed. Justify your heatwave definition and baseline. The two products come from different model systems; account for that.",
+  "catalog_version": "2026-10-01-v6",
+  "query_version": "2026-10-01-v6",
+  "region": {
+    "code": "TAS",
+    "name": "Tasman Sea and East Australian Current",
+    "bbox": [
+      147,
+      162,
+      -46,
+      -26
+    ]
+  },
+  "data_groups": [
+    "P_TAS_SURF",
+    "P_TAS_BGC"
+  ],
+  "data_access": "public",
+  "scored": false
+}

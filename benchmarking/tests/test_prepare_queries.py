@@ -32,7 +32,7 @@ def archive(tmp_path):
     return root
 
 
-@pytest.mark.parametrize("suite,count", [("test", 30), ("evolution", 12)])
+@pytest.mark.parametrize("suite,count", [("test", 30), ("evolution", 24)])
 def test_suite_produces_loadable_cases_without_data_copy(archive, tmp_path, suite, count):
     output = tmp_path / f"inputs/{suite}.jsonl"
     before = sorted(p.relative_to(archive) for p in archive.rglob("*.nc"))
@@ -59,6 +59,21 @@ def test_subset_and_wrong_suite(archive, tmp_path):
     with pytest.raises(ValueError, match="evolution suite"):
         prepare.main(["--data-root", str(archive), "--suite", "evolution", "--tasks", "Q01",
                       "--output", str(tmp_path / "x.jsonl")])
+
+
+def test_each_evolution_set_is_prepared_on_its_own(archive, tmp_path):
+    for name, expected in (("A", [f"E{i:02}" for i in range(1, 13)]),
+                           ("B", [f"E{i:02}" for i in range(13, 25)])):
+        output = tmp_path / f"set-{name}.jsonl"
+        assert prepare.main(["--data-root", str(archive), "--suite", "evolution", "--set", name,
+                             "--output", str(output)]) == 0
+        assert [case.id for case in load_queries(output)] == expected
+    with pytest.raises(ValueError, match="evolution suite only"):
+        prepare.main(["--data-root", str(archive), "--suite", "test", "--set", "A",
+                      "--output", str(tmp_path / "x.jsonl")])
+    with pytest.raises(ValueError, match="evolution suite"):
+        prepare.main(["--data-root", str(archive), "--suite", "evolution", "--set", "A", "--tasks", "E13",
+                      "--output", str(tmp_path / "y.jsonl")])
 
 
 @pytest.mark.parametrize("task,group", [("Q14", "C_PRODUCTION"), ("Q16", "C_CARBON")])

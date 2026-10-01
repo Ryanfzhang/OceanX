@@ -1,11 +1,12 @@
 {
   "id": "E01",
   "suite": "evolution",
+  "evolution_set": "A",
   "type": "open_problem",
   "open_kind": "checkable",
   "title": "The equatorward California Current",
   "query": "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer thickness for 2011-2020 off California and Oregon (30-48 N, 130-116 W), characterize the equatorward California Current: its position, strength and vertical structure through the seasonal cycle, how it changed from year to year, including during 2014-2016, and what controls those changes.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "CCS",

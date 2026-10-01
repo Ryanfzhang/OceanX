@@ -1,16 +1,17 @@
 # OceanX benchmark: design
 
-Catalogue `2026-10-01-v5`. Two suites:
+Catalogue `2026-10-01-v6`. Two suites:
 
 - **Test suite, Q01-Q30.** Scored. 10 paper verifications and 20 open problems. South China Sea questions
   use the private CMOMS model output. The other questions use public data in the Gulf of Mexico, the East
   China Sea and the Arabian Sea. Every scored measurement comes from this suite.
-- **Evolution suite, E01-E12.** Never scored. Twelve open problems on the California Current System, public
-  reanalyses only. OceanX learns lessons from these runs.
+- **Evolution suite, E01-E24.** Never scored. Open problems on public reanalyses, in two sets of twelve:
+  set A on the California Current System and set B on the Tasman Sea and East Australian Current. OceanX
+  learns lessons from these runs in two rounds (see "Evolution suite").
 
 Everything runs on the Linux server, never on macOS.
 
-[summary.md](summary.md) is the three-column inventory of all 42 queries: question, required data
+[summary.md](summary.md) is the three-column inventory of all 54 queries: question, required data
 (type, period, sampling, spatial/depth scope and variables), and brief assessment criteria.
 
 ## Goals
@@ -19,7 +20,7 @@ Everything runs on the Linux server, never on macOS.
    - verifying published findings with data from the paper's own study period;
    - investigating typical open problems in physical and biogeochemical oceanography.
 2. Measure whether the research-policy choice and self-improvement (lessons learned from earlier runs) help
-   on questions OceanX has never seen.
+   on questions OceanX has never seen, and whether a second round of learning adds to the first.
 
 ## Design rules
 
@@ -32,12 +33,14 @@ Everything runs on the Linux server, never on macOS.
 | Centred on the CMOMS variables | Questions use temperature, salinity, currents, oxygen and chlorophyll. Q14 also uses primary production and nitrate uptake, and Q16 uses air-sea CO2 exchange and surface pCO2. Oxygen: Q05, Q13, Q17 on CMOMS and Q19 on public data. Chlorophyll: Q06, Q14, Q22 on CMOMS and Q18 on public data. |
 | Typical problems, several regions | The open problems are standard research problems: marine heatwaves, coastal upwelling, hypoxia, blooms, primary production, air-sea carbon exchange, oxygen minimum zones, deep ventilation, water-mass spreading, boundary currents and eddy shedding, river plumes, ocean heat content, fronts. |
 | Few multi-product questions | Only 3 of 30 combine products: Q10 (OISST, GLORYS12 and ERA5), Q19 (biogeochemical and physical reanalyses) and Q22 (CMOMS and MODIS). Q14 and Q16 add diagnostics from the same CMOMS model, not another product. |
-| Download as little as possible | The Gulf of Mexico, East China Sea, ERA5, OISST and MODIS groups are already on the server (MODIS is extended to 2020). New downloads are two monthly Arabian Sea groups (about 2 GB) and the evolution suite's California Current groups (about 2-3 GB). The monthly winds are no longer needed. |
-| Paper verification needs real papers | The 10 papers were checked against Crossref (title, authors, volume, pages, DOI) and their abstracts on 2026-10-01. The findings in each query paraphrase the abstract. |
+| Download as little as possible | The Gulf of Mexico, East China Sea, ERA5, OISST and MODIS groups are already on the server (MODIS is extended to 2020). New downloads are two monthly Arabian Sea groups (about 2 GB) and the evolution suite's California Current and Tasman Sea groups (about 2-3 GB each). The two evolution sets use the same three products, so no new product is added. The monthly winds are no longer needed. |
+| Paper verification needs real papers | The 10 papers were checked against Crossref (title, authors, volume, pages, DOI) and their abstracts on 2026-10-01. The findings in each query paraphrase the abstract. Five were also read in full (Q02, Q04, Q05, Q07, Q10); see "Papers". |
 | Different rubrics for the two types | Paper verification scores whether each finding of the paper was actually verified. Open problems are scored more broadly and deeply, on seven dimensions, against a hidden answer key (see "Rubrics"). |
 | No evaluator material reaches the agent | Rubrics live in `tasks/<task>/evaluator/`. Answer-key data lives under `_evaluator_only/` on the server. Query preparation refuses both. |
 | No evolution while benchmarking | Each attempt starts from empty OceanX state. An arm fixes the research policy and an optional frozen lesson set, and every attempt verifies its lessons were unchanged. |
-| Evolution uses open problems on separate data | The evolution suite has 12 open problems and no paper verification. It uses another region (the California Current System) and the same kinds of public products. CMOMS never appears in evolution, so CMOMS questions measure transfer to data OceanX has never seen. |
+| Evolution uses open problems on separate data | The evolution suite has 24 open problems and no paper verification. It uses two regions outside the test suite (the California Current System and the Tasman Sea) and the same kinds of public products. CMOMS never appears in evolution, so CMOMS questions measure transfer to data OceanX has never seen. |
+| Two rounds of learning | Set A runs without lessons and yields lesson set L1. Set B runs with L1 and yields L2. The test suite runs with no lessons, with L1 and with L2, so each round is measured separately. |
+| Lessons are judged by the research process too | Lessons are about research-tree decisions, so each run also reports process measures from its tree (see `EVALUATION.md`). One of them is a pre-registered endpoint. |
 
 ## Allocation (30 test questions)
 
@@ -121,6 +124,16 @@ Each paper was chosen so that its study period lies inside the supplied data.
 | Q09 | Sosa-Gutierrez et al. (2020), Erosion of the subsurface salinity maximum of the Loop Current eddies, JGR Oceans 125. doi:10.1029/2019JC015397 | August 2016-July 2017; glider sections and a regional model | GLORYS12, 2011-2017 |
 | Q10 | Oh et al. (2024), Late-arriving 2023 summer marine heatwave in the East China Sea, npj Climate and Atmospheric Science 7. doi:10.1038/s41612-024-00846-4 | 2023 event, 1982-2011 baseline, 1993-2011 budget reference; OISST, GLORYS12, ERA5 | the same three products, same periods |
 
+How far each paper was checked:
+- **Read in full (five):** Q02, Q04, Q05, Q07 and Q10. For Q07 the full text supplied the paper's own
+  definitions, now in its rubric: the water-mass criteria, the mixed-layer criteria, the sea-surface-height
+  classes and the potential vorticity. That vorticity is the Coriolis parameter divided by the thickness
+  below the 6 C isotherm, which needs the water depth. No bathymetry is supplied, so finding 5 of Q07 is now
+  partly testable.
+- **Abstract only (five):** Q01, Q03, Q06, Q08 and Q09. The publisher's site refuses automated reading. Open
+  repository copies exist for Q01 (Woods Hole), Q08 (Ifremer) and Q09 (HAL); none was found for Q03 and Q06.
+  Their regions, windows and definitions must be confirmed from the paper before their rubrics are frozen.
+
 What still differs from the papers:
 - **The product.** Nine papers used observations or another model. Here CMOMS or the GLORYS12 reanalysis
   stands in for them. Only Q10 uses the paper's own products.
@@ -197,16 +210,27 @@ Gates apply to both types:
 
 ## Evolution suite (never scored)
 
-Twelve open problems on the California Current System, 30-48 N, 130-116 W. There is no paper verification
-in this suite. Public products only:
-- **P_CCS_PHY:** GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer
-  thickness, 2011-2020, 0-1000 m;
-- **P_CCS_SURF:** GLORYS12 daily near-surface temperature, 1993-2020;
-- **P_CCS_BGC:** CMEMS global biogeochemical reanalysis monthly oxygen, chlorophyll and nitrate, 1993-2020,
-  0-1000 m.
+Twenty-four open problems in two sets of twelve. There is no paper verification in this suite. Both sets use
+the same three public products, each cropped to its own region:
+- **GLORYS12 monthly** temperature, salinity, velocity, sea surface height and mixed-layer thickness,
+  2011-2020, 0-1000 m (`P_CCS_PHY`, `P_TAS_PHY`);
+- **GLORYS12 daily** near-surface temperature, 1993-2020 (`P_CCS_SURF`, `P_TAS_SURF`);
+- **CMEMS global biogeochemical reanalysis monthly** oxygen, chlorophyll and nitrate, 1993-2020, 0-1000 m
+  (`P_CCS_BGC`, `P_TAS_BGC`).
 
 The variable set mirrors CMOMS, so lessons about temperature, currents, oxygen and chlorophyll can transfer.
-The region does not.
+The regions do not: neither appears in the test suite.
+
+| Set | Region | Runs with | Yields |
+|---|---|---|---|
+| A, E01-E12 | California Current System, 30-48 N, 130-116 W: an eastern-boundary upwelling system | no lessons (L0) | lesson set L1 |
+| B, E13-E24 | Tasman Sea and East Australian Current, 46-26 S, 147-162 E: a western boundary current and an ocean-warming hotspot | L1 | lesson set L2 |
+
+Set B is on other waters and another kind of circulation, so L2 is not learned where L1 was. It shows two
+things the first round cannot: whether tasks run with L1 still make the mistakes L1 addresses, and which
+lessons hold in a second region. The meta-agent may propose retiring an L1 lesson that set B contradicts.
+
+### Set A: California Current System
 
 | ID | Kind | Title | Data |
 |---|---|---|---|
@@ -222,6 +246,40 @@ The region does not.
 | E10 | disagreement | Product mixed-layer thickness versus mixed layers computed from profiles | P_CCS_PHY |
 | E11 | checkable | Coastal versus offshore marine heatwaves | P_CCS_SURF |
 | E12 | disagreement | When temperature stops predicting nitrate | P_CCS_PHY, P_CCS_BGC |
+
+### Set B: Tasman Sea and East Australian Current
+
+| ID | Kind | Title | Data |
+|---|---|---|---|
+| E13 | checkable | The East Australian Current and where it leaves the coast | P_TAS_PHY |
+| E14 | checkable | Southward or eastward: the two pathways of the separated current | P_TAS_PHY |
+| E15 | checkable | Local or advected: the upper-ocean warm anomaly of 2015-2016 | P_TAS_PHY |
+| E16 | checkable | Spreading and dilution of the saline subtropical water | P_TAS_PHY |
+| E17 | checkable | Deep winter mixed layers and the water they form | P_TAS_PHY |
+| E18 | disagreement | How much water the East Australian Current carries, and why estimates differ | P_TAS_PHY |
+| E19 | checkable | How fast the sea surface has warmed since 1993 | P_TAS_SURF |
+| E20 | checkable | Two marine heatwaves compared: 2015-2016 and 2017-2018 | P_TAS_SURF, P_TAS_BGC |
+| E21 | checkable | Cold water inshore of the East Australian Current | P_TAS_SURF |
+| E22 | checkable | Timing and size of the spring bloom | P_TAS_BGC |
+| E23 | checkable | Has oxygen in the thermocline changed since 1993 | P_TAS_BGC |
+| E24 | disagreement | Do warm-core eddies hold more or less chlorophyll than cold-core eddies | P_TAS_PHY, P_TAS_BGC |
+
+Set B has the same mix as set A: ten checkable problems and two disagreement problems, across physics,
+surface temperature and biogeochemistry. Three problems state that surface fluxes or winds are not supplied
+(E15, E17, E21), and two combine products from different model systems (E20, E24).
+
+## What changed in v6
+
+- **A second evolution set.** Set B (E13-E24) adds twelve open problems on the Tasman Sea and East
+  Australian Current, with three new download groups (`P_TAS_PHY`, `P_TAS_SURF`, `P_TAS_BGC`) of the same
+  products as set A. The test suite (Q01-Q30) is unchanged.
+- **Two rounds of learning.** L0 to L1 on set A, L1 to L2 on set B. The test suite gains one arm: no
+  lessons, L1 and L2 under the same policy.
+- **Process measures.** Each run reports how its research tree went, not only its score.
+- **Q07 follows the paper's full text.** Its rubric now uses the paper's own definitions, and its fifth
+  finding is partly testable because the paper's potential vorticity needs bathymetry.
+- **A longer time limit.** The default per-attempt limit is three hours instead of two. Three recorded
+  research runs of one question took 79 to 152 minutes, and a timed-out attempt scores 0.
 
 ## What changed in v5
 

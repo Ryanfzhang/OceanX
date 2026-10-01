@@ -1,11 +1,12 @@
 {
   "id": "E03",
   "suite": "evolution",
+  "evolution_set": "A",
   "type": "open_problem",
   "open_kind": "checkable",
   "title": "Has subsurface oxygen declined since 1993",
   "query": "Using the supplied CMEMS global biogeochemical reanalysis monthly oxygen, nitrate and chlorophyll for 1993-2020 off California and Oregon (30-48 N, 130-116 W), determine whether subsurface oxygen has declined and the hypoxic boundary (about 60 umol/kg) has shoaled since 1993, where and at which depths, whether the changes are trends or decadal variability, and what could explain them.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "CCS",

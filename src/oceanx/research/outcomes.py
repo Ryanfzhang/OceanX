@@ -57,6 +57,10 @@ def compute_outcomes(tree_doc: dict, events: list[dict], attempts: list[dict],
         if event["type"] == "delegated":
             delegations.setdefault(event["node_id"], []).append(event["payload"])
 
+    # The Coordinator answers the root itself, so its own model calls belong to the first root.
+    coordinator_calls = [c for c in model_calls if c.get("role") == "coordinator"]
+    root = next((n for n, node in found.items() if node.get("parent") is None), None)
+
     adopted: dict[str, int] = {}
     for node in found.values():
         for ref in (node.get("origin") or {}).get("refs", []):
@@ -68,7 +72,8 @@ def compute_outcomes(tree_doc: dict, events: list[dict], attempts: list[dict],
         node_attempts = attempts_by_node.get(node_id, [])
         attempt_ids = {a["attempt_id"] for a in node_attempts} | {
             d.get("attempt_id") for d in delegations.get(node_id, [])}
-        calls = [c for a in attempt_ids for c in calls_by_attempt.get(a, [])]
+        calls = (coordinator_calls if node_id == root
+                 else [c for a in attempt_ids for c in calls_by_attempt.get(a, [])])
         cited = bool(re.search(rf"(?<![A-Za-z0-9.]){re.escape(node_id)}(?![0-9A-Za-z]|\.\d)", prose)) \
             or any(f"[{a['agent_key']}/" in prose or a["report_path"] in prose for a in node_attempts)
         runs = _executions_for(node_attempts, list(code_executions))
@@ -82,6 +87,8 @@ def compute_outcomes(tree_doc: dict, events: list[dict], attempts: list[dict],
             "model_calls": len(calls),
             "input_tokens": sum(_usage(c)[0] for c in calls),
             "output_tokens": sum(_usage(c)[1] for c in calls),
+            # Which skills these calls opened; shows whether a skill with lessons was read.
+            "skills_read": sorted({name for c in calls for name in c.get("skills_read") or []}),
             "cited_in_final": cited,
             "spawned_children": sum(1 for n in found.values() if n.get("parent") == node_id),
             "follow_ups_proposed": len(((node.get("result") or {}).get("proposals")) or []),

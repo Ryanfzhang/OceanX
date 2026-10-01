@@ -24,7 +24,7 @@ def rubric(task):
 
 
 def test_allocation_ten_papers_twenty_open_problems():
-    assert TEST == [f"Q{i:02}" for i in range(1, 31)] and EVOLUTION == [f"E{i:02}" for i in range(1, 13)]
+    assert TEST == [f"Q{i:02}" for i in range(1, 31)] and EVOLUTION == [f"E{i:02}" for i in range(1, 25)]
     assert [info(t)["type"] for t in TEST] == ["paper_reproduction"] * 10 + ["open_problem"] * 20
     assert {info(t)["open_kind"] for t in OPEN} == {"checkable", "disagreement"}
     assert all(info(t)["suite"] == "test" for t in TEST) and all(info(e)["suite"] == "evolution" for e in EVOLUTION)
@@ -138,6 +138,21 @@ def test_suites_use_disjoint_data_and_evolution_is_unscored():
         # The evolution suite has open problems only.
         assert info(task)["scored"] is False and info(task)["type"] == "open_problem" and "paper" not in info(task)
         assert not (BENCH / "evolution" / task / "evaluator").exists()
+
+
+def test_evolution_has_two_sets_on_different_waters():
+    sets = {e: info(e)["evolution_set"] for e in EVOLUTION}
+    members = {name: [e for e in EVOLUTION if sets[e] == name] for name in "AB"}
+    assert members == {"A": [f"E{i:02}" for i in range(1, 13)], "B": [f"E{i:02}" for i in range(13, 25)]}
+    assert {name: {info(e)["region"]["code"] for e in tasks} for name, tasks in members.items()} == {
+        "A": {"CCS"}, "B": {"TAS"}}
+    # Each set has its own data, so the second round of lessons is not learned on the first set's waters.
+    groups = {name: {g for e in tasks for g in info(e)["data_groups"]} for name, tasks in members.items()}
+    assert not groups["A"] & groups["B"]
+    for tasks in members.values():
+        kinds = [info(e)["open_kind"] for e in tasks]
+        assert (kinds.count("checkable"), kinds.count("disagreement")) == (10, 2)
+        assert len({info(e)["query"] for e in tasks}) == 12
 
 
 def test_design_document_lists_every_task():

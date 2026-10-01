@@ -50,9 +50,9 @@ like any other, then compared with paired runs.
 | `tree_tools.py` | `update_research_tree` (always compact text; hypothesis actions only if the policy enables them) |
 | `delegation.py` | `node_id` on the native `task` tool, delegation/attempt IDs, `delegated` events |
 | `policy.py` | Load, validate and select bundled policies |
-| `outcomes.py` | Per-node cost, code runs, citation, children, proposals made/adopted, reopen/conflict |
+| `outcomes.py` | Per-node cost, code runs, citation, children, proposals made/adopted, reopen/conflict, skills opened; the Coordinator's own calls count on the root |
 | `labels.py` | Auto and judge labels, the small human review set, judge–human agreement |
-| `memory.py` | Per-task digests (outline, decision history, outcomes, labels), weekly consolidation and archiving |
+| `memory.py` | Per-task digests (outline, decision history, outcomes, labels), process measures of a finished tree (`run_measures`), weekly consolidation and archiving |
 | `lessons.py` | The meta-agent's two mining prompts, proposal validation, approval, and writing lessons into skills |
 | `metering.py` | One record per model call: tokens, node attribution, and which skills the call opened |
 | `acceptance.py` + `resources/evals/research_policy_acceptance.yaml` | Frozen criteria with a hash lock |
@@ -96,7 +96,8 @@ when it is high, fewer human labels are needed.
     instructions) and the names of the reader's other skills;
   - the role's own view of the records: for the Coordinator, the questions in the order they
     were created with their origin, timing, retries, cost, label and dropped follow-ups; for the
-    Experts, each analysed question with its Expert, result and limits.
+    Experts, each analysed question with its Expert, result and limits. Each task is marked as run
+    with or without lessons, so a later round can propose retiring a lesson that such runs contradict.
 
   It is told not to propose programming advice, findings about one task's region or process, or
   advice that needs data the tasks did not have, and to propose only where the records show a

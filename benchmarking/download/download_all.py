@@ -184,6 +184,8 @@ def main(argv=None):
     parser.add_argument("--execute", action="store_true", help="Download; otherwise show the fixed scope without network calls")
     parser.add_argument("--workers", type=services.positive_workers, default=2,
                         help="Concurrent CMEMS/ERA5 chunks (default: 2; 1 restores serial). Public/verify stay serial.")
+    parser.add_argument("--groups", nargs="+",
+                        help="Only these groups of the phase, e.g. P_TAS_PHY P_TAS_SURF P_TAS_BGC; default: all of them")
     args = parser.parse_args(argv)
     manifest = load_manifest()
     root = args.output.expanduser().resolve()
@@ -193,6 +195,10 @@ def main(argv=None):
         selected = {k: g for k, g in manifest["groups"].items() if g["phase"] != "private"}
     else:
         selected = {k: g for k, g in manifest["groups"].items() if g["phase"] == args.phase}
+    if args.groups:
+        if set(args.groups) - set(selected):
+            raise ValueError(f"Not groups of the {args.phase} phase: {sorted(set(args.groups) - set(selected))}")
+        selected = {key: selected[key] for key in args.groups}
     if not args.execute and args.phase not in {"verify", "private"}:
         for key, group in selected.items():
             print(key, json.dumps(group))

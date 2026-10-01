@@ -6,7 +6,7 @@
   "topic": "coastal upwelling",
   "title": "Year-to-year strength of the summer upwelling off Somalia and Oman",
   "query": "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer thickness for 2011-2020 in the western and northern Arabian Sea (47-70 E, 4-26 N), quantify the summer-monsoon (June-September) coastal upwelling off Somalia and off Oman in each year, determine what controls its year-to-year variability, and explain why the two systems do or do not vary together. Winds are not supplied.",
-  "catalog_version": "2026-10-01-v5",
+  "catalog_version": "2026-10-01-v6",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "ARAB",

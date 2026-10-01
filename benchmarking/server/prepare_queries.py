@@ -20,13 +20,17 @@ FORBIDDEN_PARTS = {"evaluator", "target_study", "_evaluator_only", "checklist.js
 
 
 def task_file(task_id: str) -> Path:
-    if not re.fullmatch(r"Q(?:0[1-9]|[12][0-9]|30)|E(?:0[1-9]|1[0-2])", task_id):
+    if not re.fullmatch(r"Q(?:0[1-9]|[12][0-9]|30)|E(?:0[1-9]|1[0-9]|2[0-4])", task_id):
         raise ValueError(f"Invalid task ID: {task_id}")
     return (TASKS if task_id.startswith("Q") else EVOLUTION) / task_id / "task_info.json"
 
 
-def suite_tasks(suite: str) -> list[str]:
-    return sorted(p.name for p in SUITE_DIRS[suite].iterdir() if (p / "task_info.json").is_file())
+def suite_tasks(suite: str, evolution_set: str | None = None) -> list[str]:
+    """The suite's tasks; for the evolution suite, optionally one of its two sets (A or B)."""
+    tasks = sorted(p.name for p in SUITE_DIRS[suite].iterdir() if (p / "task_info.json").is_file())
+    if evolution_set is None:
+        return tasks
+    return [t for t in tasks if json.loads(task_file(t).read_text()).get("evolution_set") == evolution_set]
 
 
 def manifest_bindings(task_ids, root):
@@ -90,7 +94,7 @@ def resolve_resource(root, value):
     return str(candidate)
 
 
-def build_cases(task_ids, root, bindings, timeout=7200, literature_mode="search_only"):
+def build_cases(task_ids, root, bindings, timeout=10800, literature_mode="search_only"):
     root = Path(root).expanduser().resolve(strict=True)
     if not root.is_dir() or root == Path(root.anchor):
         raise ValueError("Provide a dedicated existing data root")
@@ -119,13 +123,18 @@ def main(argv=None):
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--suite", choices=sorted(SUITE_DIRS), required=True)
     parser.add_argument("--tasks", nargs="+", help="Subset of the suite; default: all of it")
+    parser.add_argument("--set", dest="evolution_set", choices=["A", "B"],
+                        help="Evolution suite only: set A (E01-E12, learns L1) or set B (E13-E24, learns L2)")
     parser.add_argument("--bindings", type=Path, help="Optional JSON overriding the manifest folders per task")
     parser.add_argument("--output", type=Path, required=True, help="New JSONL file outside the data root")
-    parser.add_argument("--timeout", type=float, default=7200, help="Per-case wall-clock limit in seconds")
+    parser.add_argument("--timeout", type=float, default=10800,
+                        help="Per-case wall-clock limit in seconds (default: 3 hours; a timed-out attempt scores 0)")
     parser.add_argument("--literature-mode", choices=["search_only", "ask_before_download", "auto_download_open_access"],
                         default="search_only")
     args = parser.parse_args(argv)
-    available = suite_tasks(args.suite)
+    if args.evolution_set and args.suite != "evolution":
+        raise ValueError("--set applies to the evolution suite only")
+    available = suite_tasks(args.suite, args.evolution_set)
     tasks = args.tasks or available
     if set(tasks) - set(available):
         raise ValueError(f"Not in the {args.suite} suite: {sorted(set(tasks) - set(available))}")
