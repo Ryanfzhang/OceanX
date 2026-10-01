@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.1",
   "task_id": "Q14",
   "type": "open_problem",
   "open_kind": "checkable",
-  "title": "What controls the winter bloom northwest of Luzon",
+  "title": "Winter chlorophyll, primary production and nitrate uptake northwest of Luzon",
   "status": "draft",
-  "query_sha256": "85f1597a4a39132a34acc11abac4de8cb09b02b15a0a57ecdd6042d62866bdc1",
+  "query_sha256": "fefab3d233c789b8b40201999b2556343a2bb467de6dd2bd8650588a8239992c",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -60,14 +60,15 @@
       "title": "Mechanistic depth",
       "uses": [
         "Q14-A2",
+        "Q14-A3",
         "depth_probes"
       ],
       "anchors": {
-        "0": "Description only, or a mechanism that the answer key contradicts.",
-        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
-        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
-        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
-        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+        "0": "No tested interpretation, or assertions contradicted by the available process diagnostics.",
+        "1": "An interpretation asserted from intuition or literature without a test in the supplied data.",
+        "2": "One relevant association tested, with limited process reasoning or unresolved alternatives ignored.",
+        "3": "An interpretation supported by quantitative process diagnostics and at least one targeted test of an alternative; missing inputs limit causal claims.",
+        "4": "Coherent quantitative tests distinguish supported interpretations from unresolved alternatives, agree with frozen checks under stated definitions, and address the depth probes without overstating causal identification."
       }
     },
     {
@@ -119,30 +120,38 @@
     "items": [
       {
         "id": "Q14-A1",
-        "quantity": "Bloom metrics",
-        "procedure": "For each winter: onset, peak month and peak magnitude of box-mean surface chlorophyll and of the 0-100 m integral.",
+        "quantity": "Chlorophyll and production seasonality",
+        "procedure": "For valid wet cells in 116-120 E, 16-20 N, compute surface and 0-100 m chlorophyll metrics, and volume-integrated P_Production and NO3_uptake over 0-100 m. Report monthly climatologies and each complete December-February winter (2011/12 through 2019/20). Weight by actual layer thickness, cell area and averaging interval; label partial edge winters.",
         "used_by": "Q14-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: peak month within 1 month in at least 70% of winters; Spearman of magnitudes at least 0.7)"
+        "tolerance": "to freeze before judging (suggested: seasonal peak within one month; seasonal and winter integrals within 15% after matching masks, depths and definitions)"
       },
       {
         "id": "Q14-A2",
-        "quantity": "Driver ranking",
-        "procedure": "Yearly correlations of bloom magnitude and timing with mixed-layer depth (density threshold), cyclonic doming (depth of the 22 C isotherm in the Luzon cold-eddy area) and Kuroshio intrusion strength (0-300 m westward transport through the Luzon Strait).",
+        "quantity": "Bloom-production agreement and nitrate-uptake fraction",
+        "procedure": "Compare winter chlorophyll magnitude and timing with integrated P_Production. Compute NO3_uptake/P_Production as a ratio of matched, integrated rates, exclude or flag near-zero production, and identify robust concordant and discordant winters. Do not interpret this ratio as an observed export-production fraction.",
         "used_by": "Q14-M",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: top driver exact)"
+        "tolerance": "to freeze before judging (suggested: uptake fraction within 0.10 absolute; agreement signs and identified exceptional winters robust to reasonable definitions)"
+      },
+      {
+        "id": "Q14-A3",
+        "quantity": "Ocean-state associations and competing interpretations",
+        "procedure": "Test production and chlorophyll relationships with density-based mixed-layer depth, stratification, isotherm displacement and available circulation. Use lags or conditional comparisons where supported, and separate growth-rate changes from redistribution; do not require unique causal attribution without irradiance, nutrients and complete loss terms.",
+        "used_by": "Q14-M",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (accept scientifically justified alternative analyses; quantify association uncertainty and identify unresolvable alternatives)"
       }
     ]
   },
   "depth_probes": [
-    "Separates entrainment by mixed-layer deepening from eddy- or curl-driven upwelling (isotherm doming) and from lateral advection of oligotrophic Kuroshio water.",
-    "Distinguishes redistribution of the subsurface chlorophyll maximum to the surface from a net biomass increase (vertical integral).",
-    "Examines light limitation when the mixed layer is deepest."
+    "Uses volume and time weighting appropriate to volumetric process rates, not the same units or operation as surface chlorophyll.",
+    "Separates stronger chlorophyll concentration, integrated chlorophyll accumulation and higher measured primary production.",
+    "Tests sensitivity to vertical integration depth, winter boundaries, small denominators and serial dependence; does not infer nutrient or light limitation without their inputs."
   ],
   "breadth_probes": [
-    "Compares with the summer bloom off Vietnam or with satellite climatologies.",
-    "Places the result among published explanations of the Luzon winter bloom."
+    "Connects the chlorophyll seasonal cycle to explicit production and nitrate uptake, with physical state and circulation as additional evidence.",
+    "Compares with published Luzon winter-bloom interpretations while identifying missing irradiance, nutrient concentrations and ecosystem loss terms."
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",

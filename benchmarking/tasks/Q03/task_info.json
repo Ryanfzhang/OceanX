@@ -2,11 +2,11 @@
   "id": "Q03",
   "suite": "test",
   "type": "paper_reproduction",
-  "topic": "winter cold tongue",
-  "title": "The winter cold tongue and slope current off southern Vietnam",
-  "query": "Using the supplied CMOMS daily temperature and velocity for 2011-2020, test the following findings of Liu et al. (2004, Journal of Geophysical Research, doi:10.1029/2003JC002179) on the South China Sea in boreal winter: (1) the Indo-Pacific warm pool has a gap over the South China Sea, where a cold tongue off southern Vietnam keeps sea surface temperature well below that of the surrounding waters; (2) an intense southward slope current south of Vietnam, exceeding 0.5 m/s and forming the western boundary current of the winter cyclonic gyre, creates the cold tongue by advecting cold water from the north; (3) the slope current and the cold tongue are strongest from November to February; (4) the cold tongue's interannual variability follows ENSO, warming during El Nino as the winter monsoon weakens and the circulation spins down. No ENSO index is supplied; you may use published ENSO event classifications. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used satellite data.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "western boundary current",
+  "title": "The weakest winter western boundary current, 2015-2016",
+  "query": "Using the supplied CMOMS daily velocity, temperature and salinity for 2011-2020, test the following findings of Zhao and Zhu (2016, Journal of Geophysical Research: Oceans, doi:10.1002/2016JC012252) on the South China Sea western boundary current in boreal winter (November-February): (1) in winter 2015-2016 its southwestward volume transport fell to a minimum of 3.7 Sv, against about 5.2 Sv in normal winters, the weakest winter on record; (2) the basin-scale cyclonic gyre was significantly weaker that winter; (3) the current is weaker in El Nino winters and stronger in La Nina winters (4.7 Sv and 5.6 Sv on average); (4) the cause was a weaker wind-stress curl over the South China Sea, set up by an anticyclone over the Philippine Sea. No winds or ENSO index are supplied; you may use published ENSO event classifications. Define the section you use across the boundary current and justify it. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used in situ and satellite observations.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",
     "name": "South China Sea",
@@ -18,14 +18,29 @@
   ],
   "data_access": "private",
   "paper": {
-    "citation": "Liu et al. (2004)",
-    "title": "A gap in the Indo‐Pacific warm pool over the South China Sea in boreal winter: Seasonal development and interannual variability",
+    "citation": "Zhao and Zhu (2016)",
+    "title": "Weakest winter South China Sea western boundary current caused by the 2015–2016 El Niño event",
     "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2004,
-    "volume": "109",
-    "pages": "2003JC002179",
-    "doi": "10.1029/2003JC002179",
-    "url": "https://doi.org/10.1029/2003JC002179",
+    "year": 2016,
+    "volume": "121",
+    "pages": "7673-7682",
+    "doi": "10.1002/2016JC012252",
+    "url": "https://doi.org/10.1002/2016JC012252",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "winter (November-February) 2015-2016",
+    "paper_data": "in situ volume-transport monitoring, satellite altimetry",
+    "paper_window": [
+      "2015-11",
+      "2016-02"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model velocity, temperature and salinity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ],
+    "note": "The paper's El Nino and La Nina composites use its longer record; only the ENSO winters inside 2011-2020 can be tested (finding 3)."
   }
 }

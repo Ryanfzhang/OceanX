@@ -1,11 +1,12 @@
 {
   "id": "E04",
   "suite": "evolution",
-  "type": "paper_reproduction",
-  "title": "Impacts of the 2015-2016 El Nino on the California Current System",
-  "query": "Using the supplied GLORYS12 daily near-surface temperature and CMEMS biogeochemical reanalysis monthly chlorophyll and nitrate for 1993-2020 off California and Oregon (30-48 N, 130-116 W), test the following findings of Jacox et al. (2016, Geophysical Research Letters, doi:10.1002/2016GL069716): (1) the 2015-2016 El Nino affected the physical state of the California Current System less than expected from its tropical strength, and less than the 1997-1998 El Nino; (2) temperature anomalies in 2015-2016 reflected the persistence of the multiyear warm anomaly that began in 2014 more than El Nino itself; (3) phytoplankton biomass stayed low in spring and summer 2016. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "Two El Ninos compared: 1997-1998 and 2015-2016",
+  "query": "Using the supplied GLORYS12 daily near-surface temperature and CMEMS biogeochemical reanalysis monthly chlorophyll and nitrate for 1993-2020 off California and Oregon (30-48 N, 130-116 W), compare how the 1997-1998 and 2015-2016 El Nino events affected coastal temperature and chlorophyll, and determine why their imprints differed, including the role of the warm anomaly that began in 2014.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "CCS",
     "name": "California Current System",
@@ -21,16 +22,5 @@
     "P_CCS_BGC"
   ],
   "data_access": "public",
-  "scored": false,
-  "paper": {
-    "citation": "Jacox et al. (2016)",
-    "title": "Impacts of the 2015–2016 El Niño on the California Current System: Early assessment and comparison to past events",
-    "journal": "Geophysical Research Letters",
-    "year": 2016,
-    "volume": "43",
-    "pages": "7072-7080",
-    "doi": "10.1002/2016GL069716",
-    "url": "https://doi.org/10.1002/2016GL069716",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
-  }
+  "scored": false
 }

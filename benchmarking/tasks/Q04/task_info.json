@@ -2,31 +2,45 @@
   "id": "Q04",
   "suite": "test",
   "type": "paper_reproduction",
-  "topic": "summer upwelling",
-  "title": "Summer upwelling, wind jet and cold filament off southern Vietnam",
-  "query": "Using the supplied CMOMS daily temperature, velocity and chlorophyll for 2011-2020 and NOAA blended monthly winds for 2003-2020, test the following findings of Xie et al. (2003, Journal of Geophysical Research, doi:10.1029/2003JC001867) on summer upwelling off southern Vietnam: (1) the southwest monsoon forms a wind jet off the southern tip of Indochina, whose strong wind-stress curl drives coastal and open-ocean upwelling; (2) in July and August an anticyclonic eddy to the southeast carries the cold coastal water offshore as a cold filament; (3) the filament's centre lies north of the wind-speed maximum, so open-ocean upwelling helps cool the surface; (4) a tongue of high chlorophyll is collocated with the cold filament; (5) the filament interrupts summer warming, giving a semi-annual SST cycle, and interannual SST variance peaks over the climatological filament. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used satellite data.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "coastal upwelling",
+  "title": "The South Vietnam upwelling in summer 2018",
+  "query": "Using the supplied CMOMS daily temperature, salinity and velocity for 2011-2020, test the following findings of Herrmann et al. (2023, Ocean Science, doi:10.5194/os-19-453-2023) on the South Vietnam upwelling in summer (June-September) 2018, which they simulated with a 1 km ensemble: (1) summer 2018 was a summer of exceptionally strong upwelling in the southern coastal, offshore and Mekong-shelf areas; (2) the southern coastal and Mekong-shelf upwelling are induced by the stable northeastward, then eastward, boundary current; (3) the offshore upwelling develops in July along the northern flank of the eastward jet and in August in the area of cyclonic eddies north of the jet; (4) in mid-summer the alongshore current of the jet and eddy dipole prevents the northern coastal upwelling, which develops in early and late summer when the flow is directed offshore; (5) the intraseasonal variability follows the wind to first order, and ocean intrinsic variability matters most for the offshore and northern areas. Winds are not supplied. State how you define the upwelling areas and the upwelling index, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",
     "name": "South China Sea",
     "data": "CMOMS model domain"
   },
-  "period": "2011-2020 (CMOMS); 2003-2020 (winds)",
+  "period": "2011-2020",
   "data_groups": [
-    "C_CORE",
-    "P_WIND"
+    "C_CORE"
   ],
-  "data_access": "private+public",
+  "data_access": "private",
   "paper": {
-    "citation": "Xie et al. (2003)",
-    "title": "Summer upwelling in the South China Sea and its role in regional climate variations",
-    "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2003,
-    "volume": "108",
-    "pages": "2003JC001867",
-    "doi": "10.1029/2003JC001867",
-    "url": "https://doi.org/10.1029/2003JC001867",
+    "citation": "Herrmann et al. (2023)",
+    "title": "Intraseasonal variability of the South Vietnam upwelling, South China Sea: influence of atmospheric forcing and ocean intrinsic variability",
+    "journal": "Ocean Science",
+    "year": 2023,
+    "volume": "19",
+    "pages": "453-467",
+    "doi": "10.5194/os-19-453-2023",
+    "url": "https://doi.org/10.5194/os-19-453-2023",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "June-September 2018",
+    "paper_data": "ten-member ensemble of a 1 km SYMPHONIE model",
+    "paper_window": [
+      "2018-06",
+      "2018-09"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model temperature, salinity and velocity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ],
+    "note": "The paper calls 2018 exceptional relative to a 2009-2018 simulation; here it is ranked within 2011-2020 (finding 1)."
   }
 }

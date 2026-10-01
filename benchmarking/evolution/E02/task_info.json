@@ -1,11 +1,12 @@
 {
   "id": "E02",
   "suite": "evolution",
-  "type": "paper_reproduction",
-  "title": "Coastal temperatures during the 2014-2016 northeast Pacific heatwave",
-  "query": "Using the supplied GLORYS12 daily near-surface temperature for 1993-2020 off the US West Coast (30-48 N, 130-116 W), test the following findings of Gentemann et al. (2017, Geophysical Research Letters, doi:10.1002/2016GL071039) on the 2014-2016 northeast Pacific marine heatwave: (1) from January 2014 to August 2016 coastal sea surface temperatures were significantly warmer than usual, with a maximum anomaly of 6.2 C off Southern California; (2) nearshore anomalies persisted along the entire coast and abated only seasonally, during the spring upwelling season; (3) the coastal heatwave weakened in July 2016 and disappeared by September 2016. State your anomaly baseline and the nearshore band you use, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used satellite SST.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "Temperature fronts of the upwelling zone",
+  "query": "Using the supplied GLORYS12 daily near-surface temperature for 1993-2020 off California and Oregon (30-48 N, 130-116 W), map the main sea surface temperature fronts, describe their seasonal cycle, determine how their strength and position changed over the record and during the 2014-2016 warm anomalies, and explain the changes.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "CCS",
     "name": "California Current System",
@@ -20,16 +21,5 @@
     "P_CCS_SURF"
   ],
   "data_access": "public",
-  "scored": false,
-  "paper": {
-    "citation": "Gentemann et al. (2017)",
-    "title": "Satellite sea surface temperatures along the West Coast of the United States during the 2014–2016 northeast Pacific marine heat wave",
-    "journal": "Geophysical Research Letters",
-    "year": 2017,
-    "volume": "44",
-    "pages": "312-319",
-    "doi": "10.1002/2016GL071039",
-    "url": "https://doi.org/10.1002/2016GL071039",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
-  }
+  "scored": false
 }

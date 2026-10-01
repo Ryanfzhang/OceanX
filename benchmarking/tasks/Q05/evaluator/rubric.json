@@ -1,11 +1,11 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q05",
   "type": "paper_reproduction",
-  "title": "Mesoscale eddy statistics and their thermohaline imprint",
+  "title": "Destruction and return of hypoxia off the Pearl River Estuary, July 2018",
   "status": "draft",
-  "query_sha256": "ce57ef4763c7f2238c630519ff2c5eb6893b217d54c019bb2de571fac02bb933",
+  "query_sha256": "6e1ff8ccccc6f080ff36a1597f461d7850b10747ef365044dcf537c3ee59bbc9",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -14,15 +14,29 @@
     "split": "findings 70, method 10, differences 10, report 10"
   },
   "paper": {
-    "citation": "Chen et al. (2011)",
-    "title": "Mesoscale eddies in the South China Sea: Mean properties, spatiotemporal variability, and impact on thermohaline structure",
-    "journal": "Journal of Geophysical Research",
-    "year": 2011,
-    "volume": "116",
-    "pages": "C06018",
-    "doi": "10.1029/2010JC006716",
-    "url": "https://doi.org/10.1029/2010JC006716",
+    "citation": "Zhao et al. (2021)",
+    "title": "Destruction and reinstatement of coastal hypoxia in the South China Sea off the Pearl River estuary",
+    "journal": "Biogeosciences",
+    "year": 2021,
+    "volume": "18",
+    "pages": "2755-2775",
+    "doi": "10.5194/bg-18-2755-2021",
+    "url": "https://doi.org/10.5194/bg-18-2755-2021",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "8-29 July 2018",
+    "paper_data": "three cruise legs before and after Typhoon Son-Tinh",
+    "paper_window": [
+      "2018-07",
+      "2018-07"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model oxygen, temperature, salinity, chlorophyll and velocity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ]
   },
   "verdict_labels": [
     "reproduced",
@@ -36,12 +50,12 @@
       "kind": "claim",
       "weight": 15,
       "title": "Finding 1",
-      "claim": "Eddies are generated mainly along a northeast-southwest band and southwest of the Luzon Strait, with similar numbers of anticyclones and cyclones in most regions.",
-      "paper_evidence": "Abstract: 'Eddies are mainly generated in a northeast-southwest direction and southwest of Luzon Strait. There is no significant difference between the numbers of two types of eddies'.",
+      "claim": "Before the typhoon the bottom water was severely hypoxic: oxygen as low as 3.5 umol/kg and about 660 km2 below 63 umol/kg.",
+      "paper_evidence": "Abstract: 'The lowest ever recorded regional dissolved oxygen (DO) concentration of 3.5 umol kg-1 ... was observed in bottom waters during leg 1, with an ~660 km2 area experiencing hypoxic conditions (DO < 63 umol kg-1).'",
       "testability": "testable",
-      "how_to_test": "Generation-density map and counts by polarity and region from the evaluator's tracker run with the agent's stated parameters.",
+      "how_to_test": "Daily bottom-oxygen minimum and hypoxic area (below 63 umol/kg, with the density conversion stated) on the inner shelf off the estuary for 8-14 July 2018.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: generation maxima in the same regions; anticyclone/cyclone ratio +/-0.2)",
+      "tolerance": "to freeze before judging (suggested: hypoxia present; area within a factor of 2)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -55,12 +69,12 @@
       "kind": "claim",
       "weight": 15,
       "title": "Finding 2",
-      "claim": "The mean eddy radius is about 132 km and the mean lifetime about 8.8 weeks.",
-      "paper_evidence": "Abstract (altimetry, winding-angle method, 17 years).",
+      "claim": "The passage of Typhoon Son-Tinh destroyed the hypoxia completely.",
+      "paper_evidence": "Abstract: 'Hypoxia was completely destroyed by the typhoon passage'.",
       "testability": "testable",
-      "how_to_test": "Mean radius and lifetime from the evaluator's run with the agent's parameters and from a default (minimum lifetime 4 weeks).",
+      "how_to_test": "Hypoxic area, bottom oxygen and stratification through 16-24 July 2018.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: +/-30% of the evaluator's value for the agent's method)",
+      "tolerance": "to freeze before judging (suggested: hypoxic area falls by at least 90%)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -72,31 +86,52 @@
     {
       "id": "Q05-K3",
       "kind": "claim",
-      "weight": 15,
+      "weight": 20,
       "title": "Finding 3",
-      "claim": "Eddies propagate southwestward along the northern slope at about 5-9 cm/s and roughly westward in the central basin at about 2-6 cm/s; propagation east of Vietnam is random.",
-      "paper_evidence": "Abstract: 5.0-9.0 cm/s and 2.0-6.4 cm/s.",
-      "testability": "testable",
-      "how_to_test": "Propagation direction and speed by region.",
+      "claim": "Hypoxia returned about 6 days later, with bottom-water oxygen consumption averaging 14.6 umol/kg per day.",
+      "paper_evidence": "Abstract: 'quickly restored ~6 d later, resulting primarily from high biochemical oxygen consumption in bottom waters that averaged 14.6 +/- 4.8 umol O2 kg-1 d-1.'",
+      "testability": "partly testable",
+      "how_to_test": "Testable: the time for hypoxia to return and the rate of bottom-oxygen decline. Consumption can be separated from physical supply only with the evaluator-only oxygen budget (X_OXY) or stated assumptions.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: directions exact; speeds +/-2 cm/s)",
+      "tolerance": "to freeze before judging (suggested: return time +/-3 days; decline rate +/-50%)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
         "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
         "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
       }
     },
     {
       "id": "Q05-K4",
       "kind": "claim",
-      "weight": 15,
+      "weight": 10,
       "title": "Finding 4",
-      "claim": "Cyclonic eddies make the thermocline shallower, thinner and stronger; anticyclonic eddies make it deeper, thicker and weaker; the halocline under cyclones is shallower and thinner.",
-      "paper_evidence": "Abstract (Argo composites).",
+      "claim": "Shoreward intrusion of offshore subsurface water added about 8.6% to the oxygen loss.",
+      "paper_evidence": "Abstract: 'The shoreward intrusion of offshore subsurface waters contributed to an additional 8.6 +/- 1.7 % of oxygen loss during the reinstatement of hypoxia.'",
+      "testability": "partly testable",
+      "how_to_test": "Testable as the advective contribution estimated from velocity and oxygen gradients (or from X_OXY). The paper's mixing-model estimate cannot be reproduced exactly.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: sign exact; share +/-10 percentage points)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
+      }
+    },
+    {
+      "id": "Q05-K5",
+      "kind": "claim",
+      "weight": 10,
+      "title": "Finding 5",
+      "claim": "Freshwater input suppressed wind-driven mixing and stabilised the water column, helping hypoxia form.",
+      "paper_evidence": "Abstract: 'Freshwater inputs suppressed wind-driven turbulent mixing, stabilizing the water column and facilitating the hypoxia formation.'",
       "testability": "testable",
-      "how_to_test": "Composites of thermocline and halocline depth, thickness and intensity inside cyclones and anticyclones relative to the local seasonal climatology.",
+      "how_to_test": "Stratification (bottom-minus-surface density and the salinity contribution) before, during and after the typhoon, and its relation to the return of hypoxia.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: signs exact)",
       "anchors": {
@@ -108,31 +143,11 @@
       }
     },
     {
-      "id": "Q05-K5",
-      "kind": "claim",
-      "weight": 10,
-      "title": "Finding 5",
-      "claim": "Eddy activity is sensitive to wind-stress curl and, in the northern South China Sea, related to the strength of the background flow.",
-      "paper_evidence": "Abstract.",
-      "testability": "partly testable",
-      "how_to_test": "Testable: the relation of northern eddy activity to the background flow (for example the slope current or the Kuroshio intrusion). Not testable: the wind-stress-curl link (no winds supplied).",
-      "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: sign of the background-flow relation exact)",
-      "anchors": {
-        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
-        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
-        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
-        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
-        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
-      }
-    },
-    {
       "id": "Q05-M",
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Eddy detection and tracking adapted to model fields (closed streamlines, winding angle, Okubo-Weiss, or SSH reconstructed from dynamic height), with minimum lifetime and radius definitions comparable to the paper's; propagation speed; thermocline and halocline depth, thickness and intensity.",
+      "focus": "The hypoxia threshold and unit conversion (umol/kg to the model's mmol/m3); the bottom layer and a shelf area matching the cruise region; daily series through the three cruise legs.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -144,7 +159,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "Model velocity versus altimetry (resolution and smoothing change counts and radii); 2011-2020 versus 1993-2009; model versus Argo profiles for the thermohaline composites; no winds.",
+      "focus": "Model versus cruise observations; whether the model's wind forcing contains the typhoon; daily means; resolution near the estuary; the paper's rates come from incubations and a mixing model.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",
@@ -168,7 +183,9 @@
     "A paper value reported as the agent's own result scores 0 on that claim and caps R at 1.",
     "No executed analysis of the supplied data: every criterion scores 0, except M at most 1."
   ],
-  "evaluator_groups": [],
+  "evaluator_groups": [
+    "X_OXY"
+  ],
   "frozen": {
     "references_sha256": null,
     "tolerances_frozen_at": null,

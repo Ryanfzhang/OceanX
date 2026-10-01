@@ -2,11 +2,11 @@
   "id": "Q06",
   "suite": "test",
   "type": "paper_reproduction",
-  "topic": "marine heatwaves",
-  "title": "Summer marine heatwaves in the South China Sea",
-  "query": "Using the supplied CMOMS daily temperature and velocity for 2011-2020, test the following findings of Yao and Wang (2021, Journal of Geophysical Research: Oceans, doi:10.1029/2021JC017792) on summer marine heatwaves in the South China Sea: (1) multiyear-mean summer marine-heatwave days and duration are concentrated near the Nansha (Spratly) Islands and in the Beibu Gulf; (2) marine-heatwave days, duration and frequency increased significantly over 1982-2020; (3) the leading EOF of summer marine-heatwave days has one sign over the whole basin and explains about 60% of the variance; (4) severe summer marine heatwaves occur when the southwest monsoon weakens south of 12 N and the upwelling in the mid-western South China Sea weakens or disappears. State your marine-heatwave definition and baseline, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used 1982-2020 satellite data.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "typhoon and chlorophyll",
+  "title": "Typhoon Merbok and the vertical chlorophyll distribution, June 2017",
+  "query": "Using the supplied CMOMS daily chlorophyll, temperature, salinity and velocity for 2011-2020, test the following findings of Fang et al. (2022, Journal of Geophysical Research: Oceans, doi:10.1029/2022JC019350) on Typhoon Merbok, which crossed the northern South China Sea and made landfall near the Pearl River Estuary in June 2017: (1) after the typhoon, chlorophyll in the bottom or subsurface chlorophyll maximum decreased both nearshore and offshore; (2) the maximum layer became shallower nearshore and deeper offshore; (3) during the typhoon, movement of plume water changed surface chlorophyll nearshore, while vertical mixing raised chlorophyll in the upper layer and lowered it in the maximum layer offshore; (4) after the typhoon, surface chlorophyll rose and bottom chlorophyll fell nearshore, and as mixing weakened, upwelling shoaled the maximum layer and phytoplankton production raised its chlorophyll. Winds and primary production are not supplied. State how you define the chlorophyll maximum and the nearshore and offshore regions, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used field observations and its own coupled model.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",
     "name": "South China Sea",
@@ -17,16 +17,29 @@
     "C_CORE"
   ],
   "data_access": "private",
-  "pair": "Q10",
   "paper": {
-    "citation": "Yao and Wang (2021)",
-    "title": "Variations in Summer Marine Heatwaves in the South China Sea",
+    "citation": "Fang et al. (2022)",
+    "title": "Typhoon Effects on the Vertical Chlorophyll Distribution on the Northern Shelf of the South China Sea",
     "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2021,
-    "volume": "126",
-    "pages": "e2021JC017792",
-    "doi": "10.1029/2021JC017792",
-    "url": "https://doi.org/10.1029/2021JC017792",
+    "year": 2022,
+    "volume": "127",
+    "pages": "e2022JC019350",
+    "doi": "10.1029/2022JC019350",
+    "url": "https://doi.org/10.1029/2022JC019350",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "June 2017",
+    "paper_data": "field observations before and after the typhoon, a coupled physical-biogeochemical model",
+    "paper_window": [
+      "2017-06",
+      "2017-06"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model chlorophyll, temperature, salinity and velocity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ]
   }
 }

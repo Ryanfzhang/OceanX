@@ -4,19 +4,23 @@
   "type": "open_problem",
   "open_kind": "checkable",
   "topic": "water masses",
-  "title": "Erosion of the North Pacific Tropical Water salinity maximum",
-  "query": "Using the supplied CMOMS daily temperature, salinity and velocity for 2011-2020, determine how the subsurface salinity maximum of North Pacific Tropical Water entering through the Luzon Strait is diluted and transformed inside the South China Sea: along which paths, how fast, in which seasons, and by which processes.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "title": "Spreading and dilution of the Gulf outflow water in the Arabian Sea",
+  "query": "Using the supplied GLORYS12 monthly temperature, salinity and velocity for 2011-2020 in the western and northern Arabian Sea (47-70 E, 4-26 N), determine how the high-salinity water that leaves the Gulf of Oman at about 200-350 m (Persian Gulf Water) spreads and is diluted in the Arabian Sea: along which paths, how fast, in which seasons, and by which processes.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
-    "code": "SCS",
-    "name": "South China Sea",
-    "data": "CMOMS model domain"
+    "code": "ARAB",
+    "name": "Arabian Sea",
+    "bbox": [
+      47,
+      70,
+      4,
+      26
+    ]
   },
   "period": "2011-2020",
   "data_groups": [
-    "C_CORE"
+    "P_ARAB_PHY"
   ],
-  "data_access": "private",
-  "pair": "Q24"
+  "data_access": "public"
 }

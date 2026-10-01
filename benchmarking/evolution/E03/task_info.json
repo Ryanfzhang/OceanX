@@ -1,11 +1,12 @@
 {
   "id": "E03",
   "suite": "evolution",
-  "type": "paper_reproduction",
-  "title": "Oxygen decline and the shoaling hypoxic boundary",
-  "query": "Using the supplied CMEMS global biogeochemical reanalysis monthly oxygen, nitrate and chlorophyll for 1993-2020 off California and Oregon (30-48 N, 130-116 W), test the following findings of Bograd et al. (2008, Geophysical Research Letters, doi:10.1029/2008GL034185), which used CalCOFI observations for 1984-2006 in the southern California Current System: (1) dissolved oxygen declined throughout the domain, by up to 2.1 umol/kg per year; (2) the largest relative declines occurred below the thermocline (about 21% at 300 m), with significant trends down to 500 m; (3) the hypoxic boundary (about 60 umol/kg) shoaled by up to 90 m. Test the findings for the overlapping years and say whether the trends continued after 2006. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "Has subsurface oxygen declined since 1993",
+  "query": "Using the supplied CMEMS global biogeochemical reanalysis monthly oxygen, nitrate and chlorophyll for 1993-2020 off California and Oregon (30-48 N, 130-116 W), determine whether subsurface oxygen has declined and the hypoxic boundary (about 60 umol/kg) has shoaled since 1993, where and at which depths, whether the changes are trends or decadal variability, and what could explain them.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "CCS",
     "name": "California Current System",
@@ -20,16 +21,5 @@
     "P_CCS_BGC"
   ],
   "data_access": "public",
-  "scored": false,
-  "paper": {
-    "citation": "Bograd et al. (2008)",
-    "title": "Oxygen declines and the shoaling of the hypoxic boundary in the California Current",
-    "journal": "Geophysical Research Letters",
-    "year": 2008,
-    "volume": "35",
-    "pages": "2008GL034185",
-    "doi": "10.1029/2008GL034185",
-    "url": "https://doi.org/10.1029/2008GL034185",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
-  }
+  "scored": false
 }

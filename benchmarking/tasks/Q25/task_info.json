@@ -6,7 +6,7 @@
   "topic": "upper-ocean heat content",
   "title": "Ocean heat available to hurricanes and the Loop Current's share",
   "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, quantify the upper-ocean heat available to tropical cyclones during the hurricane season (June-November), how much the Loop Current and its eddies contribute to it, and what controls its year-to-year variability.",
-  "catalog_version": "2026-10-01-v3",
+  "catalog_version": "2026-10-01-v5",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "GULF",

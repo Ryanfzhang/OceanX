@@ -1,11 +1,11 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q06",
   "type": "paper_reproduction",
-  "title": "Summer marine heatwaves in the South China Sea",
+  "title": "Typhoon Merbok and the vertical chlorophyll distribution, June 2017",
   "status": "draft",
-  "query_sha256": "1c39a398d9b67e1d2c9702d5206e00848b56ce748746ad3e84ed8afc9caa6733",
+  "query_sha256": "82885843db901844a4b65b3bf87b4919c6367dbc18856e71df962a729150e14e",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -14,15 +14,29 @@
     "split": "findings 70, method 10, differences 10, report 10"
   },
   "paper": {
-    "citation": "Yao and Wang (2021)",
-    "title": "Variations in Summer Marine Heatwaves in the South China Sea",
+    "citation": "Fang et al. (2022)",
+    "title": "Typhoon Effects on the Vertical Chlorophyll Distribution on the Northern Shelf of the South China Sea",
     "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2021,
-    "volume": "126",
-    "pages": "e2021JC017792",
-    "doi": "10.1029/2021JC017792",
-    "url": "https://doi.org/10.1029/2021JC017792",
+    "year": 2022,
+    "volume": "127",
+    "pages": "e2022JC019350",
+    "doi": "10.1029/2022JC019350",
+    "url": "https://doi.org/10.1029/2022JC019350",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "June 2017",
+    "paper_data": "field observations before and after the typhoon, a coupled physical-biogeochemical model",
+    "paper_window": [
+      "2017-06",
+      "2017-06"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model chlorophyll, temperature, salinity and velocity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ]
   },
   "verdict_labels": [
     "reproduced",
@@ -36,12 +50,12 @@
       "kind": "claim",
       "weight": 20,
       "title": "Finding 1",
-      "claim": "Multiyear-mean summer marine-heatwave days and duration are concentrated near the Nansha Islands and in the Beibu Gulf.",
-      "paper_evidence": "Abstract: 'The MHW days and duration, calculated as multiyear average, are mainly concentrated near the Nansha Islands and Beibu Gulf'.",
+      "claim": "After the typhoon, chlorophyll in the bottom or subsurface chlorophyll maximum decreased both nearshore and offshore.",
+      "paper_evidence": "Abstract: 'the chlorophyll-a (Chla) concentration in the bottom/subsurface chlorophyll maximum (BCM/SCM) layer decreased in both nearshore and offshore regions after Merbok.'",
       "testability": "testable",
-      "how_to_test": "Mean summer marine-heatwave days and duration maps, 2011-2020, with the agent's definition and ten-year baseline; rank of the two regions within the basin.",
+      "how_to_test": "Chlorophyll at the maximum layer before and after the typhoon's passage in June 2017, nearshore and offshore on the shelf off the Pearl River Estuary. The evaluator confirms the passage dates from the paper before freezing.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: both regions in the top quartile of the basin, or the difference explained)",
+      "tolerance": "to freeze before judging (suggested: signs exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -53,31 +67,33 @@
     {
       "id": "Q06-K2",
       "kind": "claim",
-      "weight": 10,
+      "weight": 20,
       "title": "Finding 2",
-      "claim": "Marine-heatwave days, duration and frequency increased significantly over 1982-2020.",
-      "paper_evidence": "Abstract: 'significant increasing trends in MHW days, duration, and frequency in the South China Sea during 1982-2020'.",
-      "testability": "not testable",
-      "how_to_test": "The supplied record covers 2011-2020 only; a ten-year trend cannot test a 39-year trend. A short-record trend must be labelled as such.",
-      "expected": "n/a",
-      "tolerance": "n/a",
+      "claim": "The maximum layer became shallower nearshore and deeper offshore.",
+      "paper_evidence": "Abstract: 'the BCM/SCM layer became shallower in the nearshore region and deeper in the offshore region after Merbok.'",
+      "testability": "testable",
+      "how_to_test": "Depth of the chlorophyll maximum before and after, nearshore and offshore.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: signs exact; depth changes +/-10 m)",
       "anchors": {
-        "0": "Ignored, or reported as verified or refuted although the supplied data cannot test it.",
-        "2": "Recognised as not fully testable, but without naming what is missing, or a weak proxy presented as a real test.",
-        "4": "Stated as not testable with the supplied data, naming the missing data or period; any proxy analysis is labelled as a proxy and not used for the verdict."
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
       }
     },
     {
       "id": "Q06-K3",
       "kind": "claim",
-      "weight": 15,
+      "weight": 20,
       "title": "Finding 3",
-      "claim": "The leading EOF of summer marine-heatwave days has one sign over the whole basin and explains about 60% of the variance.",
-      "paper_evidence": "Abstract.",
+      "claim": "During the typhoon, movement of plume water changed surface chlorophyll nearshore, while vertical mixing raised chlorophyll in the upper layer and lowered it in the maximum layer offshore.",
+      "paper_evidence": "Abstract: 'the spatial movement of plume water was responsible for the surface Chla change in the nearshore region, and vertical mixing increased Chla in the upper layer and decreased it in the SCM layer in the offshore region.'",
       "testability": "testable",
-      "how_to_test": "EOF of yearly summer marine-heatwave days (ten summers): variance fraction and sign uniformity.",
+      "how_to_test": "Daily surface salinity and chlorophyll nearshore; offshore, the vertical redistribution of chlorophyll with a nearly conserved depth integral as the test of mixing.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: variance fraction +/-10 percentage points; sign uniformity exact)",
+      "tolerance": "to freeze before judging (suggested: signs exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -89,14 +105,14 @@
     {
       "id": "Q06-K4",
       "kind": "claim",
-      "weight": 25,
+      "weight": 10,
       "title": "Finding 4",
-      "claim": "Severe summer marine heatwaves occur when the southwest monsoon weakens south of 12 N and the mid-western South China Sea upwelling weakens or disappears.",
-      "paper_evidence": "Abstract: 'The midwestern South China Sea upwelling weakens or even disappears due to a negative wind stress curl, causing basin-wide severe summer MHWs'.",
+      "claim": "After the typhoon, surface chlorophyll rose and bottom chlorophyll fell nearshore; as mixing weakened, upwelling shoaled the maximum layer and phytoplankton production raised its chlorophyll.",
+      "paper_evidence": "Abstract: 'surface Chla increased and bottom Chla decreased in the nearshore region ... upwelling tended to shoal the BCM layer in the nearshore region, and phytoplankton production increased Chla in the BCM layer.'",
       "testability": "partly testable",
-      "how_to_test": "Testable: upwelling strength off Vietnam (coastal-minus-offshore temperature, offshore currents) in the most severe heatwave summers versus other summers. Not testable: the monsoon, the anticyclone and the radiation and latent-heat changes (no atmospheric data).",
+      "how_to_test": "Testable: the chlorophyll changes and the upwelling signature (isotherm shoaling, onshore bottom flow). Not testable: production, which is not supplied for this region.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: upwelling anomaly sign exact in the two most severe summers)",
+      "tolerance": "to freeze before judging (suggested: signs exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -111,7 +127,7 @@
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Hobday et al. (2016) definition (percentile, minimum duration, gap joining, climatology window) or a stated variant; the summer months; EOF of yearly marine-heatwave days; an upwelling index for the mid-western South China Sea.",
+      "focus": "Definitions of the bottom or subsurface chlorophyll maximum (depth and magnitude); nearshore and offshore regions matching the paper's stations; before, during and after windows around the typhoon's passage.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -123,7 +139,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "Ten years versus 39; a baseline from a short record; model SST versus satellite SST; no winds for the monsoon part.",
+      "focus": "CMOMS versus the paper's own coupled model and field observations; whether the model's wind forcing contains the typhoon at full strength; daily means; primary production is not supplied here.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",

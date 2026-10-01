@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q10",
   "type": "paper_reproduction",
   "title": "The late-arriving 2023 East China Sea marine heatwave",
@@ -23,6 +23,21 @@
     "doi": "10.1038/s41612-024-00846-4",
     "url": "https://doi.org/10.1038/s41612-024-00846-4",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "August-October 2023 event; 1982-2011 baseline; 1993-2011 heat-budget reference",
+    "paper_data": "OISST, GLORYS12, ERA5 over 25-34 N, 120-128 E",
+    "paper_window": [
+      "1982-01",
+      "2023-10"
+    ],
+    "supplied_period": "OISST 1982-2023 daily; GLORYS12 and ERA5 May-November 1993-2011 and 2023",
+    "supplied_data": "the same three products",
+    "supplied_window": [
+      "1982-01",
+      "2023-12"
+    ],
+    "note": "The paper's heat budget covers 30 June-19 October, inside the supplied May-November months."
   },
   "verdict_labels": [
     "reproduced",

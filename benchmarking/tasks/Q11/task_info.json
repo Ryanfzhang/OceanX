@@ -6,7 +6,7 @@
   "topic": "marine heatwaves",
   "title": "Subsurface marine heatwaves",
   "query": "Using the supplied CMOMS daily temperature, salinity and velocity for 2011-2020, investigate marine heatwaves below the sea surface in the South China Sea. Where and when are subsurface heatwaves most frequent and intense, how often do they occur without a surface heatwave above them, and what physical processes produce them? Justify your detection method and baseline, and support the mechanisms with quantitative evidence.",
-  "catalog_version": "2026-10-01-v3",
+  "catalog_version": "2026-10-01-v5",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "SCS",

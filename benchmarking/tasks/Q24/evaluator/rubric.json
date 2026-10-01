@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q24",
   "type": "open_problem",
   "open_kind": "checkable",
-  "title": "Loss of the salinity maximum in Loop Current eddies",
+  "title": "Offshore export of river water from the northern Gulf shelf",
   "status": "draft",
-  "query_sha256": "b9a7c841ceeef233d5112caadd48cb94f9d090d7384fd8513d79ea89fc389d3d",
+  "query_sha256": "05486c67c82cc826038eba9517e0da8f5b0d8db332c32f3283c98ca4c84da280",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -43,7 +43,8 @@
       "weight": 20,
       "title": "Quantitative answer against the answer key",
       "uses": [
-        "Q24-A1"
+        "Q24-A1",
+        "Q24-A3"
       ],
       "anchors": {
         "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
@@ -60,7 +61,6 @@
       "title": "Mechanistic depth",
       "uses": [
         "Q24-A2",
-        "Q24-A3",
         "depth_probes"
       ],
       "anchors": {
@@ -93,8 +93,7 @@
       "weight": 15,
       "title": "Breadth and synthesis",
       "uses": [
-        "breadth_probes",
-        "literature_context"
+        "breadth_probes"
       ],
       "anchors": {
         "0": "A single isolated diagnostic, with no link to related processes or published work.",
@@ -121,51 +120,37 @@
     "items": [
       {
         "id": "Q24-A1",
-        "quantity": "Eddy-following salinity maximum",
-        "procedure": "For each tracked Loop Current eddy, the time series of the core salinity-maximum value and depth after separation; decay rate.",
+        "quantity": "Offshore low-salinity water",
+        "procedure": "Area and freshwater volume of water with surface salinity below 35 seaward of the 200 m isobath in the northern Gulf (about 92-86 W, 26-29.5 N): monthly climatology, yearly maxima and event dates.",
         "used_by": "Q24-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: decay rate +/-40%)"
+        "tolerance": "to freeze before judging (suggested: peak season exact; Spearman of yearly values at least 0.7)"
       },
       {
         "id": "Q24-A2",
-        "quantity": "Seasonality",
-        "procedure": "Whether the decay is faster in late autumn and winter (mixed-layer deepening) than in summer.",
+        "quantity": "Carrier features",
+        "procedure": "Fraction of export events with the Loop Current or an anticyclonic eddy within 100 km of the shelf break, from sea surface height.",
         "used_by": "Q24-M",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: exact)"
+        "tolerance": "to freeze before judging (suggested: +/-0.2)"
       },
       {
         "id": "Q24-A3",
-        "quantity": "Process indicators",
-        "procedure": "Relation of the decay to mixed-layer depth in the eddy core and to interaction with other eddies or the slope.",
-        "used_by": "Q24-M",
+        "quantity": "Vertical extent",
+        "procedure": "Thickness of the low-salinity layer offshore during events.",
+        "used_by": "Q24-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: signs exact)"
+        "tolerance": "to freeze before judging (suggested: +/-30%)"
       }
     ]
   },
   "depth_probes": [
-    "Works in an eddy-following frame and on density surfaces.",
-    "Separates vertical mixing (winter mixed-layer deepening) from lateral exchange and eddy-eddy interaction.",
-    "Compares eddies that separated in different seasons."
+    "Separates the supply of fresh water on the shelf from its offshore entrainment by the circulation.",
+    "Follows events in time instead of relying on means.",
+    "Assesses whether the reanalysis, with its river forcing, can represent the plume."
   ],
   "breadth_probes": [
-    "Connects the transformation to the formation of Gulf Common Water and the Gulf's salt budget."
-  ],
-  "literature_context": [
-    {
-      "citation": "Sosa-Gutierrez et al. (2020)",
-      "title": "Erosion of the Subsurface Salinity Maximum of the Loop Current Eddies From Glider Observations and a Numerical Model",
-      "journal": "Journal of Geophysical Research: Oceans",
-      "year": 2020,
-      "volume": "125",
-      "pages": "e2019JC015397",
-      "doi": "10.1029/2019JC015397",
-      "url": "https://doi.org/10.1029/2019JC015397",
-      "verification": "Crossref metadata and abstract checked 2026-10-01",
-      "use": "Glider and model study of the Poseidon eddy (2016-2017): most dilution of the salinity maximum in late autumn and winter, mostly by vertical salt diffusion above the 1026 kg/m3 isopycnal and by advection below it. Use it to judge the literature comparison only; the answer key comes from the supplied data."
-    }
+    "Relates the export to stratification and to the heat available to hurricanes, and compares with published accounts of plume entrainment."
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",

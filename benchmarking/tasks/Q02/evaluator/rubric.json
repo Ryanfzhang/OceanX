@@ -1,11 +1,11 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q02",
   "type": "paper_reproduction",
-  "title": "The South China Sea throughflow as a heat and freshwater conveyor",
+  "title": "The Kuroshio Loop Current in the winters of 2014-2017",
   "status": "draft",
-  "query_sha256": "8784f459d9773ed32919bac583b65409de32dc613626fa1d5d5574a51e1b11e9",
+  "query_sha256": "a91596dd91f8ee154767d6cec4adf083450810f05e9fa1646ff0619b0ef8f3d7",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -14,15 +14,30 @@
     "split": "findings 70, method 10, differences 10, report 10"
   },
   "paper": {
-    "citation": "Qu et al. (2006)",
-    "title": "South China Sea throughflow: A heat and freshwater conveyor",
-    "journal": "Geophysical Research Letters",
-    "year": 2006,
-    "volume": "33",
-    "pages": "2006GL028350",
-    "doi": "10.1029/2006GL028350",
-    "url": "https://doi.org/10.1029/2006GL028350",
+    "citation": "Sun et al. (2020)",
+    "title": "Three-Dimensional Structure and Interannual Variability of the Kuroshio Loop Current in the Northeastern South China Sea",
+    "journal": "Journal of Physical Oceanography",
+    "year": 2020,
+    "volume": "50",
+    "pages": "2437-2455",
+    "doi": "10.1175/JPO-D-20-0058.1",
+    "url": "https://doi.org/10.1175/JPO-D-20-0058.1",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "June 2014 to June 2017 (moorings)",
+    "paper_data": "ten moorings west of the Luzon Strait, satellite altimetry",
+    "paper_window": [
+      "2014-06",
+      "2017-06"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model velocity, temperature and salinity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ],
+    "note": "The paper also ranks events in the 1993-2019 altimeter record, which lies partly outside the supplied record (finding 4)."
   },
   "verdict_labels": [
     "reproduced",
@@ -34,14 +49,14 @@
     {
       "id": "Q02-K1",
       "kind": "claim",
-      "weight": 30,
+      "weight": 10,
       "title": "Finding 1",
-      "claim": "The throughflow transfers up to about 0.2 PW of heat and about 0.1 Sv of freshwater from the South China Sea into the Indonesian maritime continent.",
-      "paper_evidence": "Abstract: 'a conveyor belt transferring up to 0.2 PW ... of heat and 0.1 Sv ... of freshwater from the South China Sea into the Indonesian maritime continent'. The paper's numbers come from surface flux data.",
+      "claim": "The Kuroshio Loop Current occurs mainly in winter.",
+      "paper_evidence": "Abstract: 'The 3-yr moored data between 2014 and 2017 revealed that the KLC mainly occurred in winter'.",
       "testability": "testable",
-      "how_to_test": "Mean volume transports through the Luzon, Taiwan, Mindoro and Karimata straits inside the domain and their closure; heat and freshwater transport through the southern outlets; the reference-independent net heat and freshwater convergence of the closed basin; recomputed by the evaluator with the agent's reference values.",
+      "how_to_test": "A loop-current index (for example the anticyclonic circulation or dynamic-height anomaly southwest of Taiwan, about 118-121 E, 19.5-22.5 N) by month for 2011-2020.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: Luzon Strait net transport +/-30%; heat and freshwater export within a factor of 2)",
+      "tolerance": "to freeze before judging (suggested: peak season exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -53,14 +68,52 @@
     {
       "id": "Q02-K2",
       "kind": "claim",
-      "weight": 15,
+      "weight": 25,
       "title": "Finding 2",
-      "claim": "Surface heat and freshwater fluxes vary differently in time from the throughflow.",
-      "paper_evidence": "Abstract: 'surface heat and freshwater fluxes display substantially different temporal variations with the South China Sea throughflow'.",
-      "testability": "partly testable",
-      "how_to_test": "Surface fluxes are not supplied. Testable through the implied surface flux (heat-content change minus lateral heat convergence) against the throughflow, by year and season. A direct comparison with surface-flux products is not possible.",
+      "claim": "It was moderate, weak and strong in the winters of 2014/15, 2015/16 and 2016/17.",
+      "paper_evidence": "Abstract: 'significant interannual variability with moderate, weak, and strong strengths in the winters of 2014/15, 2015/16, and 2016/17, respectively'.",
+      "testability": "testable",
+      "how_to_test": "The winter (December-February) index for the three winters, and for all winters of 2011-2020.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: correlation sign and magnitude +/-0.2)",
+      "tolerance": "to freeze before judging (suggested: ranking of the three winters exact)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q02-K3",
+      "kind": "claim",
+      "weight": 20,
+      "title": "Finding 3",
+      "claim": "Near the Luzon Strait the loop current is confined to the upper 500 m; farther into the South China Sea it becomes more barotropic.",
+      "paper_evidence": "Abstract: 'initially confined to the upper 500 m near the Luzon Strait, but it became more barotropic, with kinetic energy transferring from the baroclinic mode to the barotropic mode when it extended into the SCS interior'.",
+      "testability": "testable",
+      "how_to_test": "Vertical structure of the velocity anomaly along the loop from the strait into the interior; the barotropic share of kinetic energy by location (the mooring sections were along about 119.9 E and 21 N).",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: velocity e-folding depth near the strait +/-150 m; sign of the along-path change in barotropic share exact)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q02-K4",
+      "kind": "claim",
+      "weight": 5,
+      "title": "Finding 4",
+      "claim": "The 2016/17 event was the strongest since 1993.",
+      "paper_evidence": "Abstract: 'the KLC event in 2016/17 winter is the strongest one since 1993' (altimeter data 1993-2019).",
+      "testability": "partly testable",
+      "how_to_test": "Testable only as the rank of 2016/17 among the winters of 2011-2020; the 1993-2019 altimeter record is not supplied.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: rank within 2011-2020 exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -71,22 +124,23 @@
       }
     },
     {
-      "id": "Q02-K3",
+      "id": "Q02-K5",
       "kind": "claim",
-      "weight": 25,
-      "title": "Finding 3",
-      "claim": "The South China Sea acts as a heat capacitor, storing heat in some years and releasing it in others.",
-      "paper_evidence": "Abstract: hypothesis confirmed in the paper with a high-resolution model.",
-      "testability": "testable",
-      "how_to_test": "Yearly basin heat-content change 2011-2020 against yearly lateral heat export; storage and release years; correlation and lag.",
+      "weight": 10,
+      "title": "Finding 5",
+      "claim": "The loop current is stronger in La Nina winters and weaker in El Nino winters, through the wind work of the northeast monsoon.",
+      "paper_evidence": "Abstract: 'the strength of KLC is significantly modulated by El Nino-Southern Oscillation, being stronger in La Nina and weaker in El Nino years'.",
+      "testability": "partly testable",
+      "how_to_test": "Testable: the winter index against ENSO phase for the ten winters (published classifications). Not testable: the wind work, as winds are not supplied.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: storage or release matches the reference in at least 7 of 10 years; correlation +/-0.2)",
+      "tolerance": "to freeze before judging (suggested: sign of the ENSO relation exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
         "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
         "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
       }
     },
     {
@@ -94,7 +148,7 @@
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Section placement across each strait inside the domain and volume closure; reference temperature and salinity, or reference-independent net fluxes over a closed set of sections; heat and freshwater transport formulas; basin heat-content change.",
+      "focus": "A loop-current identification adapted from the paper's mooring velocities and altimeter SSH to model fields; the winter season; a modal decomposition or another justified barotropic and baroclinic split.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -106,7 +160,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "Model transports versus the paper's surface-flux estimate; 2011-2020 versus the paper's period; straits possibly outside the domain; daily means miss sub-daily covariance.",
+      "focus": "Model versus moored observations; a forced model need not reproduce the timing of individual eddy-shedding events; the 1993-2019 altimeter context lies outside the record; no winds.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",

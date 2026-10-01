@@ -2,11 +2,11 @@
   "id": "Q09",
   "suite": "test",
   "type": "paper_reproduction",
-  "topic": "mesoscale eddies",
-  "title": "Vertical structure of a Loop Current eddy",
-  "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, test the following findings of Meunier et al. (2018, Journal of Geophysical Research: Oceans, doi:10.1029/2018JC013801) on the Loop Current eddy (Poseidon) observed by glider from August to November 2016: (1) the eddy is a large body of nearly homogeneous water between about 50 and 250 m, confined between the seasonal and main thermoclines; (2) its core is up to 9.7 C warmer than the surrounding Gulf water; (3) its salinity has a double-core structure, a subsurface fresh core (anomaly about -0.27) above a deeper saline core (anomaly up to 1.22); (4) the saline core of Caribbean origin is well conserved from the Yucatan Basin through the Loop Current and at least seven months after the eddy detached, while the fresh homogeneous core forms by surface heat loss and mixing in the winter before detachment; (5) the geostrophic velocity forms a subsurface-intensified vortex ring. Identify the corresponding eddy in the reanalysis and justify the match, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper's observations.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "water masses",
+  "title": "Erosion of the salinity maximum inside the Loop Current eddy Poseidon",
+  "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, test the following findings of Sosa-Gutierrez et al. (2020, Journal of Geophysical Research: Oceans, doi:10.1029/2019JC015397), who followed the Loop Current eddy Poseidon with gliders from August 2016 to July 2017: (1) during its westward journey the subsurface salinity maximum of Subtropical Underwater inside the eddy was eroded, forming Gulf Common Water; (2) most of the dilution occurred in late autumn and winter, with northerly winds and mixed-layer deepening; (3) above the 1026 kg/m3 isopycnal the salinity trend is explained mostly by vertical salt diffusion, as winter heat loss drives a turbulent salt flux into the eddy's thermostad and dilutes the high-salinity core below; (4) vertical diffusion keeps homogenising upper-ocean salinity until the vertical salinity gradient is negligible; (5) below the 1026 kg/m3 isopycnal, advection, presumably through eddy-eddy interaction, is the main cause of salt loss. Winds and surface fluxes are not supplied. Identify and track the eddy in the reanalysis and justify the match, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used glider observations and a regional model.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "GULF",
     "name": "Gulf of Mexico",
@@ -17,21 +17,35 @@
       31
     ]
   },
-  "period": "2011-2017 (focus 2015-2016)",
+  "period": "2011-2017 (focus August 2016-July 2017)",
   "data_groups": [
     "P_GULF"
   ],
   "data_access": "public",
-  "pair": "Q05",
+  "pair": "Q01",
   "paper": {
-    "citation": "Meunier et al. (2018)",
-    "title": "The Vertical Structure of a Loop Current Eddy",
+    "citation": "Sosa-Gutierrez et al. (2020)",
+    "title": "Erosion of the Subsurface Salinity Maximum of the Loop Current Eddies From Glider Observations and a Numerical Model",
     "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2018,
-    "volume": "123",
-    "pages": "6070-6090",
-    "doi": "10.1029/2018JC013801",
-    "url": "https://doi.org/10.1029/2018JC013801",
+    "year": 2020,
+    "volume": "125",
+    "pages": "e2019JC015397",
+    "doi": "10.1029/2019JC015397",
+    "url": "https://doi.org/10.1029/2019JC015397",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "August 2016 to July 2017",
+    "paper_data": "underwater glider sections, a regional numerical model",
+    "paper_window": [
+      "2016-08",
+      "2017-07"
+    ],
+    "supplied_period": "2011-2017, daily",
+    "supplied_data": "GLORYS12 reanalysis temperature, salinity and sea surface height, 0-2000 m",
+    "supplied_window": [
+      "2011-01",
+      "2017-12"
+    ]
   }
 }

@@ -1,11 +1,11 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q04",
   "type": "paper_reproduction",
-  "title": "Summer upwelling, wind jet and cold filament off southern Vietnam",
+  "title": "The South Vietnam upwelling in summer 2018",
   "status": "draft",
-  "query_sha256": "356af6f30a90e0b1780df65d6487e284b1172742f7a1dc9a5c1ddec2492797d0",
+  "query_sha256": "206951e0c1904480e5d139ac28e9a30e0223b7f81c810bc1cc653378077cdc30",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -14,15 +14,30 @@
     "split": "findings 70, method 10, differences 10, report 10"
   },
   "paper": {
-    "citation": "Xie et al. (2003)",
-    "title": "Summer upwelling in the South China Sea and its role in regional climate variations",
-    "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2003,
-    "volume": "108",
-    "pages": "2003JC001867",
-    "doi": "10.1029/2003JC001867",
-    "url": "https://doi.org/10.1029/2003JC001867",
+    "citation": "Herrmann et al. (2023)",
+    "title": "Intraseasonal variability of the South Vietnam upwelling, South China Sea: influence of atmospheric forcing and ocean intrinsic variability",
+    "journal": "Ocean Science",
+    "year": 2023,
+    "volume": "19",
+    "pages": "453-467",
+    "doi": "10.5194/os-19-453-2023",
+    "url": "https://doi.org/10.5194/os-19-453-2023",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "June-September 2018",
+    "paper_data": "ten-member ensemble of a 1 km SYMPHONIE model",
+    "paper_window": [
+      "2018-06",
+      "2018-09"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model temperature, salinity and velocity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ],
+    "note": "The paper calls 2018 exceptional relative to a 2009-2018 simulation; here it is ranked within 2011-2020 (finding 1)."
   },
   "verdict_labels": [
     "reproduced",
@@ -36,31 +51,32 @@
       "kind": "claim",
       "weight": 15,
       "title": "Finding 1",
-      "claim": "The southwest monsoon forms a wind jet off the southern tip of Indochina whose strong wind-stress curl drives coastal and open-ocean upwelling.",
-      "paper_evidence": "Abstract: 'a strong wind jet occurs at its southern tip offshore east of Saigon, resulting in strong wind curls that are important for ocean upwelling off the coast'.",
-      "testability": "testable",
-      "how_to_test": "July-August mean wind speed and wind-stress curl off southern Vietnam (2003-2020 and 2011-2020); jet position; relation between the curl and CMOMS upwelling (cold anomaly, isotherm shoaling).",
+      "claim": "Summer 2018 was a summer of exceptionally strong upwelling in the southern coastal, offshore and Mekong-shelf areas.",
+      "paper_evidence": "Full text: 'the summer of 2018 case, which was an exceptionally strong summer of upwelling for the SCU, OFU and MKU'.",
+      "testability": "partly testable",
+      "how_to_test": "Testable: the June-September upwelling index of each area in 2018 ranked among the summers of 2011-2020. The paper's reference record is 2009-2018.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: jet latitude +/-0.5 degree; curl sign exact)",
+      "tolerance": "to freeze before judging (suggested: 2018 among the two strongest summers for each area)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
         "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
         "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
       }
     },
     {
       "id": "Q04-K2",
       "kind": "claim",
-      "weight": 15,
+      "weight": 20,
       "title": "Finding 2",
-      "claim": "In July and August an anticyclonic eddy to the southeast carries cold coastal water offshore as a cold filament.",
-      "paper_evidence": "Abstract: 'In July and August an anticyclonic ocean eddy develops to the southeast, advecting the cold coastal water offshore'.",
+      "claim": "The southern coastal and Mekong-shelf upwelling are induced by the stable northeastward, then eastward, boundary current.",
+      "paper_evidence": "Abstract: 'The MKU and SCU are induced by stable ocean dynamics (the northeastward then eastward boundary current) and have very little chaotic variability.'",
       "testability": "testable",
-      "how_to_test": "July-August CMOMS surface currents and SST: presence and position of the anticyclone and the filament in each summer.",
+      "how_to_test": "Daily upwelling index of the two areas against the strength of the boundary current and eastward jet in June-September 2018.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: filament years match the reference within 2 years)",
+      "tolerance": "to freeze before judging (suggested: correlation sign exact; magnitude +/-0.2)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -74,12 +90,12 @@
       "kind": "claim",
       "weight": 15,
       "title": "Finding 3",
-      "claim": "The filament's centre lies north of the wind-speed maximum, so open-ocean upwelling helps cool the surface.",
-      "paper_evidence": "Abstract: 'The center of this cold filament is located consistently north of the wind speed maximum'.",
+      "claim": "The offshore upwelling develops in July along the northern flank of the eastward jet and in August in the area of cyclonic eddies north of the jet.",
+      "paper_evidence": "Abstract: 'In July, OFU mainly develops along the northern flank of the eastward jet. ... In August ... OFU develops mainly in the area of positive wind curl and cyclonic eddies north of the jet.'",
       "testability": "testable",
-      "how_to_test": "Latitude of the filament SST minimum along 110-114 E versus the latitude of the wind-speed maximum.",
+      "how_to_test": "Location of the offshore cold water relative to the jet axis and to cyclonic vorticity in July and in August 2018.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: sign of the latitude difference exact; size +/-0.5 degree)",
+      "tolerance": "to freeze before judging (suggested: position relative to the jet exact; association with cyclonic vorticity exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -91,14 +107,14 @@
     {
       "id": "Q04-K4",
       "kind": "claim",
-      "weight": 10,
+      "weight": 15,
       "title": "Finding 4",
-      "claim": "A tongue of high chlorophyll is collocated with the cold filament.",
-      "paper_evidence": "Abstract: 'a collocated tongue of high chlorophyll concentration'.",
+      "claim": "In mid-summer the alongshore current of the jet and eddy dipole prevents the northern coastal upwelling, which develops in early and late summer when the flow is directed offshore.",
+      "paper_evidence": "Abstract: 'a large-scale circulation formed by the eastward jet and eddy dipole is well established with an alongshore current preventing the NCU development ... the NCU is favored (annihilated) by offshore-oriented (alongshore) structures.'",
       "testability": "testable",
-      "how_to_test": "Spatial correlation between the July-August SST anomaly and log10 surface chlorophyll in about 108-115 E, 9-15 N in CMOMS.",
+      "how_to_test": "Daily northern-area upwelling index against alongshore and offshore surface flow in June-September 2018.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: correlation sign exact; magnitude +/-0.15)",
+      "tolerance": "to freeze before judging (suggested: signs exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -110,20 +126,18 @@
     {
       "id": "Q04-K5",
       "kind": "claim",
-      "weight": 15,
+      "weight": 5,
       "title": "Finding 5",
-      "claim": "The filament interrupts summer warming, giving a semi-annual SST cycle, and interannual SST variance peaks over the climatological filament.",
-      "paper_evidence": "Abstract: 'disrupts the summer warming of the SCS and causes a pronounced semi-annual cycle in SST'; 'Interannual SST variance has a local maximum over the climatological cold filament'.",
-      "testability": "testable",
-      "how_to_test": "Semi-annual harmonic amplitude of the 2011-2020 SST climatology; map of interannual July-August SST standard deviation (ten summers) and the location of its maximum.",
-      "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: variance maximum within 1 degree; semi-annual amplitude larger over the filament than around it)",
+      "claim": "The intraseasonal variability follows the wind to first order, and ocean intrinsic variability matters most for the offshore and northern areas.",
+      "paper_evidence": "Abstract: 'driven to the first order by the wind variability ... The OIV has a stronger influence on OFU'.",
+      "testability": "not testable",
+      "how_to_test": "This needs daily winds and an ensemble of simulations; neither is supplied.",
+      "expected": "n/a",
+      "tolerance": "n/a",
       "anchors": {
-        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
-        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
-        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
-        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+        "0": "Ignored, or reported as verified or refuted although the supplied data cannot test it.",
+        "2": "Recognised as not fully testable, but without naming what is missing, or a weak proxy presented as a real test.",
+        "4": "Stated as not testable with the supplied data, naming the missing data or period; any proxy analysis is labelled as a proxy and not used for the verdict."
       }
     },
     {
@@ -131,7 +145,7 @@
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Wind-stress and curl computation from the monthly winds (drag formula stated); a filament index; filament and wind-maximum latitudes; a chlorophyll collocation measure; semi-annual harmonic and variance analysis.",
+      "focus": "The paper's SST-based upwelling index (reference temperature 29.2 C and threshold 27.6 C in the paper, or values re-derived for CMOMS with justification); the four upwelling areas; the eastward-jet axis.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -143,7 +157,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "Model SST and chlorophyll versus satellite data; blended winds versus the paper's scatterometer winds; ten summers; the paper's 1998 example lies outside the period.",
+      "focus": "CMOMS versus a 1 km ensemble: one realisation, coarser resolution, different forcing and tides; a different reference record (2011-2020 instead of 2009-2018).",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",

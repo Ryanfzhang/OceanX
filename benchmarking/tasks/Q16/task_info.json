@@ -3,19 +3,27 @@
   "suite": "test",
   "type": "open_problem",
   "open_kind": "checkable",
-  "topic": "river plume",
-  "title": "Year-to-year extent and spreading of the Pearl River plume",
-  "query": "Using the supplied CMOMS daily salinity, temperature and velocity for 2011-2020, quantify the extent, freshwater content and spreading direction of the summer (June-August) Pearl River plume in each year and determine what controls its year-to-year variability. River discharge and winds are not supplied; explain how this limits your conclusions.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "air-sea carbon exchange",
+  "title": "Seasonal and interannual air-sea CO2 exchange on the Pearl River adjacent shelf",
+  "query": "Using the supplied CMOMS interval-averaged air-sea CO2 flux (CO2_airsea) and surface pCO2, together with daily temperature, salinity, chlorophyll and velocity for 2011-2020, determine when and where the Pearl River adjacent shelf is a net CO2 source or sink. Use valid ocean cells in 112-116 E, 20-23 N with water depth no greater than 200 m. Quantify the monthly cycle, annual net exchange, source/sink area and year-to-year variability, using cell areas and actual averaging intervals. Establish the flux sign and pCO2 units from provider metadata before interpreting them. Examine which changes in temperature, salinity, chlorophyll and circulation accompany the flux changes, testing plausible alternative interpretations. Atmospheric CO2, wind, river carbon loads, dissolved inorganic carbon and alkalinity are not supplied; do not treat correlations or a residual as a closed carbon budget or a complete separation of thermal and biological causes.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v4",
   "region": {
     "code": "SCS",
-    "name": "South China Sea",
-    "data": "CMOMS model domain"
+    "name": "Pearl River adjacent shelf, South China Sea",
+    "data": "CMOMS wet shelf cells in 112-116 E, 20-23 N, bathymetry <=200 m",
+    "bbox": [
+      112,
+      116,
+      20,
+      23
+    ],
+    "bathymetry_max_m": 200
   },
   "period": "2011-2020",
   "data_groups": [
-    "C_CORE"
+    "C_CORE",
+    "C_CARBON"
   ],
   "data_access": "private"
 }

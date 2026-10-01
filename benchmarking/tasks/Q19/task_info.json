@@ -2,20 +2,27 @@
   "id": "Q19",
   "suite": "test",
   "type": "open_problem",
-  "open_kind": "disagreement",
-  "topic": "shelf circulation",
-  "title": "Does the winter South China Sea Warm Current exist, and what drives it",
-  "query": "In winter the northern South China Sea shelf is often reported to carry a northeastward current against the northeasterly monsoon (the South China Sea Warm Current), but studies disagree about whether it persists and what drives it. Using the supplied CMOMS daily velocity, temperature and salinity for 2011-2020, determine whether, where and when such a countercurrent exists in winter, how persistent it is, and which proposed driving mechanisms the data support.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "open_kind": "checkable",
+  "topic": "oxygen minimum zone",
+  "title": "Structure and ventilation of the Arabian Sea oxygen minimum zone",
+  "query": "Using the supplied CMEMS global biogeochemical reanalysis monthly oxygen and nitrate and GLORYS12 monthly temperature, salinity and velocity for 2011-2020 in the western and northern Arabian Sea (47-70 E, 4-26 N), characterize the oxygen minimum zone (its depth range, horizontal extent and intensity) and its seasonal and year-to-year variability, and determine what ventilates it and along which pathways. The two products come from different model systems; account for that.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
-    "code": "SCS",
-    "name": "South China Sea",
-    "data": "CMOMS model domain"
+    "code": "ARAB",
+    "name": "Arabian Sea",
+    "bbox": [
+      47,
+      70,
+      4,
+      26
+    ]
   },
   "period": "2011-2020",
   "data_groups": [
-    "C_CORE"
+    "P_ARAB_BGC",
+    "P_ARAB_PHY"
   ],
-  "data_access": "private"
+  "data_access": "public",
+  "pair": "Q17"
 }

@@ -2,30 +2,50 @@
   "id": "Q08",
   "suite": "test",
   "type": "paper_reproduction",
-  "topic": "eddies and chlorophyll",
-  "title": "Eddy modulation of the subsurface chlorophyll maximum",
-  "query": "Using the supplied CMOMS daily chlorophyll, temperature, salinity and velocity for 2011-2020, test the following findings of Xu et al. (2023, Journal of Geophysical Research: Biogeosciences, doi:10.1029/2023JG007648) on how mesoscale eddies modulate the subsurface chlorophyll maximum (SCM) in the South China Sea: (1) cyclonic eddies uplift the thermocline and anticyclonic eddies depress it; (2) anticyclonic eddies deepen the SCM and reduce its magnitude, while cyclonic eddies make it shallower and stronger; (3) SCM thickness decreases in cyclonic eddies and increases slightly in anticyclonic eddies; (4) the effects grow with eddy amplitude and are largest near eddy centres. State how you detect eddies and define the SCM, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used a different model and period.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "mesoscale eddies",
+  "title": "Vertical structure of a Loop Current eddy",
+  "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, test the following findings of Meunier et al. (2018, Journal of Geophysical Research: Oceans, doi:10.1029/2018JC013801) on the Loop Current eddy (Poseidon) observed by glider from August to November 2016: (1) the eddy is a large body of nearly homogeneous water between about 50 and 250 m, confined between the seasonal and main thermoclines; (2) its core is up to 9.7 C warmer than the surrounding Gulf water; (3) its salinity has a double-core structure, a subsurface fresh core (anomaly about -0.27) above a deeper saline core (anomaly up to 1.22); (4) the saline core of Caribbean origin is well conserved from the Yucatan Basin through the Loop Current and at least seven months after the eddy detached, while the fresh homogeneous core forms by surface heat loss and mixing in the winter before detachment; (5) the geostrophic velocity forms a subsurface-intensified vortex ring. Identify the corresponding eddy in the reanalysis and justify the match, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper's observations.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
-    "code": "SCS",
-    "name": "South China Sea",
-    "data": "CMOMS model domain"
+    "code": "GULF",
+    "name": "Gulf of Mexico",
+    "bbox": [
+      -98,
+      -80,
+      18,
+      31
+    ]
   },
-  "period": "2011-2020",
+  "period": "2011-2017 (focus August-November 2016)",
   "data_groups": [
-    "C_CORE"
+    "P_GULF"
   ],
-  "data_access": "private",
+  "data_access": "public",
+  "pair": "Q02",
   "paper": {
-    "citation": "Xu et al. (2023)",
-    "title": "Mesoscale Eddy Modulation of Subsurface Chlorophyll Maximum Layers in the South China Sea",
-    "journal": "Journal of Geophysical Research: Biogeosciences",
-    "year": 2023,
-    "volume": "128",
-    "pages": "e2023JG007648",
-    "doi": "10.1029/2023JG007648",
-    "url": "https://doi.org/10.1029/2023JG007648",
+    "citation": "Meunier et al. (2018)",
+    "title": "The Vertical Structure of a Loop Current Eddy",
+    "journal": "Journal of Geophysical Research: Oceans",
+    "year": 2018,
+    "volume": "123",
+    "pages": "6070-6090",
+    "doi": "10.1029/2018JC013801",
+    "url": "https://doi.org/10.1029/2018JC013801",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "August to November 2016",
+    "paper_data": "underwater glider sections, altimetry and Argo",
+    "paper_window": [
+      "2016-08",
+      "2016-11"
+    ],
+    "supplied_period": "2011-2017, daily",
+    "supplied_data": "GLORYS12 reanalysis temperature, salinity and sea surface height, 0-2000 m",
+    "supplied_window": [
+      "2011-01",
+      "2017-12"
+    ]
   }
 }

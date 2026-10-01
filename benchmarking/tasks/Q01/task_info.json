@@ -2,11 +2,11 @@
   "id": "Q01",
   "suite": "test",
   "type": "paper_reproduction",
-  "topic": "layered circulation",
-  "title": "Layered rotating circulation and its vorticity hotspots",
-  "query": "Using the supplied CMOMS daily velocity, temperature and salinity for 2011-2020, test the following findings of Gan et al. (2022, Nature Communications, doi:10.1038/s41467-022-29610-z) for the South China Sea basin: (1) the basin-scale circulation rotates in alternating directions in vertically stacked layers, cyclonic in the upper layer, anticyclonic in the middle layer and cyclonic in the deep layer; (2) in each layer the circulation, identified through Stokes' theorem as the area integral of relative vorticity over the basin, is dominated by a few energetic hotspots with large vorticity whose contribution far exceeds their share of the area; (3) these hotspots also supply most of the energy needed to form and maintain the rotating circulation. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain any differences from the paper.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "salinity change",
+  "title": "Salinification of the South China Sea since late 2012",
+  "query": "Using the supplied CMOMS daily salinity, temperature and velocity for 2011-2020, test the following findings of Zeng et al. (2018, Geophysical Research Letters, doi:10.1002/2017GL076574), who used satellite and Argo salinity for the South China Sea: (1) the upper ocean has become saltier since late 2012; (2) the salinification is strongest near the surface and extends below the seasonal thermocline to about 150 m; (3) it reverses a 20-year freshening that began in 1993 and coincides with the Pacific Decadal Oscillation turning from negative to positive; (4) the salinity budget attributes it to a growing net surface freshwater loss (less precipitation) and to salt advection through the Luzon Strait by the South China Sea throughflow, with enhanced Luzon Strait transport dominating the recent intense salinification. Surface freshwater fluxes are not supplied. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",
     "name": "South China Sea",
@@ -17,15 +17,31 @@
     "C_CORE"
   ],
   "data_access": "private",
+  "pair": "Q09",
   "paper": {
-    "citation": "Gan et al. (2022)",
-    "title": "Hotspots of the stokes rotating circulation in a large marginal sea",
-    "journal": "Nature Communications",
-    "year": 2022,
-    "volume": "13",
-    "pages": "2223",
-    "doi": "10.1038/s41467-022-29610-z",
-    "url": "https://doi.org/10.1038/s41467-022-29610-z",
+    "citation": "Zeng et al. (2018)",
+    "title": "Salinification in the South China Sea Since Late 2012: A Reversal of the Freshening Since the 1990s",
+    "journal": "Geophysical Research Letters",
+    "year": 2018,
+    "volume": "45",
+    "pages": "2744-2751",
+    "doi": "10.1002/2017GL076574",
+    "url": "https://doi.org/10.1002/2017GL076574",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "late 2012 to about 2017",
+    "paper_data": "Aquarius and SMAP satellite salinity, Argo floats",
+    "paper_window": [
+      "2012-09",
+      "2017-12"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model salinity, temperature and velocity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ],
+    "note": "The 1993-2012 freshening that the paper uses as context lies outside the supplied record (finding 3)."
   }
 }

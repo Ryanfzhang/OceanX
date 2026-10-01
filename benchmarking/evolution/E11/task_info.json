@@ -5,7 +5,7 @@
   "open_kind": "checkable",
   "title": "Coastal versus offshore marine heatwaves",
   "query": "Using the supplied GLORYS12 daily near-surface temperature for 1993-2020 off California and Oregon (30-48 N, 130-116 W), compare marine heatwaves in the coastal upwelling band with those offshore: their frequency, intensity, duration and timing, and whether coastal upwelling buffers or delays them. Justify your heatwave definition and baseline.",
-  "catalog_version": "2026-10-01-v3",
+  "catalog_version": "2026-10-01-v5",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "CCS",

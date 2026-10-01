@@ -6,7 +6,7 @@
   "topic": "chlorophyll",
   "title": "Why CMOMS and MODIS surface chlorophyll disagree",
   "query": "Compare the supplied CMOMS daily surface chlorophyll for 2011-2020 with MODIS-Aqua monthly chlorophyll for the same period over the South China Sea. Quantify where, when and by how much they disagree in magnitude, seasonal timing and spatial pattern, and diagnose the causes with targeted tests, distinguishing problems of the satellite product, of sampling and of the model.",
-  "catalog_version": "2026-10-01-v3",
+  "catalog_version": "2026-10-01-v5",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "SCS",

@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.1",
   "task_id": "Q16",
   "type": "open_problem",
   "open_kind": "checkable",
-  "title": "Year-to-year extent and spreading of the Pearl River plume",
+  "title": "Seasonal and interannual air-sea CO2 exchange on the Pearl River adjacent shelf",
   "status": "draft",
-  "query_sha256": "469262365f47b9efa738d6aa660d1428527b9451488591981162be0b22573f21",
+  "query_sha256": "02e11253e445787e8cc95a91718a5e289dc9b959a44dc6ac57fa250e88c0c267",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -43,7 +43,8 @@
       "weight": 20,
       "title": "Quantitative answer against the answer key",
       "uses": [
-        "Q16-A1"
+        "Q16-A1",
+        "Q16-A3"
       ],
       "anchors": {
         "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
@@ -63,11 +64,11 @@
         "depth_probes"
       ],
       "anchors": {
-        "0": "Description only, or a mechanism that the answer key contradicts.",
-        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
-        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
-        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
-        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+        "0": "No tested interpretation, or assertions contradicted by the available process diagnostics.",
+        "1": "An interpretation asserted from intuition or literature without a test in the supplied data.",
+        "2": "One relevant association tested, with limited process reasoning or unresolved alternatives ignored.",
+        "3": "An interpretation supported by quantitative process diagnostics and at least one targeted test of an alternative; missing inputs limit causal claims.",
+        "4": "Coherent quantitative tests distinguish supported interpretations from unresolved alternatives, agree with frozen checks under stated definitions, and address the depth probes without overstating causal identification."
       }
     },
     {
@@ -119,30 +120,38 @@
     "items": [
       {
         "id": "Q16-A1",
-        "quantity": "Plume metrics",
-        "procedure": "Yearly June-August plume area (surface salinity below 32), freshwater volume (reference salinity 34), centroid longitude, fraction of plume area east of the estuary mouth, plume thickness.",
+        "quantity": "CO2 source/sink seasonality and annual exchange",
+        "procedure": "On valid wet cells in 112-116 E, 20-23 N with bathymetry <=200 m, establish CO2_airsea sign from provider metadata. Compute monthly area-weighted flux, annual time-and-area-integrated net exchange for 2011-2020, and source/sink area fractions with temporal coverage reported. Convert native mmol C m-2 day-1 and pCO2 in atm to stated output units.",
         "used_by": "Q16-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: Spearman at least 0.7 for area; centroid direction exact)"
+        "tolerance": "to freeze before judging (suggested: annual source/sink classification exact except near-zero uncertain years; integrals within 10% with matched masks and intervals; area fractions within 0.10)"
       },
       {
         "id": "Q16-A2",
-        "quantity": "Controls",
-        "procedure": "Relation of the eastward fraction to the mean along-shelf current; relation of freshwater volume to area as a discharge proxy; the evaluator's ranking.",
+        "quantity": "Flux-pCO2 and ocean-state relationships",
+        "procedure": "Align pCO2 and CO2_airsea intervals with core temperature, salinity, chlorophyll and circulation. Compare seasons and years using anomalies, lag or conditional comparisons and alternative explanations. With no atmospheric CO2, wind, DIC or alkalinity, score evidence-supported associations and explicitly unresolved mechanisms rather than demand a complete thermal/biological flux decomposition.",
         "used_by": "Q16-M",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: signs exact)"
+        "tolerance": "to freeze before judging (relationship signs and source/sink transitions match recomputed evidence; alternative defensible analyses accepted)"
+      },
+      {
+        "id": "Q16-A3",
+        "quantity": "Robustness of net source/sink verdict",
+        "procedure": "Repeat source/sink classification with modest box and shelf-depth variations, matched fixed wet masks and explicit missing-interval handling. Quantify interannual uncertainty and flag annual net exchanges close to zero.",
+        "used_by": "Q16-Q",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (robust years retain sign; fragile classifications must be identified)"
       }
     ]
   },
   "depth_probes": [
-    "Separates freshwater supply (freshwater volume) from wind-driven spreading (shape, direction, thickness).",
-    "Uses the shelf current as a wind proxy and checks it against plume movement on synoptic scales.",
-    "Identifies offshore detachment events and their frequency."
+    "Confirms the model's native flux sign and pCO2 convention before source/sink interpretation, and converts surface rates with cell area and averaging duration.",
+    "Separates gross positive and negative exchange from annual net exchange, with sensitivity near zero.",
+    "Tests ocean-state associations without claiming a closed carbon budget or identifying thermal versus biological causes from correlations alone."
   ],
   "breadth_probes": [
-    "Connects plume behaviour to stratification, hypoxia and nutrient delivery.",
-    "Compares with published plume classifications."
+    "Connects coastal salinity structure, temperature, chlorophyll and circulation with carbon-exchange variability.",
+    "Compares with relevant shelf air-sea carbon studies while distinguishing model results from observations and identifying missing forcing and carbon-system variables."
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",

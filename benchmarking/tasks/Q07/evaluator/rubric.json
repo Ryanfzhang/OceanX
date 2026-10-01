@@ -1,11 +1,11 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q07",
   "type": "paper_reproduction",
-  "title": "Synoptic wind-driven control of hypoxia off the Pearl River Estuary",
+  "title": "Hydrography of the deep Gulf of Mexico, 2011-2015",
   "status": "draft",
-  "query_sha256": "980566fbe2dcae518f831081a1b6796fb9371e9b819c0870a04c1334012a7377",
+  "query_sha256": "25aa65ff9429e9bc5e1ac7f6d140626ae06172a9e26a078ab69ebdb3053e2988",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -14,15 +14,29 @@
     "split": "findings 70, method 10, differences 10, report 10"
   },
   "paper": {
-    "citation": "Li et al. (2021)",
-    "title": "Spatiotemporal Development and Dissipation of Hypoxia Induced by Variable Wind‐Driven Shelf Circulation off the Pearl River Estuary: Observational and Modeling Studies",
-    "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2021,
-    "volume": "126",
-    "pages": "e2020JC016700",
-    "doi": "10.1029/2020JC016700",
-    "url": "https://doi.org/10.1029/2020JC016700",
+    "citation": "Hamilton et al. (2018)",
+    "title": "Hydrography of the Gulf of Mexico Using Autonomous Floats",
+    "journal": "Journal of Physical Oceanography",
+    "year": 2018,
+    "volume": "48",
+    "pages": "773-794",
+    "doi": "10.1175/JPO-D-17-0205.1",
+    "url": "https://doi.org/10.1175/JPO-D-17-0205.1",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "July 2011 to August 2015",
+    "paper_data": "706 casts from 14 autonomous profiling floats, altimeter SSH",
+    "paper_window": [
+      "2011-07",
+      "2015-08"
+    ],
+    "supplied_period": "2011-2017, daily",
+    "supplied_data": "GLORYS12 reanalysis temperature, salinity and sea surface height, 0-2000 m",
+    "supplied_window": [
+      "2011-01",
+      "2017-12"
+    ]
   },
   "verdict_labels": [
     "reproduced",
@@ -36,12 +50,12 @@
       "kind": "claim",
       "weight": 15,
       "title": "Finding 1",
-      "claim": "Bottom hypoxia in the western and eastern coastal transition zones varies strongly in space and time with synoptic changes of the summer monsoon.",
-      "paper_evidence": "Abstract: 'Observations reveal the high spatiotemporal variability of the hypoxia in the western and eastern coastal transition zones'.",
+      "claim": "Subtropical Underwater, Antarctic Intermediate Water and North Atlantic Deep Water show east-west gradients consistent with sources in the Loop Current and the Yucatan Channel.",
+      "paper_evidence": "Abstract: 'Maps of characteristic water masses, including Subtropical Underwater, Antarctic Intermediate Water (AAIW), and North Atlantic Deep Water, showed gradients from east to west'.",
       "testability": "testable",
-      "how_to_test": "Daily bottom hypoxic area (oxygen below 62.5 mmol/m3) in the two zones; synoptic (3-15 day) variance fraction versus the seasonal cycle.",
+      "how_to_test": "Maps of the salinity maximum (Subtropical Underwater), the salinity minimum (Antarctic Intermediate Water) and properties near 1500-2000 m for July 2011-August 2015; east-minus-west differences. The supplied data reach 2000 m.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: synoptic variance fraction +/-0.15)",
+      "tolerance": "to freeze before judging (suggested: signs exact; magnitudes +/-30%)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -53,14 +67,14 @@
     {
       "id": "Q07-K2",
       "kind": "claim",
-      "weight": 20,
+      "weight": 15,
       "title": "Finding 2",
-      "claim": "Under upwelling-favourable winds the northeastward shelf current converges with the plume, stratification strengthens and hypoxia develops.",
-      "paper_evidence": "Abstract: 'the northeastward shelf current converges with nutrient-rich river plume, forms strong stratification, and provides hubs for depositing detritus for hypoxia to develop'.",
+      "claim": "The deep Gulf has a two-layer structure: isotherms are deeper in the Loop Current and its eddies and shallower in cyclones.",
+      "paper_evidence": "Abstract: 'The two-layer nature of the deep Gulf shows isotherms being deeper in the warm anticyclonic LC and LC eddies and shallower in the cold cyclones.'",
       "testability": "testable",
-      "how_to_test": "Regimes classified from the along-shelf current (northeastward flow as the upwelling-favourable proxy); composites of stratification (bottom-minus-surface density), plume position and hypoxic area by regime with lags of 0-5 days.",
+      "how_to_test": "Depths of selected isotherms composited by sea-surface-height class.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: signs of the composite anomalies exact)",
+      "tolerance": "to freeze before judging (suggested: signs exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -72,14 +86,14 @@
     {
       "id": "Q07-K3",
       "kind": "claim",
-      "weight": 25,
+      "weight": 15,
       "title": "Finding 3",
-      "claim": "When upwelling-favourable winds relax or turn downwelling-favourable, the plume and organic matter move westward, mixing weakens, hypoxia is enhanced in the western zone and weakened in the eastern zone.",
-      "paper_evidence": "Abstract: 'The ensuing URW and DFW forcing alters the transport to advect the plume and detritus westward, weakens vertical mixing, and enhances hypoxia in the WCTZ. Correspondingly, opposite conditions occur in the ECTZ'.",
+      "claim": "The mean seasonal mixed-layer depth has a maximum of about 60 m in January and a minimum of about 20 m in June-July.",
+      "paper_evidence": "Abstract: 'Mixed layer depths have an average seasonal signal that shows maximum depths (~60 m) in January and a minimum in June-July (~20 m).'",
       "testability": "testable",
-      "how_to_test": "The same composites for relaxation and downwelling regimes: plume-centroid shift, western and eastern hypoxic-area anomalies, a mixing proxy (stratification or shear).",
+      "how_to_test": "Deep-basin mixed-layer depth climatology for July 2011-August 2015 with the paper's criterion or a stated one.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: signs exact; plume shift direction exact)",
+      "tolerance": "to freeze before judging (suggested: months +/-1; depths +/-15 m)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -91,14 +105,33 @@
     {
       "id": "Q07-K4",
       "kind": "claim",
-      "weight": 10,
+      "weight": 15,
       "title": "Finding 4",
-      "claim": "When the downwelling-favourable wind relaxes, conditions return toward their upwelling-period state.",
-      "paper_evidence": "Abstract: 'the weakening westward transport during the DRW forcing restores the biophysical conditions'.",
+      "claim": "Basin-mean steric height from 0-50 m dynamic height and sea surface height have a seasonal range of about 12 cm, with significant interannual variability.",
+      "paper_evidence": "Abstract: 'Basin-mean steric heights from 0-50-m dynamic heights and altimeter SSH show a seasonal range of ~12 cm, with significant interannual variability.'",
       "testability": "testable",
-      "how_to_test": "Composite evolution through complete regime sequences.",
+      "how_to_test": "Seasonal range of basin-mean 0-50 m steric height and of sea surface height.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: direction of change exact)",
+      "tolerance": "to freeze before judging (suggested: +/-3 cm)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q07-K5",
+      "kind": "claim",
+      "weight": 10,
+      "title": "Finding 5",
+      "claim": "The translation of Loop Current eddies across the western basin produces a region of low, homogeneous potential vorticity over its deepest part.",
+      "paper_evidence": "Abstract: 'The translation of LC eddies across the western basin produces a region of low homogeneous potential vorticity centered over the deepest part of the western basin.'",
+      "testability": "testable",
+      "how_to_test": "Potential vorticity from stratification on mid-depth density layers; location and homogeneity of the western-basin minimum.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: location within 1.5 degrees; sign exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -112,7 +145,7 @@
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Western and eastern transition-zone definitions; the hypoxia threshold and bottom layer; regime classification from ocean data (for example the along-shelf current) with thresholds; lagged composites.",
+      "focus": "Water-mass definitions (salinity extrema in stated density or depth ranges); the mixed-layer criterion; dynamic and steric height; potential vorticity from stratification; sea-surface-height classes for Loop Current, eddy and cyclone water; the deep-basin mask.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -124,7 +157,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "CMOMS 2011-2020 versus the paper's ROMS runs and cruises; no winds, so regimes are inferred; daily means; the paper's model is related to CMOMS, so agreement is not fully independent.",
+      "focus": "A gridded reanalysis versus 706 float casts (different sampling in space and time); the reanalysis assimilates such profiles, so agreement is not independent; reanalysis sea surface height versus altimetry; data reach 2000 m only.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",
@@ -148,9 +181,7 @@
     "A paper value reported as the agent's own result scores 0 on that claim and caps R at 1.",
     "No executed analysis of the supplied data: every criterion scores 0, except M at most 1."
   ],
-  "evaluator_groups": [
-    "X_OXY"
-  ],
+  "evaluator_groups": [],
   "frozen": {
     "references_sha256": null,
     "tolerances_frozen_at": null,

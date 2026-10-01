@@ -3,7 +3,7 @@
 #   python benchmarking/evaluation/evaluate.py freeze --prereg <EVAL_ROOT>/<experiment>/preregistration.yaml
 # A frozen file cannot be edited; a change means a new experiment name.
 
-experiment: test-v2-2026-10            # unique name; also the folder under EVAL_ROOT and RUNS_ROOT
+experiment: test-v5-2026-10            # unique name; also the folder under EVAL_ROOT and RUNS_ROOT
 suite: test                            # Q01-Q30
 code_commit: <git commit used by every arm>
 model: <model id from benchmark.yaml>  # same model for every arm and for lesson mining

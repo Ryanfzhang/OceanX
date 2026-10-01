@@ -75,12 +75,18 @@ python benchmarking/server/run_oceanx.py --queries <suite.jsonl> --output <arm f
 The rubric in the repository is a template with status `draft`. Before judging, the evaluator makes a
 frozen copy per task under `$EVAL_ROOT/<experiment>/rubrics/`:
 
-1. Implement each `reference_spec` item as a script in `$EVAL_ROOT/<experiment>/references/<task>/` and run
-   it on the same inputs the agents get, plus the evaluator-only data for answer keys.
-2. Fill the frozen copy: reference values per check, the `answer_key.expected` field for open problems, the
-   final tolerances (the suggested ones unless the owner changes them).
-3. Paper tasks: confirm each claim against the paper text, if the owner provides the PDF. Otherwise the
-   abstract wording in the rubric stands. Record where in the paper it was confirmed.
+1. Write the reference scripts in `$EVAL_ROOT/<experiment>/references/<task>/`:
+   - paper verification: one calculation per finding, following its `how_to_test`;
+   - open problems: one calculation per answer-key item, following its `procedure`.
+
+   Run them on the same inputs the agents get, plus the evaluator-only data where the rubric names it.
+2. Fill the frozen copy:
+   - `expected` and the final `tolerance` for every finding and every answer-key item (the suggested
+     tolerances unless the owner changes them);
+   - for disagreement questions, the expected verdict of each candidate cause.
+3. Paper tasks: confirm each finding against the paper text, if the owner provides the PDF. Otherwise the
+   abstract wording in the rubric stands. Record where in the paper it was confirmed. Two rubrics name a
+   detail to confirm first: the transport section of Q03 and the typhoon's passage dates in Q06.
 4. Set `status: "frozen"`, `frozen.references_sha256` (SHA-256 of the reference outputs), date and name.
    From then on the frozen rubric is read-only.
 
@@ -109,9 +115,11 @@ python benchmarking/evaluation/evaluate.py summarize --prereg $EVAL_ROOT/<experi
 ```
 
 For each comparison, the per-task score difference is averaged over repeats. The report gives the mean
-difference over tasks with a 95% bootstrap interval, wins and losses, token reduction, the difference by
-question type, and whether the pre-registered rule is met. Read the per-type rows before concluding: a policy
-can help open problems and do nothing for basic calculations.
+difference over tasks with a 95% bootstrap interval, wins and losses, token reduction, and whether the
+pre-registered rule is met. It also gives the difference by question type (paper verification, open
+problem) and by data access (private CMOMS, public). Read these rows before concluding:
+- a policy can help open problems and do nothing for paper verification;
+- lessons learned on public reanalyses may help public questions more than the unseen CMOMS questions.
 
 ## How the research policy is chosen
 
@@ -169,14 +177,26 @@ python benchmarking/server/research_cli.py label --tree <tree path> --node B1.3 
 ```
 
 How labels are applied: **a label changes nothing by itself.** It is evidence for lessons.
-- **Digests:** `consolidate` writes a digest per finished run, containing the tree outline, each node's cost
-  and outcome, and its effective label.
-- **Mining:** the meta model reads the digests and proposes lessons that recur across at least three tasks. For example,
-  branches labelled misleading-or-wasteful that share a cause become an "avoid ..." lesson, and repeated
-  decision-changing patterns become a "do ..." lesson.
-- **Approval:** you approve, edit or reject each proposal. Only approved lessons enter OceanX: Coordinator
-  lessons are added to its guidance, and Expert lessons become the `method-lessons` skill that the analysis
-  Experts can read.
+- **Digests:** `consolidate` writes a digest per finished run. For each question it holds who proposed it, when
+  it was created and run, every retry, its result and stated limits, its cost, its effective label, and which
+  of its proposed follow-ups were adopted or dropped.
+- **Mining:** the meta-agent reads the digests and the skills it may write into, and proposes lessons with
+  one model call per role:
+  - Coordinator: research-tree decisions, such as the order of questions, which follow-ups to adopt, how
+    deep to go, retries and when to stop. These are written into `research-trajectory-planning`.
+  - Analysis Experts: what to watch for in an analysis, such as definitions, limits of the data, method
+    assumptions and checks. These are written into the analysis skills, for example
+    `ocean-physical-consistency-review`.
+
+  Each proposal names its skill and section. A lesson needs supporting runs from at least three different
+  questions; two repeats of one question count once. Programming advice, findings about one region or
+  process, and anything a skill already says are excluded by the instructions.
+- **Approval:** you approve, edit or reject each proposal. An approved lesson is written into the named
+  skill, at the end of the named section. Nothing is added to a prompt, and the packaged skill files are
+  not changed: arms B and C run the same commit and differ only in the lessons written into those skills.
+- **Was the skill read?** Every model call records the skills it opened (`skills_read` in the model-call
+  records of the attempt's workspace database). Check this before reading a null result as "lessons do not
+  help".
 - **Checking the model judge:** `judge-agreement` tells you how often the model's labels match yours. When it agrees well,
   you can label fewer nodes in later rounds.
 
@@ -186,13 +206,15 @@ How labels are applied: **a label changes nothing by itself.** It is evidence fo
 2. **Model labels:** `research_cli.py judge-labels --tree <tree>` for every evolution tree.
 3. **Your labels:** label the review set of each tree (above).
 4. **Mine:** `research_cli.py consolidate --project $RUNS_ROOT/<experiment>/evolution --propose`. This creates
-   `evolution/.oceanx/research/` with one digest per run and at most five lesson proposals. Run it again
-   for more proposals; duplicates are refused.
+   `evolution/.oceanx/research/` with one digest per run and at most three lesson proposals per role. Run
+   it again for more proposals; proposals awaiting review are shown to the meta-agent and duplicates are
+   refused.
 5. **Review:** `research_cli.py lessons --project ...` lists the proposals.
    - Approve one: `lesson-decide --project ... --proposal lp_... --approve --reviewer <you>`, optionally with
      `--text` and `--applies-when` edits.
    - Reject one: `--reject --reason "..."`.
-   - Approve only general advice. Reject any lesson naming a test-suite region, paper or phenomenon.
+   - Approve only general advice. Reject any lesson naming a test-suite region (South China Sea, Gulf of
+     Mexico, East China Sea, Arabian Sea), paper or phenomenon.
 6. **Freeze:** copy `evolution/.oceanx/research/lessons/lessons.json` to `$EVAL_ROOT/lessons/L1/`, write its SHA-256
    and the list of approved proposals, and never edit L1 again.
 7. **Use:** arm C runs with `--lessons $EVAL_ROOT/lessons/L1`.
@@ -203,7 +225,7 @@ The meta model is the `benchmark.yaml` model (through `research_cli.py`), the sa
 
 - **Fair comparison:** all three arms share the same period, data, model, commit and judge, so the
   differences come from policy and lessons.
-- **The RSI answer is about generalisation:** lessons come only from the evolution suite (other regions, other
-  questions), and you approve them before seeing any test result.
+- **The RSI answer is about generalisation:** lessons come only from the evolution suite (another region, open
+  problems only, no CMOMS data), and you approve them before seeing any test result.
 - **Decisions cannot follow the results:** the pre-registration and the rubrics are frozen before the test
   runs, so the decision rules cannot be tuned after the scores are known.

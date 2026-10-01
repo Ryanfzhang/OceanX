@@ -5,9 +5,9 @@ it in four phases on the server:
 
 | Phase | What | Network |
 |---|---|---|
-| `public` | NOAA OISST (NCEI originals, cropped), MODIS chlorophyll and blended winds (ERDDAP), the ONI index | anonymous HTTPS |
-| `services` | Copernicus Marine (GLORYS12, altimetry) and ERA5 (Google ARCO mirror) | CMEMS login |
-| `private` | Checks the owner-staged CMOMS folders and evaluator-only budget files | none |
+| `public` | NOAA OISST (NCEI originals, cropped) and MODIS chlorophyll (ERDDAP) | anonymous HTTPS |
+| `services` | Copernicus Marine (GLORYS12 physics, the global biogeochemical reanalysis) and ERA5 (Google ARCO mirror) | CMEMS login |
+| `private` | Checks the owner-staged CMOMS folders, the requested diagnostics and the evaluator-only budget files | none |
 | `verify` | Re-checks every downloaded file's request identity and SHA-256 | none |
 
 ```bash
@@ -30,7 +30,7 @@ How the downloader behaves:
   complete), `data_bindings.json` (agent folders per task) and per-group `*.report.json` / `*.plan.json`.
 
 Pinned products:
-- **CMEMS:** GLORYS12 `202311`; altimetry L4 `202411`. A retired version fails rather than switching silently.
+- **CMEMS:** GLORYS12 `202311`; biogeochemical reanalysis `202406`. A retired version fails rather than switching silently.
 - **ERA5:** read hour by hour from the public Google mirror, with resumable checkpoints (`*.part.google`);
   do not delete them.
 - **OISST:** each day's global original file is fetched, cropped, and the temporary copy deleted.
@@ -41,5 +41,5 @@ The adapters are:
 - `era5_google.py` for the Google mirror reader;
 - `ncei_oisst.py` for OISST.
 
-The Gulf of Mexico and East China Sea groups (evolution suite) are unchanged from the 2026-09 catalogue,
+The Gulf of Mexico and East China Sea groups (test suite) are unchanged from the 2026-09 catalogue,
 so files downloaded then are verified and reused.

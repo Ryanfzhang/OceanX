@@ -24,34 +24,6 @@
       "variable_folders": {
         "chlor_a": "chlorophyll"
       }
-    },
-    {
-      "id": "blended_wind_monthly",
-      "enabled": true,
-      "server": "https://coastwatch.noaa.gov/erddap",
-      "dataset": "noaacwBlendedWindsMonthly",
-      "version_label": "NOAA Blended Sea Winds v2",
-      "variables": [
-        "windspeed",
-        "u_wind",
-        "v_wind",
-        "mask"
-      ],
-      "axis_values": {
-        "zlev": 10
-      },
-      "start": "2003-01",
-      "end": "2020-12",
-      "cadence": "month",
-      "bbox": [
-        104,
-        122,
-        1,
-        25
-      ],
-      "notes": "Monthly scalar and vector winds, 2003-2020; used by the Vietnam upwelling question (Q04). Scalar mean speed is not the magnitude of mean vector components.",
-      "data_type": "NOAA_Blended_Wind",
-      "variable_folders": {}
     }
   ],
   "scope": "ERDDAP products used by download_all.py (v2). Groups in data_manifest.json override start, end, bbox and variables."

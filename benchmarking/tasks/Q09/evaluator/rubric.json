@@ -1,11 +1,11 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q09",
   "type": "paper_reproduction",
-  "title": "Vertical structure of a Loop Current eddy",
+  "title": "Erosion of the salinity maximum inside the Loop Current eddy Poseidon",
   "status": "draft",
-  "query_sha256": "2eb14136d6b8c6cea3f4666f6c4e315c83c7c9ed65947a742fb9e6a8d14bfdb9",
+  "query_sha256": "84ef98bfbe21f9dd893685df4b0a189740b906c4238532ccbe2fed3e3cb882af",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -14,15 +14,29 @@
     "split": "findings 70, method 10, differences 10, report 10"
   },
   "paper": {
-    "citation": "Meunier et al. (2018)",
-    "title": "The Vertical Structure of a Loop Current Eddy",
+    "citation": "Sosa-Gutierrez et al. (2020)",
+    "title": "Erosion of the Subsurface Salinity Maximum of the Loop Current Eddies From Glider Observations and a Numerical Model",
     "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2018,
-    "volume": "123",
-    "pages": "6070-6090",
-    "doi": "10.1029/2018JC013801",
-    "url": "https://doi.org/10.1029/2018JC013801",
+    "year": 2020,
+    "volume": "125",
+    "pages": "e2019JC015397",
+    "doi": "10.1029/2019JC015397",
+    "url": "https://doi.org/10.1029/2019JC015397",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "August 2016 to July 2017",
+    "paper_data": "underwater glider sections, a regional numerical model",
+    "paper_window": [
+      "2016-08",
+      "2017-07"
+    ],
+    "supplied_period": "2011-2017, daily",
+    "supplied_data": "GLORYS12 reanalysis temperature, salinity and sea surface height, 0-2000 m",
+    "supplied_window": [
+      "2011-01",
+      "2017-12"
+    ]
   },
   "verdict_labels": [
     "reproduced",
@@ -34,14 +48,14 @@
     {
       "id": "Q09-K1",
       "kind": "claim",
-      "weight": 15,
+      "weight": 20,
       "title": "Finding 1",
-      "claim": "The detached eddy is a large body of nearly homogeneous water between about 50 and 250 m, confined between the seasonal and main thermoclines.",
-      "paper_evidence": "Abstract: 'The LCE appeared as a large body of nearly homogeneous water between 50 and 250 m confined between the seasonal and main thermoclines'.",
+      "claim": "During its westward journey the subsurface salinity maximum of Subtropical Underwater inside the eddy was eroded, forming Gulf Common Water.",
+      "paper_evidence": "Abstract: 'The erosion of the subsurface salinity maximum, signature of the Caribbean Subtropical UnderWater (SUW), within the Loop Current Eddy (LCE) Poseidon (August 2016 to July 2017) ... and the formation of the Gulf Common Water (GCW) during its journey westward, was observed using glider data.'",
       "testability": "testable",
-      "how_to_test": "Core profiles for August-November 2016 of the eddy that detached in 2016 in the reanalysis; depth range of the low-stratification layer.",
+      "how_to_test": "Eddy-following series of the core salinity maximum (value, depth and density) for August 2016-July 2017.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: thermostad top and bottom +/-50 m)",
+      "tolerance": "to freeze before judging (suggested: decrease sign exact; total change +/-40%)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -53,52 +67,14 @@
     {
       "id": "Q09-K2",
       "kind": "claim",
-      "weight": 15,
+      "weight": 20,
       "title": "Finding 2",
-      "claim": "The core is up to 9.7 C warmer than the surrounding Gulf water.",
-      "paper_evidence": "Abstract.",
-      "testability": "testable",
-      "how_to_test": "Maximum core temperature anomaly relative to a reference profile of surrounding Gulf water at the same depth (definition stated by the agent).",
-      "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: +/-1.5 C under the agent's reference)",
-      "anchors": {
-        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
-        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
-        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
-        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
-      }
-    },
-    {
-      "id": "Q09-K3",
-      "kind": "claim",
-      "weight": 15,
-      "title": "Finding 3",
-      "claim": "Salinity has a double core: a subsurface fresh core (anomaly about -0.27) above a deeper saline core (anomaly up to 1.22).",
-      "paper_evidence": "Abstract.",
-      "testability": "testable",
-      "how_to_test": "Core salinity-anomaly profile; depth and size of both cores.",
-      "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: both cores present; anomalies +/-0.15 (fresh) and +/-0.3 (saline))",
-      "anchors": {
-        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
-        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
-        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
-        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
-      }
-    },
-    {
-      "id": "Q09-K4",
-      "kind": "claim",
-      "weight": 10,
-      "title": "Finding 4",
-      "claim": "The saline core of Caribbean origin is conserved from the Yucatan Basin through the Loop Current and at least seven months after detachment; the fresh core forms by winter surface heat loss and mixing before detachment.",
-      "paper_evidence": "Abstract.",
+      "claim": "Most of the dilution occurred in late autumn and winter, with northerly winds and mixed-layer deepening.",
+      "paper_evidence": "Abstract: 'Most of the dilution of the SUW high-salinity core within Poseidon occurs during late autumn and winter associated with Northern winds and mixed-layer deepening.'",
       "testability": "partly testable",
-      "how_to_test": "Testable: the salinity maximum along the path from the Yucatan Channel through the Loop Current and after detachment, and the winter mixed-layer evolution in the Loop Current. Not testable directly: surface heat and freshwater fluxes (not supplied).",
+      "how_to_test": "Testable: the timing of the dilution and the mixed-layer depth in the eddy core. Not testable: the winds, which are not supplied.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: salinity-maximum change over seven months within 0.1 of the reference)",
+      "tolerance": "to freeze before judging (suggested: season of fastest dilution exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -109,16 +85,36 @@
       }
     },
     {
-      "id": "Q09-K5",
+      "id": "Q09-K3",
       "kind": "claim",
-      "weight": 15,
-      "title": "Finding 5",
-      "claim": "The geostrophic velocity forms a subsurface-intensified vortex ring.",
-      "paper_evidence": "Abstract: 'The geostrophic velocity structure had the form of a subsurface intensified vortex ring'.",
-      "testability": "testable",
-      "how_to_test": "Geostrophic velocity section across the eddy from thermal wind referenced to the SSH-derived surface velocity; depth of the velocity maximum.",
+      "weight": 10,
+      "title": "Finding 3",
+      "claim": "Above the 1026 kg/m3 isopycnal the salinity trend is explained mostly by vertical salt diffusion, driven by winter heat loss.",
+      "paper_evidence": "Abstract: 'the salinity trend is mostly explained by the vertical salinity diffusion. Cold and dry Northern winds during the first winter drive strong negative net heat fluxes that trigger turbulent flux of salt into the LCEs' thermostad and dilution of the SUW high-salinity core below.'",
+      "testability": "partly testable",
+      "how_to_test": "No salt-budget terms or surface fluxes are supplied. Testable through the vertical redistribution of salt above the isopycnal (column salt content conserved while the maximum erodes).",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: velocity maximum below the surface; depth +/-50 m)",
+      "tolerance": "to freeze before judging (suggested: sign exact)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
+      }
+    },
+    {
+      "id": "Q09-K4",
+      "kind": "claim",
+      "weight": 10,
+      "title": "Finding 4",
+      "claim": "Vertical diffusion keeps homogenising upper-ocean salinity until the vertical salinity gradient is negligible.",
+      "paper_evidence": "Abstract: 'The vertical salinity diffusion continues homogenizing the salinity in the upper ocean until the vertical gradient of salinity is negligible.'",
+      "testability": "testable",
+      "how_to_test": "The vertical salinity gradient above the core through time.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: sign exact; final gradient within the reference tolerance)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -128,11 +124,31 @@
       }
     },
     {
+      "id": "Q09-K5",
+      "kind": "claim",
+      "weight": 10,
+      "title": "Finding 5",
+      "claim": "Below the 1026 kg/m3 isopycnal, advection, presumably through eddy-eddy interaction, is the main cause of salt loss.",
+      "paper_evidence": "Abstract: below the 1,026 kg m-3 isopycnal advection 'is the most important process driving loss of salinity', presumably through eddy-eddy interaction.",
+      "testability": "partly testable",
+      "how_to_test": "Testable as salt loss on deeper isopycnals coinciding with interactions with other eddies seen in sea surface height. A budget is not possible.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: sign exact)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
+      }
+    },
+    {
       "id": "Q09-M",
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Identification of the eddy and its detachment date in the reanalysis; a reference profile for anomalies; thermostad and salinity-core definitions; geostrophic velocity from thermal wind referenced to SSH.",
+      "focus": "Identification and tracking of Poseidon in sea surface height; an eddy-core definition; analysis on density surfaces (the 1026 kg/m3 isopycnal); mixed-layer depth.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -144,7 +160,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "GLORYS12 reanalysis versus glider observations: assimilation constrains the eddy but smooths its structure; resolution; no surface fluxes supplied.",
+      "focus": "A reanalysis versus glider sections and the paper's own regional model with a salt budget; assimilation smooths the eddy and may reset its properties; no surface fluxes or winds.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",

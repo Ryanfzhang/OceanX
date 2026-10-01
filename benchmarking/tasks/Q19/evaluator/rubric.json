@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q19",
   "type": "open_problem",
-  "open_kind": "disagreement",
-  "title": "Does the winter South China Sea Warm Current exist, and what drives it",
+  "open_kind": "checkable",
+  "title": "Structure and ventilation of the Arabian Sea oxygen minimum zone",
   "status": "draft",
-  "query_sha256": "bc0300b8fff70838449073afe86fd5b6d6a652bce8c07cbb746122235fa326e6",
+  "query_sha256": "ae1d8d5d5d8521038d0c59ef9fa9461bfec6140086b3402013fccd449622ca72",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -41,34 +41,34 @@
       "id": "Q19-Q",
       "kind": "answer",
       "weight": 20,
-      "title": "Disagreement quantified",
+      "title": "Quantitative answer against the answer key",
       "uses": [
-        "Q19-A1",
-        "Q19-A2"
+        "Q19-A1"
       ],
       "anchors": {
-        "0": "The disagreement is not quantified, or incompatible quantities are compared.",
-        "1": "Quantified only in aggregate (one number), or mostly inconsistent with the frozen references.",
-        "2": "Quantified, but with unaddressed comparability problems (definition, grid, depth, averaging, period) or partly inconsistent with the frozen references.",
-        "3": "Quantified on a common footing and mostly consistent with the frozen references; its structure (where, when) partly described.",
-        "4": "Quantified on a common footing (definitions, grids, periods, averaging), with its structure by region, season or method, consistent with the frozen references."
+        "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
+        "1": "Quantities are reported, but most disagree with the answer key and no stated definition explains the difference.",
+        "2": "About half of the answer-key items used by this criterion agree within tolerance (or differ only by a stated definition that the evaluator recomputed).",
+        "3": "Most items agree within tolerance; one is missing or outside tolerance.",
+        "4": "All answer-key items used by this criterion agree within tolerance, and their uncertainty is stated."
       }
     },
     {
       "id": "Q19-M",
       "kind": "mechanism",
       "weight": 20,
-      "title": "Causes diagnosed with targeted tests",
+      "title": "Mechanistic depth",
       "uses": [
-        "candidate_causes",
+        "Q19-A2",
+        "Q19-A3",
         "depth_probes"
       ],
       "anchors": {
-        "0": "Causes asserted without tests.",
-        "1": "Plausible causes listed; at most one weak test.",
-        "2": "One candidate cause tested with a targeted experiment, or tests inconclusive but honestly reported.",
-        "3": "Two candidate causes tested with targeted experiments; the conclusions follow and agree with the frozen references.",
-        "4": "Three or more candidate causes considered, at least two tested with experiments that could have shown them wrong; the conclusions follow from the tests, agree with the frozen references, and the unexplained remainder is quantified."
+        "0": "Description only, or a mechanism that the answer key contradicts.",
+        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
+        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
+        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
+        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
       }
     },
     {
@@ -93,7 +93,8 @@
       "weight": 15,
       "title": "Breadth and synthesis",
       "uses": [
-        "breadth_probes"
+        "breadth_probes",
+        "literature_context"
       ],
       "anchors": {
         "0": "A single isolated diagnostic, with no link to related processes or published work.",
@@ -120,54 +121,64 @@
     "items": [
       {
         "id": "Q19-A1",
-        "quantity": "Occurrence",
-        "procedure": "Fraction of December-February days with northeastward depth-averaged along-shelf flow between the 50 m and 200 m isobaths (about 113-117 E); mean speed; by month and year.",
+        "quantity": "Extent and intensity",
+        "procedure": "Volume and thickness of water with oxygen below 20 mmol/m3 and below 60 mmol/m3: mean, seasonal range and interannual standard deviation; location of the oxygen minimum.",
         "used_by": "Q19-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: fraction +/-0.15; sign exact)"
+        "tolerance": "to freeze before judging (suggested: +/-30%; location within 2 degrees)"
       },
       {
         "id": "Q19-A2",
-        "quantity": "Relations",
-        "procedure": "Correlations of the countercurrent with the along-shelf pressure gradient (dynamic height from temperature and salinity), with the Luzon Strait upper-layer westward transport, and with synoptic relaxations of the westward coastal current.",
-        "used_by": "Q19-Q",
+        "quantity": "Ventilation pathways",
+        "procedure": "Association of higher oxygen at 200-400 m with high-salinity water spreading from the Gulf of Oman and along the western boundary, and the flow at those depths.",
+        "used_by": "Q19-M",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: the top relation exact)"
+        "tolerance": "to freeze before judging (suggested: signs exact)"
+      },
+      {
+        "id": "Q19-A3",
+        "quantity": "Heave versus oxygen change",
+        "procedure": "Whether year-to-year changes of the upper boundary of the zone follow the vertical displacement of density surfaces or oxygen changes on density surfaces.",
+        "used_by": "Q19-M",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: dominant contribution exact)"
       }
     ]
   },
-  "candidate_causes": [
-    {
-      "id": "Q19-H1",
-      "cause": "Relaxation of the northeasterly monsoon lets an along-shelf pressure gradient drive northeastward flow.",
-      "test": "Composite the countercurrent on relaxation days (weak westward coastal current) versus strong days.",
-      "expected": "to freeze before judging (supported, partly supported or not supported)"
-    },
-    {
-      "id": "Q19-H2",
-      "cause": "Kuroshio intrusion through the Luzon Strait raises sea level to the southwest and sets up the pressure gradient.",
-      "test": "Lagged correlation with the Luzon Strait intrusion transport.",
-      "expected": "to freeze before judging (supported, partly supported or not supported)"
-    },
-    {
-      "id": "Q19-H3",
-      "cause": "Topographic effects (the joint effect of baroclinicity and relief).",
-      "test": "Dependence on isobath and depth; vertical structure.",
-      "expected": "to freeze before judging (supported, partly supported or not supported)"
-    },
-    {
-      "id": "Q19-H4",
-      "cause": "Definitions and averaging: monthly means can create or remove an apparently persistent current.",
-      "test": "Daily versus monthly occurrence statistics.",
-      "expected": "to freeze before judging (supported, partly supported or not supported)"
-    }
-  ],
   "depth_probes": [
-    "Shows how the conclusion changes with the averaging period and with the section or depth used.",
-    "Tests at least two mechanisms quantitatively and states which the data reject."
+    "Works on density surfaces to separate vertical displacement from oxygen change.",
+    "Tests lateral ventilation (Gulf outflow water, Red Sea water, inflow from the south) against vertical supply.",
+    "Deals explicitly with the mismatch between the two products (grids and physics)."
   ],
   "breadth_probes": [
-    "Connects the countercurrent to cross-shelf exchange and winter shelf temperature."
+    "Relates the position of the zone to the productive regions and explains the offset.",
+    "Compares with published accounts of the zone's dynamics."
+  ],
+  "literature_context": [
+    {
+      "citation": "McCreary et al. (2013)",
+      "title": "Dynamics of the Indian-Ocean oxygen minimum zones",
+      "journal": "Progress in Oceanography",
+      "year": 2013,
+      "volume": "112-113",
+      "pages": "15-37",
+      "doi": "10.1016/j.pocean.2013.03.002",
+      "url": "https://doi.org/10.1016/j.pocean.2013.03.002",
+      "verification": "Crossref metadata and abstract checked 2026-10-01",
+      "use": "Model study of the Indian Ocean oxygen minimum zones: the upper part of the Arabian Sea zone lies in the central and eastern basin, east of the most productive western region; the lower part intensifies northward. Use it to judge the literature comparison only."
+    },
+    {
+      "citation": "Lachkar et al. (2019)",
+      "title": "Strong Intensification of the Arabian Sea Oxygen Minimum Zone in Response to Arabian Gulf Warming",
+      "journal": "Geophysical Research Letters",
+      "year": 2019,
+      "volume": "46",
+      "pages": "5420-5429",
+      "doi": "10.1029/2018GL081631",
+      "url": "https://doi.org/10.1029/2018GL081631",
+      "verification": "Crossref metadata and abstract checked 2026-10-01",
+      "use": "Model study: saline, oxygen-rich water from the Arabian (Persian) Gulf sinks to 200-300 m in the Arabian Sea and ventilates the upper oxygen minimum zone. Use it to judge the literature comparison only."
+    }
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",

@@ -43,7 +43,10 @@ def test_suite_produces_loadable_cases_without_data_copy(archive, tmp_path, suit
         original = json.loads(prepare.task_file(case.id).read_text())
         assert case.query == original["query"] and case.workflow_mode == "research"
         assert all(p.is_dir() and p.is_relative_to(archive.resolve()) for p in case.datasets)
-        assert not any("_evaluator_only" in p.parts or "CMOMS_DIA" in p.parts for p in case.datasets)
+        assert not any("_evaluator_only" in p.parts for p in case.datasets)
+        diagnostics = {p.name for p in case.datasets if "CMOMS_DIA" in p.parts}
+        assert diagnostics == {"Q14": {"P_Production", "NO3_uptake"},
+                               "Q16": {"CO2_airsea", "pCO2"}}.get(case.id, set())
     assert sorted(p.relative_to(archive) for p in archive.rglob("*.nc")) == before
     assert not list(output.parent.rglob("*.nc"))
 
@@ -56,6 +59,19 @@ def test_subset_and_wrong_suite(archive, tmp_path):
     with pytest.raises(ValueError, match="evolution suite"):
         prepare.main(["--data-root", str(archive), "--suite", "evolution", "--tasks", "Q01",
                       "--output", str(tmp_path / "x.jsonl")])
+
+
+@pytest.mark.parametrize("task,group", [("Q14", "C_PRODUCTION"), ("Q16", "C_CARBON")])
+def test_missing_requested_diagnostics_prevent_query_preparation(archive, tmp_path, task, group):
+    path = archive / "_download_all" / f"{group}.report.json"
+    report = json.loads(path.read_text())
+    report["complete"] = False
+    download.write_json(path, report)
+    output = tmp_path / "blocked.jsonl"
+    with pytest.raises(ValueError, match=group):
+        prepare.main(["--data-root", str(archive), "--suite", "test", "--tasks", task,
+                      "--output", str(output)])
+    assert not output.exists()
 
 
 @pytest.mark.parametrize("fault", ["old_version", "incomplete", "missing_report", "empty_data", "task_incomplete"])

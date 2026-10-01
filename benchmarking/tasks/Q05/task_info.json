@@ -2,11 +2,11 @@
   "id": "Q05",
   "suite": "test",
   "type": "paper_reproduction",
-  "topic": "mesoscale eddies",
-  "title": "Mesoscale eddy statistics and their thermohaline imprint",
-  "query": "Using the supplied CMOMS daily velocity, temperature and salinity for 2011-2020, test the following findings of Chen et al. (2011, Journal of Geophysical Research, doi:10.1029/2010JC006716) on South China Sea mesoscale eddies: (1) eddies are generated mainly along a northeast-southwest band and southwest of the Luzon Strait, with similar numbers of anticyclonic and cyclonic eddies in most regions; (2) the mean eddy radius is about 132 km and the mean lifetime about 8.8 weeks; (3) in the northern South China Sea eddies propagate southwestward along the continental slope at about 5-9 cm/s, while in the central basin they move roughly westward at about 2-6 cm/s; (4) cyclonic eddies make the thermocline shallower, thinner and stronger, anticyclonic eddies make it deeper, thicker and weaker, and the halocline responds similarly; (5) eddy activity is sensitive to wind-stress curl and, in the northern South China Sea, to the strength of the background flow. The paper detected eddies in satellite altimetry; choose and justify a detection and tracking method for the model fields and state its parameters. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "coastal hypoxia",
+  "title": "Destruction and return of hypoxia off the Pearl River Estuary, July 2018",
+  "query": "Using the supplied CMOMS daily oxygen, temperature, salinity, chlorophyll and velocity for 2011-2020, test the following findings of Zhao et al. (2021, Biogeosciences, doi:10.5194/bg-18-2755-2021), who surveyed the shelf off the Pearl River Estuary in three cruise legs in July 2018 (8-14, 21-25 and 26-29 July) around the passage of Typhoon Son-Tinh (16-24 July): (1) before the typhoon the bottom water was severely hypoxic, with oxygen as low as 3.5 umol/kg and about 660 km2 below 63 umol/kg; (2) the typhoon destroyed the hypoxia completely; (3) hypoxia returned about 6 days later, with bottom-water oxygen consumption averaging 14.6 umol/kg per day; (4) shoreward intrusion of offshore subsurface water added about 8.6% to the oxygen loss; (5) freshwater input suppressed wind-driven mixing and stabilised the water column, helping hypoxia form. Winds and river discharge are not supplied. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper's observations.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",
     "name": "South China Sea",
@@ -17,16 +17,29 @@
     "C_CORE"
   ],
   "data_access": "private",
-  "pair": "Q09",
   "paper": {
-    "citation": "Chen et al. (2011)",
-    "title": "Mesoscale eddies in the South China Sea: Mean properties, spatiotemporal variability, and impact on thermohaline structure",
-    "journal": "Journal of Geophysical Research",
-    "year": 2011,
-    "volume": "116",
-    "pages": "C06018",
-    "doi": "10.1029/2010JC006716",
-    "url": "https://doi.org/10.1029/2010JC006716",
+    "citation": "Zhao et al. (2021)",
+    "title": "Destruction and reinstatement of coastal hypoxia in the South China Sea off the Pearl River estuary",
+    "journal": "Biogeosciences",
+    "year": 2021,
+    "volume": "18",
+    "pages": "2755-2775",
+    "doi": "10.5194/bg-18-2755-2021",
+    "url": "https://doi.org/10.5194/bg-18-2755-2021",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "8-29 July 2018",
+    "paper_data": "three cruise legs before and after Typhoon Son-Tinh",
+    "paper_window": [
+      "2018-07",
+      "2018-07"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model oxygen, temperature, salinity, chlorophyll and velocity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ]
   }
 }

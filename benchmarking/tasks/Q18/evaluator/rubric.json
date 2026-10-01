@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q18",
   "type": "open_problem",
   "open_kind": "checkable",
-  "title": "Imprint of the 2015-2016 El Nino on South China Sea heat content",
+  "title": "The winter and summer blooms of the Arabian Sea",
   "status": "draft",
-  "query_sha256": "6a5fcbe3176a3475f2a618a994994cbe205d31ffc36f27c74c578c81b995be1d",
+  "query_sha256": "078c612aa0a1d941bda1b98b7d0694a3905b4700dd26213bb5e501fdde22ad52",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -44,7 +44,7 @@
       "title": "Quantitative answer against the answer key",
       "uses": [
         "Q18-A1",
-        "Q18-A3"
+        "Q18-A2"
       ],
       "anchors": {
         "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
@@ -60,7 +60,7 @@
       "weight": 20,
       "title": "Mechanistic depth",
       "uses": [
-        "Q18-A2",
+        "Q18-A3",
         "depth_probes"
       ],
       "anchors": {
@@ -93,7 +93,8 @@
       "weight": 15,
       "title": "Breadth and synthesis",
       "uses": [
-        "breadth_probes"
+        "breadth_probes",
+        "literature_context"
       ],
       "anchors": {
         "0": "A single isolated diagnostic, with no link to related processes or published work.",
@@ -116,54 +117,63 @@
     }
   ],
   "answer_key": {
-    "oracle_groups": [
-      "X_HEAT"
-    ],
+    "oracle_groups": [],
     "items": [
       {
         "id": "Q18-A1",
-        "quantity": "Heat-content anomaly",
-        "procedure": "Monthly 0-300 m heat-content anomaly of the basin (bottom deeper than 300 m), 2014-2017; timing and size of the peak.",
+        "quantity": "Bloom climatology",
+        "procedure": "Peak month and magnitude of surface and 0-100 m chlorophyll in a northern box (about 60-68 E, 19-25 N) and a western box (about 50-60 E, 8-20 N).",
         "used_by": "Q18-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: peak +/-2 months; size +/-30%)"
+        "tolerance": "to freeze before judging (suggested: peak month +/-1; magnitude +/-30%)"
       },
       {
         "id": "Q18-A2",
-        "quantity": "Processes",
-        "procedure": "Monthly anomalies of the basin-integrated 0-300 m budget terms for the build-up and decay phases; rank horizontal advection (including the Luzon Strait), vertical advection and vertical diffusion (which includes the surface flux).",
-        "used_by": "Q18-M",
-        "oracle": "X_HEAT",
+        "quantity": "Year-to-year series",
+        "procedure": "Yearly magnitude of each bloom.",
+        "used_by": "Q18-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: rank 1 exact for each phase)"
+        "tolerance": "to freeze before judging (suggested: Spearman at least 0.7)"
       },
       {
         "id": "Q18-A3",
-        "quantity": "Circulation change",
-        "procedure": "Change of the upper-layer basin circulation (area-integrated vorticity) and of the Luzon Strait transport in 2015-2016 relative to 2011-2020.",
-        "used_by": "Q18-Q",
+        "quantity": "Nutrient supply",
+        "procedure": "Surface nitrate and nitracline depth in the months before each peak, and their relation to bloom size.",
+        "used_by": "Q18-M",
         "expected": "to freeze before judging",
         "tolerance": "to freeze before judging (suggested: signs exact)"
       }
     ]
   },
   "depth_probes": [
-    "Separates the surface heat flux (inferred as a residual) from lateral heat transport through the straits and from vertical processes.",
-    "Distinguishes the developing winter from the decaying summer of the event.",
-    "Compares with other ENSO years in the record to test whether the response is specific to El Nino."
+    "Uses the nitrate distribution to distinguish supply by winter convective mixing from supply by summer upwelling and lateral advection.",
+    "Separates surface chlorophyll from depth-integrated chlorophyll.",
+    "Checks how realistic the product is, for example against published bloom timing."
   ],
   "breadth_probes": [
-    "Connects heat-content changes to SST, marine heatwaves and circulation.",
-    "Relates the findings to published ENSO teleconnection mechanisms for the South China Sea."
+    "Compares the controls of the two blooms and relates them to the oxygen minimum zone below.",
+    "Compares with published explanations of the blooms."
+  ],
+  "literature_context": [
+    {
+      "citation": "Keerthi et al. (2017)",
+      "title": "Physical control of interannual variations of the winter chlorophyll bloom in the northern Arabian Sea",
+      "journal": "Biogeosciences",
+      "year": 2017,
+      "volume": "14",
+      "pages": "3615-3632",
+      "doi": "10.5194/bg-14-3615-2017",
+      "url": "https://doi.org/10.5194/bg-14-3615-2017",
+      "verification": "Crossref metadata and abstract checked 2026-10-01",
+      "use": "Observations and a model: the northern Arabian Sea winter bloom is triggered by convective overturning; its year-to-year variations are controlled by physical processes. Use it to judge the literature comparison only."
+    }
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",
     "A different target (region, period or quantity) without justification: Q and M score at most 1.",
     "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
   ],
-  "evaluator_groups": [
-    "X_HEAT"
-  ],
+  "evaluator_groups": [],
   "frozen": {
     "references_sha256": null,
     "tolerances_frozen_at": null,

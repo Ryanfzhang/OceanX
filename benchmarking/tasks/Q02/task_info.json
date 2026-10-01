@@ -2,11 +2,11 @@
   "id": "Q02",
   "suite": "test",
   "type": "paper_reproduction",
-  "topic": "throughflow",
-  "title": "The South China Sea throughflow as a heat and freshwater conveyor",
-  "query": "Using the supplied CMOMS daily velocity, temperature and salinity for 2011-2020, test the following findings of Qu et al. (2006, Geophysical Research Letters, doi:10.1029/2006GL028350): (1) the South China Sea throughflow, entering through the Luzon Strait and leaving through the other straits, is a conveyor that transfers up to about 0.2 PW of heat and about 0.1 Sv of freshwater from the South China Sea into the Indonesian maritime continent; (2) the surface heat and freshwater fluxes into the South China Sea vary differently in time from the throughflow; (3) the South China Sea acts as a heat capacitor, storing heat in some years and releasing it in others. Quantify the strait transports and the heat and freshwater they carry, state the reference temperature and salinity you use, and give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence. If a strait lies outside the supplied model domain, say so and adapt.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "Kuroshio Loop Current",
+  "title": "The Kuroshio Loop Current in the winters of 2014-2017",
+  "query": "Using the supplied CMOMS daily velocity, temperature and salinity for 2011-2020, test the following findings of Sun et al. (2020, Journal of Physical Oceanography, doi:10.1175/JPO-D-20-0058.1) on the Kuroshio Loop Current in the northeastern South China Sea, which they observed with a mooring array from June 2014 to June 2017: (1) the loop current occurs mainly in winter; (2) it was moderate, weak and strong in the winters of 2014/15, 2015/16 and 2016/17; (3) near the Luzon Strait it is confined to the upper 500 m, and it becomes more barotropic as it extends into the South China Sea interior; (4) the 2016/17 event was the strongest since 1993; (5) the loop current is stronger in La Nina winters and weaker in El Nino winters, because the northeast monsoon does more wind work. Winds and sea surface height are not supplied; define a loop-current measure from the model fields and justify it. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",
     "name": "South China Sea",
@@ -17,15 +17,31 @@
     "C_CORE"
   ],
   "data_access": "private",
+  "pair": "Q08",
   "paper": {
-    "citation": "Qu et al. (2006)",
-    "title": "South China Sea throughflow: A heat and freshwater conveyor",
-    "journal": "Geophysical Research Letters",
-    "year": 2006,
-    "volume": "33",
-    "pages": "2006GL028350",
-    "doi": "10.1029/2006GL028350",
-    "url": "https://doi.org/10.1029/2006GL028350",
+    "citation": "Sun et al. (2020)",
+    "title": "Three-Dimensional Structure and Interannual Variability of the Kuroshio Loop Current in the Northeastern South China Sea",
+    "journal": "Journal of Physical Oceanography",
+    "year": 2020,
+    "volume": "50",
+    "pages": "2437-2455",
+    "doi": "10.1175/JPO-D-20-0058.1",
+    "url": "https://doi.org/10.1175/JPO-D-20-0058.1",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "June 2014 to June 2017 (moorings)",
+    "paper_data": "ten moorings west of the Luzon Strait, satellite altimetry",
+    "paper_window": [
+      "2014-06",
+      "2017-06"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model velocity, temperature and salinity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ],
+    "note": "The paper also ranks events in the 1993-2019 altimeter record, which lies partly outside the supplied record (finding 4)."
   }
 }

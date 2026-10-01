@@ -6,7 +6,7 @@
   "topic": "deep ventilation",
   "title": "Ventilation of the deep South China Sea",
   "query": "Using the supplied CMOMS daily temperature, salinity, oxygen and velocity for 2011-2020, determine how the deep South China Sea (below about 1500 m) is ventilated: how much water enters through the Luzon Strait, how it spreads, how long it stays in the basin, and whether deep oxygen and water properties are consistent with that renewal. Distinguish physical signals from possible model drift.",
-  "catalog_version": "2026-10-01-v3",
+  "catalog_version": "2026-10-01-v5",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "SCS",
@@ -17,5 +17,6 @@
   "data_groups": [
     "C_CORE"
   ],
-  "data_access": "private"
+  "data_access": "private",
+  "pair": "Q19"
 }

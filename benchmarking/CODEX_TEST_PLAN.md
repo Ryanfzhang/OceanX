@@ -1,6 +1,6 @@
 # Benchmark test plan for Codex
 
-You are the benchmark tester and the single judge for OceanX benchmark v2. This document lists every test
+You are the benchmark tester and the single judge for the OceanX benchmark (catalogue `2026-10-01-v5`). This document lists every test
 to execute, in order, with commands, pass criteria and what to report. Background:
 - `DESIGN.md`: what the questions are;
 - `DATA.md`: the data;
@@ -29,7 +29,7 @@ Variables used below (set them in your shell):
 export DATA_ROOT=/import/home4/share/mafzhang
 export RUNS_ROOT=$HOME/oceanx-bench/runs
 export EVAL_ROOT=$HOME/oceanx-bench/eval
-export EXP=test-v2-2026-10                  # experiment name; must match the pre-registration
+export EXP=test-v5-2026-10                  # experiment name; must match the pre-registration
 ```
 
 ## T0. Environment and repository
@@ -59,8 +59,10 @@ Report the commit. Every arm of the experiment must use this commit.
    python -u benchmarking/download/download_all.py public   --output "$DATA_ROOT" --execute
    python -u benchmarking/download/download_all.py services --output "$DATA_ROOT" --execute --workers 2
    ```
-2. **Owner step:** stage CMOMS as `DATA.md` "Staging CMOMS" describes, including `CMOMS/grid/README.md`,
-   and, when granted, the heat budget under `_evaluator_only/CMOMS_DIA/`.
+2. **Owner step:** stage CMOMS as `DATA.md` "Staging CMOMS" describes, including `CMOMS/grid/README.md`.
+   When granted, also stage:
+   - the heat budget under `_evaluator_only/CMOMS_DIA/`;
+   - the production and carbon diagnostics for Q14 and Q16 under `CMOMS_DIA/`.
 3. Check the staging and re-verify the downloads:
 
    ```bash
@@ -68,11 +70,14 @@ Report the commit. Every arm of the experiment must use this commit.
    python benchmarking/download/download_all.py verify  --output "$DATA_ROOT"
    ```
 4. Open one CMOMS file per variable and record the time sampling, units and depth layout. Then compare them
-   with `CMOMS/grid/README.md` and the queries' word "daily".
+   with `CMOMS/grid/README.md` and the queries' word "daily". Confirm that June 2017 and July 2018 are
+   present, because the paper questions Q06 and Q05 depend on them.
 
 Pass:
-- `coverage.json` shows `numerical_inputs_complete: true` for all 42 tasks, and evaluator inputs complete
-  for Q10, Q17, Q18 and Q24 (Q19 may lack the optional X_OXY);
+- `coverage.json` shows `numerical_inputs_complete: true` for all 42 tasks. Q14 and Q16 stay incomplete
+  until their requested diagnostics are staged; report this, and run the other tasks only if the owner
+  agrees;
+- evaluator inputs are complete for Q11 and Q12 (Q05 and Q13 may lack the optional X_OXY);
 - `verify` passes;
 - CMOMS sampling is daily, or the owner has been told.
 
@@ -88,6 +93,10 @@ python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite t
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution \
   --output $RUNS_ROOT/$EXP/inputs/evolution-all.jsonl
 ```
+
+The test command refuses to run while any test question lacks data. If Q14 and Q16 are still waiting for
+their diagnostics and the owner agrees to start without them, list the other 28 questions with `--tasks`
+and record the omission in the pre-registration.
 
 Then make one shuffled copy per repeat (seed = repeat number) for each suite:
 
@@ -106,19 +115,21 @@ EOF
 
 Negative checks. Each must fail with an error:
 - a `--bindings` file that binds `$DATA_ROOT/_evaluator_only/CMOMS_DIA/temp_rate`;
-- one that binds `benchmarking/tasks/Q17/evaluator`;
+- one that binds `benchmarking/tasks/Q11/evaluator`;
 - writing the output inside `$DATA_ROOT`.
 
 Pass:
-- 30 test and 12 evolution cases, each pointing only at its own groups' folders;
+- 30 test cases (28 without Q14 and Q16) and 12 evolution cases, each pointing only at its own groups'
+  folders;
 - all three negative checks refused.
 
 ## T3. Smoke runs
 
-Run one basic and one disagreement question, and one evolution question, each in its own arm folder:
+Run one paper question on CMOMS and one open problem on public data, and one evolution question, each in
+its own arm folder:
 
 ```bash
-python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --tasks Q01 Q25 \
+python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --tasks Q05 Q27 \
   --output $RUNS_ROOT/smoke/inputs/test.jsonl
 python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/smoke/inputs/test.jsonl \
   --output $RUNS_ROOT/smoke/arm-B --arm B --policy v2-nested
@@ -128,7 +139,7 @@ Also check the lesson injection on one short evolution question, with a throwawa
 
 ```bash
 mkdir -p $RUNS_ROOT/smoke/L0 && cp benchmarking/tests/fixtures/lessons.json $RUNS_ROOT/smoke/L0/
-python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution --tasks E12 \
+python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution --tasks E10 \
   --output $RUNS_ROOT/smoke/inputs/evolution.jsonl
 python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/smoke/inputs/evolution.jsonl \
   --output $RUNS_ROOT/smoke/arm-C --arm C-smoke --policy v2-nested --lessons $RUNS_ROOT/smoke/L0
@@ -137,8 +148,8 @@ python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/smoke/inputs/evolu
 Pass:
 - both attempts complete;
 - `arm.json` shows the commit, policy and parallel-Expert limit;
-- the C-smoke attempt has `arm_lessons.json` with `unchanged: true` and a `method-lessons` skill under its
-  state folder;
+- the C-smoke attempt has `arm_lessons.json` with `unchanged: true`, and its state folder holds
+  `research/lessons/skills/research-trajectory-planning/SKILL.md` with the fixture lesson written in;
 - the answers cite only supplied data.
 
 Report:
@@ -147,33 +158,46 @@ Report:
 ## T4. References and frozen rubrics (evaluator work)
 
 For every test task, follow `EVALUATION.md` "References and frozen rubrics":
-1. Write `$EVAL_ROOT/$EXP/references/<task>/compute.py` implementing the rubric's `reference_spec`.
-   Use the same inputs as the agents, plus evaluator-only data for answer keys.
+1. Write `$EVAL_ROOT/$EXP/references/<task>/compute.py`:
+   - paper questions: one calculation per finding, following its `how_to_test`;
+   - open problems: one calculation per answer-key item, following its `procedure`.
+
+   Use the same inputs as the agents, plus evaluator-only data where the rubric names it.
 2. Run it and keep its outputs.
-3. Write the frozen rubric `$EVAL_ROOT/$EXP/rubrics/<task>.json`: the reference value per check, the
-   answer key's `expected`, the final tolerances, `status: "frozen"`, and `references_sha256`.
+3. Write the frozen rubric `$EVAL_ROOT/$EXP/rubrics/<task>.json`: `expected` and the final `tolerance` for
+   every finding and answer-key item, the expected verdict of each candidate cause, `status: "frozen"`,
+   and `references_sha256`.
 
 Order:
-- first the six basic tasks (exact arithmetic);
-- then Q17, Q18 and Q24 (heat-budget answer keys);
+- first Q11 and Q12 (heat-budget answer keys);
+- then the ten paper questions;
 - then the rest.
 
-For the answer keys, confirm the budget closes: rate equals the sum of the terms, within 5% over the region and
-period used. Paper tasks: if the owner supplies the PDF, confirm each claim in the paper text and record the
-page.
+For the heat-budget answer keys, confirm the budget closes: rate equals the sum of the terms, within 5% over
+the region and period used.
 
-**Owner step:** spot-check five frozen rubrics (at least one per type) before phase 2.
+Paper questions:
+- If the owner supplies the PDF, confirm each finding in the paper text and record the page.
+- Confirm the transport section of Q03 and the typhoon's passage dates in Q06 from the papers before
+  freezing those two rubrics.
+- For Q05 and Q06, record whether the CMOMS forcing contains the typhoon. If it does not, the frozen
+  expected verdicts are "not reproduced", and that is a valid reference.
+
+**Owner step:** spot-check five frozen rubrics before phase 2: at least two paper questions, one checkable
+open problem and one disagreement question.
 
 Pass:
-- 30 frozen rubrics, each with references and a closed budget where one is used;
+- 30 frozen rubrics (28 while Q14 and Q16 wait for their diagnostics), each with references and a closed
+  budget where one is used;
 - the owner's spot-check accepted.
 
 ## T5. Noise pilot
 
-Arm B, three tasks of different types, two repeats each:
+Arm B, three tasks (one paper question, one checkable open problem, one disagreement question), two
+repeats each:
 
 ```bash
-python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --tasks Q11 Q17 Q25 \
+python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --tasks Q05 Q12 Q27 \
   --output $RUNS_ROOT/pilot/inputs/pilot.jsonl
 python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/pilot/inputs/pilot.jsonl --output $RUNS_ROOT/pilot/r1/arm-B --arm B --policy v2-nested
 python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/pilot/inputs/pilot.jsonl --output $RUNS_ROOT/pilot/r2/arm-B --arm B --policy v2-nested
@@ -217,7 +241,9 @@ python benchmarking/server/research_cli.py lessons --project $RUNS_ROOT/$EXP/evo
 python benchmarking/server/research_cli.py judge-agreement --runs $RUNS_ROOT/$EXP/evolution
 ```
 
-Run `consolidate --propose` up to three times if fewer than five proposals survive validation.
+Each run proposes at most three lessons per role (Coordinator: research-tree decisions; Experts: analysis),
+each naming the skill and section it would be written into. Run `consolidate --propose` up to three times
+if fewer than three proposals per role survive validation.
 
 **Owner step:** approve or reject each proposal with `lesson-decide`.
 
@@ -306,7 +332,7 @@ python benchmarking/evaluation/evaluate.py summarize --prereg $EVAL_ROOT/$EXP/pr
 
 Send the owner:
 - `report.md`;
-- the per-type differences;
+- the differences by question type and by data access (private CMOMS, public);
 - the five largest per-task differences in each direction, with one line on why;
 - failures by arm;
 - total cost.

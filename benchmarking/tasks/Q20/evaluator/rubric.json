@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q20",
   "type": "open_problem",
-  "open_kind": "checkable",
-  "title": "Summer circulation and bottom cold water of the Beibu Gulf",
+  "open_kind": "disagreement",
+  "title": "What starts the Great Whirl",
   "status": "draft",
-  "query_sha256": "c5c362f2ae406b0d98d0e4d744872fa6070c0ab8dc5b2473445a7b7157444558",
+  "query_sha256": "9c3b022f84c1c9a20c3a10aede80e2378051f896672f6135861fa05a0202a102",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -41,33 +41,34 @@
       "id": "Q20-Q",
       "kind": "answer",
       "weight": 20,
-      "title": "Quantitative answer against the answer key",
+      "title": "Disagreement quantified",
       "uses": [
-        "Q20-A1"
+        "Q20-A1",
+        "Q20-A2"
       ],
       "anchors": {
-        "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
-        "1": "Quantities are reported, but most disagree with the answer key and no stated definition explains the difference.",
-        "2": "About half of the answer-key items used by this criterion agree within tolerance (or differ only by a stated definition that the evaluator recomputed).",
-        "3": "Most items agree within tolerance; one is missing or outside tolerance.",
-        "4": "All answer-key items used by this criterion agree within tolerance, and their uncertainty is stated."
+        "0": "The disagreement is not quantified, or incompatible quantities are compared.",
+        "1": "Quantified only in aggregate (one number), or mostly inconsistent with the frozen references.",
+        "2": "Quantified, but with unaddressed comparability problems (definition, grid, depth, averaging, period) or partly inconsistent with the frozen references.",
+        "3": "Quantified on a common footing and mostly consistent with the frozen references; its structure (where, when) partly described.",
+        "4": "Quantified on a common footing (definitions, grids, periods, averaging), with its structure by region, season or method, consistent with the frozen references."
       }
     },
     {
       "id": "Q20-M",
       "kind": "mechanism",
       "weight": 20,
-      "title": "Mechanistic depth",
+      "title": "Causes diagnosed with targeted tests",
       "uses": [
-        "Q20-A2",
+        "candidate_causes",
         "depth_probes"
       ],
       "anchors": {
-        "0": "Description only, or a mechanism that the answer key contradicts.",
-        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
-        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
-        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
-        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+        "0": "Causes asserted without tests.",
+        "1": "Plausible causes listed; at most one weak test.",
+        "2": "One candidate cause tested with a targeted experiment, or tests inconclusive but honestly reported.",
+        "3": "Two candidate causes tested with targeted experiments; the conclusions follow and agree with the frozen references.",
+        "4": "Three or more candidate causes considered, at least two tested with experiments that could have shown them wrong; the conclusions follow from the tests, agree with the frozen references, and the unexplained remainder is quantified."
       }
     },
     {
@@ -92,7 +93,8 @@
       "weight": 15,
       "title": "Breadth and synthesis",
       "uses": [
-        "breadth_probes"
+        "breadth_probes",
+        "literature_context"
       ],
       "anchors": {
         "0": "A single isolated diagnostic, with no link to related processes or published work.",
@@ -119,30 +121,68 @@
     "items": [
       {
         "id": "Q20-A1",
-        "quantity": "Circulation",
-        "procedure": "June-August mean depth-averaged circulation in the gulf: sense and strength of the main gyre or gyres; exchange through the Qiongzhou Strait and the gulf mouth.",
+        "quantity": "Life cycle",
+        "procedure": "For each year, the first month with a closed anticyclone near 5-10 N, 50-55 E, the months of its peak and decay, its peak sea-surface-height amplitude and position.",
         "used_by": "Q20-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: sense exact; strength +/-30%)"
+        "tolerance": "to freeze before judging (suggested: months +/-1; position within 1 degree)"
       },
       {
         "id": "Q20-A2",
-        "quantity": "Bottom cold water",
-        "procedure": "June-August bottom-temperature minimum, its area below the evaluator's threshold and its year-to-year variation; relation with gyre strength.",
-        "used_by": "Q20-M",
+        "quantity": "Precursors",
+        "procedure": "Westward-propagating sea-surface-height anomalies along about 6-10 N reaching the coast before formation: arrival month and speed.",
+        "used_by": "Q20-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: location within 0.5 degree; Spearman at least 0.6)"
+        "tolerance": "to freeze before judging (suggested: arrival month +/-1; speed +/-30%)"
       }
     ]
   },
+  "candidate_causes": [
+    {
+      "id": "Q20-H1",
+      "cause": "Local southwest-monsoon winds (the wind-stress curl of the low-level jet).",
+      "test": "Timing of formation relative to the usual June onset; whether intensification rather than initiation coincides with the monsoon months.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q20-H2",
+      "cause": "Annual Rossby waves arriving at the western boundary.",
+      "test": "Time-longitude sections of sea surface height along the latitude band; arrival against first appearance.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q20-H3",
+      "cause": "Instability or inertial overshoot of the northward Somali Current.",
+      "test": "Relation of the whirl's growth to the strength and separation latitude of the boundary current.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q20-H4",
+      "cause": "Limits of monthly means for timing.",
+      "test": "State what monthly means cannot resolve about the onset.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    }
+  ],
   "depth_probes": [
-    "Tests density-driven (baroclinic) gyre dynamics around the cold dome against wind- or inflow-driven explanations.",
-    "Considers tidal mixing fronts and stratification, and whether daily means resolve tidal effects.",
-    "Traces the origin of the bottom cold water (winter remnant versus inflow)."
+    "Distinguishes initiation from intensification.",
+    "Quantifies year-to-year variability in position and size and relates it to the precursors."
   ],
   "breadth_probes": [
-    "Connects to bottom oxygen and chlorophyll.",
-    "Relates to analogous cold-water masses (for example the Yellow Sea Bottom Cold Water)."
+    "Connects the whirl to the cold wedge and the upwelling off Somalia."
+  ],
+  "literature_context": [
+    {
+      "citation": "Beal and Donohue (2013)",
+      "title": "The Great Whirl: Observations of its seasonal development and interannual variability",
+      "journal": "Journal of Geophysical Research: Oceans",
+      "year": 2013,
+      "volume": "118",
+      "pages": "1-13",
+      "doi": "10.1029/2012JC008198",
+      "url": "https://doi.org/10.1029/2012JC008198",
+      "verification": "Crossref metadata and abstract checked 2026-10-01",
+      "use": "Observations of the Great Whirl: anticyclonic circulation appears on average in April, almost two months before the southwest monsoon starts, coincident with the arrival of annual Rossby waves; it intensifies with the monsoon in June and peaks in July-September. Use it to judge the literature comparison only."
+    }
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",

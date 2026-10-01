@@ -1,6 +1,6 @@
 {
- "version": "2026-10-01-v3",
- "scope": "All inputs of the v3 test suite (Q01-Q30: South China Sea on CMOMS 2011-2020, Gulf of Mexico and East China Sea on public data) and evolution suite (E01-E12: California Current System on public reanalyses). Public groups are downloaded by download_all.py; private groups are staged by the owner and only checked; evaluator-only groups are never bound to agents.",
+ "version": "2026-10-01-v5",
+ "scope": "Inputs of the v5 test suite (Q01-Q30) and evolution suite (E01-E12). South China Sea questions use owner-staged CMOMS (2011-2020), two with requested diagnostic groups; the Gulf of Mexico, East China Sea and Arabian Sea questions and the California Current evolution questions use public products. Public groups are downloaded; private groups are owner-staged and checked; evaluator-only groups are never bound to agents.",
  "phases": {
   "public": "anonymous HTTPS downloads",
   "services": "Copernicus Marine (login) and Google ARCO-ERA5",
@@ -42,6 +42,86 @@
    ],
    "note": "CMOMS daily fields on the owner's fixed-depth layout, one folder per variable and year, plus grid/ with masks, cell areas, depth levels and bathymetry."
   },
+  "C_PRODUCTION": {
+   "phase": "private",
+   "adapter": "private",
+   "data_type": "CMOMS_DIA",
+   "variables": [
+    "P_Production",
+    "NO3_uptake"
+   ],
+   "folders": [
+    "P_Production",
+    "NO3_uptake"
+   ],
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "bbox": [
+    116,
+    120,
+    16,
+    20
+   ],
+   "depth": [
+    0,
+    100
+   ],
+   "availability": "requested",
+   "sampling": "Interval-averaged diagnostics; daily means requested, native averaging interval must be documented.",
+   "units": {
+    "P_Production": "millimole_nitrogen meter-3 day-1",
+    "NO3_uptake": "millimole_nitrogen meter-3 day-1"
+   },
+   "note": "Agent-visible dia-file diagnostics for Q14 only, northwest of Luzon. Request 2011-2020 and the upper 100 m; preserve wet masks, vertical coordinates, cell volumes and time-interval metadata. No automatic download or assumed availability."
+  },
+  "C_CARBON": {
+   "phase": "private",
+   "adapter": "private",
+   "data_type": "CMOMS_DIA",
+   "variables": [
+    "CO2_airsea",
+    "pCO2"
+   ],
+   "folders": [
+    "CO2_airsea",
+    "pCO2"
+   ],
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "bbox": [
+    112,
+    116,
+    20,
+    23
+   ],
+   "availability": "requested",
+   "sampling": "Interval-averaged surface diagnostics; daily means requested, native averaging interval must be documented.",
+   "units": {
+    "CO2_airsea": "millimole_carbon meter-2 day-1",
+    "pCO2": "atm"
+   },
+   "note": "Agent-visible dia-file diagnostics for Q16 only, Pearl River adjacent shelf. Request surface fields for 2011-2020. Provider must state CO2_airsea sign, pCO2 convention, time intervals and native wet mask; atmosphere, wind, DIC and alkalinity are not assumed supplied."
+  },
   "X_HEAT": {
    "phase": "private",
    "adapter": "private",
@@ -73,7 +153,7 @@
     2019,
     2020
    ],
-   "note": "Requested from the CMOMS provider (dia file). Evaluator answer key only (Q03, Q11, Q12, Q18); stored under _evaluator_only/. The upper 300 m is enough."
+   "note": "Requested from the CMOMS provider (dia file). Evaluator answer key only (Q11, Q12); stored under _evaluator_only/. The upper 300 m is enough."
   },
   "X_OXY": {
    "phase": "private",
@@ -107,33 +187,7 @@
     2019,
     2020
    ],
-   "note": "Optional request (dia file); May-September on the Pearl River shelf is enough. Answer key for Q07 and Q13 only; both fall back to reference diagnostics without it."
-  },
-  "P_WIND": {
-   "phase": "public",
-   "adapter": "erddap",
-   "product": "blended_wind_monthly",
-   "data_type": "NOAA_Blended_Wind",
-   "variables": [
-    "windspeed",
-    "u_wind",
-    "v_wind",
-    "mask"
-   ],
-   "folders": [
-    "windspeed",
-    "u_wind",
-    "v_wind",
-    "mask"
-   ],
-   "start": "2003-01",
-   "end": "2020-12",
-   "bbox": [
-    104,
-    122,
-    1,
-    25
-   ]
+   "note": "Optional request (dia file); May-September on the Pearl River shelf is enough. Answer key for Q05 and Q13 only; both fall back to reference diagnostics without it."
   },
   "P_MODIS": {
    "phase": "public",
@@ -332,6 +386,123 @@
     129,
     24,
     35
+   ]
+  },
+  "P_ARAB_PHY": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_ARABIAN_MONTHLY",
+   "dataset": "cmems_mod_glo_phy_my_0.083deg_P1M-m",
+   "dataset_version": "202311",
+   "variables": [
+    "thetao",
+    "so",
+    "uo",
+    "vo",
+    "zos",
+    "mlotst"
+   ],
+   "folders": [
+    "thetao",
+    "so",
+    "uo",
+    "vo",
+    "zos",
+    "mlotst"
+   ],
+   "surface_variables": [
+    "zos",
+    "mlotst"
+   ],
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "bbox": [
+    47,
+    70,
+    4,
+    26
+   ],
+   "depth": [
+    0,
+    1000
+   ]
+  },
+  "P_ARAB_BGC": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_ARABIAN_BGC_MONTHLY",
+   "dataset": "cmems_mod_glo_bgc_my_0.25deg_P1M-m",
+   "dataset_version": "202406",
+   "variables": [
+    "o2",
+    "chl",
+    "no3"
+   ],
+   "folders": [
+    "o2",
+    "chl",
+    "no3"
+   ],
+   "grid_step": 0.25,
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "bbox": [
+    47,
+    70,
+    4,
+    26
+   ],
+   "depth": [
+    0,
+    1000
    ]
   },
   "P_CCS_PHY": {
@@ -548,8 +719,7 @@
    "C_CORE"
   ],
   "Q04": [
-   "C_CORE",
-   "P_WIND"
+   "C_CORE"
   ],
   "Q05": [
    "C_CORE"
@@ -558,10 +728,10 @@
    "C_CORE"
   ],
   "Q07": [
-   "C_CORE"
+   "P_GULF"
   ],
   "Q08": [
-   "C_CORE"
+   "P_GULF"
   ],
   "Q09": [
    "P_GULF"
@@ -581,28 +751,31 @@
    "C_CORE"
   ],
   "Q14": [
-   "C_CORE"
+   "C_CORE",
+   "C_PRODUCTION"
   ],
   "Q15": [
-   "C_CORE"
+   "P_ARAB_PHY"
   ],
   "Q16": [
-   "C_CORE"
+   "C_CORE",
+   "C_CARBON"
   ],
   "Q17": [
    "C_CORE"
   ],
   "Q18": [
-   "C_CORE"
+   "P_ARAB_BGC"
   ],
   "Q19": [
-   "C_CORE"
+   "P_ARAB_BGC",
+   "P_ARAB_PHY"
   ],
   "Q20": [
-   "C_CORE"
+   "P_ARAB_PHY"
   ],
   "Q21": [
-   "C_CORE"
+   "P_ARAB_PHY"
   ],
   "Q22": [
    "C_CORE",
@@ -672,10 +845,7 @@
   ]
  },
  "evaluator_groups": {
-  "Q03": [
-   "X_HEAT"
-  ],
-  "Q07": [
+  "Q05": [
    "X_OXY"
   ],
   "Q11": [
@@ -686,9 +856,6 @@
   ],
   "Q13": [
    "X_OXY"
-  ],
-  "Q18": [
-   "X_HEAT"
   ]
  },
  "masks": {
@@ -704,11 +871,29 @@
    25,
    34
   ],
+  "arabian_sea_analysis": [
+   47,
+   70,
+   4,
+   26
+  ],
   "ccs_analysis": [
    -130,
    -116,
    30,
    48
+  ],
+  "luzon_production": [
+   116,
+   120,
+   16,
+   20
+  ],
+  "pearl_carbon": [
+   112,
+   116,
+   20,
+   23
   ]
  },
  "mask_policy": "Coordinate boxes are benchmark-defined approximations, not original paper polygons or bathymetric shelf masks. Use native valid/ocean masks and coordinate-derived cell areas; no external bathymetry required.",

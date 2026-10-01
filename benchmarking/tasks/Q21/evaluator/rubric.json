@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q21",
   "type": "open_problem",
   "open_kind": "checkable",
-  "title": "Erosion of the North Pacific Tropical Water salinity maximum",
+  "title": "Spreading and dilution of the Gulf outflow water in the Arabian Sea",
   "status": "draft",
-  "query_sha256": "ef19e4b8ce81411ee6a230feb4d9a873127edb45dd68b9589aaff2ccfe7571d5",
+  "query_sha256": "fa0806104a11de76c2b91a72a2e1983ac1ca0242059a88f380c36f12dc70fd62",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -121,15 +121,15 @@
       {
         "id": "Q21-A1",
         "quantity": "Salinity-maximum field",
-        "procedure": "Seasonal maps of the salinity-maximum value and its density and depth; decay along the main pathways from the Luzon Strait (e-folding distance).",
+        "procedure": "Seasonal maps of the salinity maximum in the core density range (about 26.2-26.8 kg/m3) and its decay along the main pathways from the Gulf of Oman (e-folding distance).",
         "used_by": "Q21-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: e-folding distance +/-40%; sign of the seasonal contrast exact)"
+        "tolerance": "to freeze before judging (suggested: main pathway exact; e-folding distance +/-40%)"
       },
       {
         "id": "Q21-A2",
-        "quantity": "Season and pathway",
-        "procedure": "Season with the strongest inflow signature; main pathway (for example along the northern slope).",
+        "quantity": "Season and direction",
+        "procedure": "Season of the strongest outflow signature and its direction (along the Oman coast or into the interior).",
         "used_by": "Q21-Q",
         "expected": "to freeze before judging",
         "tolerance": "to freeze before judging (suggested: exact)"
@@ -137,7 +137,7 @@
       {
         "id": "Q21-A3",
         "quantity": "Process indicators",
-        "procedure": "Relation of the decay rate to stratification and shear (mixing proxies) and to eddy activity.",
+        "procedure": "Relation of the decay to eddy activity (sea-surface-height variance) and to the velocity on the core density surfaces.",
         "used_by": "Q21-M",
         "expected": "to freeze before judging",
         "tolerance": "to freeze before judging (suggested: signs exact)"
@@ -145,12 +145,13 @@
     ]
   },
   "depth_probes": [
-    "Works on density surfaces as well as depth, separating isopycnal from diapycnal mixing.",
-    "Separates advection along the pathway from local mixing (for example T-S analysis along the path).",
-    "Links seasonal changes to Kuroshio intrusion strength."
+    "Works on density surfaces, separating spreading along them from mixing across them.",
+    "Separates advection by the mean flow from stirring by eddies.",
+    "Assesses whether the reanalysis represents the outflow source realistically, given that the strait lies at the edge of the supplied box."
   ],
   "breadth_probes": [
-    "Compares with the erosion of Subtropical Underwater in Loop Current eddies or in other marginal seas."
+    "Relates the spreading to the ventilation of the oxygen minimum zone and to Red Sea water at greater depth.",
+    "Compares with the erosion of other subsurface salinity maxima, for example in Loop Current eddies."
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",

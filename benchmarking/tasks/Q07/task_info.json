@@ -2,30 +2,49 @@
   "id": "Q07",
   "suite": "test",
   "type": "paper_reproduction",
-  "topic": "coastal hypoxia",
-  "title": "Synoptic wind-driven control of hypoxia off the Pearl River Estuary",
-  "query": "Using the supplied CMOMS daily oxygen, temperature, salinity, chlorophyll and velocity for May-September 2011-2020, test the following findings of Li et al. (2021, Journal of Geophysical Research: Oceans, doi:10.1029/2020JC016700) on summer hypoxia off the Pearl River Estuary: (1) bottom hypoxia in the coastal transition zones west and east of the estuary varies strongly in space and time with synoptic changes of the summer monsoon; (2) under upwelling-favourable winds the northeastward shelf current converges with the river plume, strengthening stratification and favouring hypoxia; (3) when upwelling-favourable winds relax or turn downwelling-favourable, the plume and organic matter are carried westward, vertical mixing weakens, hypoxia is enhanced in the western zone and the opposite happens in the eastern zone; (4) once the downwelling-favourable wind relaxes, conditions return to their upwelling-period state. Winds are not supplied: identify the wind regimes from the ocean data and explain how. Define the zones and the hypoxia threshold you use, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "hydrography",
+  "title": "Hydrography of the deep Gulf of Mexico, 2011-2015",
+  "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, test the following findings of Hamilton et al. (2018, Journal of Physical Oceanography, doi:10.1175/JPO-D-17-0205.1), who used 706 profiles from 14 autonomous floats in the deep Gulf between July 2011 and August 2015: (1) Subtropical Underwater, Antarctic Intermediate Water and North Atlantic Deep Water show east-west gradients consistent with their sources in the Loop Current and the Yucatan Channel; (2) the deep Gulf has a two-layer structure, with isotherms deeper in the Loop Current and its eddies and shallower in cyclones, as classified by sea surface height; (3) the mean seasonal mixed-layer depth has a maximum of about 60 m in January and a minimum of about 20 m in June-July; (4) basin-mean steric height from 0-50 m dynamic height and sea surface height have a seasonal range of about 12 cm, with significant interannual variability; (5) the translation of Loop Current eddies across the western basin produces a region of low, homogeneous potential vorticity over its deepest part. Use July 2011-August 2015. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper's float observations.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
-    "code": "SCS",
-    "name": "South China Sea",
-    "data": "CMOMS model domain"
+    "code": "GULF",
+    "name": "Gulf of Mexico",
+    "bbox": [
+      -98,
+      -80,
+      18,
+      31
+    ]
   },
-  "period": "May-September 2011-2020",
+  "period": "July 2011-August 2015 (data 2011-2017)",
   "data_groups": [
-    "C_CORE"
+    "P_GULF"
   ],
-  "data_access": "private",
+  "data_access": "public",
   "paper": {
-    "citation": "Li et al. (2021)",
-    "title": "Spatiotemporal Development and Dissipation of Hypoxia Induced by Variable Wind‐Driven Shelf Circulation off the Pearl River Estuary: Observational and Modeling Studies",
-    "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2021,
-    "volume": "126",
-    "pages": "e2020JC016700",
-    "doi": "10.1029/2020JC016700",
-    "url": "https://doi.org/10.1029/2020JC016700",
+    "citation": "Hamilton et al. (2018)",
+    "title": "Hydrography of the Gulf of Mexico Using Autonomous Floats",
+    "journal": "Journal of Physical Oceanography",
+    "year": 2018,
+    "volume": "48",
+    "pages": "773-794",
+    "doi": "10.1175/JPO-D-17-0205.1",
+    "url": "https://doi.org/10.1175/JPO-D-17-0205.1",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "July 2011 to August 2015",
+    "paper_data": "706 casts from 14 autonomous profiling floats, altimeter SSH",
+    "paper_window": [
+      "2011-07",
+      "2015-08"
+    ],
+    "supplied_period": "2011-2017, daily",
+    "supplied_data": "GLORYS12 reanalysis temperature, salinity and sea surface height, 0-2000 m",
+    "supplied_window": [
+      "2011-01",
+      "2017-12"
+    ]
   }
 }

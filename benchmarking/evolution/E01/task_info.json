@@ -1,11 +1,12 @@
 {
   "id": "E01",
   "suite": "evolution",
-  "type": "paper_reproduction",
-  "title": "The 2014-2015 warming of the Southern California Current System",
-  "query": "Using the supplied GLORYS12 monthly temperature, salinity and velocity for 2011-2020 off California and Oregon (30-48 N, 130-116 W), test the following findings of Zaba and Rudnick (2016, Geophysical Research Letters, doi:10.1002/2015GL067550) for the Southern California Current System: (1) upper-ocean temperature anomalies in 2014-2015 were the largest of the record; (2) the warming came with a depressed thermocline, high stratification and freshening; (3) the vertical distribution of chlorophyll changed; (4) anomalous local atmospheric forcing (surface heat flux and wind) caused the unusual ocean conditions. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used glider observations from 2006 onward.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "The equatorward California Current",
+  "query": "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer thickness for 2011-2020 off California and Oregon (30-48 N, 130-116 W), characterize the equatorward California Current: its position, strength and vertical structure through the seasonal cycle, how it changed from year to year, including during 2014-2016, and what controls those changes.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
     "code": "CCS",
     "name": "California Current System",
@@ -20,16 +21,5 @@
     "P_CCS_PHY"
   ],
   "data_access": "public",
-  "scored": false,
-  "paper": {
-    "citation": "Zaba and Rudnick (2016)",
-    "title": "The 2014–2015 warming anomaly in the Southern California Current System observed by underwater gliders",
-    "journal": "Geophysical Research Letters",
-    "year": 2016,
-    "volume": "43",
-    "pages": "1241-1248",
-    "doi": "10.1002/2015GL067550",
-    "url": "https://doi.org/10.1002/2015GL067550",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
-  }
+  "scored": false
 }

@@ -6,14 +6,14 @@
 | `run_oceanx.py` | Run a JSONL as one arm: `--arm`, `--policy`, optional `--lessons <frozen snapshot>`. Writes `arm.json`; each attempt starts from empty OceanX state. |
 | `research_cli.py` | `ocean research ...` (show, label, judge-labels, judge-agreement, consolidate, lessons, lesson-decide) with the `benchmark.yaml` model. |
 | `collect_oceanx.py` | Collect finished attempts into `collected/` for reading (run automatically at the end of a run). |
-| `run_claude.py` | Optional: the same JSONL with Claude Code, for a cross-system comparison (not part of the v2 experiment). |
+| `run_claude.py` | Optional: the same JSONL with Claude Code, for a cross-system comparison (not part of the main experiment). |
 | `check_setup.py`, `benchmark_config.py`, `benchmark_models.py` | Model configuration from `benchmark.yaml` and setup checks. |
 
 ## Prepare inputs
 
 ```bash
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --output <file.jsonl>
-python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --tasks Q01 Q25 --output <file.jsonl>
+python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --tasks Q05 Q27 --output <file.jsonl>
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution --output <file.jsonl>
 ```
 

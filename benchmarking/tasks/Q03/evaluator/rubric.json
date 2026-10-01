@@ -1,11 +1,11 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q03",
   "type": "paper_reproduction",
-  "title": "The winter cold tongue and slope current off southern Vietnam",
+  "title": "The weakest winter western boundary current, 2015-2016",
   "status": "draft",
-  "query_sha256": "577fdd8477ee75557930a0d44bbe7b930be663d25fcf42d5a7784a128340c480",
+  "query_sha256": "81f9a1d7cbfcfbbb82ca142d1a567b5cfcb9a8e82223248ac1a781e8d4e8d2eb",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -14,15 +14,30 @@
     "split": "findings 70, method 10, differences 10, report 10"
   },
   "paper": {
-    "citation": "Liu et al. (2004)",
-    "title": "A gap in the Indo‐Pacific warm pool over the South China Sea in boreal winter: Seasonal development and interannual variability",
+    "citation": "Zhao and Zhu (2016)",
+    "title": "Weakest winter South China Sea western boundary current caused by the 2015–2016 El Niño event",
     "journal": "Journal of Geophysical Research: Oceans",
-    "year": 2004,
-    "volume": "109",
-    "pages": "2003JC002179",
-    "doi": "10.1029/2003JC002179",
-    "url": "https://doi.org/10.1029/2003JC002179",
+    "year": 2016,
+    "volume": "121",
+    "pages": "7673-7682",
+    "doi": "10.1002/2016JC012252",
+    "url": "https://doi.org/10.1002/2016JC012252",
     "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "period_match": {
+    "paper_period": "winter (November-February) 2015-2016",
+    "paper_data": "in situ volume-transport monitoring, satellite altimetry",
+    "paper_window": [
+      "2015-11",
+      "2016-02"
+    ],
+    "supplied_period": "2011-2020, daily",
+    "supplied_data": "CMOMS model velocity, temperature and salinity",
+    "supplied_window": [
+      "2011-01",
+      "2020-12"
+    ],
+    "note": "The paper's El Nino and La Nina composites use its longer record; only the ENSO winters inside 2011-2020 can be tested (finding 3)."
   },
   "verdict_labels": [
     "reproduced",
@@ -34,33 +49,34 @@
     {
       "id": "Q03-K1",
       "kind": "claim",
-      "weight": 15,
+      "weight": 30,
       "title": "Finding 1",
-      "claim": "In boreal winter a cold tongue off southern Vietnam keeps South China Sea surface temperature well below that of the surrounding waters (a gap in the warm pool).",
-      "paper_evidence": "Abstract: 'a conspicuous gap over the South China Sea where SST is considerably lower than over the oceans both to the west and east'; 'a distinct cold tongue in the winter SST climatology'.",
-      "testability": "testable",
-      "how_to_test": "December-February mean SST map 2011-2020; cold-tongue minimum minus waters at the same latitudes east of the Philippines or in the Sulu Sea where inside the domain (otherwise relative to the basin east of 112 E); position of the cold-tongue axis.",
+      "claim": "In winter 2015-2016 the southwestward transport of the western boundary current fell to its minimum (3.7 Sv, against about 5.2 Sv in normal winters), the weakest winter on record.",
+      "paper_evidence": "Abstract: 'volume transport (VT) time series of the South China Sea western boundary current (SCSWBC) exhibited a minimum value of 3.7 Sv ... toward the southwest, indicating the weakest strength ever recorded in boreal winter (from November to February)'.",
+      "testability": "partly testable",
+      "how_to_test": "Testable: winter-mean transport across a section of the boundary current for each winter of 2011-2020, the rank of 2015-2016 and its reduction relative to the other winters. Not testable: 'weakest on record' beyond 2011-2020. The evaluator confirms the paper's section from the full text before freezing.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: temperature contrast +/-0.5 C; cold-tongue axis within 1 degree)",
+      "tolerance": "to freeze before judging (suggested: rank of 2015-2016 exact; relative reduction +/-15 percentage points)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
         "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
         "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
       }
     },
     {
       "id": "Q03-K2",
       "kind": "claim",
-      "weight": 25,
+      "weight": 20,
       "title": "Finding 2",
-      "claim": "An intense southward slope current south of Vietnam, exceeding 0.5 m/s, is the western boundary current of the winter cyclonic gyre and forms the cold tongue by cold advection.",
-      "paper_evidence": "Abstract: 'This slope current exceeds 0.5 m s-1 in speed and advects cold water from the north. This cold advection results in a distinct cold tongue'.",
+      "claim": "The basin-scale cyclonic gyre was significantly weaker that winter.",
+      "paper_evidence": "Abstract: 'The South China Sea (SCS) cyclonic gyre, inferred from the satellite-derived surface absolute geostrophic current, was significantly reduced.'",
       "testability": "testable",
-      "how_to_test": "Monthly climatology of the maximum southward speed along the slope off southern Vietnam (about 10-13 N); horizontal advection's share of the November-February cooling of the cold-tongue box from the evaluator-only CMOMS heat budget (X_HEAT).",
+      "how_to_test": "Winter-mean upper-layer circulation: area-integrated relative vorticity over the deep basin and the boundary-current speed, 2015-2016 against the other winters.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: peak speed +/-0.1 m/s; sign and rank of horizontal advection exact)",
+      "tolerance": "to freeze before judging (suggested: sign exact; reduction +/-15 percentage points)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -74,31 +90,12 @@
       "kind": "claim",
       "weight": 15,
       "title": "Finding 3",
-      "claim": "The slope current and the cold tongue are strongest from November to February.",
-      "paper_evidence": "Abstract: 'Both the slope current and the cold tongue are strongest in November to February'.",
-      "testability": "testable",
-      "how_to_test": "Months of maximum slope-current speed and maximum cold-tongue contrast in the 2011-2020 climatology.",
-      "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: peak months +/-1 month)",
-      "anchors": {
-        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
-        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
-        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
-        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
-        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
-      }
-    },
-    {
-      "id": "Q03-K4",
-      "kind": "claim",
-      "weight": 15,
-      "title": "Finding 4",
-      "claim": "The cold tongue's interannual variability follows ENSO: during El Nino the monsoon weakens, the circulation spins down and the cold tongue warms.",
-      "paper_evidence": "Abstract: variability 'highly correlated with eastern equatorial Pacific SST'; 'In an El Nino the winter monsoon weakens, causing the SCS ocean circulation to spin down'.",
+      "claim": "The current is weaker in El Nino winters and stronger in La Nina winters than in normal winters (4.7, 5.6 and 5.2 Sv).",
+      "paper_evidence": "Abstract: 'The mean VT of SCSWBC is 4.7 Sv (5.6 Sv), which is smaller (larger) than 5.2 Sv in normal years.'",
       "testability": "partly testable",
-      "how_to_test": "Testable: cold-tongue SST and slope-current anomalies in the 2015/16 El Nino winter versus La Nina winters (event years from published classifications). Not testable: the monsoon weakening (no winds) and a robust correlation with Pacific SST (no index; ten winters).",
+      "how_to_test": "Testable for the El Nino and La Nina winters inside 2011-2020 (published classifications). The paper's composites use a longer record.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: anomaly signs exact for the 2015/16 winter)",
+      "tolerance": "to freeze before judging (suggested: signs exact)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -109,11 +106,28 @@
       }
     },
     {
+      "id": "Q03-K4",
+      "kind": "claim",
+      "weight": 5,
+      "title": "Finding 4",
+      "claim": "The cause was a weaker wind-stress curl over the South China Sea, set up by an anticyclone over the Philippine Sea.",
+      "paper_evidence": "Abstract: 'the weakened wind stress curl (negative anomaly) over the SCS resulting from an anticyclone over the Philippine Sea played an essential role'.",
+      "testability": "not testable",
+      "how_to_test": "No atmospheric fields are supplied.",
+      "expected": "n/a",
+      "tolerance": "n/a",
+      "anchors": {
+        "0": "Ignored, or reported as verified or refuted although the supplied data cannot test it.",
+        "2": "Recognised as not fully testable, but without naming what is missing, or a weak proxy presented as a real test.",
+        "4": "Stated as not testable with the supplied data, naming the missing data or period; any proxy analysis is labelled as a proxy and not used for the verdict."
+      }
+    },
+    {
       "id": "Q03-M",
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Cold-tongue index (winter SST relative to surrounding waters); slope-current speed along the shelf break off southern Vietnam; the winter months used; a heat-advection estimate (advection terms from the velocity and temperature) or a stated proxy.",
+      "focus": "A section across the western boundary current with its depth range and sign convention; the winter months (November-February); a gyre-strength measure.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -125,7 +139,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "Model fields versus the paper's satellite data; ten winters with few ENSO events; no ENSO index or winds supplied.",
+      "focus": "Model transport versus the paper's in situ and altimeter-based transport; section location and depth range; the long record behind the paper's ENSO composites is not available.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",
@@ -149,9 +163,7 @@
     "A paper value reported as the agent's own result scores 0 on that claim and caps R at 1.",
     "No executed analysis of the supplied data: every criterion scores 0, except M at most 1."
   ],
-  "evaluator_groups": [
-    "X_HEAT"
-  ],
+  "evaluator_groups": [],
   "frozen": {
     "references_sha256": null,
     "tolerances_frozen_at": null,

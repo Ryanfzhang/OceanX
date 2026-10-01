@@ -24,7 +24,7 @@ import ncei_oisst as ncei
 
 def test_catalogue_groups_and_coverage():
     m = all_data.load_manifest()
-    assert len(m["tasks"]) == 42 and len(m["groups"]) == 12
+    assert len(m["tasks"]) == 42 and len(m["groups"]) == 15
     assert {g["adapter"] for g in m["groups"].values()} == {"cmems", "era5", "erddap", "ncei", "private"}
     assert all(not m["groups"][g].get("evaluator_only") for groups in m["tasks"].values() for g in groups)
     assert m["evaluator_groups"]["Q11"] == ["X_HEAT"]
@@ -46,14 +46,51 @@ def test_catalogue_groups_and_coverage():
 
 def test_evaluator_groups_are_never_agent_inputs(tmp_path, monkeypatch):
     m = json.loads(all_data.MANIFEST.read_text())
+    hidden_variables = {folder for group in m["groups"].values() if group.get("evaluator_only")
+                        for folder in group["folders"]}
     for binding in all_data.bindings(m).values():
-        assert not any("CMOMS_DIA" in p or p.startswith("_evaluator_only") for p in binding["datasets"])
+        assert not any(p.startswith("_evaluator_only") or Path(p).name in hidden_variables
+                       for p in binding["datasets"])
     m["tasks"]["Q11"] = m["tasks"]["Q11"] + ["X_HEAT"]
     leaked = tmp_path / "data_manifest.json"
     leaked.write_text(json.dumps(m))
     monkeypatch.setattr(all_data, "MANIFEST", leaked)
     with pytest.raises(ValueError, match="evaluator-only|mismatch"):
         all_data.load_manifest()
+
+
+@pytest.mark.parametrize("key,task,variables", [
+    ("C_PRODUCTION", "Q14", ["P_Production", "NO3_uptake"]),
+    ("C_CARBON", "Q16", ["CO2_airsea", "pCO2"]),
+])
+def test_requested_diagnostics_only_bind_and_block_their_question(tmp_path, key, task, variables):
+    m = all_data.load_manifest()
+    group = m["groups"][key]
+    assert group["adapter"] == "private" and group["availability"] == "requested"
+    assert group["years"] == list(range(2011, 2021))
+    report = all_data.check_private(group, tmp_path)
+    assert not report["complete"]
+    assert report["missing"] == [f"CMOMS_DIA/{v}/{year}" for v in variables for year in range(2011, 2021)]
+    paths = {f"CMOMS_DIA/{v}" for v in variables}
+    bindings = all_data.bindings(m)
+    assert paths <= set(bindings[task]["datasets"])
+    assert all(not paths & set(binding["datasets"]) for t, binding in bindings.items() if t != task)
+    reports = {k: {"complete": True, "group_sha256": down.fingerprint(g)} for k, g in m["groups"].items()}
+    reports[key]["complete"] = False
+    status = all_data.coverage(m, reports)
+    assert status["complete_tasks"] == 41
+    assert status["tasks"][task]["missing_groups"] == [key]
+    assert all(state["numerical_inputs_complete"] for t, state in status["tasks"].items() if t != task)
+
+
+def test_arabian_sea_groups_plan_correctly():
+    m = all_data.load_manifest()
+    phy = all_data.group_plan(m["groups"]["P_ARAB_PHY"])
+    assert len(phy) == 10 * 12 * 6 and all(c["bbox"] == [47, 70, 4, 26] for c in phy)
+    assert all(c["relative_path"].startswith("CMEMS_ARABIAN_MONTHLY/") for c in phy)
+    bgc = all_data.group_plan(m["groups"]["P_ARAB_BGC"])
+    assert len(bgc) == 10 * 12 * 3 and all(c["expected_grid_step"] == 0.25 for c in bgc)
+    assert "P_WIND" not in m["groups"]
 
 
 def test_evolution_groups_plan_correctly():

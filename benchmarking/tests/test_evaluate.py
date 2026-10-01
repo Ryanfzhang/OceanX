@@ -99,7 +99,7 @@ def test_freeze_summarize_and_decisions(tmp_path):
     policy = summary["comparisons"][0]
     assert policy["tasks"] == 4 and policy["mean_diff"] > 0 and policy["decision"] is True
     assert set(policy["by_type"]) == {"paper_reproduction", "open_problem"}
-    assert policy["by_data"]["public"]["tasks"] == 1 and policy["by_data"]["private"]["tasks"] == 3
+    assert policy["by_data"]["public"]["tasks"] == 2 and policy["by_data"]["private"]["tasks"] == 2
     assert summary["arms"]["A"]["failures"] == 1  # Q01 failed in both arms and scored 0
     assert "meets rule" in (eval_root / "report" / "report.md").read_text()
     prereg.write_text(prereg.read_text() + "# edited\n")

@@ -3,19 +3,25 @@
   "suite": "test",
   "type": "open_problem",
   "open_kind": "checkable",
-  "topic": "ENSO response",
-  "title": "Imprint of the 2015-2016 El Nino on South China Sea heat content",
-  "query": "Using the supplied CMOMS daily temperature, salinity and velocity for 2011-2020, determine how the 2015-2016 El Nino changed the upper-ocean heat content and circulation of the South China Sea, when the anomaly built up and decayed, and through which processes. No ENSO index or surface fluxes are supplied.",
-  "catalog_version": "2026-10-01-v3",
-  "query_version": "2026-10-01-v3",
+  "topic": "phytoplankton blooms",
+  "title": "The winter and summer blooms of the Arabian Sea",
+  "query": "Using the supplied CMEMS global biogeochemical reanalysis monthly chlorophyll, nitrate and oxygen for 2011-2020 in the western and northern Arabian Sea (47-70 E, 4-26 N), characterize the two seasonal chlorophyll blooms, the winter bloom in the north and the summer bloom in the west: where and when each occurs, how large it is, how it varies from year to year, and what controls it. Temperature, mixing and winds are not supplied; state what that prevents you from concluding.",
+  "catalog_version": "2026-10-01-v5",
+  "query_version": "2026-10-01-v5",
   "region": {
-    "code": "SCS",
-    "name": "South China Sea",
-    "data": "CMOMS model domain"
+    "code": "ARAB",
+    "name": "Arabian Sea",
+    "bbox": [
+      47,
+      70,
+      4,
+      26
+    ]
   },
   "period": "2011-2020",
   "data_groups": [
-    "C_CORE"
+    "P_ARAB_BGC"
   ],
-  "data_access": "private"
+  "data_access": "public",
+  "pair": "Q14"
 }

@@ -36,10 +36,16 @@ def test_south_china_sea_uses_cmoms_and_few_multi_dataset_queries():
         assert scs == ("C_CORE" in info(task)["data_groups"]), task
         groups = info(task)["data_groups"]
         access = info(task)["data_access"]
-        assert access == ("private" if groups == ["C_CORE"] else "private+public" if "C_CORE" in groups else "public")
-    multi = [t for t in TEST if len(info(t)["data_groups"]) > 1]
-    assert len(multi) == 3
-    assert {info(t)["region"]["code"] for t in OPEN} == {"SCS", "GULF", "ECS"}
+        private = [MANIFEST["groups"][g]["phase"] == "private" for g in groups]
+        assert access == ("private" if all(private) else "private+public" if any(private) else "public")
+    def product(group):
+        data_type = MANIFEST["groups"][group]["data_type"]
+        return "CMOMS" if data_type.startswith("CMOMS") else data_type
+    multi = [t for t in TEST if len({product(g) for g in info(t)["data_groups"]}) > 1]
+    assert multi == ["Q10", "Q19", "Q22"]
+    assert {info(t)["region"]["code"] for t in OPEN} == {"SCS", "ARAB", "GULF", "ECS"}
+    # Fewer than half of the open problems use CMOMS.
+    assert sum("C_CORE" in info(t)["data_groups"] for t in OPEN) == 7
 
 
 @pytest.mark.parametrize("task", TEST)
@@ -77,6 +83,24 @@ def test_paper_rubrics_check_each_finding_of_ten_verified_papers():
     assert len(set(dois)) == 10
 
 
+def coverage(group):
+    """First and last month a manifest group covers."""
+    if "years" in group:
+        return f"{min(group['years'])}-01", f"{max(group['years'])}-12"
+    return group["start"][:7], group["end"][:7]
+
+
+def test_paper_data_cover_each_papers_study_period():
+    for task in PAPERS:
+        match = info(task)["period_match"]
+        assert rubric(task)["period_match"] == match
+        assert match["paper_period"] and match["paper_data"] and match["supplied_data"]
+        start, end = match["paper_window"]
+        assert match["supplied_window"][0] <= start <= end <= match["supplied_window"][1], task
+        windows = [coverage(MANIFEST["groups"][g]) for g in info(task)["data_groups"]]
+        assert min(w[0] for w in windows) <= start and end <= max(w[1] for w in windows), task
+
+
 def test_open_rubrics_are_broad_and_checkable():
     for task in OPEN:
         ref = rubric(task)
@@ -111,10 +135,9 @@ def test_suites_use_disjoint_data_and_evolution_is_unscored():
     evolution_groups = {g for e in EVOLUTION for g in info(e)["data_groups"]}
     assert not test_groups & evolution_groups
     for task in EVOLUTION:
-        assert info(task)["scored"] is False and info(task)["type"] in {"paper_reproduction", "open_problem"}
+        # The evolution suite has open problems only.
+        assert info(task)["scored"] is False and info(task)["type"] == "open_problem" and "paper" not in info(task)
         assert not (BENCH / "evolution" / task / "evaluator").exists()
-        if "paper" in info(task):
-            assert info(task)["paper"]["doi"] in info(task)["query"]
 
 
 def test_design_document_lists_every_task():
@@ -123,7 +146,16 @@ def test_design_document_lists_every_task():
         assert f"| {task} | " in design and info(task)["title"] in design
 
 
-def test_reused_paper_panels_are_intact():
-    for figure in rubric("Q01")["context_figures"]:
-        path = BENCH / "tasks" / "Q01" / "evaluator" / figure["path"]
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == figure["sha256"]
+def test_summary_has_three_columns_and_every_query_once():
+    summary = (BENCH / "summary.md").read_text()
+    rows = [line for line in summary.splitlines() if line.startswith("| **[")]
+    assert len(rows) == len(TEST + EVOLUTION)
+    for task in TEST + EVOLUTION:
+        matched = [line for line in rows if line.startswith(f"| **[{task} · ")]
+        assert len(matched) == 1
+        row = matched[0]
+        assert row.count("|") == 4 and info(task)["title"] in row
+        suite = "tasks" if task.startswith("Q") else "evolution"
+        assert f"({suite}/{task}/task_info.json)" in row
+        if "paper" in info(task):
+            assert info(task)["paper"]["doi"] in row

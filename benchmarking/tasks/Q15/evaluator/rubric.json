@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.2",
   "task_id": "Q15",
   "type": "open_problem",
-  "open_kind": "disagreement",
-  "title": "Why estimates of the Luzon Strait transport and Kuroshio intrusion differ",
+  "open_kind": "checkable",
+  "title": "Year-to-year strength of the summer upwelling off Somalia and Oman",
   "status": "draft",
-  "query_sha256": "995816b07b1a5fdac8e2bd923f587a4f5d7fe7053d1d68b27dafc4dd9528b115",
+  "query_sha256": "6f79337ba9576eff43ce5d0ee957e878217494857e9fb145d6580aae8dab82ee",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -41,34 +41,34 @@
       "id": "Q15-Q",
       "kind": "answer",
       "weight": 20,
-      "title": "Disagreement quantified",
+      "title": "Quantitative answer against the answer key",
       "uses": [
         "Q15-A1",
         "Q15-A2"
       ],
       "anchors": {
-        "0": "The disagreement is not quantified, or incompatible quantities are compared.",
-        "1": "Quantified only in aggregate (one number), or mostly inconsistent with the frozen references.",
-        "2": "Quantified, but with unaddressed comparability problems (definition, grid, depth, averaging, period) or partly inconsistent with the frozen references.",
-        "3": "Quantified on a common footing and mostly consistent with the frozen references; its structure (where, when) partly described.",
-        "4": "Quantified on a common footing (definitions, grids, periods, averaging), with its structure by region, season or method, consistent with the frozen references."
+        "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
+        "1": "Quantities are reported, but most disagree with the answer key and no stated definition explains the difference.",
+        "2": "About half of the answer-key items used by this criterion agree within tolerance (or differ only by a stated definition that the evaluator recomputed).",
+        "3": "Most items agree within tolerance; one is missing or outside tolerance.",
+        "4": "All answer-key items used by this criterion agree within tolerance, and their uncertainty is stated."
       }
     },
     {
       "id": "Q15-M",
       "kind": "mechanism",
       "weight": 20,
-      "title": "Causes diagnosed with targeted tests",
+      "title": "Mechanistic depth",
       "uses": [
-        "candidate_causes",
+        "Q15-A3",
         "depth_probes"
       ],
       "anchors": {
-        "0": "Causes asserted without tests.",
-        "1": "Plausible causes listed; at most one weak test.",
-        "2": "One candidate cause tested with a targeted experiment, or tests inconclusive but honestly reported.",
-        "3": "Two candidate causes tested with targeted experiments; the conclusions follow and agree with the frozen references.",
-        "4": "Three or more candidate causes considered, at least two tested with experiments that could have shown them wrong; the conclusions follow from the tests, agree with the frozen references, and the unexplained remainder is quantified."
+        "0": "Description only, or a mechanism that the answer key contradicts.",
+        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
+        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
+        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
+        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
       }
     },
     {
@@ -93,8 +93,7 @@
       "weight": 15,
       "title": "Breadth and synthesis",
       "uses": [
-        "breadth_probes",
-        "literature_context"
+        "breadth_probes"
       ],
       "anchors": {
         "0": "A single isolated diagnostic, with no link to related processes or published work.",
@@ -121,74 +120,39 @@
     "items": [
       {
         "id": "Q15-A1",
-        "quantity": "Transport",
-        "procedure": "Mean, seasonal cycle and standard deviation of the net and layered (0-500 m, 500-1500 m, below 1500 m) transport across a section at about 120.75 E, 18.5-22 N; month of maximum westward upper-layer transport.",
+        "quantity": "Yearly upwelling indices",
+        "procedure": "June-September coastal-minus-offshore sea surface temperature and 0-100 m heat-content anomaly off Somalia (about 5-11 N) and off Oman (about 16-22 N); the evaluator's default and the agent's index recomputed.",
         "used_by": "Q15-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: net mean +/-1.5 Sv; seasonal phase +/-1 month; layer signs exact)"
+        "tolerance": "to freeze before judging (suggested: Spearman at least 0.7 for each system)"
       },
       {
         "id": "Q15-A2",
-        "quantity": "Intrusion forms",
-        "procedure": "Frequency of leaping, looping and eddy-shedding states under a documented index (for example a vorticity-based Kuroshio intrusion index west of the strait), with the evaluator's default and the agent's index recomputed.",
+        "quantity": "Co-variation",
+        "procedure": "Correlation between the two yearly series.",
         "used_by": "Q15-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: seasonality exact; frequencies +/-30%)"
+        "tolerance": "to freeze before judging (suggested: sign exact; magnitude +/-0.2)"
+      },
+      {
+        "id": "Q15-A3",
+        "quantity": "Controls",
+        "procedure": "Relations of each index with the alongshore boundary current and the position of the Great Whirl, with offshore thermocline depth before the monsoon, and with the depth of the upwelled water.",
+        "used_by": "Q15-M",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: top relation exact)"
       }
     ]
   },
-  "candidate_causes": [
-    {
-      "id": "Q15-H1",
-      "cause": "Section position and depth range: upper-layer versus full-depth transport and the sandwich-like vertical structure.",
-      "test": "Recompute with alternative sections and layers; show how the number changes.",
-      "expected": "to freeze before judging (supported, partly supported or not supported)"
-    },
-    {
-      "id": "Q15-H2",
-      "cause": "Period: interannual and decadal variability.",
-      "test": "Yearly transports and their spread; compare years and phases of ENSO.",
-      "expected": "to freeze before judging (supported, partly supported or not supported)"
-    },
-    {
-      "id": "Q15-H3",
-      "cause": "Method: geostrophic or altimetry-based estimates versus direct velocity; the reference level.",
-      "test": "Geostrophic transport from the model's temperature and salinity versus model velocity.",
-      "expected": "to freeze before judging (supported, partly supported or not supported)"
-    },
-    {
-      "id": "Q15-H4",
-      "cause": "Event definitions and thresholds for intrusion forms.",
-      "test": "Sensitivity of event counts to the index and threshold.",
-      "expected": "to freeze before judging (supported, partly supported or not supported)"
-    },
-    {
-      "id": "Q15-H5",
-      "cause": "Model physics and resolution.",
-      "test": "Compare with observation-based estimates and discuss what could bias the model.",
-      "expected": "to freeze before judging (supported, partly supported or not supported)"
-    }
-  ],
   "depth_probes": [
-    "Shows quantitatively how much each methodological choice changes the transport estimate (for example a table of estimates by definition).",
-    "Separates true variability from definitional differences."
+    "Separates coastal upwelling from offshore advection of cold water by the Great Whirl and filaments.",
+    "Uses the ocean state (alongshore currents, mixed-layer depth) as indirect evidence of wind forcing and states the limit of doing so.",
+    "Considers remote influences such as planetary waves and the thermocline depth set before the monsoon.",
+    "Assesses what monthly means cannot resolve."
   ],
   "breadth_probes": [
-    "Connects the intrusion to South China Sea water properties (salinity maximum), heat content or eddy shedding."
-  ],
-  "literature_context": [
-    {
-      "citation": "Nan et al. (2015)",
-      "title": "Kuroshio intrusion into the South China Sea: A review",
-      "journal": "Progress in Oceanography",
-      "year": 2015,
-      "volume": "137",
-      "pages": "314-333",
-      "doi": "10.1016/j.pocean.2014.05.012",
-      "url": "https://doi.org/10.1016/j.pocean.2014.05.012",
-      "verification": "Crossref metadata and abstract checked 2026-10-01",
-      "use": "Review of Kuroshio intrusion types, Luzon Strait transport estimates from observations and models, their seasonal and interannual variability, and proposed mechanisms. Use it to judge the agent's comparison with published estimates."
-    }
+    "Connects the result to Indian Ocean Dipole and ENSO years in the record and to biological productivity.",
+    "Compares with published accounts of Somali and Oman upwelling."
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",
