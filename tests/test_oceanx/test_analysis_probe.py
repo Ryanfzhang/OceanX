@@ -94,3 +94,29 @@ def test_analysis_probe_inspects_a_dataset_collection_without_opening_the_root_a
         "so",
     }
     assert context["spatial_context"]["bounds"] == [-91.0, 24.0, -90.0, 25.0]
+
+
+def test_a_linked_local_folder_or_file_is_described_only_when_it_holds_data(tmp_path) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    xr.Dataset({"temp": ("time", [20.0, 21.0], {"units": "degC"})}).to_netcdf(data / "t_2025.nc")
+    (data / "notes.txt").write_text("not data")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "readme.md").write_text("no arrays here")
+    table = tmp_path / "stations.csv"
+    table.write_text("station,temp\nA,20.5\n")
+
+    def linked(path, format_hint):
+        return inspect_source({"handle": "source_1", "kind": "project_context", "title": path.name,
+                               "path": str(path), "format": format_hint})
+
+    folder = linked(data, "directory")
+    assert (folder["inspection"], folder["member_count"]) == ("ready", 1)
+    assert folder["members"][0]["data_variables"][0]["name"] == "temp"
+    assert linked(table, "csv")["data_variables"][1]["name"] == "temp"
+    # A folder or file without arrays or tables is not a failed inspection.
+    assert linked(docs, "directory") == {"handle": "source_1", "kind": "project_context",
+                                         "title": "docs", "path": str(docs), "format": "directory",
+                                         "inspection": "not_a_dataset"}
+    assert linked(docs / "readme.md", "md")["inspection"] == "not_a_dataset"

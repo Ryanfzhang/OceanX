@@ -64,8 +64,10 @@ directly. Delegation uses DeepAgents' native synchronous `task` tool. Independen
 same research-tree frontier can be issued in one Coordinator turn and run concurrently; dependent
 questions remain sequential. The server owns task execution, checkpoints and cancellation; the old
 orchestrator is deleted, not wrapped inside another scheduler.
-There is no separate Data Expert: each analysis Expert inspects the supplied data while answering
-its question. The backend supplies DatasetContext and the original user request. Native task model
+There is no separate Data Expert. Before the first analysis Expert of a task starts, the backend
+reads the supplied data's metadata once; DatasetContext then lists its variables, dimensions, units
+and time ranges for every later agent, and each analysis Expert inspects further detail only when its
+question needs it. The backend also supplies the original user request. Native task model
 contexts are isolated; questions in the same root branch reuse its fixed working/output directory
 and live kernel. Experts choose their methods and
 write the canonical `report.md`, beginning with a short `## Summary`; no second result summary is
@@ -85,9 +87,9 @@ Agent Server checkpoints are the source of truth for participant conversation st
 OceanX task database stores product state, final task results, code-execution provenance, and a
 compact user-facing transcript for the Desktop UI.
 
-Python and sandbox checks run when an Expert actually invokes code execution, not when a
-text-only or literature assignment starts. Code execution still fails closed if its runtime
-is unavailable.
+Python and sandbox checks run when an analysis Expert starts (the one-time metadata read) or
+invokes code execution, not when a text-only or literature assignment starts. Code execution
+still fails closed if its runtime is unavailable.
 
 Python RAM is not part of a graph checkpoint: kernel/server loss is reported and recovery
 uses durable files. Cancellation stops the actual kernel. Current persistent-kernel sandbox

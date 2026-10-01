@@ -93,6 +93,15 @@ async def test_imported_source_path_reaches_native_graph(
                 assert item["handle"] == "source_1"
             else:
                 assert item["kind"] == "directory"
+            # A data Expert starts after the task's one-time data check; the Coordinator and
+            # text-only agents never wait for Python, and see the description once it exists.
+            if role in graphs.DATA_EXPERT_ROLES:
+                assert item["inspection"] == "ready"
+                assert {(v["name"], v.get("units")) for v in item["data_variables"]} == {
+                    ("temperature", "degC")}
+            else:
+                assert item.get("inspection") != "ready"
+            assert "reuse them rather than re-inspecting" in kwargs["system_prompt"]
             responses = [
                 AIMessage(
                     content="",

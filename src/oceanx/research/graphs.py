@@ -243,6 +243,29 @@ def coordinator_report_path(config) -> Path:
             "agents" / "coordinator" / "report.md")
 
 
+# Experts that analyse the supplied data; literature and discussion work starts without Python.
+DATA_EXPERT_ROLES = frozenset({"ocean_process_expert", "statistical_inference_expert"})
+
+
+async def _describe_task_data(c) -> None:
+    """Inspect the task's data sources once, before the first data Expert starts.
+
+    The description (variables, dimensions, units, time ranges) is cached for the task and
+    shown in every later agent's context, so Experts do not each rediscover the data. The
+    Coordinator never waits for it; it sees the description once one exists.
+    """
+    service = getattr(host(), "expert_code_execution", None)
+    if service is None:
+        return
+    try:
+        sources = service.resolve_task_sources(workspace_id=c["workspace_id"], task_id=c["task_id"])
+        if sources:
+            await service.get_task_dataset_context(
+                workspace_id=c["workspace_id"], task_id=c["task_id"], sources=sources)
+    except Exception:  # without it, agents inspect the files themselves
+        _LOGGER.warning("Could not describe the task's data sources", exc_info=True)
+
+
 def services(config, role: str, run: AgentRun | None = None) -> OceanToolServices:
     h = host()
     c = config["configurable"]
@@ -346,11 +369,16 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    "Create report.md at this exact path as soon as you have a defensible partial answer, "
                    "and keep it current as evidence changes. Begin with a short ## Summary. Do not defer "
                    "the report until the end, repeat it, or announce its path in chat.\n")
+    if role in DATA_EXPERT_ROLES:
+        await _describe_task_data(c)
     from oceanx.context import OceanContextBuilder
     context = OceanContextBuilder(store=host().store, paths=host().paths).build(
         workspace_id=c["workspace_id"], provider_id=svc.provider_id, task_id=c["task_id"],
         dataset_context_root=task_root / ".runtime" / "analysis-context")
-    prompt += "\nDataset and workspace context:\n" + json.dumps(context.payload, ensure_ascii=False)
+    prompt += ("\nA source with inspection ready lists its checked variables, dimensions, units "
+               "and time ranges; reuse them rather than re-inspecting the files."
+               "\nDataset and workspace context:\n"
+               + json.dumps(context.payload, ensure_ascii=False))
     prompt += suffix
 
     filesystem_tools = (

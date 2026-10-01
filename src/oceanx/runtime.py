@@ -64,11 +64,11 @@ OCEAN_EXPLORATION_POLICY = """\
 # Research tree
 You own Observe, Ideate, Select and every scientific status decision. Tree branches are scientific subquestions,
 not a checklist. Put the user question at ROOT as a non-delegated anchor; its children are
-executable questions. Before delegating, use the data context and bounded literature consultation to add
-materially distinct, non-duplicate candidates. Select only worthwhile candidates. The frontier in the
-tree view lists the selected questions that are ready to run; run independent frontier questions
-concurrently. Continue only directions whose reports expose a consequential uncertainty, contradiction,
-or discriminating follow-up.
+executable questions. Launch the bounded literature consultation together with any question that
+only characterizes the supplied data; then use both to add materially distinct, non-duplicate
+candidates. Select only worthwhile candidates. The tree view's frontier lists the selected questions
+ready to run; run them concurrently. Continue only directions whose reports expose a consequential
+uncertainty, contradiction, or discriminating follow-up.
 
 DeepAgents task completion means only that an Agent returned. The backend binds report.md's Summary,
 Agent key and path to the node but never changes scientific progress. Explicitly adjudicate every returned
@@ -196,7 +196,9 @@ async def build_ocean_runtime(
 OCEAN_EXPERT_WORKSTREAM_POLICY = """\
 # Evidence and results
 Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
-estimates. Save ordinary reusable arrays as ordinary data files. For a user-facing interactive figure, use
+estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
+not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
+as bare .npz files. For a user-facing interactive figure, use
 `from oceanx.scientific_view import ScientificFigure`, supply the computed arrays and complete panel/layer
 structure, then call `figure.save('concise-name.nc')`. That explicit save is the delivery boundary; ordinary
 NetCDF files are not figures. Cite the assigned Agent namespace plus filename stem in report.md immediately

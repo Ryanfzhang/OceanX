@@ -100,6 +100,15 @@ def test_experts_keep_evidence_without_workflow_checklists():
     assert "Keep verified calculations and code" in policy
     assert "Derive reported values and labels from saved calculations" in policy
     assert "Do not spend a separate round polishing" in policy
+    # Most failed code runs across tasks were shape/axis mistakes after dropping to bare arrays.
+    assert "select and reduce by dimension name" in policy and "not as bare .npz" in policy
+
+
+def test_data_work_does_not_wait_for_the_literature_consultation():
+    prompt = coordinator_prompt()
+    assert ("Launch the bounded literature consultation together with any question that only "
+            "characterizes the supplied data") in prompt
+    assert "Before delegating, use the data context and bounded literature" not in prompt
 
 
 def test_delivery_uses_assigned_file_not_a_terminal_tool():

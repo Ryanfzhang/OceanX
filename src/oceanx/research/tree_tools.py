@@ -8,18 +8,22 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 
-class ResearchTreeChange(BaseModel):
+# One tree change under a policy without hypothesis nodes. (A class docstring would reach the
+# model-visible schema, so these classes use comments.)
+class QuestionTreeChange(BaseModel):
     action: Literal[
         "add", "revise", "set_status", "close", "reopen", "link", "prune", "decline",
-        "set_verdict",
     ] = Field(description="One semantic tree change.")
     target: str = Field(description="ROOT, an existing parent, or the node being changed.")
     question: str | None = None
     why_it_matters: str | None = None
     relation: Literal["independent", "dependency", "alternative", "extension"] | None = None
     from_proposal: str | None = Field(
-        default=None, description="add only: the Expert proposal being pursued, e.g. B1.2#1.")
-    origin_type: str | None = None
+        default=None, description="add only: the Expert proposal this question pursues, e.g. "
+        "B1.2#1. Set it whenever the question comes from a proposal.")
+    origin_type: str | None = Field(
+        default=None, description="add only: why a question that is not an Expert proposal exists, "
+        "e.g. contradiction or evidence_gap.")
     origin_refs: list[str] | None = None
     dependencies: list[str] | None = None
     branch_key: str | None = None
@@ -27,6 +31,15 @@ class ResearchTreeChange(BaseModel):
     status: Literal["candidate", "selected", "completed", "failed"] | None = None
     reason: str | None = None
     other: str | None = None
+    link_type: Literal["supports", "conflicts", "depends_on", "related"] | None = None
+
+
+# Adds hypothesis nodes, their verdicts and evidence links, for policies that enable them.
+class ResearchTreeChange(QuestionTreeChange):
+    action: Literal[
+        "add", "revise", "set_status", "close", "reopen", "link", "prune", "decline",
+        "set_verdict",
+    ] = Field(description="One semantic tree change.")
     link_type: Literal[
         "supports", "refutes", "inconclusive", "conflicts", "depends_on", "related"
     ] | None = None
@@ -34,14 +47,21 @@ class ResearchTreeChange(BaseModel):
     verdict: Literal["supported", "refuted", "unresolved"] | None = None
 
 
-class ResearchTreeUpdate(BaseModel):
-    changes: list[ResearchTreeChange] = Field(
+class QuestionTreeUpdate(BaseModel):
+    changes: list[QuestionTreeChange] = Field(
         default_factory=list,
         description="One atomic decision batch. Empty reads the current view.",
     )
     view: Literal["decision", "full"] = Field(
         default="decision",
         description="Use full only once when writing the final Research Tree section.",
+    )
+
+
+class ResearchTreeUpdate(QuestionTreeUpdate):
+    changes: list[ResearchTreeChange] = Field(
+        default_factory=list,
+        description="One atomic decision batch. Empty reads the current view.",
     )
 
 
@@ -90,9 +110,11 @@ def research_tree_tool(tree):
     hypotheses = bool(getattr(tree.policy, "hypotheses", False))
     return StructuredTool.from_function(
         name="update_research_tree", func=update, coroutine=aupdate, infer_schema=False,
-        args_schema=ResearchTreeUpdate,
+        # Offer hypothesis options only when the policy accepts them.
+        args_schema=ResearchTreeUpdate if hypotheses else QuestionTreeUpdate,
         description=_DESCRIPTION + (_HYPOTHESES if hypotheses else ""),
     )
 
 
-__all__ = ["ResearchTreeChange", "ResearchTreeUpdate", "research_tree_tool"]
+__all__ = ["QuestionTreeChange", "QuestionTreeUpdate", "ResearchTreeChange", "ResearchTreeUpdate",
+           "research_tree_tool"]
