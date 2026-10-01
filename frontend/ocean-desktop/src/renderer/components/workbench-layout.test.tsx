@@ -8,7 +8,7 @@ import {ConversationTranscript} from './ConversationTranscript.js';
 import {InteractiveViewWorkbench} from './InteractiveViewWorkbench.js';
 import {normalizeScientificFigure} from './scientific-figure.js';
 import {clampScientificDomain, scientificAxisExtent, scientificScatterAppearance} from './ScientificView.js';
-import {boundsForContext, displayContextFor, mapFitPadding, ResultWorkbench, sampleSpatialGrid, shouldFitRegion, spatialRasterDimensions, usableMapViewport} from './SpatialWorkbench.js';
+import {boundsForContext, displayContextFor, mapFitPadding, ResultWorkbench, sampleSpatialGrid, shouldFitRegion, spatialRasterDimensions, spatialRasterResampling, spatialRenderedRatio, usableMapViewport} from './SpatialWorkbench.js';
 
 describe('research workbench layout', () => {
   it('keeps sparse scientific scatter points legible without saturating dense clouds', () => {
@@ -87,6 +87,26 @@ describe('research workbench layout', () => {
     expect(spatialRasterDimensions(payload)).toEqual({width: 48, height: 48});
     expect(sampleSpatialGrid(payload, -1.75, 1, 'linear')).toBeNull();
     expect(sampleSpatialGrid(payload, -.5, 1.5, 'linear')).toBeCloseTo(30);
+  });
+  it('preserves expert field rendering semantics on spatial maps', () => {
+    const base = {
+      schema_version: 'ocean-interactive-spatial/v1' as const,
+      view_kind: 'spatial_map' as const,
+      variable: 'anomaly', units: '°C',
+      longitude: [0, 1], latitude: [0, 1],
+      values: [[0, .25], [.5, 1]],
+      bounds: [0, 0, 1, 1] as [number, number, number, number],
+      colorbar: {levels: [0, .25, .5, .75, 1]},
+    };
+    const contour = {...base, rendering: {kind: 'continuous' as const, render: 'filled_contour' as const, interpolation: 'linear' as const, levels: 4}};
+    const smooth = {...base, rendering: {kind: 'continuous' as const, render: 'smooth' as const, interpolation: 'linear' as const}};
+    const cells = {...base, rendering: {kind: 'continuous' as const, render: 'cells' as const, interpolation: 'nearest' as const}};
+
+    expect(spatialRenderedRatio(contour, .1)).toBe(.125);
+    expect(spatialRenderedRatio(smooth, .1)).toBe(.1);
+    expect(spatialRasterResampling(contour)).toBe('nearest');
+    expect(spatialRasterResampling(smooth)).toBe('linear');
+    expect(spatialRasterResampling(cells)).toBe('nearest');
   });
   it('keeps the collaboration topology responsive instead of using a fixed-width canvas', () => {
     const snapshot: TeamSnapshot = {

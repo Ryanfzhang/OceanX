@@ -122,6 +122,15 @@ export function sampleSpatialGrid(
   const x = gridPosition(payload.longitude, longitude);
   const y = gridPosition(payload.latitude, latitude);
   if (!x || !y) return null;
+  return sampleSpatialPosition(payload, x, y, interpolation);
+}
+
+function sampleSpatialPosition(
+  payload: SpatialPayload,
+  x: GridPosition,
+  y: GridPosition,
+  interpolation: 'linear' | 'nearest',
+): number | null {
   const nearestColumn = x.ratio < .5 ? x.lower : x.upper;
   const nearestRow = y.ratio < .5 ? y.lower : y.upper;
   const nearest = payload.values[nearestRow]?.[nearestColumn];
@@ -183,6 +192,46 @@ function spatialDomain(payload: SpatialPayload): [number, number] {
   return minimum === maximum ? [minimum - .5, maximum + .5] : [minimum, maximum];
 }
 
+function spatialRender(payload: SpatialPayload): 'filled_contour' | 'smooth' | 'cells' {
+  if (payload.rendering?.kind === 'categorical') return 'cells';
+  return payload.rendering?.render ?? 'filled_contour';
+}
+
+function spatialLevels(payload: SpatialPayload): number | number[] {
+  const configured = payload.rendering?.levels;
+  if (typeof configured === 'number' && Number.isFinite(configured)) return configured;
+  if (Array.isArray(configured)) {
+    const finite = configured.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    if (finite.length >= 2) return finite;
+  }
+  const colorbar = payload.colorbar as {levels?: unknown} | undefined;
+  const legacy = Array.isArray(colorbar?.levels)
+    ? colorbar.levels.filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    : [];
+  return legacy.length >= 2 ? legacy : 14;
+}
+
+/** Map a value to the same colour band used by the scientific field renderer. */
+export function spatialRenderedRatio(payload: SpatialPayload, value: number): number {
+  const [minimum, maximum] = spatialDomain(payload);
+  const ratio = Math.max(0, Math.min(1, (value - minimum) / (maximum - minimum || 1)));
+  if (spatialRender(payload) !== 'filled_contour') return ratio;
+  const levels = spatialLevels(payload);
+  if (Array.isArray(levels)) {
+    const index = levels.findIndex((level) => value < level);
+    const band = index < 0 ? levels.length : index;
+    return Math.max(0, Math.min(1, band / levels.length));
+  }
+  const bandCount = Math.max(1, Math.round(levels));
+  return Math.max(0, Math.min(1, (Math.floor(ratio * bandCount) + .5) / bandCount));
+}
+
+export function spatialRasterResampling(payload: SpatialPayload): 'linear' | 'nearest' {
+  return spatialRender(payload) === 'smooth' && payload.rendering?.interpolation !== 'nearest'
+    ? 'linear'
+    : 'nearest';
+}
+
 function spatialColor(palette: string[], ratio: number): [number, number, number] {
   const bounded = Math.max(0, Math.min(1, ratio));
   const position = bounded * (palette.length - 1);
@@ -200,51 +249,43 @@ function spatialColor(palette: string[], ratio: number): [number, number, number
  */
 function spatialRasterCanvas(payload: SpatialPayload): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
-  const source = document.createElement('canvas');
   const sourceWidth = payload.longitude.length;
   const sourceHeight = payload.latitude.length;
   if (!sourceWidth || !sourceHeight) return null;
-  source.width = sourceWidth;
-  source.height = sourceHeight;
-  const sourceContext = source.getContext('2d');
-  if (!sourceContext) return null;
-  const sourceImage = sourceContext.createImageData(sourceWidth, sourceHeight);
-  const longitudeAscending = payload.longitude.at(-1)! >= payload.longitude[0]!;
-  const latitudeAscending = payload.latitude.at(-1)! >= payload.latitude[0]!;
-  const [minimum, maximum] = spatialDomain(payload);
-  const palette = spatialPalette(payload);
-  const categoryColors = new Map(spatialCategories(payload).map(entry => [entry.value, parseHex(entry.color)]));
-  for (let displayRow = 0; displayRow < sourceHeight; displayRow += 1) {
-    const dataRow = latitudeAscending ? sourceHeight - displayRow - 1 : displayRow;
-    for (let displayColumn = 0; displayColumn < sourceWidth; displayColumn += 1) {
-      const dataColumn = longitudeAscending ? displayColumn : sourceWidth - displayColumn - 1;
-      const value = payload.values[dataRow]?.[dataColumn];
-      const offset = (displayRow * sourceWidth + displayColumn) * 4;
-      if (!finiteValue(value)) continue;
-      const [red, green, blue] = categoryColors.get(value) ?? spatialColor(palette, (value - minimum) / (maximum - minimum));
-      sourceImage.data[offset] = red;
-      sourceImage.data[offset + 1] = green;
-      sourceImage.data[offset + 2] = blue;
-      sourceImage.data[offset + 3] = 255;
-    }
-  }
-  sourceContext.putImageData(sourceImage, 0, 0);
-
   const canvas = document.createElement('canvas');
   const {width, height} = spatialRasterDimensions(payload);
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
   if (!context) return null;
-  context.imageSmoothingEnabled = payload.rendering?.kind !== 'categorical';
-  context.imageSmoothingQuality = 'high';
-  context.drawImage(source, 0, 0, width, height);
-  // Restore the original finite-cell mask with nearest-neighbour edges after
-  // colour interpolation. This prevents smoothed ocean values leaking inland.
-  context.globalCompositeOperation = 'destination-in';
-  context.imageSmoothingEnabled = false;
-  context.drawImage(source, 0, 0, width, height);
-  context.globalCompositeOperation = 'source-over';
+  const image = context.createImageData(width, height);
+  const palette = spatialPalette(payload);
+  const categoryColors = new Map(spatialCategories(payload).map(entry => [entry.value, parseHex(entry.color)]));
+  const interpolation = spatialRender(payload) === 'cells'
+    ? 'nearest'
+    : payload.rendering?.interpolation ?? 'linear';
+  const [west, south, east, north] = payload.bounds;
+  const xPositions = Array.from({length: width}, (_, column) =>
+    gridPosition(payload.longitude, west + ((column + .5) / width) * (east - west)));
+  const yPositions = Array.from({length: height}, (_, row) =>
+    gridPosition(payload.latitude, north - ((row + .5) / height) * (north - south)));
+  for (let row = 0; row < height; row += 1) {
+    const y = yPositions[row];
+    if (!y) continue;
+    for (let column = 0; column < width; column += 1) {
+      const x = xPositions[column];
+      if (!x) continue;
+      const value = sampleSpatialPosition(payload, x, y, interpolation);
+      if (!finiteValue(value)) continue;
+      const offset = (row * width + column) * 4;
+      const [red, green, blue] = categoryColors.get(value) ?? spatialColor(palette, spatialRenderedRatio(payload, value));
+      image.data[offset] = red;
+      image.data[offset + 1] = green;
+      image.data[offset + 2] = blue;
+      image.data[offset + 3] = 255;
+    }
+  }
+  context.putImageData(image, 0, 0);
   return canvas;
 }
 
@@ -546,9 +587,7 @@ export function ResultWorkbench({
           // Missing cells are already transparent. Keep valid values faithful
           // to the color scale instead of tinting them with the basemap.
           'raster-opacity': 1,
-          'raster-resampling': spatial.rendering?.interpolation ?? (
-            spatial.rendering?.kind === 'categorical' ? 'nearest' : 'linear'
-          ),
+          'raster-resampling': spatialRasterResampling(spatial),
         },
       }, map.getLayer('ocean-feature-fill') ? 'ocean-feature-fill' : undefined);
     }

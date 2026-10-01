@@ -31,7 +31,9 @@ export type SpatialPayload = {
   categories?: ResultCategory[];
   rendering?: {
     kind?: 'continuous' | 'categorical';
+    render?: 'filled_contour' | 'smooth' | 'cells';
     interpolation?: 'linear' | 'nearest';
+    levels?: number | number[];
   };
   spatial_context?: SpatialContext;
 };

@@ -74,6 +74,51 @@ def test_spatial_fields_require_and_preserve_explicit_valid_mask(
 
     assert hydrated["values"] == [[None, 1.0, 1.0], [None, 2.0, 3.0]]
     assert [entry["value"] for entry in hydrated["categories"]] == [1.0, 2.0, 3.0]
+    assert hydrated["rendering"] == {
+        "kind": "categorical",
+        "render": "cells",
+        "interpolation": "nearest",
+        "levels": 14,
+    }
+
+
+@pytest.mark.parametrize(
+    ("render", "interpolation", "levels"),
+    [
+        ("filled_contour", "linear", 7),
+        ("filled_contour", "nearest", [-0.5, 0.0, 0.5]),
+        ("smooth", "linear", 14),
+        ("cells", "nearest", 14),
+    ],
+)
+def test_spatial_map_preserves_expert_rendering_contract(
+    tmp_path: Path, render: str, interpolation: str, levels: int | list[float]
+) -> None:
+    longitude = np.array([-96.0, -95.0, -94.0])
+    latitude = np.array([22.0, 21.0])
+    values = np.array([[-0.5, 0.0, 0.5], [-0.25, 0.25, 0.75]])
+    valid = np.ones_like(values, dtype=bool)
+    figure = ScientificFigure(plot_kind="spatial_map", title="Temperature anomaly")
+    figure.panel(x=longitude, y=latitude).field2d(
+        values,
+        valid_mask=valid,
+        variable="temperature_anomaly",
+        units="degC",
+        render=render,
+        interpolation=interpolation,
+        levels=levels,
+    )
+
+    hydrated = hydrate_ocean_view_netcdf(
+        figure.save(tmp_path / f"{render}-{interpolation}.nc")
+    )
+
+    assert hydrated["rendering"] == {
+        "kind": "continuous",
+        "render": render,
+        "interpolation": interpolation,
+        "levels": levels,
+    }
 
 
 @pytest.mark.asyncio

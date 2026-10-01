@@ -1396,6 +1396,21 @@ class ScientificFigure:
         if scale_min == scale_max:
             epsilon = max(1e-12, abs(scale_min) * 1e-9)
             scale_min, scale_max = scale_min - epsilon, scale_max + epsilon
+        render = str(layer.get("render") or "filled_contour")
+        interpolation = str(layer.get("interpolation") or "linear")
+        configured_levels = layer.get("levels", 14)
+        if isinstance(configured_levels, list):
+            contour_levels = [float(value) for value in configured_levels]
+        else:
+            # ``levels`` names the number of filled bands.  Persist their
+            # boundaries separately from the render instruction so the map,
+            # saved preview and scientific panel share one colour contract.
+            contour_levels = [
+                float(value)
+                for value in np.linspace(
+                    scale_min, scale_max, int(configured_levels) + 1
+                )
+            ]
         bounds = [
             max(-180.0, float(longitude[0] - longitude_spacing / 2)),
             max(-90.0, float(latitude[-1] - latitude_spacing / 2)),
@@ -1417,13 +1432,13 @@ class ScientificFigure:
             "colorbar": {
                 "label": panel.payload.get("display", {}).get("colorbar_label") or units,
                 "colormap": palette,
-                "levels": [float(value) for value in np.linspace(scale_min, scale_max, 9)],
+                "levels": contour_levels,
             },
             "rendering": {
                 "kind": metadata.get("field_kind", "continuous"),
-                "interpolation": (
-                    "nearest" if metadata.get("field_kind") == "categorical" else "linear"
-                ),
+                "render": render,
+                "interpolation": interpolation,
+                "levels": configured_levels,
             },
             "spatial_context": self.spatial_context
             or {
