@@ -1,0 +1,172 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q26",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "What sea surface height reveals about the subsurface",
+  "status": "draft",
+  "query_sha256": "de0bec865914adf5c05d599a03bff9b687a13f65506e278db867a0a60e799af9",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "framing 10, data 10, answer 20, mechanism 20, robustness 15, breadth 15, insight 10"
+  },
+  "criteria": [
+    {
+      "id": "Q26-F",
+      "kind": "framing",
+      "weight": 10,
+      "title": "Framing and competing hypotheses",
+      "anchors": {
+        "0": "Answers a different or vaguer question; no testable framing.",
+        "2": "Operational definitions are given, but only one explanation is considered, or hypotheses are not tied to predictions.",
+        "4": "Precise operational definitions; competing hypotheses with distinguishing predictions that structure the analysis."
+      }
+    },
+    {
+      "id": "Q26-A",
+      "kind": "data",
+      "weight": 10,
+      "title": "Data fitness and handling",
+      "anchors": {
+        "0": "Data mishandled (units, masks, grid, time or depth conventions) in a way that changes the results.",
+        "2": "Correct handling, but the data's fitness for this question (model versus ocean, record length, resolution, missing variables) is not examined.",
+        "4": "Correct handling, and fitness for this question is checked explicitly (for example against known observations or by internal consistency), with its consequences for the conclusions stated."
+      }
+    },
+    {
+      "id": "Q26-Q",
+      "kind": "answer",
+      "weight": 20,
+      "title": "Quantitative answer against the answer key",
+      "uses": [
+        "Q26-A1"
+      ],
+      "anchors": {
+        "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
+        "1": "Quantities are reported, but most disagree with the answer key and no stated definition explains the difference.",
+        "2": "About half of the answer-key items used by this criterion agree within tolerance (or differ only by a stated definition that the evaluator recomputed).",
+        "3": "Most items agree within tolerance; one is missing or outside tolerance.",
+        "4": "All answer-key items used by this criterion agree within tolerance, and their uncertainty is stated."
+      }
+    },
+    {
+      "id": "Q26-M",
+      "kind": "mechanism",
+      "weight": 20,
+      "title": "Mechanistic depth",
+      "uses": [
+        "Q26-A2",
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "Description only, or a mechanism that the answer key contradicts.",
+        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
+        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
+        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
+        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+      }
+    },
+    {
+      "id": "Q26-R",
+      "kind": "robustness",
+      "weight": 15,
+      "title": "Robustness and uncertainty",
+      "uses": [
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "No sensitivity tests and no uncertainty.",
+        "1": "Generic caveats only.",
+        "2": "One sensitivity test, or statistics that ignore short or autocorrelated records.",
+        "3": "Several targeted sensitivity tests and suitable statistics; some key numbers lack uncertainty.",
+        "4": "Targeted sensitivity tests on every choice that could change the conclusion (thresholds, baselines, regions, definitions), statistics suited to short and autocorrelated records, and uncertainty on all key numbers."
+      }
+    },
+    {
+      "id": "Q26-B",
+      "kind": "breadth",
+      "weight": 15,
+      "title": "Breadth and synthesis",
+      "uses": [
+        "breadth_probes",
+        "literature_context"
+      ],
+      "anchors": {
+        "0": "A single isolated diagnostic, with no link to related processes or published work.",
+        "1": "Related processes or literature are mentioned but not used.",
+        "2": "More than one variable or time scale is used, or results are compared with the literature, but mostly descriptively.",
+        "3": "Processes or scales are connected and results are compared with published work with correct citations; one breadth probe is addressed well.",
+        "4": "Scales and processes are connected (for example seasonal to interannual, physics to biogeochemistry), several variables are used coherently, agreement and disagreement with published work are stated with correct citations, and the breadth probes are addressed."
+      }
+    },
+    {
+      "id": "Q26-I",
+      "kind": "insight",
+      "weight": 10,
+      "title": "Insight, limits and next steps",
+      "anchors": {
+        "0": "No clear answer to the question.",
+        "2": "A clear answer, with generic limits and next steps.",
+        "4": "A clear, quantified answer; precise limits of what the data can and cannot settle; specific next analyses or data that would settle the open points; at least one non-obvious insight supported by the analysis."
+      }
+    }
+  ],
+  "answer_key": {
+    "oracle_groups": [],
+    "items": [
+      {
+        "id": "Q26-A1",
+        "quantity": "Skill by depth and region",
+        "procedure": "Explained variance of daily temperature and salinity anomalies at 100, 200, 500 and 1000 m from SSH anomalies (linear regression; the evaluator default and the agent's method recomputed), eastern versus western Gulf, by season.",
+        "used_by": "Q26-Q",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: +/-0.15)"
+      },
+      {
+        "id": "Q26-A2",
+        "quantity": "Failure modes",
+        "procedure": "Where and when the skill is low: the shelf, the seasonal steric signal in the upper ocean, deep layers, density-compensated changes.",
+        "used_by": "Q26-M",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: the main failure modes identified)"
+      }
+    ]
+  },
+  "depth_probes": [
+    "Separates the seasonal steric signal from mesoscale variability.",
+    "Interprets the relation through the vertical structure (two-layer or baroclinic modes) and water-mass regimes (Loop Current water versus Gulf Common Water).",
+    "Notes that a reanalysis assimilating both SSH and profiles is not an independent test of the relation."
+  ],
+  "breadth_probes": [
+    "Discusses use for synthetic profiles or hurricane forecasting."
+  ],
+  "literature_context": [
+    {
+      "citation": "Hamilton et al. (2018)",
+      "title": "Hydrography of the Gulf of Mexico Using Autonomous Floats",
+      "journal": "Journal of Physical Oceanography",
+      "year": 2018,
+      "volume": "48",
+      "pages": "773-794",
+      "doi": "10.1175/JPO-D-17-0205.1",
+      "url": "https://doi.org/10.1175/JPO-D-17-0205.1",
+      "verification": "Crossref metadata and abstract checked 2026-10-01",
+      "use": "Float survey of the Gulf (2011-2015): isotherms deeper in Loop Current water and its eddies and shallower in cyclones; altimeter SSH used to classify profiles; mixed-layer depth about 60 m in January and 20 m in June-July. Use it to judge the literature comparison only."
+    }
+  ],
+  "gates": [
+    "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",
+    "A different target (region, period or quantity) without justification: Q and M score at most 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
+  ],
+  "evaluator_groups": [],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}

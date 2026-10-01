@@ -1,0 +1,168 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q01",
+  "type": "paper_reproduction",
+  "title": "Layered rotating circulation and its vorticity hotspots",
+  "status": "draft",
+  "query_sha256": "4aaef8eb55a873646082bb47bff8fad10baba97ff5cb584f24e08ff2ed91951c",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "findings 70, method 10, differences 10, report 10"
+  },
+  "paper": {
+    "citation": "Gan et al. (2022)",
+    "title": "Hotspots of the stokes rotating circulation in a large marginal sea",
+    "journal": "Nature Communications",
+    "year": 2022,
+    "volume": "13",
+    "pages": "2223",
+    "doi": "10.1038/s41467-022-29610-z",
+    "url": "https://doi.org/10.1038/s41467-022-29610-z",
+    "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "verdict_labels": [
+    "reproduced",
+    "partly reproduced",
+    "not reproduced",
+    "not testable with the supplied data"
+  ],
+  "criteria": [
+    {
+      "id": "Q01-K1",
+      "kind": "claim",
+      "weight": 25,
+      "title": "Finding 1",
+      "claim": "The basin-scale circulation rotates cyclonic in the upper layer, anticyclonic in the middle layer and cyclonic in the deep layer.",
+      "paper_evidence": "Abstract: marginal seas 'typically have alternatively rotating layered circulations'; the South China Sea is 'an outstanding example'. The layer interfaces used in related CMOMS work (about 750 m and 1500 m) are confirmed from the paper text by the evaluator before freezing.",
+      "testability": "testable",
+      "how_to_test": "Basin-integrated relative vorticity of the 2011-2020 mean flow over the deep basin (bottom deeper than 1000 m) at each model depth; its zero crossings define the layers; the sign of each layer's integral (equivalently its boundary circulation).",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: signs exact; layer interfaces +/-250 m)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q01-K2",
+      "kind": "claim",
+      "weight": 25,
+      "title": "Finding 2",
+      "claim": "In each layer a few energetic hotspots with large relative vorticity, identified through Stokes' theorem, contribute most of the layer's circulation, out of proportion to their area.",
+      "paper_evidence": "Abstract: 'the rotating circulation is structured by energetic hotspots with large vorticity ... identifiable by the constraints of Stokes Theorem. These hotspots contribute most of the vorticity'. The evaluator figures show the paper's hotspot map and contributions.",
+      "testability": "testable",
+      "how_to_test": "Per layer, rank grid cells by their contribution to the area-integrated vorticity of the layer's sign; the smallest area fractions holding 50% and 80% of it; positions of the three largest hotspots; compare with the paper's hotspot map and contribution panel.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: area fractions +/-0.10; at least two of the three hotspot positions within 1 degree of the reference)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q01-K3",
+      "kind": "claim",
+      "weight": 20,
+      "title": "Finding 3",
+      "claim": "These hotspots supply most of the energy needed to form and maintain the rotating circulation.",
+      "paper_evidence": "Abstract: the hotspots contribute 'most of energy needed to form and maintain the rotating circulation pattern'.",
+      "testability": "partly testable",
+      "how_to_test": "Testable: the share of each layer's mean and eddy kinetic energy inside the hotspots. Not testable: the energy input that maintains the circulation, which needs momentum or vorticity budget terms that are not supplied.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: kinetic-energy share +/-0.10)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
+      }
+    },
+    {
+      "id": "Q01-M",
+      "kind": "method",
+      "weight": 10,
+      "title": "Method fidelity",
+      "focus": "Deep-basin and layer definitions (layer interfaces from zero crossings of basin-integrated vorticity); circulation as the area integral of relative vorticity or the boundary line integral, computed on the native curvilinear grid with correct metrics; a hotspot definition (threshold or ranked area) with parameters.",
+      "anchors": {
+        "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
+        "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
+        "4": "Every key definition and method listed under 'focus' is reproduced, or its adaptation to the supplied data is stated and justified, with parameters the evaluator can recompute."
+      }
+    },
+    {
+      "id": "Q01-D",
+      "kind": "differences",
+      "weight": 10,
+      "title": "Differences from the paper's setting",
+      "focus": "CMOMS 2011-2020 daily output versus the paper's CMOMS experiment and period; averaging; domain and masks; the model family is the paper's own, so agreement is not independent validation.",
+      "anchors": {
+        "0": "No account of how the supplied data, period or region differ from the paper's.",
+        "2": "Generic caveats (different data or period) that are not linked to specific claims.",
+        "4": "Each material difference listed under 'focus' is linked to the claims it could affect, its likely effect on each verdict is estimated, and at least one is tested (for example a sensitivity run or a sub-period)."
+      }
+    },
+    {
+      "id": "Q01-R",
+      "kind": "report",
+      "weight": 10,
+      "title": "Verification report and traceability",
+      "anchors": {
+        "0": "No claim-by-claim result; numbers cannot be traced to code or outputs.",
+        "2": "Verdicts are given but scattered or only partly traceable.",
+        "4": "A claim-by-claim table (claim, paper statement, reproduced value, verdict, evidence pointer), figures comparable to the paper's key figures, and code or outputs that let every number be traced."
+      }
+    }
+  ],
+  "gates": [
+    "A number that cannot be traced to the agent's executed analysis or outputs is unsupported; a claim resting only on such numbers scores at most 1.",
+    "A paper value reported as the agent's own result scores 0 on that claim and caps R at 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except M at most 1."
+  ],
+  "evaluator_groups": [],
+  "context_figures": [
+    {
+      "path": "images/Gan2022_Fig1b_depth_time.png",
+      "source_doi": "10.1038/s41467-022-29610-z",
+      "pdf_page": 2,
+      "source_panel": "Fig. 1b",
+      "role": "Basin-integrated vorticity versus year and depth, its sign, units and vertical boundaries. Persistence and direction of circulation in the upper, middle and deep layers.",
+      "sha256": "f7e68384993bdffceebad4d701cfecf3d62f6d5f3f7313336204f44e1f90ba00",
+      "rights": "Original rights retained; review permission before redistribution or external Judge submission."
+    },
+    {
+      "path": "images/Gan2022_Fig2b_hotspots.png",
+      "source_doi": "10.1038/s41467-022-29610-z",
+      "pdf_page": 3,
+      "source_panel": "Fig. 2b (three vertically stacked layers)",
+      "role": "Sign-favorable hotspot locations in each layer, layer bounds, masks/areas and their quantitative contributions. Geographic correspondence must be demonstrable; arrows and extra dynamics in the original are not mandatory.",
+      "sha256": "973d0613ae32d61822796820cdc9e313fdf4503286f031799c3b92a8d1f36b21",
+      "rights": "Original rights retained; review permission before redistribution or external Judge submission."
+    },
+    {
+      "path": "images/Gan2022_Fig3a_contributions.png",
+      "source_doi": "10.1038/s41467-022-29610-z",
+      "pdf_page": 4,
+      "source_panel": "Fig. 3a",
+      "role": "IR and area-normalized AR for the three layers, definitions and underlying area fractions. Distinguish disproportionate contribution from large area; quantify the comparison, not just bar ordering.",
+      "sha256": "6177a6463981a6707dbdc307160bb179c0b8ae56278ffcb1ea50e181ecada877",
+      "rights": "Original rights retained; review permission before redistribution or external Judge submission."
+    }
+  ],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}

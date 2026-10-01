@@ -1,15 +1,27 @@
 {
   "id": "Q24",
-  "track": "autoresearch",
-  "title": "2023 East China Sea heat-budget attribution",
-  "query": "Using the provided OISST, GLORYS12 and ERA5 data, investigate the formation and persistence mechanisms of the 2023 East China Sea marine heatwave (25–34°N, 120–128°E).",
-  "catalog_version": "2026-09-08-accessible-v1",
-  "data_status": "scripted_acquisition_pending_execution",
+  "suite": "test",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "topic": "water masses",
+  "title": "Loss of the salinity maximum in Loop Current eddies",
+  "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, determine how fast Loop Current eddies lose the subsurface salinity maximum of Subtropical Underwater after they separate, how this varies between eddies and seasons, and which processes cause the loss.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "GULF",
+    "name": "Gulf of Mexico",
+    "bbox": [
+      -98,
+      -80,
+      18,
+      31
+    ]
+  },
+  "period": "2011-2017",
   "data_groups": [
-    "P_OISST",
-    "P_ECS",
-    "P_ERA5"
+    "P_GULF"
   ],
-  "analysis_period": "2023 event; 1993–2011 heat-budget baseline",
-  "query_version": "2026-09-11-general-v1"
+  "data_access": "public",
+  "pair": "Q21"
 }

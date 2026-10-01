@@ -22,20 +22,69 @@ import download_data as down
 import ncei_oisst as ncei
 
 
-def test_all_non_cmoms_tasks_have_only_implemented_groups():
+def test_catalogue_groups_and_coverage():
     m = all_data.load_manifest()
-    assert len(m["tasks"]) == 15 and len(m["groups"]) == 6
-    assert {g["adapter"] for g in m["groups"].values()} == {"cmems", "era5", "erddap", "ncei"}
-    assert not set(m["groups"]) & {"G1", "G3", "I2", "S4"}
+    assert len(m["tasks"]) == 42 and len(m["groups"]) == 12
+    assert {g["adapter"] for g in m["groups"].values()} == {"cmems", "era5", "erddap", "ncei", "private"}
+    assert all(not m["groups"][g].get("evaluator_only") for groups in m["tasks"].values() for g in groups)
+    assert m["evaluator_groups"]["Q11"] == ["X_HEAT"]
     assert not all_data.coverage(m, {})["all_numerical_inputs_complete"]
     reports = {key: {"complete": True, "group_sha256": down.fingerprint(g)} for key, g in m["groups"].items()}
-    assert all_data.coverage(m, reports)["all_numerical_inputs_complete"]
+    status = all_data.coverage(m, reports)
+    assert status["all_numerical_inputs_complete"] and status["complete_tasks"] == 42
+    assert status["tasks"]["Q11"]["evaluator_inputs_complete"]
     reports["P_GULF"]["complete"] = False
     status = all_data.coverage(m, reports)
-    assert not status["tasks"]["Q30"]["numerical_inputs_complete"]
-    assert status["tasks"]["Q21"]["numerical_inputs_complete"]
-    reports["P_MODIS"]["group_sha256"] = "old"
-    assert not all_data.coverage(m, reports)["tasks"]["Q21"]["numerical_inputs_complete"]
+    assert not status["tasks"]["Q09"]["numerical_inputs_complete"]
+    assert status["tasks"]["Q01"]["numerical_inputs_complete"]
+    reports["P_CCS_BGC"]["group_sha256"] = "old"
+    assert not all_data.coverage(m, reports)["tasks"]["E03"]["numerical_inputs_complete"]
+    reports["X_HEAT"]["complete"] = False
+    status = all_data.coverage(m, reports)
+    assert status["tasks"]["Q11"]["missing_evaluator_groups"] == ["X_HEAT"]
+
+
+def test_evaluator_groups_are_never_agent_inputs(tmp_path, monkeypatch):
+    m = json.loads(all_data.MANIFEST.read_text())
+    for binding in all_data.bindings(m).values():
+        assert not any("CMOMS_DIA" in p or p.startswith("_evaluator_only") for p in binding["datasets"])
+    m["tasks"]["Q11"] = m["tasks"]["Q11"] + ["X_HEAT"]
+    leaked = tmp_path / "data_manifest.json"
+    leaked.write_text(json.dumps(m))
+    monkeypatch.setattr(all_data, "MANIFEST", leaked)
+    with pytest.raises(ValueError, match="evaluator-only|mismatch"):
+        all_data.load_manifest()
+
+
+def test_evolution_groups_plan_correctly():
+    m = all_data.load_manifest()
+    phy = all_data.group_plan(m["groups"]["P_CCS_PHY"])
+    assert len(phy) == 10 * 12 * 6 and all(c["expected_samples"] == 1 for c in phy)
+    assert all(("maximum_depth" in c["request"]) == (c["variables"][0] not in {"zos", "mlotst"}) for c in phy)
+    assert all(c["relative_path"].startswith("CMEMS_CCS_MONTHLY/") and "/cmems_monthly_" in c["relative_path"] for c in phy)
+    surface = all_data.group_plan(m["groups"]["P_CCS_SURF"])
+    assert len(surface) == 28 * 12 and all(c["request"]["maximum_depth"] == 1 for c in surface)
+    assert all("/cmems_daily_" in c["relative_path"] for c in surface)
+    bgc = all_data.group_plan(m["groups"]["P_CCS_BGC"])
+    assert len(bgc) == 28 * 12 * 3 and all(c["expected_grid_step"] == 0.25 for c in bgc)
+    assert {c["request"]["dataset_id"] for c in bgc} == {"cmems_mod_glo_bgc_my_0.25deg_P1M-m"}
+
+
+def test_private_check_requires_every_variable_year_and_name(tmp_path):
+    group = {"data_type": "CMOMS", "folders": ["temp", "grid"], "years": [2011, 2012]}
+    assert all_data.check_private(group, tmp_path)["missing"] == ["CMOMS/temp/2011", "CMOMS/temp/2012", "CMOMS/grid"]
+    for year in (2011, 2012):
+        path = tmp_path / "CMOMS" / "temp" / str(year) / "temp.nc"
+        path.parent.mkdir(parents=True)
+        with netCDF4.Dataset(path, "w") as ds:
+            ds.createDimension("t", 1)
+            ds.createVariable("temp" if year == 2011 else "salt", "f4", ("t",))
+    (tmp_path / "CMOMS" / "grid").mkdir()
+    (tmp_path / "CMOMS" / "grid" / "grid.nc").write_bytes(b"x")
+    report = all_data.check_private(group, tmp_path)
+    assert not report["complete"] and report["unreadable"] == ["CMOMS/temp/2012/temp.nc: no variable temp"]
+    oracle = {"data_type": "CMOMS_DIA", "folders": ["temp_rate"], "years": [2011], "evaluator_only": True, "optional": True}
+    assert all_data.check_private(oracle, tmp_path)["missing"] == ["_evaluator_only/CMOMS_DIA/temp_rate/2011"]
 
 
 def test_service_depth_halo_baselines_and_no_duplicate_bindings():
@@ -93,17 +142,10 @@ def test_ncei_plan_all_days_and_shared_download(tmp_path, monkeypatch):
             assert np.all(v[:] == 2530)  # packed data not accidentally scaled twice
     ncei.execute(chunks[:2], archive, records.append)
     assert len(calls) == 1
-    assert all_data.verify_existing(chunks[:2], archive) is None
+    assert all_data.verify_existing(group, chunks[:2], archive) is None
     (archive / chunks[0]["relative_path"]).write_bytes(b"corrupt")
     with pytest.raises(down.DownloadError):
-        all_data.verify_existing(chunks[:2], archive)
-
-
-def test_adapted_rubrics_do_not_require_private_paper_panels():
-    for i in range(13, 23):
-        ref = json.loads((all_data.HERE.parent / f"tasks/Q{i}/target_study/checklist.json").read_text())
-        assert "adapt" in ref["reference_text"]
-        assert all(v["requirement"] == "context_only" for c in ref["criteria"] for v in c.get("visual_checks", []))
+        all_data.verify_existing(group, chunks[:2], archive)
 
 
 def test_failed_group_is_not_complete_or_secret_logged(tmp_path, monkeypatch):
@@ -134,7 +176,7 @@ def test_two_phases_accumulate_coverage_and_verify_detects_missing(tmp_path, mon
 
     assert all_data.main(["services", "--output", str(tmp_path), "--execute"]) == 0
     assert json.loads(path.read_text())["all_numerical_inputs_complete"]
-    def missing(chunks, root):
+    def missing(group, chunks, root):
         raise down.DownloadError("Missing fixture")
     monkeypatch.setattr(all_data, "verify_existing", missing)
     assert all_data.main(["verify", "--output", str(tmp_path)]) == 1
@@ -221,6 +263,6 @@ def test_concurrent_summary_writers_retain_both_phase_results(tmp_path):
             pytest.fail('summary writers hung')
         assert process.exitcode == 0
     result = json.loads((tmp_path / 'coverage.json').read_text())
-    assert result['tasks']['Q19']['numerical_inputs_complete']
-    assert result['tasks']['Q13']['numerical_inputs_complete']
-    assert not result['tasks']['Q24']['numerical_inputs_complete']
+    assert result['tasks']['Q23']['numerical_inputs_complete']      # P_GULF only
+    assert not result['tasks']['Q10']['numerical_inputs_complete']  # needs P_OISST, P_ECS, P_ERA5
+    assert not result['tasks']['Q22']['numerical_inputs_complete']  # also needs C_CORE

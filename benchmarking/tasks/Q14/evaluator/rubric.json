@@ -1,0 +1,158 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q14",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "What controls the winter bloom northwest of Luzon",
+  "status": "draft",
+  "query_sha256": "85f1597a4a39132a34acc11abac4de8cb09b02b15a0a57ecdd6042d62866bdc1",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "framing 10, data 10, answer 20, mechanism 20, robustness 15, breadth 15, insight 10"
+  },
+  "criteria": [
+    {
+      "id": "Q14-F",
+      "kind": "framing",
+      "weight": 10,
+      "title": "Framing and competing hypotheses",
+      "anchors": {
+        "0": "Answers a different or vaguer question; no testable framing.",
+        "2": "Operational definitions are given, but only one explanation is considered, or hypotheses are not tied to predictions.",
+        "4": "Precise operational definitions; competing hypotheses with distinguishing predictions that structure the analysis."
+      }
+    },
+    {
+      "id": "Q14-A",
+      "kind": "data",
+      "weight": 10,
+      "title": "Data fitness and handling",
+      "anchors": {
+        "0": "Data mishandled (units, masks, grid, time or depth conventions) in a way that changes the results.",
+        "2": "Correct handling, but the data's fitness for this question (model versus ocean, record length, resolution, missing variables) is not examined.",
+        "4": "Correct handling, and fitness for this question is checked explicitly (for example against known observations or by internal consistency), with its consequences for the conclusions stated."
+      }
+    },
+    {
+      "id": "Q14-Q",
+      "kind": "answer",
+      "weight": 20,
+      "title": "Quantitative answer against the answer key",
+      "uses": [
+        "Q14-A1"
+      ],
+      "anchors": {
+        "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
+        "1": "Quantities are reported, but most disagree with the answer key and no stated definition explains the difference.",
+        "2": "About half of the answer-key items used by this criterion agree within tolerance (or differ only by a stated definition that the evaluator recomputed).",
+        "3": "Most items agree within tolerance; one is missing or outside tolerance.",
+        "4": "All answer-key items used by this criterion agree within tolerance, and their uncertainty is stated."
+      }
+    },
+    {
+      "id": "Q14-M",
+      "kind": "mechanism",
+      "weight": 20,
+      "title": "Mechanistic depth",
+      "uses": [
+        "Q14-A2",
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "Description only, or a mechanism that the answer key contradicts.",
+        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
+        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
+        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
+        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+      }
+    },
+    {
+      "id": "Q14-R",
+      "kind": "robustness",
+      "weight": 15,
+      "title": "Robustness and uncertainty",
+      "uses": [
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "No sensitivity tests and no uncertainty.",
+        "1": "Generic caveats only.",
+        "2": "One sensitivity test, or statistics that ignore short or autocorrelated records.",
+        "3": "Several targeted sensitivity tests and suitable statistics; some key numbers lack uncertainty.",
+        "4": "Targeted sensitivity tests on every choice that could change the conclusion (thresholds, baselines, regions, definitions), statistics suited to short and autocorrelated records, and uncertainty on all key numbers."
+      }
+    },
+    {
+      "id": "Q14-B",
+      "kind": "breadth",
+      "weight": 15,
+      "title": "Breadth and synthesis",
+      "uses": [
+        "breadth_probes"
+      ],
+      "anchors": {
+        "0": "A single isolated diagnostic, with no link to related processes or published work.",
+        "1": "Related processes or literature are mentioned but not used.",
+        "2": "More than one variable or time scale is used, or results are compared with the literature, but mostly descriptively.",
+        "3": "Processes or scales are connected and results are compared with published work with correct citations; one breadth probe is addressed well.",
+        "4": "Scales and processes are connected (for example seasonal to interannual, physics to biogeochemistry), several variables are used coherently, agreement and disagreement with published work are stated with correct citations, and the breadth probes are addressed."
+      }
+    },
+    {
+      "id": "Q14-I",
+      "kind": "insight",
+      "weight": 10,
+      "title": "Insight, limits and next steps",
+      "anchors": {
+        "0": "No clear answer to the question.",
+        "2": "A clear answer, with generic limits and next steps.",
+        "4": "A clear, quantified answer; precise limits of what the data can and cannot settle; specific next analyses or data that would settle the open points; at least one non-obvious insight supported by the analysis."
+      }
+    }
+  ],
+  "answer_key": {
+    "oracle_groups": [],
+    "items": [
+      {
+        "id": "Q14-A1",
+        "quantity": "Bloom metrics",
+        "procedure": "For each winter: onset, peak month and peak magnitude of box-mean surface chlorophyll and of the 0-100 m integral.",
+        "used_by": "Q14-Q",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: peak month within 1 month in at least 70% of winters; Spearman of magnitudes at least 0.7)"
+      },
+      {
+        "id": "Q14-A2",
+        "quantity": "Driver ranking",
+        "procedure": "Yearly correlations of bloom magnitude and timing with mixed-layer depth (density threshold), cyclonic doming (depth of the 22 C isotherm in the Luzon cold-eddy area) and Kuroshio intrusion strength (0-300 m westward transport through the Luzon Strait).",
+        "used_by": "Q14-M",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: top driver exact)"
+      }
+    ]
+  },
+  "depth_probes": [
+    "Separates entrainment by mixed-layer deepening from eddy- or curl-driven upwelling (isotherm doming) and from lateral advection of oligotrophic Kuroshio water.",
+    "Distinguishes redistribution of the subsurface chlorophyll maximum to the surface from a net biomass increase (vertical integral).",
+    "Examines light limitation when the mixed layer is deepest."
+  ],
+  "breadth_probes": [
+    "Compares with the summer bloom off Vietnam or with satellite climatologies.",
+    "Places the result among published explanations of the Luzon winter bloom."
+  ],
+  "gates": [
+    "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",
+    "A different target (region, period or quantity) without justification: Q and M score at most 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
+  ],
+  "evaluator_groups": [],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}

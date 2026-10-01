@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Two-phase, fixed-manifest acquisition of ALL non-CMOMS numerical benchmark inputs."""
+"""Fixed-manifest acquisition of the benchmark inputs, plus a check of owner-staged private data."""
 import argparse
 import copy
 from contextlib import contextmanager, ExitStack
@@ -11,19 +11,34 @@ import download_services as services
 import ncei_oisst
 
 HERE = Path(__file__).resolve().parent
-MANIFEST = HERE / "public_manifest.json"
+BENCH = HERE.parent
+MANIFEST = HERE / "data_manifest.json"
+SUITES = {"Q": BENCH / "tasks", "E": BENCH / "evolution"}
+EVALUATOR_ONLY = "_evaluator_only"
+
+
+def task_folder(task_id):
+    return SUITES[task_id[0]] / task_id
 
 
 def load_manifest():
+    """The manifest and the task files must describe the same catalogue."""
     manifest = json.loads(MANIFEST.read_text())
-    if set(manifest["tasks"]) != {f"Q{i:02}" for i in [*range(13, 25), 28, 29, 30]}:
-        raise ValueError("Manifest must cover all 15 non-CMOMS tasks")
-    for task, groups in manifest["tasks"].items():
-        if not groups or any(group not in manifest["groups"] for group in groups):
+    groups = manifest["groups"]
+    catalogue = {p.name for root in SUITES.values() for p in root.iterdir() if (p / "task_info.json").is_file()}
+    if set(manifest["tasks"]) != catalogue:
+        raise ValueError(f"Manifest tasks differ from the catalogue: {sorted(set(manifest['tasks']) ^ catalogue)}")
+    for task, needed in manifest["tasks"].items():
+        if not needed or any(group not in groups for group in needed):
             raise ValueError(f"Undefined input group: {task}")
-        canonical = json.loads((HERE.parent / "tasks" / task / "task_info.json").read_text())
-        if canonical["data_groups"] != groups or canonical["catalog_version"] != manifest["version"]:
+        if any(groups[group].get("evaluator_only") for group in needed):
+            raise ValueError(f"{task}: evaluator-only data must never be an agent input")
+        info = json.loads((task_folder(task) / "task_info.json").read_text())
+        if info["data_groups"] != needed or info["catalog_version"] != manifest["version"]:
             raise ValueError(f"Catalogue/manifest mismatch: {task}")
+    for task, needed in manifest["evaluator_groups"].items():
+        if any(not groups.get(group, {}).get("evaluator_only") for group in needed):
+            raise ValueError(f"{task}: evaluator groups must be marked evaluator_only")
     return manifest
 
 
@@ -34,26 +49,60 @@ def group_plan(group, metadata=erddap.get_json):
         job.update({key: group[key] for key in ["variables", "data_type", "start", "end", "bbox"]})
         result = erddap.plan_product(job, metadata)
         if result["missing_periods"]:
-            raise erddap.DownloadError(f"Provider is missing required months: {result['missing_periods']}; no gap-filling or incomplete success")
+            raise erddap.DownloadError(f"Provider is missing required periods: {result['missing_periods'][:12]}; no gap-filling or incomplete success")
         return result["chunks"]
     if group["adapter"] == "ncei":
         return ncei_oisst.plan(group)
+    if group["adapter"] not in {"cmems", "era5"}:
+        raise ValueError(f"{group['adapter']} groups are not downloaded")
     chunks = []
+    surface = group.get("surface_variables", ["zos"])
     for variable in group["variables"]:
-        # Surface-height products have no depth axis, unlike 3-D hydrography.
-        depth = group.get("depth") if variable != "zos" else None
+        # Surface fields have no depth axis, unlike 3-D hydrography.
+        depth = group.get("depth") if variable not in surface else None
         selected = services.build_plan(group["adapter"], [variable], group["years"], group["months"],
                                        group["bbox"], group.get("dataset"), group.get("dataset_version"), depth)
         for chunk in selected:
             chunk["data_type"] = group["data_type"]
-            chunk["expected_grid_step"] = 1 / 12 if group["adapter"] == "cmems" else 0.25
+            chunk["expected_grid_step"] = group.get("grid_step", 1 / 12 if group["adapter"] == "cmems" else 0.25)
             chunk["request_sha256"] = erddap.fingerprint({k: v for k, v in chunk.items() if k not in {"request_sha256", "relative_path"}})
-            chunk["relative_path"] = erddap.archive_path({"id": "cmems_daily" if group["adapter"] == "cmems" else "era5_hourly", "data_type": group["data_type"]}, variable, chunk["period"], chunk["request_sha256"])
+            label = "era5_hourly" if group["adapter"] == "era5" else (
+                "cmems_monthly" if "_P1M" in group.get("dataset", "") else "cmems_daily")
+            chunk["relative_path"] = erddap.archive_path({"id": label, "data_type": group["data_type"]}, variable, chunk["period"], chunk["request_sha256"])
         chunks.extend(selected)
     return chunks
 
 
-def verify_existing(chunks, root):
+def private_folder(root, group, folder):
+    base = root / EVALUATOR_ONLY if group.get("evaluator_only") else root
+    return base / group["data_type"] / folder
+
+
+def check_private(group, root):
+    """Owner-staged data: every variable/year folder holds a readable NetCDF file naming that variable."""
+    import netCDF4
+    missing, unreadable, files = [], [], 0
+    for folder in group["folders"]:
+        years = [None] if folder == "grid" else group["years"]
+        for year in years:
+            directory = private_folder(root, group, folder) / (str(year) if year else "")
+            found = sorted(p for p in directory.glob("*.nc") if p.is_file() and p.stat().st_size) if directory.is_dir() else []
+            if not found:
+                missing.append(str(directory.relative_to(root)))
+                continue
+            files += len(found)
+            if folder != "grid":
+                try:
+                    with netCDF4.Dataset(found[0]) as ds:
+                        if folder not in ds.variables:
+                            unreadable.append(f"{found[0].relative_to(root)}: no variable {folder}")
+                except OSError as exc:
+                    unreadable.append(f"{found[0].relative_to(root)}: {exc}")
+    return {"complete": not missing and not unreadable, "files": files, "missing": missing,
+            "unreadable": unreadable, "optional": bool(group.get("optional"))}
+
+
+def verify_existing(group, chunks, root):
     """Never trust filenames alone. Recheck both request identity and file SHA256."""
     def no_network(url, destination, timeout):
         raise erddap.DownloadError(f"Missing file: {destination}")
@@ -64,17 +113,29 @@ def verify_existing(chunks, root):
 def coverage(manifest, reports):
     ready = {key: bool(report.get("complete") and report.get("group_sha256") == erddap.fingerprint(manifest["groups"][key]))
              for key, report in reports.items() if key in manifest["groups"]}
-    tasks = {task: {"numerical_inputs_complete": all(ready.get(g, False) for g in groups),
-                     "missing_groups": [g for g in groups if not ready.get(g, False)]}
-             for task, groups in manifest["tasks"].items()}
-    return {"catalogue": manifest["version"], "all_numerical_inputs_complete": all(t["numerical_inputs_complete"] for t in tasks.values()),
-            "tasks": tasks, "scope": "Numerical inputs only. This is not validated reference answers, scientific result correctness, or staged idea-paper full texts."}
+    tasks = {}
+    for task, needed in manifest["tasks"].items():
+        oracle = manifest.get("evaluator_groups", {}).get(task, [])
+        tasks[task] = {"numerical_inputs_complete": all(ready.get(g, False) for g in needed),
+                       "missing_groups": [g for g in needed if not ready.get(g, False)],
+                       "evaluator_inputs_complete": all(ready.get(g, False) for g in oracle),
+                       "missing_evaluator_groups": [g for g in oracle if not ready.get(g, False)]}
+    complete = sum(t["numerical_inputs_complete"] for t in tasks.values())
+    return {"catalogue": manifest["version"], "all_numerical_inputs_complete": complete == len(tasks),
+            "complete_tasks": complete, "tasks": tasks,
+            "scope": "Numerical inputs only. This is not validated reference answers or scientific result correctness."}
 
 
 def bindings(manifest):
-    return {task: {"datasets": list(dict.fromkeys(f"{manifest['groups'][g]['data_type']}/{folder}"
-                         for g in groups for folder in manifest["groups"][g]["folders"]))}
-            for task, groups in manifest["tasks"].items()}
+    """Agent-visible data folders per task, relative to the data root. Evaluator-only groups never appear."""
+    result = {}
+    for task, needed in manifest["tasks"].items():
+        paths = []
+        for key in needed:
+            group = manifest["groups"][key]
+            paths += [f"{group['data_type']}/{folder}" for folder in group["folders"]]
+        result[task] = {"datasets": list(dict.fromkeys(paths))}
+    return result
 
 
 @contextmanager
@@ -94,7 +155,7 @@ def phase_lock(root, phase):
         except BlockingIOError as exc:
             raise erddap.DownloadError(
                 f"Download lock busy for {phase}: same phase, verification, or a legacy downloader is running. "
-                "Restart legacy downloads with the updated script before running public and services together."
+                "Restart legacy downloads with the updated script before running phases together."
             ) from exc
         yield
 
@@ -118,8 +179,8 @@ def refresh_summary(control, manifest):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=["public", "services", "verify"])
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("phase", choices=["public", "services", "private", "verify"])
+    parser.add_argument("--output", type=Path, required=True, help="The data root shared by all phases")
     parser.add_argument("--execute", action="store_true", help="Download; otherwise show the fixed scope without network calls")
     parser.add_argument("--workers", type=services.positive_workers, default=2,
                         help="Concurrent CMEMS/ERA5 chunks (default: 2; 1 restores serial). Public/verify stay serial.")
@@ -128,8 +189,11 @@ def main(argv=None):
     root = args.output.expanduser().resolve()
     if root == Path(root.anchor):
         raise ValueError("Choose a dedicated data directory")
-    selected = {k: g for k, g in manifest["groups"].items() if args.phase == "verify" or g["phase"] == args.phase}
-    if not args.execute and args.phase != "verify":
+    if args.phase == "verify":
+        selected = {k: g for k, g in manifest["groups"].items() if g["phase"] != "private"}
+    else:
+        selected = {k: g for k, g in manifest["groups"].items() if g["phase"] == args.phase}
+    if not args.execute and args.phase not in {"verify", "private"}:
         for key, group in selected.items():
             print(key, json.dumps(group))
         print("Offline preview only. Add --execute. No data or credentials checked.")
@@ -144,9 +208,17 @@ def main(argv=None):
                       "workers": args.workers if args.phase == "services" else 1, "failed_files": []}
             report_path = control / f"{key}.report.json"
             plan_path = control / f"{key}.plan.json"
+            print(f"{key}: checking ...", flush=True)
+            if args.phase == "private":
+                report.update(check_private(group, root))
+                report["completed_files"] = report["files"]
+                erddap.write_json(report_path, report)
+                state = "complete" if report["complete"] else ("missing (optional)" if report["optional"] else "INCOMPLETE")
+                print(f"{key}: {state}; {report['files']} files; missing {report['missing'][:5]}", flush=True)
+                failed = failed or (not report["complete"] and not report["optional"])
+                continue
             erddap.write_json(report_path, report)
             refresh_summary(control, manifest)
-            print(f"{key}: checking/downloading ...", flush=True)
             try:
                 if args.phase == "verify":
                     saved = json.loads(plan_path.read_text())
@@ -164,7 +236,7 @@ def main(argv=None):
                     print(f"{key}: {report['completed_files']}/{len(chunks)} {result['path']}", flush=True)
                     erddap.write_json(report_path, report)
                 if args.phase == "verify":
-                    verify_existing(chunks, root)
+                    verify_existing(group, chunks, root)
                     report["completed_files"] = len(chunks)
                 elif group["adapter"] == "ncei":
                     ncei_oisst.execute(chunks, root, record)
@@ -192,8 +264,7 @@ def main(argv=None):
             erddap.write_json(report_path, report)
             refresh_summary(control, manifest)
         result = refresh_summary(control, manifest)
-        count = sum(t["numerical_inputs_complete"] for t in result["tasks"].values())
-        print(f"Numerical input coverage: {count}/15 tasks. Report: {control / 'coverage.json'}")
+        print(f"Numerical input coverage: {result['complete_tasks']}/{len(result['tasks'])} tasks. Report: {control / 'coverage.json'}")
         return 1 if failed else 0
 
 

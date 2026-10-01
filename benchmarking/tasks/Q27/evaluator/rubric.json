@@ -1,0 +1,189 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q27",
+  "type": "open_problem",
+  "open_kind": "disagreement",
+  "title": "Are East China Sea marine heatwaves increasing, and how the baseline changes the answer",
+  "status": "draft",
+  "query_sha256": "9e09e5f4b29396d0620b44ebde9863e4ffb9b8d2cef4dfac7733cd8c0fff22aa",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "framing 10, data 10, answer 20, mechanism 20, robustness 15, breadth 15, insight 10"
+  },
+  "criteria": [
+    {
+      "id": "Q27-F",
+      "kind": "framing",
+      "weight": 10,
+      "title": "Framing and competing hypotheses",
+      "anchors": {
+        "0": "Answers a different or vaguer question; no testable framing.",
+        "2": "Operational definitions are given, but only one explanation is considered, or hypotheses are not tied to predictions.",
+        "4": "Precise operational definitions; competing hypotheses with distinguishing predictions that structure the analysis."
+      }
+    },
+    {
+      "id": "Q27-A",
+      "kind": "data",
+      "weight": 10,
+      "title": "Data fitness and handling",
+      "anchors": {
+        "0": "Data mishandled (units, masks, grid, time or depth conventions) in a way that changes the results.",
+        "2": "Correct handling, but the data's fitness for this question (model versus ocean, record length, resolution, missing variables) is not examined.",
+        "4": "Correct handling, and fitness for this question is checked explicitly (for example against known observations or by internal consistency), with its consequences for the conclusions stated."
+      }
+    },
+    {
+      "id": "Q27-Q",
+      "kind": "answer",
+      "weight": 20,
+      "title": "Disagreement quantified",
+      "uses": [
+        "Q27-A1"
+      ],
+      "anchors": {
+        "0": "The disagreement is not quantified, or incompatible quantities are compared.",
+        "1": "Quantified only in aggregate (one number), or mostly inconsistent with the frozen references.",
+        "2": "Quantified, but with unaddressed comparability problems (definition, grid, depth, averaging, period) or partly inconsistent with the frozen references.",
+        "3": "Quantified on a common footing and mostly consistent with the frozen references; its structure (where, when) partly described.",
+        "4": "Quantified on a common footing (definitions, grids, periods, averaging), with its structure by region, season or method, consistent with the frozen references."
+      }
+    },
+    {
+      "id": "Q27-M",
+      "kind": "mechanism",
+      "weight": 20,
+      "title": "Causes diagnosed with targeted tests",
+      "uses": [
+        "Q27-A2",
+        "candidate_causes",
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "Causes asserted without tests.",
+        "1": "Plausible causes listed; at most one weak test.",
+        "2": "One candidate cause tested with a targeted experiment, or tests inconclusive but honestly reported.",
+        "3": "Two candidate causes tested with targeted experiments; the conclusions follow and agree with the frozen references.",
+        "4": "Three or more candidate causes considered, at least two tested with experiments that could have shown them wrong; the conclusions follow from the tests, agree with the frozen references, and the unexplained remainder is quantified."
+      }
+    },
+    {
+      "id": "Q27-R",
+      "kind": "robustness",
+      "weight": 15,
+      "title": "Robustness and uncertainty",
+      "uses": [
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "No sensitivity tests and no uncertainty.",
+        "1": "Generic caveats only.",
+        "2": "One sensitivity test, or statistics that ignore short or autocorrelated records.",
+        "3": "Several targeted sensitivity tests and suitable statistics; some key numbers lack uncertainty.",
+        "4": "Targeted sensitivity tests on every choice that could change the conclusion (thresholds, baselines, regions, definitions), statistics suited to short and autocorrelated records, and uncertainty on all key numbers."
+      }
+    },
+    {
+      "id": "Q27-B",
+      "kind": "breadth",
+      "weight": 15,
+      "title": "Breadth and synthesis",
+      "uses": [
+        "breadth_probes"
+      ],
+      "anchors": {
+        "0": "A single isolated diagnostic, with no link to related processes or published work.",
+        "1": "Related processes or literature are mentioned but not used.",
+        "2": "More than one variable or time scale is used, or results are compared with the literature, but mostly descriptively.",
+        "3": "Processes or scales are connected and results are compared with published work with correct citations; one breadth probe is addressed well.",
+        "4": "Scales and processes are connected (for example seasonal to interannual, physics to biogeochemistry), several variables are used coherently, agreement and disagreement with published work are stated with correct citations, and the breadth probes are addressed."
+      }
+    },
+    {
+      "id": "Q27-I",
+      "kind": "insight",
+      "weight": 10,
+      "title": "Insight, limits and next steps",
+      "anchors": {
+        "0": "No clear answer to the question.",
+        "2": "A clear answer, with generic limits and next steps.",
+        "4": "A clear, quantified answer; precise limits of what the data can and cannot settle; specific next analyses or data that would settle the open points; at least one non-obvious insight supported by the analysis."
+      }
+    }
+  ],
+  "answer_key": {
+    "oracle_groups": [],
+    "items": [
+      {
+        "id": "Q27-A1",
+        "quantity": "Trends under baselines",
+        "procedure": "Trends of summer heatwave days, frequency and cumulative intensity under a fixed 1982-2011 baseline, a fixed 1991-2020 baseline and a detrended (shifting) baseline; area mean and maps.",
+        "used_by": "Q27-Q",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: signs exact; magnitudes +/-30%)"
+      },
+      {
+        "id": "Q27-A2",
+        "quantity": "Attribution",
+        "procedure": "Share of the change in heatwave days explained by mean warming (fixed versus detrended baselines, or a variance decomposition).",
+        "used_by": "Q27-M",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: +/-0.15)"
+      }
+    ]
+  },
+  "candidate_causes": [
+    {
+      "id": "Q27-H1",
+      "cause": "Fixed versus shifting baseline.",
+      "test": "Recompute with both and compare.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q27-H2",
+      "cause": "Baseline period.",
+      "test": "1982-2011 versus 1991-2020.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q27-H3",
+      "cause": "Spatial aggregation: grid-point events versus area-mean series.",
+      "test": "Compute both.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q27-H4",
+      "cause": "Season window and event rules (minimum duration, gap joining).",
+      "test": "Sensitivity runs.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q27-H5",
+      "cause": "Homogeneity of OISST over time (changing input data).",
+      "test": "Check for step changes; compare sub-periods.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    }
+  ],
+  "depth_probes": [
+    "Decomposes the change into mean warming and variance change.",
+    "Uses statistics suited to autocorrelated series (effective sample size)."
+  ],
+  "breadth_probes": [
+    "Relates the result to the 2023 event and to published East China Sea heatwave studies."
+  ],
+  "gates": [
+    "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",
+    "A different target (region, period or quantity) without justification: Q and M score at most 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
+  ],
+  "evaluator_groups": [],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}

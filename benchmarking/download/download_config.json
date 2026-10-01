@@ -11,7 +11,7 @@
         "chlor_a"
       ],
       "start": "2003-01",
-      "end": "2017-12",
+      "end": "2020-12",
       "cadence": "month",
       "bbox": [
         104,
@@ -19,32 +19,8 @@
         1,
         25
       ],
-      "notes": "Public monthly archive shared by the revised Q19–Q22 and Q28. Queries choose their specified years and coordinate boxes; not original paper R2012.0.",
+      "notes": "Public monthly archive, 2003-2020; used by the CMOMS-versus-MODIS question (Q22).",
       "data_type": "MODIS_Aqua",
-      "variable_folders": {
-        "chlor_a": "chlorophyll"
-      }
-    },
-    {
-      "id": "seawifs_monthly",
-      "enabled": false,
-      "server": "https://oceanwatch.pifsc.noaa.gov/erddap",
-      "dataset": "sw_chla_monthly_2018_0",
-      "version_label": "SeaWiFS R2018.0",
-      "variables": [
-        "chlor_a"
-      ],
-      "start": "1997-09",
-      "end": "2010-04",
-      "cadence": "month",
-      "bbox": [
-        104,
-        120,
-        1,
-        25
-      ],
-      "notes": "Optional manual legacy product, NOT required by the accessible-data benchmark; the unified downloader never requests it.",
-      "data_type": "SeaWiFS",
       "variable_folders": {
         "chlor_a": "chlorophyll"
       }
@@ -65,7 +41,7 @@
         "zlev": 10
       },
       "start": "2003-01",
-      "end": "2012-12",
+      "end": "2020-12",
       "cadence": "month",
       "bbox": [
         104,
@@ -73,37 +49,10 @@
         1,
         25
       ],
-      "notes": "Revised Q20/Q22 monthly scalar/vector wind association. No nonlinear wind stress or CCMP substitution is claimed.",
+      "notes": "Monthly scalar and vector winds, 2003-2020; used by the Vietnam upwelling question (Q04). Scalar mean speed is not the magnitude of mean vector components.",
       "data_type": "NOAA_Blended_Wind",
       "variable_folders": {}
-    },
-    {
-      "id": "oisst_daily",
-      "enabled": false,
-      "data_type": "OISST",
-      "variable_folders": {},
-      "server": "https://coastwatch.pfeg.noaa.gov/erddap",
-      "dataset": "ncdcOisst21Agg_LonPM180",
-      "version_label": "NOAA OISST v2.1 final; disclosed current release, not presumed identical to paper v2",
-      "variables": [
-        "sst",
-        "ice"
-      ],
-      "axis_values": {
-        "zlev": 0
-      },
-      "start": "1982-01-01",
-      "end": "2023-12-31",
-      "cadence": "day",
-      "bbox": [
-        120,
-        128,
-        25,
-        34
-      ],
-      "notes": "Optional manual ERDDAP route; download_all.py uses complete original NCEI daily files instead of this potentially gappy mirror."
     }
   ],
-  "pending": [],
-  "scope": "Manual ERDDAP adapters. The complete current benchmark inventory is public_manifest.json, executed by download_all.py."
+  "scope": "ERDDAP products used by download_all.py (v2). Groups in data_manifest.json override start, end, bbox and variables."
 }

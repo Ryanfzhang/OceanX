@@ -1,0 +1,181 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q24",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "Loss of the salinity maximum in Loop Current eddies",
+  "status": "draft",
+  "query_sha256": "b9a7c841ceeef233d5112caadd48cb94f9d090d7384fd8513d79ea89fc389d3d",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "framing 10, data 10, answer 20, mechanism 20, robustness 15, breadth 15, insight 10"
+  },
+  "criteria": [
+    {
+      "id": "Q24-F",
+      "kind": "framing",
+      "weight": 10,
+      "title": "Framing and competing hypotheses",
+      "anchors": {
+        "0": "Answers a different or vaguer question; no testable framing.",
+        "2": "Operational definitions are given, but only one explanation is considered, or hypotheses are not tied to predictions.",
+        "4": "Precise operational definitions; competing hypotheses with distinguishing predictions that structure the analysis."
+      }
+    },
+    {
+      "id": "Q24-A",
+      "kind": "data",
+      "weight": 10,
+      "title": "Data fitness and handling",
+      "anchors": {
+        "0": "Data mishandled (units, masks, grid, time or depth conventions) in a way that changes the results.",
+        "2": "Correct handling, but the data's fitness for this question (model versus ocean, record length, resolution, missing variables) is not examined.",
+        "4": "Correct handling, and fitness for this question is checked explicitly (for example against known observations or by internal consistency), with its consequences for the conclusions stated."
+      }
+    },
+    {
+      "id": "Q24-Q",
+      "kind": "answer",
+      "weight": 20,
+      "title": "Quantitative answer against the answer key",
+      "uses": [
+        "Q24-A1"
+      ],
+      "anchors": {
+        "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
+        "1": "Quantities are reported, but most disagree with the answer key and no stated definition explains the difference.",
+        "2": "About half of the answer-key items used by this criterion agree within tolerance (or differ only by a stated definition that the evaluator recomputed).",
+        "3": "Most items agree within tolerance; one is missing or outside tolerance.",
+        "4": "All answer-key items used by this criterion agree within tolerance, and their uncertainty is stated."
+      }
+    },
+    {
+      "id": "Q24-M",
+      "kind": "mechanism",
+      "weight": 20,
+      "title": "Mechanistic depth",
+      "uses": [
+        "Q24-A2",
+        "Q24-A3",
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "Description only, or a mechanism that the answer key contradicts.",
+        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
+        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
+        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
+        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+      }
+    },
+    {
+      "id": "Q24-R",
+      "kind": "robustness",
+      "weight": 15,
+      "title": "Robustness and uncertainty",
+      "uses": [
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "No sensitivity tests and no uncertainty.",
+        "1": "Generic caveats only.",
+        "2": "One sensitivity test, or statistics that ignore short or autocorrelated records.",
+        "3": "Several targeted sensitivity tests and suitable statistics; some key numbers lack uncertainty.",
+        "4": "Targeted sensitivity tests on every choice that could change the conclusion (thresholds, baselines, regions, definitions), statistics suited to short and autocorrelated records, and uncertainty on all key numbers."
+      }
+    },
+    {
+      "id": "Q24-B",
+      "kind": "breadth",
+      "weight": 15,
+      "title": "Breadth and synthesis",
+      "uses": [
+        "breadth_probes",
+        "literature_context"
+      ],
+      "anchors": {
+        "0": "A single isolated diagnostic, with no link to related processes or published work.",
+        "1": "Related processes or literature are mentioned but not used.",
+        "2": "More than one variable or time scale is used, or results are compared with the literature, but mostly descriptively.",
+        "3": "Processes or scales are connected and results are compared with published work with correct citations; one breadth probe is addressed well.",
+        "4": "Scales and processes are connected (for example seasonal to interannual, physics to biogeochemistry), several variables are used coherently, agreement and disagreement with published work are stated with correct citations, and the breadth probes are addressed."
+      }
+    },
+    {
+      "id": "Q24-I",
+      "kind": "insight",
+      "weight": 10,
+      "title": "Insight, limits and next steps",
+      "anchors": {
+        "0": "No clear answer to the question.",
+        "2": "A clear answer, with generic limits and next steps.",
+        "4": "A clear, quantified answer; precise limits of what the data can and cannot settle; specific next analyses or data that would settle the open points; at least one non-obvious insight supported by the analysis."
+      }
+    }
+  ],
+  "answer_key": {
+    "oracle_groups": [],
+    "items": [
+      {
+        "id": "Q24-A1",
+        "quantity": "Eddy-following salinity maximum",
+        "procedure": "For each tracked Loop Current eddy, the time series of the core salinity-maximum value and depth after separation; decay rate.",
+        "used_by": "Q24-Q",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: decay rate +/-40%)"
+      },
+      {
+        "id": "Q24-A2",
+        "quantity": "Seasonality",
+        "procedure": "Whether the decay is faster in late autumn and winter (mixed-layer deepening) than in summer.",
+        "used_by": "Q24-M",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: exact)"
+      },
+      {
+        "id": "Q24-A3",
+        "quantity": "Process indicators",
+        "procedure": "Relation of the decay to mixed-layer depth in the eddy core and to interaction with other eddies or the slope.",
+        "used_by": "Q24-M",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: signs exact)"
+      }
+    ]
+  },
+  "depth_probes": [
+    "Works in an eddy-following frame and on density surfaces.",
+    "Separates vertical mixing (winter mixed-layer deepening) from lateral exchange and eddy-eddy interaction.",
+    "Compares eddies that separated in different seasons."
+  ],
+  "breadth_probes": [
+    "Connects the transformation to the formation of Gulf Common Water and the Gulf's salt budget."
+  ],
+  "literature_context": [
+    {
+      "citation": "Sosa-Gutierrez et al. (2020)",
+      "title": "Erosion of the Subsurface Salinity Maximum of the Loop Current Eddies From Glider Observations and a Numerical Model",
+      "journal": "Journal of Geophysical Research: Oceans",
+      "year": 2020,
+      "volume": "125",
+      "pages": "e2019JC015397",
+      "doi": "10.1029/2019JC015397",
+      "url": "https://doi.org/10.1029/2019JC015397",
+      "verification": "Crossref metadata and abstract checked 2026-10-01",
+      "use": "Glider and model study of the Poseidon eddy (2016-2017): most dilution of the salinity maximum in late autumn and winter, mostly by vertical salt diffusion above the 1026 kg/m3 isopycnal and by advection below it. Use it to judge the literature comparison only; the answer key comes from the supplied data."
+    }
+  ],
+  "gates": [
+    "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",
+    "A different target (region, period or quantity) without justification: Q and M score at most 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
+  ],
+  "evaluator_groups": [],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}

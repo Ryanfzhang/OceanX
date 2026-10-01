@@ -1,12 +1,22 @@
 {
   "id": "Q12",
-  "track": "autoresearch",
-  "title": "Nutrient-management effects on projected hypoxia",
-  "query": "Evaluate how nutrient reduction changes projected coastal hypoxia in the supplied Pearl River estuary–shelf simulations under SSP5-8.5. Compare ConstantN and DecreasingN during 2016–2045 and 2071–2100 using hypoxic water volume, quantify between-period changes and interannual variability, and assess whether the management effect persists in the later period.",
-  "catalog_version": "2026-09-07-paper-aligned",
-  "data_status": "pending_acquisition_and_validation",
+  "suite": "test",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "topic": "coastal upwelling",
+  "title": "Year-to-year control of the upwelling off eastern Hainan",
+  "query": "Using the supplied CMOMS daily temperature, salinity and velocity for 2011-2020, quantify the summer (June-August) coastal upwelling off the east coast of Hainan Island in each year and determine what controls its year-to-year variability. Winds are not supplied.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "SCS",
+    "name": "South China Sea",
+    "data": "CMOMS model domain"
+  },
+  "period": "2011-2020",
   "data_groups": [
-    "M5"
+    "C_CORE"
   ],
-  "analysis_period": "2016–2045 and 2071–2100; June–September"
+  "data_access": "private",
+  "pair": "Q29"
 }

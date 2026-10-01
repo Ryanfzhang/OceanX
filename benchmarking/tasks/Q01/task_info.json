@@ -1,40 +1,31 @@
 {
   "id": "Q01",
-  "track": "data_analysis",
-  "title": "Monthly surface chlorophyll",
-  "catalog_version": "2026-09-07-basic-v1",
-  "query": "Using the 2011 CMOMS data and supplied shelf mask, plot the area-weighted monthly mean surface chlorophyll as one line chart. Calculate a valid-area-weighted regional mean for each day, then average valid daily means within each month. Use the fixed shallowest wet level, without replacing missing surface values with deeper values. Give one short conclusion identifying the highest and lowest months. Use the frozen B1 manifest for masks and geometry, keep missing values distinct from zero, and retain the calculation code for checking. Only one figure and one short conclusion are requested.",
-  "analysis_period": "2011",
-  "data_groups": [
-    "B1"
-  ],
-  "required_variables": [
-    "chlorophyll"
-  ],
-  "input_contract": {
-    "data_group": "B1",
-    "source": "CMOMS",
-    "period": "2011-01-01/2011-12-31",
-    "sampling": "daily mean",
-    "depth": "all supplied fixed physical depth levels; do not surface-trim the shared archive",
-    "science_fields": [
-      "temp",
-      "salt",
-      "u",
-      "v",
-      "oxygen",
-      "chlorophyll"
-    ],
-    "metadata_required": [
-      "provider-confirmed units and temperature/salinity conventions",
-      "calendar, time bounds, fill values and QC",
-      "longitude/latitude, positive-down depth and wet/land masks",
-      "cell areas and bathymetry",
-      "velocity staggering/orientation and collocation/rotation specification",
-      "fixed analysis and shelf masks"
-    ],
-    "availability": "pending_authorization_and_file_validation",
-    "notes": "One shared archive, not six copies. Science fields exist in the supplied avg_info.cdl, but the header does not prove the 2011 files or geometry are available. temp is labelled potential temperature; salt convention must be confirmed. Freeze physical bottom-level indices before applying daily data validity; a missing bottom value is not permission to substitute a shallower value. Use the user's per-year/per-variable fixed-depth layout. Freeze any preprocessing and bottom mapping before evaluation, and give both systems the identical prepared grid."
+  "suite": "test",
+  "type": "paper_reproduction",
+  "topic": "layered circulation",
+  "title": "Layered rotating circulation and its vorticity hotspots",
+  "query": "Using the supplied CMOMS daily velocity, temperature and salinity for 2011-2020, test the following findings of Gan et al. (2022, Nature Communications, doi:10.1038/s41467-022-29610-z) for the South China Sea basin: (1) the basin-scale circulation rotates in alternating directions in vertically stacked layers, cyclonic in the upper layer, anticyclonic in the middle layer and cyclonic in the deep layer; (2) in each layer the circulation, identified through Stokes' theorem as the area integral of relative vorticity over the basin, is dominated by a few energetic hotspots with large vorticity whose contribution far exceeds their share of the area; (3) these hotspots also supply most of the energy needed to form and maintain the rotating circulation. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain any differences from the paper.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "SCS",
+    "name": "South China Sea",
+    "data": "CMOMS model domain"
   },
-  "data_status": "pending_authorization_and_file_validation"
+  "period": "2011-2020",
+  "data_groups": [
+    "C_CORE"
+  ],
+  "data_access": "private",
+  "paper": {
+    "citation": "Gan et al. (2022)",
+    "title": "Hotspots of the stokes rotating circulation in a large marginal sea",
+    "journal": "Nature Communications",
+    "year": 2022,
+    "volume": "13",
+    "pages": "2223",
+    "doi": "10.1038/s41467-022-29610-z",
+    "url": "https://doi.org/10.1038/s41467-022-29610-z",
+    "verification": "Crossref metadata and abstract checked 2026-10-01"
+  }
 }

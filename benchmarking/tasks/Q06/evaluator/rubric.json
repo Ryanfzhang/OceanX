@@ -1,0 +1,156 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q06",
+  "type": "paper_reproduction",
+  "title": "Summer marine heatwaves in the South China Sea",
+  "status": "draft",
+  "query_sha256": "1c39a398d9b67e1d2c9702d5206e00848b56ce748746ad3e84ed8afc9caa6733",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "findings 70, method 10, differences 10, report 10"
+  },
+  "paper": {
+    "citation": "Yao and Wang (2021)",
+    "title": "Variations in Summer Marine Heatwaves in the South China Sea",
+    "journal": "Journal of Geophysical Research: Oceans",
+    "year": 2021,
+    "volume": "126",
+    "pages": "e2021JC017792",
+    "doi": "10.1029/2021JC017792",
+    "url": "https://doi.org/10.1029/2021JC017792",
+    "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "verdict_labels": [
+    "reproduced",
+    "partly reproduced",
+    "not reproduced",
+    "not testable with the supplied data"
+  ],
+  "criteria": [
+    {
+      "id": "Q06-K1",
+      "kind": "claim",
+      "weight": 20,
+      "title": "Finding 1",
+      "claim": "Multiyear-mean summer marine-heatwave days and duration are concentrated near the Nansha Islands and in the Beibu Gulf.",
+      "paper_evidence": "Abstract: 'The MHW days and duration, calculated as multiyear average, are mainly concentrated near the Nansha Islands and Beibu Gulf'.",
+      "testability": "testable",
+      "how_to_test": "Mean summer marine-heatwave days and duration maps, 2011-2020, with the agent's definition and ten-year baseline; rank of the two regions within the basin.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: both regions in the top quartile of the basin, or the difference explained)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q06-K2",
+      "kind": "claim",
+      "weight": 10,
+      "title": "Finding 2",
+      "claim": "Marine-heatwave days, duration and frequency increased significantly over 1982-2020.",
+      "paper_evidence": "Abstract: 'significant increasing trends in MHW days, duration, and frequency in the South China Sea during 1982-2020'.",
+      "testability": "not testable",
+      "how_to_test": "The supplied record covers 2011-2020 only; a ten-year trend cannot test a 39-year trend. A short-record trend must be labelled as such.",
+      "expected": "n/a",
+      "tolerance": "n/a",
+      "anchors": {
+        "0": "Ignored, or reported as verified or refuted although the supplied data cannot test it.",
+        "2": "Recognised as not fully testable, but without naming what is missing, or a weak proxy presented as a real test.",
+        "4": "Stated as not testable with the supplied data, naming the missing data or period; any proxy analysis is labelled as a proxy and not used for the verdict."
+      }
+    },
+    {
+      "id": "Q06-K3",
+      "kind": "claim",
+      "weight": 15,
+      "title": "Finding 3",
+      "claim": "The leading EOF of summer marine-heatwave days has one sign over the whole basin and explains about 60% of the variance.",
+      "paper_evidence": "Abstract.",
+      "testability": "testable",
+      "how_to_test": "EOF of yearly summer marine-heatwave days (ten summers): variance fraction and sign uniformity.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: variance fraction +/-10 percentage points; sign uniformity exact)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q06-K4",
+      "kind": "claim",
+      "weight": 25,
+      "title": "Finding 4",
+      "claim": "Severe summer marine heatwaves occur when the southwest monsoon weakens south of 12 N and the mid-western South China Sea upwelling weakens or disappears.",
+      "paper_evidence": "Abstract: 'The midwestern South China Sea upwelling weakens or even disappears due to a negative wind stress curl, causing basin-wide severe summer MHWs'.",
+      "testability": "partly testable",
+      "how_to_test": "Testable: upwelling strength off Vietnam (coastal-minus-offshore temperature, offshore currents) in the most severe heatwave summers versus other summers. Not testable: the monsoon, the anticyclone and the radiation and latent-heat changes (no atmospheric data).",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: upwelling anomaly sign exact in the two most severe summers)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
+      }
+    },
+    {
+      "id": "Q06-M",
+      "kind": "method",
+      "weight": 10,
+      "title": "Method fidelity",
+      "focus": "Hobday et al. (2016) definition (percentile, minimum duration, gap joining, climatology window) or a stated variant; the summer months; EOF of yearly marine-heatwave days; an upwelling index for the mid-western South China Sea.",
+      "anchors": {
+        "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
+        "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
+        "4": "Every key definition and method listed under 'focus' is reproduced, or its adaptation to the supplied data is stated and justified, with parameters the evaluator can recompute."
+      }
+    },
+    {
+      "id": "Q06-D",
+      "kind": "differences",
+      "weight": 10,
+      "title": "Differences from the paper's setting",
+      "focus": "Ten years versus 39; a baseline from a short record; model SST versus satellite SST; no winds for the monsoon part.",
+      "anchors": {
+        "0": "No account of how the supplied data, period or region differ from the paper's.",
+        "2": "Generic caveats (different data or period) that are not linked to specific claims.",
+        "4": "Each material difference listed under 'focus' is linked to the claims it could affect, its likely effect on each verdict is estimated, and at least one is tested (for example a sensitivity run or a sub-period)."
+      }
+    },
+    {
+      "id": "Q06-R",
+      "kind": "report",
+      "weight": 10,
+      "title": "Verification report and traceability",
+      "anchors": {
+        "0": "No claim-by-claim result; numbers cannot be traced to code or outputs.",
+        "2": "Verdicts are given but scattered or only partly traceable.",
+        "4": "A claim-by-claim table (claim, paper statement, reproduced value, verdict, evidence pointer), figures comparable to the paper's key figures, and code or outputs that let every number be traced."
+      }
+    }
+  ],
+  "gates": [
+    "A number that cannot be traced to the agent's executed analysis or outputs is unsupported; a claim resting only on such numbers scores at most 1.",
+    "A paper value reported as the agent's own result scores 0 on that claim and caps R at 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except M at most 1."
+  ],
+  "evaluator_groups": [],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}

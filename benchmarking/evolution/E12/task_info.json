@@ -1,0 +1,26 @@
+{
+  "id": "E12",
+  "suite": "evolution",
+  "type": "open_problem",
+  "open_kind": "disagreement",
+  "title": "When temperature stops predicting nitrate",
+  "query": "Using the supplied GLORYS12 monthly temperature and salinity for 2011-2020 and CMEMS biogeochemical reanalysis monthly nitrate for the same years off California and Oregon (30-48 N, 130-116 W), determine how well temperature or density predicts nitrate, where and when the relation breaks down, and why. The two products come from different model systems; account for that.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "CCS",
+    "name": "California Current System",
+    "bbox": [
+      -130,
+      -116,
+      30,
+      48
+    ]
+  },
+  "data_groups": [
+    "P_CCS_PHY",
+    "P_CCS_BGC"
+  ],
+  "data_access": "public",
+  "scored": false
+}

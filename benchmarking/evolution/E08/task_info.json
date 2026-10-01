@@ -1,0 +1,25 @@
+{
+  "id": "E08",
+  "suite": "evolution",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "Timing and size of the upwelling-season chlorophyll maximum",
+  "query": "Using the supplied CMEMS biogeochemical reanalysis monthly chlorophyll and nitrate for 1993-2020 off California and Oregon (30-48 N, 130-116 W), determine how the timing and magnitude of the coastal upwelling-season chlorophyll maximum differ between the northern and southern California Current System and from year to year, and what controls them.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "CCS",
+    "name": "California Current System",
+    "bbox": [
+      -130,
+      -116,
+      30,
+      48
+    ]
+  },
+  "data_groups": [
+    "P_CCS_BGC"
+  ],
+  "data_access": "public",
+  "scored": false
+}

@@ -130,11 +130,11 @@ class BindingTests(unittest.TestCase):
     def test_directory_reference_keeps_query_and_does_not_copy(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "data"
-            data = root / "CMOMS/temperature/2011"
+            data = root / "CMOMS/temp/2011"
             data.mkdir(parents=True)
             source = data / "original.nc"
             source.write_bytes(b"path-only fixture, not validated science data")
-            cases = prepare.build_cases(["Q01"], root, datasets=["CMOMS/temperature/2011"])
+            cases = prepare.build_cases(["Q01"], root, {"Q01": {"datasets": ["CMOMS/temp/2011"]}})
             task = json.loads((prepare.TASKS / "Q01/task_info.json").read_text())
             self.assertEqual(cases[0]["query"], task["query"])
             self.assertEqual(cases[0]["datasets"], [str(data.resolve())])
@@ -146,12 +146,12 @@ class BindingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "empty").mkdir()
-            for kwargs in [{"bindings": {}}, {"datasets": ["empty"]}, {"datasets": ["../escape"]}]:
+            for bindings in [{}, {"Q01": {"datasets": ["empty"]}}, {"Q01": {"datasets": ["../escape"]}}]:
                 with self.assertRaises((ValueError, FileNotFoundError)):
-                    prepare.build_cases(["Q01"], root, **kwargs)
+                    prepare.build_cases(["Q01"], root, bindings)
             (root / "checklist.json").write_text("{}")
             with self.assertRaises(ValueError):
-                prepare.build_cases(["Q01"], root, datasets=["checklist.json"])
+                prepare.build_cases(["Q01"], root, {"Q01": {"datasets": ["checklist.json"]}})
 
 
 if __name__ == "__main__":

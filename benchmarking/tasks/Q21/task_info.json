@@ -1,14 +1,22 @@
 {
   "id": "Q21",
-  "track": "autoresearch",
-  "title": "MODIS coastal versus offshore chlorophyll",
-  "query": "Using the provided MODIS-Aqua data for 2003–2012, investigate how chlorophyll variability differs between the SEATS area (115.5–116.5°E, 17.5–18.5°N) and Pearl River coastal waters (112–115°E, 21–23°N).",
-  "catalog_version": "2026-09-08-accessible-v1",
-  "data_status": "scripted_acquisition_pending_execution",
+  "suite": "test",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "topic": "water masses",
+  "title": "Erosion of the North Pacific Tropical Water salinity maximum",
+  "query": "Using the supplied CMOMS daily temperature, salinity and velocity for 2011-2020, determine how the subsurface salinity maximum of North Pacific Tropical Water entering through the Luzon Strait is diluted and transformed inside the South China Sea: along which paths, how fast, in which seasons, and by which processes.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "SCS",
+    "name": "South China Sea",
+    "data": "CMOMS model domain"
+  },
+  "period": "2011-2020",
   "data_groups": [
-    "P_MODIS"
+    "C_CORE"
   ],
-  "analysis_period": "2003–2012",
-  "adaptation": "Public-data method transfer with reduced scope, authorized 2026-09-08; not exact reproduction of the original observational archive.",
-  "query_version": "2026-09-11-general-v1"
+  "data_access": "private",
+  "pair": "Q24"
 }

@@ -1,0 +1,204 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q15",
+  "type": "open_problem",
+  "open_kind": "disagreement",
+  "title": "Why estimates of the Luzon Strait transport and Kuroshio intrusion differ",
+  "status": "draft",
+  "query_sha256": "995816b07b1a5fdac8e2bd923f587a4f5d7fe7053d1d68b27dafc4dd9528b115",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "framing 10, data 10, answer 20, mechanism 20, robustness 15, breadth 15, insight 10"
+  },
+  "criteria": [
+    {
+      "id": "Q15-F",
+      "kind": "framing",
+      "weight": 10,
+      "title": "Framing and competing hypotheses",
+      "anchors": {
+        "0": "Answers a different or vaguer question; no testable framing.",
+        "2": "Operational definitions are given, but only one explanation is considered, or hypotheses are not tied to predictions.",
+        "4": "Precise operational definitions; competing hypotheses with distinguishing predictions that structure the analysis."
+      }
+    },
+    {
+      "id": "Q15-A",
+      "kind": "data",
+      "weight": 10,
+      "title": "Data fitness and handling",
+      "anchors": {
+        "0": "Data mishandled (units, masks, grid, time or depth conventions) in a way that changes the results.",
+        "2": "Correct handling, but the data's fitness for this question (model versus ocean, record length, resolution, missing variables) is not examined.",
+        "4": "Correct handling, and fitness for this question is checked explicitly (for example against known observations or by internal consistency), with its consequences for the conclusions stated."
+      }
+    },
+    {
+      "id": "Q15-Q",
+      "kind": "answer",
+      "weight": 20,
+      "title": "Disagreement quantified",
+      "uses": [
+        "Q15-A1",
+        "Q15-A2"
+      ],
+      "anchors": {
+        "0": "The disagreement is not quantified, or incompatible quantities are compared.",
+        "1": "Quantified only in aggregate (one number), or mostly inconsistent with the frozen references.",
+        "2": "Quantified, but with unaddressed comparability problems (definition, grid, depth, averaging, period) or partly inconsistent with the frozen references.",
+        "3": "Quantified on a common footing and mostly consistent with the frozen references; its structure (where, when) partly described.",
+        "4": "Quantified on a common footing (definitions, grids, periods, averaging), with its structure by region, season or method, consistent with the frozen references."
+      }
+    },
+    {
+      "id": "Q15-M",
+      "kind": "mechanism",
+      "weight": 20,
+      "title": "Causes diagnosed with targeted tests",
+      "uses": [
+        "candidate_causes",
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "Causes asserted without tests.",
+        "1": "Plausible causes listed; at most one weak test.",
+        "2": "One candidate cause tested with a targeted experiment, or tests inconclusive but honestly reported.",
+        "3": "Two candidate causes tested with targeted experiments; the conclusions follow and agree with the frozen references.",
+        "4": "Three or more candidate causes considered, at least two tested with experiments that could have shown them wrong; the conclusions follow from the tests, agree with the frozen references, and the unexplained remainder is quantified."
+      }
+    },
+    {
+      "id": "Q15-R",
+      "kind": "robustness",
+      "weight": 15,
+      "title": "Robustness and uncertainty",
+      "uses": [
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "No sensitivity tests and no uncertainty.",
+        "1": "Generic caveats only.",
+        "2": "One sensitivity test, or statistics that ignore short or autocorrelated records.",
+        "3": "Several targeted sensitivity tests and suitable statistics; some key numbers lack uncertainty.",
+        "4": "Targeted sensitivity tests on every choice that could change the conclusion (thresholds, baselines, regions, definitions), statistics suited to short and autocorrelated records, and uncertainty on all key numbers."
+      }
+    },
+    {
+      "id": "Q15-B",
+      "kind": "breadth",
+      "weight": 15,
+      "title": "Breadth and synthesis",
+      "uses": [
+        "breadth_probes",
+        "literature_context"
+      ],
+      "anchors": {
+        "0": "A single isolated diagnostic, with no link to related processes or published work.",
+        "1": "Related processes or literature are mentioned but not used.",
+        "2": "More than one variable or time scale is used, or results are compared with the literature, but mostly descriptively.",
+        "3": "Processes or scales are connected and results are compared with published work with correct citations; one breadth probe is addressed well.",
+        "4": "Scales and processes are connected (for example seasonal to interannual, physics to biogeochemistry), several variables are used coherently, agreement and disagreement with published work are stated with correct citations, and the breadth probes are addressed."
+      }
+    },
+    {
+      "id": "Q15-I",
+      "kind": "insight",
+      "weight": 10,
+      "title": "Insight, limits and next steps",
+      "anchors": {
+        "0": "No clear answer to the question.",
+        "2": "A clear answer, with generic limits and next steps.",
+        "4": "A clear, quantified answer; precise limits of what the data can and cannot settle; specific next analyses or data that would settle the open points; at least one non-obvious insight supported by the analysis."
+      }
+    }
+  ],
+  "answer_key": {
+    "oracle_groups": [],
+    "items": [
+      {
+        "id": "Q15-A1",
+        "quantity": "Transport",
+        "procedure": "Mean, seasonal cycle and standard deviation of the net and layered (0-500 m, 500-1500 m, below 1500 m) transport across a section at about 120.75 E, 18.5-22 N; month of maximum westward upper-layer transport.",
+        "used_by": "Q15-Q",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: net mean +/-1.5 Sv; seasonal phase +/-1 month; layer signs exact)"
+      },
+      {
+        "id": "Q15-A2",
+        "quantity": "Intrusion forms",
+        "procedure": "Frequency of leaping, looping and eddy-shedding states under a documented index (for example a vorticity-based Kuroshio intrusion index west of the strait), with the evaluator's default and the agent's index recomputed.",
+        "used_by": "Q15-Q",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: seasonality exact; frequencies +/-30%)"
+      }
+    ]
+  },
+  "candidate_causes": [
+    {
+      "id": "Q15-H1",
+      "cause": "Section position and depth range: upper-layer versus full-depth transport and the sandwich-like vertical structure.",
+      "test": "Recompute with alternative sections and layers; show how the number changes.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q15-H2",
+      "cause": "Period: interannual and decadal variability.",
+      "test": "Yearly transports and their spread; compare years and phases of ENSO.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q15-H3",
+      "cause": "Method: geostrophic or altimetry-based estimates versus direct velocity; the reference level.",
+      "test": "Geostrophic transport from the model's temperature and salinity versus model velocity.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q15-H4",
+      "cause": "Event definitions and thresholds for intrusion forms.",
+      "test": "Sensitivity of event counts to the index and threshold.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    },
+    {
+      "id": "Q15-H5",
+      "cause": "Model physics and resolution.",
+      "test": "Compare with observation-based estimates and discuss what could bias the model.",
+      "expected": "to freeze before judging (supported, partly supported or not supported)"
+    }
+  ],
+  "depth_probes": [
+    "Shows quantitatively how much each methodological choice changes the transport estimate (for example a table of estimates by definition).",
+    "Separates true variability from definitional differences."
+  ],
+  "breadth_probes": [
+    "Connects the intrusion to South China Sea water properties (salinity maximum), heat content or eddy shedding."
+  ],
+  "literature_context": [
+    {
+      "citation": "Nan et al. (2015)",
+      "title": "Kuroshio intrusion into the South China Sea: A review",
+      "journal": "Progress in Oceanography",
+      "year": 2015,
+      "volume": "137",
+      "pages": "314-333",
+      "doi": "10.1016/j.pocean.2014.05.012",
+      "url": "https://doi.org/10.1016/j.pocean.2014.05.012",
+      "verification": "Crossref metadata and abstract checked 2026-10-01",
+      "use": "Review of Kuroshio intrusion types, Luzon Strait transport estimates from observations and models, their seasonal and interannual variability, and proposed mechanisms. Use it to judge the agent's comparison with published estimates."
+    }
+  ],
+  "gates": [
+    "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",
+    "A different target (region, period or quantity) without justification: Q and M score at most 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
+  ],
+  "evaluator_groups": [],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}

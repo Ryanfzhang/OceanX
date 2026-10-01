@@ -61,10 +61,12 @@ def build_plan(source, variables, years, months, bbox, dataset_id=None, version=
                                "time": [f"{h:02}:00" for h in range(24)],
                                "area": [north, west, south, east], "data_format": "netcdf", "download_format": "unarchived"}
                     dataset = "reanalysis-era5-single-levels"
+                # A monthly-mean product (dataset ID with P1M) has one sample per month.
+                samples = 1 if "_P1M" in dataset else days * (24 if source == "era5" else 1)
                 chunk = {"service": source, "dataset": dataset, "request": request,
                          "period": period, "variables": [variable], "bbox": bbox,
                          "url": f"{source}:{dataset}", "version_label": version if source == "cmems" else "ERA5 reanalysis, retrieval timestamp in receipt",
-                         "expected_samples": days * (24 if source == "era5" else 1)}
+                         "expected_samples": samples}
                 chunk["request_sha256"] = fingerprint(chunk)
                 job = {"id": "cmems_daily" if source == "cmems" else "era5_hourly",
                        "data_type": "CMEMS" if source == "cmems" else "ERA5"}

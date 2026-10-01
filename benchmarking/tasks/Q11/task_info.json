@@ -1,12 +1,22 @@
 {
   "id": "Q11",
-  "track": "autoresearch",
-  "title": "Dissolved inorganic carbon structure",
-  "query": "Investigate how dissolved inorganic carbon distributions in the South China Sea change with depth and season using the supplied 2018–2022 historical CMOMS simulation. Compare summer and winter spatial patterns and northern versus southern basin profiles, quantify the principal contrasts, and state which interpretations the available fields can and cannot support.",
-  "catalog_version": "2026-09-07-paper-aligned",
-  "data_status": "pending_acquisition_and_validation",
+  "suite": "test",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "topic": "marine heatwaves",
+  "title": "Subsurface marine heatwaves",
+  "query": "Using the supplied CMOMS daily temperature, salinity and velocity for 2011-2020, investigate marine heatwaves below the sea surface in the South China Sea. Where and when are subsurface heatwaves most frequent and intense, how often do they occur without a surface heatwave above them, and what physical processes produce them? Justify your detection method and baseline, and support the mechanisms with quantitative evidence.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "SCS",
+    "name": "South China Sea",
+    "data": "CMOMS model domain"
+  },
+  "period": "2011-2020",
   "data_groups": [
-    "M4"
+    "C_CORE"
   ],
-  "analysis_period": "2018–2022"
+  "data_access": "private",
+  "pair": "Q27"
 }

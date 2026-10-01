@@ -1,0 +1,716 @@
+{
+ "version": "2026-10-01-v3",
+ "scope": "All inputs of the v3 test suite (Q01-Q30: South China Sea on CMOMS 2011-2020, Gulf of Mexico and East China Sea on public data) and evolution suite (E01-E12: California Current System on public reanalyses). Public groups are downloaded by download_all.py; private groups are staged by the owner and only checked; evaluator-only groups are never bound to agents.",
+ "phases": {
+  "public": "anonymous HTTPS downloads",
+  "services": "Copernicus Marine (login) and Google ARCO-ERA5",
+  "private": "presence check of owner-staged CMOMS data; no network"
+ },
+ "groups": {
+  "C_CORE": {
+   "phase": "private",
+   "adapter": "private",
+   "data_type": "CMOMS",
+   "variables": [
+    "temp",
+    "salt",
+    "u",
+    "v",
+    "oxygen",
+    "chlorophyll"
+   ],
+   "folders": [
+    "temp",
+    "salt",
+    "u",
+    "v",
+    "oxygen",
+    "chlorophyll",
+    "grid"
+   ],
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "note": "CMOMS daily fields on the owner's fixed-depth layout, one folder per variable and year, plus grid/ with masks, cell areas, depth levels and bathymetry."
+  },
+  "X_HEAT": {
+   "phase": "private",
+   "adapter": "private",
+   "evaluator_only": true,
+   "data_type": "CMOMS_DIA",
+   "variables": [
+    "temp_rate",
+    "temp_hadv",
+    "temp_vadv",
+    "temp_hdiff",
+    "temp_vdiff"
+   ],
+   "folders": [
+    "temp_rate",
+    "temp_hadv",
+    "temp_vadv",
+    "temp_hdiff",
+    "temp_vdiff"
+   ],
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "note": "Requested from the CMOMS provider (dia file). Evaluator answer key only (Q03, Q11, Q12, Q18); stored under _evaluator_only/. The upper 300 m is enough."
+  },
+  "X_OXY": {
+   "phase": "private",
+   "adapter": "private",
+   "evaluator_only": true,
+   "optional": true,
+   "data_type": "CMOMS_DIA",
+   "variables": [
+    "oxygen_rate",
+    "oxygen_hadv",
+    "oxygen_vadv",
+    "oxygen_hdiff",
+    "oxygen_vdiff"
+   ],
+   "folders": [
+    "oxygen_rate",
+    "oxygen_hadv",
+    "oxygen_vadv",
+    "oxygen_hdiff",
+    "oxygen_vdiff"
+   ],
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "note": "Optional request (dia file); May-September on the Pearl River shelf is enough. Answer key for Q07 and Q13 only; both fall back to reference diagnostics without it."
+  },
+  "P_WIND": {
+   "phase": "public",
+   "adapter": "erddap",
+   "product": "blended_wind_monthly",
+   "data_type": "NOAA_Blended_Wind",
+   "variables": [
+    "windspeed",
+    "u_wind",
+    "v_wind",
+    "mask"
+   ],
+   "folders": [
+    "windspeed",
+    "u_wind",
+    "v_wind",
+    "mask"
+   ],
+   "start": "2003-01",
+   "end": "2020-12",
+   "bbox": [
+    104,
+    122,
+    1,
+    25
+   ]
+  },
+  "P_MODIS": {
+   "phase": "public",
+   "adapter": "erddap",
+   "product": "modis_monthly",
+   "data_type": "MODIS_Aqua",
+   "variables": [
+    "chlor_a"
+   ],
+   "folders": [
+    "chlorophyll"
+   ],
+   "start": "2003-01",
+   "end": "2020-12",
+   "bbox": [
+    104,
+    122,
+    1,
+    25
+   ]
+  },
+  "P_GULF": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_Gulf",
+   "dataset": "cmems_mod_glo_phy_my_0.083deg_P1D-m",
+   "dataset_version": "202311",
+   "variables": [
+    "thetao",
+    "so",
+    "zos"
+   ],
+   "folders": [
+    "thetao",
+    "so",
+    "zos"
+   ],
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017
+   ],
+   "months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "bbox": [
+    -98,
+    -80,
+    18,
+    31
+   ],
+   "depth": [
+    0,
+    2000
+   ]
+  },
+  "P_OISST": {
+   "phase": "public",
+   "adapter": "ncei",
+   "data_type": "OISST",
+   "variables": [
+    "sst",
+    "ice"
+   ],
+   "folders": [
+    "sst",
+    "ice"
+   ],
+   "start": "1982-01-01",
+   "end": "2023-12-31",
+   "bbox": [
+    120,
+    128,
+    25,
+    34
+   ]
+  },
+  "P_ECS": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_ECS",
+   "dataset": "cmems_mod_glo_phy_my_0.083deg_P1D-m",
+   "dataset_version": "202311",
+   "variables": [
+    "thetao",
+    "uo",
+    "vo"
+   ],
+   "folders": [
+    "thetao",
+    "uo",
+    "vo"
+   ],
+   "years": [
+    1993,
+    1994,
+    1995,
+    1996,
+    1997,
+    1998,
+    1999,
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2023
+   ],
+   "months": [
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "bbox": [
+    119,
+    129,
+    24,
+    35
+   ]
+  },
+  "P_ERA5": {
+   "phase": "services",
+   "adapter": "era5",
+   "data_type": "ERA5",
+   "variables": [
+    "ssr",
+    "str",
+    "sshf",
+    "slhf"
+   ],
+   "folders": [
+    "ssr",
+    "str",
+    "sshf",
+    "slhf"
+   ],
+   "years": [
+    1993,
+    1994,
+    1995,
+    1996,
+    1997,
+    1998,
+    1999,
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2023
+   ],
+   "months": [
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "bbox": [
+    119,
+    129,
+    24,
+    35
+   ]
+  },
+  "P_CCS_PHY": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_CCS_MONTHLY",
+   "dataset": "cmems_mod_glo_phy_my_0.083deg_P1M-m",
+   "dataset_version": "202311",
+   "variables": [
+    "thetao",
+    "so",
+    "uo",
+    "vo",
+    "zos",
+    "mlotst"
+   ],
+   "folders": [
+    "thetao",
+    "so",
+    "uo",
+    "vo",
+    "zos",
+    "mlotst"
+   ],
+   "surface_variables": [
+    "zos",
+    "mlotst"
+   ],
+   "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "bbox": [
+    -130,
+    -116,
+    30,
+    48
+   ],
+   "depth": [
+    0,
+    1000
+   ]
+  },
+  "P_CCS_SURF": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_CCS_SURFACE_DAILY",
+   "dataset": "cmems_mod_glo_phy_my_0.083deg_P1D-m",
+   "dataset_version": "202311",
+   "variables": [
+    "thetao"
+   ],
+   "folders": [
+    "thetao"
+   ],
+   "years": [
+    1993,
+    1994,
+    1995,
+    1996,
+    1997,
+    1998,
+    1999,
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "bbox": [
+    -130,
+    -116,
+    30,
+    48
+   ],
+   "depth": [
+    0,
+    1
+   ]
+  },
+  "P_CCS_BGC": {
+   "phase": "services",
+   "adapter": "cmems",
+   "data_type": "CMEMS_CCS_BGC_MONTHLY",
+   "dataset": "cmems_mod_glo_bgc_my_0.25deg_P1M-m",
+   "dataset_version": "202406",
+   "variables": [
+    "o2",
+    "chl",
+    "no3"
+   ],
+   "folders": [
+    "o2",
+    "chl",
+    "no3"
+   ],
+   "grid_step": 0.25,
+   "years": [
+    1993,
+    1994,
+    1995,
+    1996,
+    1997,
+    1998,
+    1999,
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+   ],
+   "months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "bbox": [
+    -130,
+    -116,
+    30,
+    48
+   ],
+   "depth": [
+    0,
+    1000
+   ]
+  }
+ },
+ "tasks": {
+  "Q01": [
+   "C_CORE"
+  ],
+  "Q02": [
+   "C_CORE"
+  ],
+  "Q03": [
+   "C_CORE"
+  ],
+  "Q04": [
+   "C_CORE",
+   "P_WIND"
+  ],
+  "Q05": [
+   "C_CORE"
+  ],
+  "Q06": [
+   "C_CORE"
+  ],
+  "Q07": [
+   "C_CORE"
+  ],
+  "Q08": [
+   "C_CORE"
+  ],
+  "Q09": [
+   "P_GULF"
+  ],
+  "Q10": [
+   "P_OISST",
+   "P_ECS",
+   "P_ERA5"
+  ],
+  "Q11": [
+   "C_CORE"
+  ],
+  "Q12": [
+   "C_CORE"
+  ],
+  "Q13": [
+   "C_CORE"
+  ],
+  "Q14": [
+   "C_CORE"
+  ],
+  "Q15": [
+   "C_CORE"
+  ],
+  "Q16": [
+   "C_CORE"
+  ],
+  "Q17": [
+   "C_CORE"
+  ],
+  "Q18": [
+   "C_CORE"
+  ],
+  "Q19": [
+   "C_CORE"
+  ],
+  "Q20": [
+   "C_CORE"
+  ],
+  "Q21": [
+   "C_CORE"
+  ],
+  "Q22": [
+   "C_CORE",
+   "P_MODIS"
+  ],
+  "Q23": [
+   "P_GULF"
+  ],
+  "Q24": [
+   "P_GULF"
+  ],
+  "Q25": [
+   "P_GULF"
+  ],
+  "Q26": [
+   "P_GULF"
+  ],
+  "Q27": [
+   "P_OISST"
+  ],
+  "Q28": [
+   "P_ECS"
+  ],
+  "Q29": [
+   "P_ECS"
+  ],
+  "Q30": [
+   "P_OISST"
+  ],
+  "E01": [
+   "P_CCS_PHY"
+  ],
+  "E02": [
+   "P_CCS_SURF"
+  ],
+  "E03": [
+   "P_CCS_BGC"
+  ],
+  "E04": [
+   "P_CCS_SURF",
+   "P_CCS_BGC"
+  ],
+  "E05": [
+   "P_CCS_SURF"
+  ],
+  "E06": [
+   "P_CCS_PHY"
+  ],
+  "E07": [
+   "P_CCS_BGC"
+  ],
+  "E08": [
+   "P_CCS_BGC"
+  ],
+  "E09": [
+   "P_CCS_PHY"
+  ],
+  "E10": [
+   "P_CCS_PHY"
+  ],
+  "E11": [
+   "P_CCS_SURF"
+  ],
+  "E12": [
+   "P_CCS_PHY",
+   "P_CCS_BGC"
+  ]
+ },
+ "evaluator_groups": {
+  "Q03": [
+   "X_HEAT"
+  ],
+  "Q07": [
+   "X_OXY"
+  ],
+  "Q11": [
+   "X_HEAT"
+  ],
+  "Q12": [
+   "X_HEAT"
+  ],
+  "Q13": [
+   "X_OXY"
+  ],
+  "Q18": [
+   "X_HEAT"
+  ]
+ },
+ "masks": {
+  "gulf_analysis": [
+   -98,
+   -82,
+   18,
+   30
+  ],
+  "ecs_analysis": [
+   120,
+   128,
+   25,
+   34
+  ],
+  "ccs_analysis": [
+   -130,
+   -116,
+   30,
+   48
+  ]
+ },
+ "mask_policy": "Coordinate boxes are benchmark-defined approximations, not original paper polygons or bathymetric shelf masks. Use native valid/ocean masks and coordinate-derived cell areas; no external bathymetry required.",
+ "version_source": "https://marine.copernicus.eu/media/pdf/6713/open"
+}

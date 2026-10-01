@@ -1,12 +1,31 @@
 {
   "id": "Q07",
-  "track": "autoresearch",
-  "title": "Layered circulation and spatial concentration",
-  "query": "Determine the vertical organization of South China Sea circulation during 1992–2011. Quantify basin-integrated relative vorticity and identify the regions that contribute disproportionately to circulation in the upper, middle and deep layers. Assess whether their circulation contributions are proportional to their area.",
-  "catalog_version": "2026-09-07-paper-aligned",
-  "data_status": "pending_acquisition_and_validation",
+  "suite": "test",
+  "type": "paper_reproduction",
+  "topic": "coastal hypoxia",
+  "title": "Synoptic wind-driven control of hypoxia off the Pearl River Estuary",
+  "query": "Using the supplied CMOMS daily oxygen, temperature, salinity, chlorophyll and velocity for May-September 2011-2020, test the following findings of Li et al. (2021, Journal of Geophysical Research: Oceans, doi:10.1029/2020JC016700) on summer hypoxia off the Pearl River Estuary: (1) bottom hypoxia in the coastal transition zones west and east of the estuary varies strongly in space and time with synoptic changes of the summer monsoon; (2) under upwelling-favourable winds the northeastward shelf current converges with the river plume, strengthening stratification and favouring hypoxia; (3) when upwelling-favourable winds relax or turn downwelling-favourable, the plume and organic matter are carried westward, vertical mixing weakens, hypoxia is enhanced in the western zone and the opposite happens in the eastern zone; (4) once the downwelling-favourable wind relaxes, conditions return to their upwelling-period state. Winds are not supplied: identify the wind regimes from the ocean data and explain how. Define the zones and the hypoxia threshold you use, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "SCS",
+    "name": "South China Sea",
+    "data": "CMOMS model domain"
+  },
+  "period": "May-September 2011-2020",
   "data_groups": [
-    "M1"
+    "C_CORE"
   ],
-  "analysis_period": "1992–2011"
+  "data_access": "private",
+  "paper": {
+    "citation": "Li et al. (2021)",
+    "title": "Spatiotemporal Development and Dissipation of Hypoxia Induced by Variable Wind‐Driven Shelf Circulation off the Pearl River Estuary: Observational and Modeling Studies",
+    "journal": "Journal of Geophysical Research: Oceans",
+    "year": 2021,
+    "volume": "126",
+    "pages": "e2020JC016700",
+    "doi": "10.1029/2020JC016700",
+    "url": "https://doi.org/10.1029/2020JC016700",
+    "verification": "Crossref metadata and abstract checked 2026-10-01"
+  }
 }

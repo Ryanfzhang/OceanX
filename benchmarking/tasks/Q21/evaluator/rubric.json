@@ -1,0 +1,166 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q21",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "title": "Erosion of the North Pacific Tropical Water salinity maximum",
+  "status": "draft",
+  "query_sha256": "ef19e4b8ce81411ee6a230feb4d9a873127edb45dd68b9589aaff2ccfe7571d5",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "framing 10, data 10, answer 20, mechanism 20, robustness 15, breadth 15, insight 10"
+  },
+  "criteria": [
+    {
+      "id": "Q21-F",
+      "kind": "framing",
+      "weight": 10,
+      "title": "Framing and competing hypotheses",
+      "anchors": {
+        "0": "Answers a different or vaguer question; no testable framing.",
+        "2": "Operational definitions are given, but only one explanation is considered, or hypotheses are not tied to predictions.",
+        "4": "Precise operational definitions; competing hypotheses with distinguishing predictions that structure the analysis."
+      }
+    },
+    {
+      "id": "Q21-A",
+      "kind": "data",
+      "weight": 10,
+      "title": "Data fitness and handling",
+      "anchors": {
+        "0": "Data mishandled (units, masks, grid, time or depth conventions) in a way that changes the results.",
+        "2": "Correct handling, but the data's fitness for this question (model versus ocean, record length, resolution, missing variables) is not examined.",
+        "4": "Correct handling, and fitness for this question is checked explicitly (for example against known observations or by internal consistency), with its consequences for the conclusions stated."
+      }
+    },
+    {
+      "id": "Q21-Q",
+      "kind": "answer",
+      "weight": 20,
+      "title": "Quantitative answer against the answer key",
+      "uses": [
+        "Q21-A1",
+        "Q21-A2"
+      ],
+      "anchors": {
+        "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
+        "1": "Quantities are reported, but most disagree with the answer key and no stated definition explains the difference.",
+        "2": "About half of the answer-key items used by this criterion agree within tolerance (or differ only by a stated definition that the evaluator recomputed).",
+        "3": "Most items agree within tolerance; one is missing or outside tolerance.",
+        "4": "All answer-key items used by this criterion agree within tolerance, and their uncertainty is stated."
+      }
+    },
+    {
+      "id": "Q21-M",
+      "kind": "mechanism",
+      "weight": 20,
+      "title": "Mechanistic depth",
+      "uses": [
+        "Q21-A3",
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "Description only, or a mechanism that the answer key contradicts.",
+        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
+        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
+        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
+        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+      }
+    },
+    {
+      "id": "Q21-R",
+      "kind": "robustness",
+      "weight": 15,
+      "title": "Robustness and uncertainty",
+      "uses": [
+        "depth_probes"
+      ],
+      "anchors": {
+        "0": "No sensitivity tests and no uncertainty.",
+        "1": "Generic caveats only.",
+        "2": "One sensitivity test, or statistics that ignore short or autocorrelated records.",
+        "3": "Several targeted sensitivity tests and suitable statistics; some key numbers lack uncertainty.",
+        "4": "Targeted sensitivity tests on every choice that could change the conclusion (thresholds, baselines, regions, definitions), statistics suited to short and autocorrelated records, and uncertainty on all key numbers."
+      }
+    },
+    {
+      "id": "Q21-B",
+      "kind": "breadth",
+      "weight": 15,
+      "title": "Breadth and synthesis",
+      "uses": [
+        "breadth_probes"
+      ],
+      "anchors": {
+        "0": "A single isolated diagnostic, with no link to related processes or published work.",
+        "1": "Related processes or literature are mentioned but not used.",
+        "2": "More than one variable or time scale is used, or results are compared with the literature, but mostly descriptively.",
+        "3": "Processes or scales are connected and results are compared with published work with correct citations; one breadth probe is addressed well.",
+        "4": "Scales and processes are connected (for example seasonal to interannual, physics to biogeochemistry), several variables are used coherently, agreement and disagreement with published work are stated with correct citations, and the breadth probes are addressed."
+      }
+    },
+    {
+      "id": "Q21-I",
+      "kind": "insight",
+      "weight": 10,
+      "title": "Insight, limits and next steps",
+      "anchors": {
+        "0": "No clear answer to the question.",
+        "2": "A clear answer, with generic limits and next steps.",
+        "4": "A clear, quantified answer; precise limits of what the data can and cannot settle; specific next analyses or data that would settle the open points; at least one non-obvious insight supported by the analysis."
+      }
+    }
+  ],
+  "answer_key": {
+    "oracle_groups": [],
+    "items": [
+      {
+        "id": "Q21-A1",
+        "quantity": "Salinity-maximum field",
+        "procedure": "Seasonal maps of the salinity-maximum value and its density and depth; decay along the main pathways from the Luzon Strait (e-folding distance).",
+        "used_by": "Q21-Q",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: e-folding distance +/-40%; sign of the seasonal contrast exact)"
+      },
+      {
+        "id": "Q21-A2",
+        "quantity": "Season and pathway",
+        "procedure": "Season with the strongest inflow signature; main pathway (for example along the northern slope).",
+        "used_by": "Q21-Q",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: exact)"
+      },
+      {
+        "id": "Q21-A3",
+        "quantity": "Process indicators",
+        "procedure": "Relation of the decay rate to stratification and shear (mixing proxies) and to eddy activity.",
+        "used_by": "Q21-M",
+        "expected": "to freeze before judging",
+        "tolerance": "to freeze before judging (suggested: signs exact)"
+      }
+    ]
+  },
+  "depth_probes": [
+    "Works on density surfaces as well as depth, separating isopycnal from diapycnal mixing.",
+    "Separates advection along the pathway from local mixing (for example T-S analysis along the path).",
+    "Links seasonal changes to Kuroshio intrusion strength."
+  ],
+  "breadth_probes": [
+    "Compares with the erosion of Subtropical Underwater in Loop Current eddies or in other marginal seas."
+  ],
+  "gates": [
+    "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",
+    "A different target (region, period or quantity) without justification: Q and M score at most 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
+  ],
+  "evaluator_groups": [],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}

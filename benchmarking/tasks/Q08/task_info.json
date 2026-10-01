@@ -1,12 +1,31 @@
 {
   "id": "Q08",
-  "track": "autoresearch",
-  "title": "Decadal circulation transition",
-  "query": "Investigate whether South China Sea layered circulation underwent a regime transition around 2009 using the 1993–2022 simulation. Compare trends during 1993–2008 and 2009–2018, account for low-frequency variability, and distinguish changes in signed vorticity from changes in circulation strength. Quantify the uncertainty and limitations of the inferred transition.",
-  "catalog_version": "2026-09-07-paper-aligned",
-  "data_status": "pending_acquisition_and_validation",
+  "suite": "test",
+  "type": "paper_reproduction",
+  "topic": "eddies and chlorophyll",
+  "title": "Eddy modulation of the subsurface chlorophyll maximum",
+  "query": "Using the supplied CMOMS daily chlorophyll, temperature, salinity and velocity for 2011-2020, test the following findings of Xu et al. (2023, Journal of Geophysical Research: Biogeosciences, doi:10.1029/2023JG007648) on how mesoscale eddies modulate the subsurface chlorophyll maximum (SCM) in the South China Sea: (1) cyclonic eddies uplift the thermocline and anticyclonic eddies depress it; (2) anticyclonic eddies deepen the SCM and reduce its magnitude, while cyclonic eddies make it shallower and stronger; (3) SCM thickness decreases in cyclonic eddies and increases slightly in anticyclonic eddies; (4) the effects grow with eddy amplitude and are largest near eddy centres. State how you detect eddies and define the SCM, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used a different model and period.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "SCS",
+    "name": "South China Sea",
+    "data": "CMOMS model domain"
+  },
+  "period": "2011-2020",
   "data_groups": [
-    "M2"
+    "C_CORE"
   ],
-  "analysis_period": "1993–2022; trends 1993–2008 versus 2009–2018"
+  "data_access": "private",
+  "paper": {
+    "citation": "Xu et al. (2023)",
+    "title": "Mesoscale Eddy Modulation of Subsurface Chlorophyll Maximum Layers in the South China Sea",
+    "journal": "Journal of Geophysical Research: Biogeosciences",
+    "year": 2023,
+    "volume": "128",
+    "pages": "e2023JG007648",
+    "doi": "10.1029/2023JG007648",
+    "url": "https://doi.org/10.1029/2023JG007648",
+    "verification": "Crossref metadata and abstract checked 2026-10-01"
+  }
 }

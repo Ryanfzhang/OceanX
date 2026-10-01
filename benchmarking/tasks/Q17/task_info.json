@@ -1,14 +1,21 @@
 {
   "id": "Q17",
-  "track": "autoresearch",
-  "title": "Seasonal subsurface salinity evolution in a Gulf subregion",
-  "query": "Using the provided GLORYS12 data for 6 August 2016–25 July 2017 in the central Gulf of Mexico (92–88°W, 23–27°N), investigate how subsurface salinity structure evolves seasonally and relates to upper-ocean mixing.",
-  "catalog_version": "2026-09-08-accessible-v1",
-  "data_status": "scripted_acquisition_pending_execution",
+  "suite": "test",
+  "type": "open_problem",
+  "open_kind": "checkable",
+  "topic": "deep ventilation",
+  "title": "Ventilation of the deep South China Sea",
+  "query": "Using the supplied CMOMS daily temperature, salinity, oxygen and velocity for 2011-2020, determine how the deep South China Sea (below about 1500 m) is ventilated: how much water enters through the Luzon Strait, how it spreads, how long it stays in the basin, and whether deep oxygen and water properties are consistent with that renewal. Distinguish physical signals from possible model drift.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "SCS",
+    "name": "South China Sea",
+    "data": "CMOMS model domain"
+  },
+  "period": "2011-2020",
   "data_groups": [
-    "P_GULF"
+    "C_CORE"
   ],
-  "analysis_period": "6 August 2016–25 July 2017",
-  "adaptation": "Public-data method transfer with reduced scope, authorized 2026-09-08; not exact reproduction of the original observational archive.",
-  "query_version": "2026-09-11-general-v1"
+  "data_access": "private"
 }

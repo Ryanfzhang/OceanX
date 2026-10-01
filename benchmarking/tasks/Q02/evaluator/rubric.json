@@ -1,0 +1,139 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q02",
+  "type": "paper_reproduction",
+  "title": "The South China Sea throughflow as a heat and freshwater conveyor",
+  "status": "draft",
+  "query_sha256": "8784f459d9773ed32919bac583b65409de32dc613626fa1d5d5574a51e1b11e9",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "findings 70, method 10, differences 10, report 10"
+  },
+  "paper": {
+    "citation": "Qu et al. (2006)",
+    "title": "South China Sea throughflow: A heat and freshwater conveyor",
+    "journal": "Geophysical Research Letters",
+    "year": 2006,
+    "volume": "33",
+    "pages": "2006GL028350",
+    "doi": "10.1029/2006GL028350",
+    "url": "https://doi.org/10.1029/2006GL028350",
+    "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "verdict_labels": [
+    "reproduced",
+    "partly reproduced",
+    "not reproduced",
+    "not testable with the supplied data"
+  ],
+  "criteria": [
+    {
+      "id": "Q02-K1",
+      "kind": "claim",
+      "weight": 30,
+      "title": "Finding 1",
+      "claim": "The throughflow transfers up to about 0.2 PW of heat and about 0.1 Sv of freshwater from the South China Sea into the Indonesian maritime continent.",
+      "paper_evidence": "Abstract: 'a conveyor belt transferring up to 0.2 PW ... of heat and 0.1 Sv ... of freshwater from the South China Sea into the Indonesian maritime continent'. The paper's numbers come from surface flux data.",
+      "testability": "testable",
+      "how_to_test": "Mean volume transports through the Luzon, Taiwan, Mindoro and Karimata straits inside the domain and their closure; heat and freshwater transport through the southern outlets; the reference-independent net heat and freshwater convergence of the closed basin; recomputed by the evaluator with the agent's reference values.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: Luzon Strait net transport +/-30%; heat and freshwater export within a factor of 2)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q02-K2",
+      "kind": "claim",
+      "weight": 15,
+      "title": "Finding 2",
+      "claim": "Surface heat and freshwater fluxes vary differently in time from the throughflow.",
+      "paper_evidence": "Abstract: 'surface heat and freshwater fluxes display substantially different temporal variations with the South China Sea throughflow'.",
+      "testability": "partly testable",
+      "how_to_test": "Surface fluxes are not supplied. Testable through the implied surface flux (heat-content change minus lateral heat convergence) against the throughflow, by year and season. A direct comparison with surface-flux products is not possible.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: correlation sign and magnitude +/-0.2)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
+      }
+    },
+    {
+      "id": "Q02-K3",
+      "kind": "claim",
+      "weight": 25,
+      "title": "Finding 3",
+      "claim": "The South China Sea acts as a heat capacitor, storing heat in some years and releasing it in others.",
+      "paper_evidence": "Abstract: hypothesis confirmed in the paper with a high-resolution model.",
+      "testability": "testable",
+      "how_to_test": "Yearly basin heat-content change 2011-2020 against yearly lateral heat export; storage and release years; correlation and lag.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: storage or release matches the reference in at least 7 of 10 years; correlation +/-0.2)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q02-M",
+      "kind": "method",
+      "weight": 10,
+      "title": "Method fidelity",
+      "focus": "Section placement across each strait inside the domain and volume closure; reference temperature and salinity, or reference-independent net fluxes over a closed set of sections; heat and freshwater transport formulas; basin heat-content change.",
+      "anchors": {
+        "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
+        "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
+        "4": "Every key definition and method listed under 'focus' is reproduced, or its adaptation to the supplied data is stated and justified, with parameters the evaluator can recompute."
+      }
+    },
+    {
+      "id": "Q02-D",
+      "kind": "differences",
+      "weight": 10,
+      "title": "Differences from the paper's setting",
+      "focus": "Model transports versus the paper's surface-flux estimate; 2011-2020 versus the paper's period; straits possibly outside the domain; daily means miss sub-daily covariance.",
+      "anchors": {
+        "0": "No account of how the supplied data, period or region differ from the paper's.",
+        "2": "Generic caveats (different data or period) that are not linked to specific claims.",
+        "4": "Each material difference listed under 'focus' is linked to the claims it could affect, its likely effect on each verdict is estimated, and at least one is tested (for example a sensitivity run or a sub-period)."
+      }
+    },
+    {
+      "id": "Q02-R",
+      "kind": "report",
+      "weight": 10,
+      "title": "Verification report and traceability",
+      "anchors": {
+        "0": "No claim-by-claim result; numbers cannot be traced to code or outputs.",
+        "2": "Verdicts are given but scattered or only partly traceable.",
+        "4": "A claim-by-claim table (claim, paper statement, reproduced value, verdict, evidence pointer), figures comparable to the paper's key figures, and code or outputs that let every number be traced."
+      }
+    }
+  ],
+  "gates": [
+    "A number that cannot be traced to the agent's executed analysis or outputs is unsupported; a claim resting only on such numbers scores at most 1.",
+    "A paper value reported as the agent's own result scores 0 on that claim and caps R at 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except M at most 1."
+  ],
+  "evaluator_groups": [],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}

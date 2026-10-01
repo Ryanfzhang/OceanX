@@ -1,12 +1,37 @@
 {
   "id": "Q09",
-  "track": "autoresearch",
-  "title": "Regional chlorophyll seasonality",
-  "query": "Characterize the seasonal distribution of near-surface chlorophyll in the South China Sea using the supplied 2018–2022 historical CMOMS simulation. Compare the northern and southern shelf and basin regions, identify differences in seasonal timing and amplitude, and distinguish spatial contrasts from temporal variability.",
-  "catalog_version": "2026-09-07-paper-aligned",
-  "data_status": "pending_acquisition_and_validation",
+  "suite": "test",
+  "type": "paper_reproduction",
+  "topic": "mesoscale eddies",
+  "title": "Vertical structure of a Loop Current eddy",
+  "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, test the following findings of Meunier et al. (2018, Journal of Geophysical Research: Oceans, doi:10.1029/2018JC013801) on the Loop Current eddy (Poseidon) observed by glider from August to November 2016: (1) the eddy is a large body of nearly homogeneous water between about 50 and 250 m, confined between the seasonal and main thermoclines; (2) its core is up to 9.7 C warmer than the surrounding Gulf water; (3) its salinity has a double-core structure, a subsurface fresh core (anomaly about -0.27) above a deeper saline core (anomaly up to 1.22); (4) the saline core of Caribbean origin is well conserved from the Yucatan Basin through the Loop Current and at least seven months after the eddy detached, while the fresh homogeneous core forms by surface heat loss and mixing in the winter before detachment; (5) the geostrophic velocity forms a subsurface-intensified vortex ring. Identify the corresponding eddy in the reanalysis and justify the match, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper's observations.",
+  "catalog_version": "2026-10-01-v3",
+  "query_version": "2026-10-01-v3",
+  "region": {
+    "code": "GULF",
+    "name": "Gulf of Mexico",
+    "bbox": [
+      -98,
+      -80,
+      18,
+      31
+    ]
+  },
+  "period": "2011-2017 (focus 2015-2016)",
   "data_groups": [
-    "M3"
+    "P_GULF"
   ],
-  "analysis_period": "2018–2022"
+  "data_access": "public",
+  "pair": "Q05",
+  "paper": {
+    "citation": "Meunier et al. (2018)",
+    "title": "The Vertical Structure of a Loop Current Eddy",
+    "journal": "Journal of Geophysical Research: Oceans",
+    "year": 2018,
+    "volume": "123",
+    "pages": "6070-6090",
+    "doi": "10.1029/2018JC013801",
+    "url": "https://doi.org/10.1029/2018JC013801",
+    "verification": "Crossref metadata and abstract checked 2026-10-01"
+  }
 }

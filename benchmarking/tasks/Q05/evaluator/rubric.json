@@ -1,0 +1,177 @@
+{
+  "schema_version": 3,
+  "rubric_version": "3.0",
+  "task_id": "Q05",
+  "type": "paper_reproduction",
+  "title": "Mesoscale eddy statistics and their thermohaline imprint",
+  "status": "draft",
+  "query_sha256": "ce57ef4763c7f2238c630519ff2c5eb6893b217d54c019bb2de571fac02bb933",
+  "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
+  "scoring": {
+    "scale": "0-4 per criterion",
+    "total": "sum(weight * score / 4)",
+    "max": 100,
+    "split": "findings 70, method 10, differences 10, report 10"
+  },
+  "paper": {
+    "citation": "Chen et al. (2011)",
+    "title": "Mesoscale eddies in the South China Sea: Mean properties, spatiotemporal variability, and impact on thermohaline structure",
+    "journal": "Journal of Geophysical Research",
+    "year": 2011,
+    "volume": "116",
+    "pages": "C06018",
+    "doi": "10.1029/2010JC006716",
+    "url": "https://doi.org/10.1029/2010JC006716",
+    "verification": "Crossref metadata and abstract checked 2026-10-01"
+  },
+  "verdict_labels": [
+    "reproduced",
+    "partly reproduced",
+    "not reproduced",
+    "not testable with the supplied data"
+  ],
+  "criteria": [
+    {
+      "id": "Q05-K1",
+      "kind": "claim",
+      "weight": 15,
+      "title": "Finding 1",
+      "claim": "Eddies are generated mainly along a northeast-southwest band and southwest of the Luzon Strait, with similar numbers of anticyclones and cyclones in most regions.",
+      "paper_evidence": "Abstract: 'Eddies are mainly generated in a northeast-southwest direction and southwest of Luzon Strait. There is no significant difference between the numbers of two types of eddies'.",
+      "testability": "testable",
+      "how_to_test": "Generation-density map and counts by polarity and region from the evaluator's tracker run with the agent's stated parameters.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: generation maxima in the same regions; anticyclone/cyclone ratio +/-0.2)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q05-K2",
+      "kind": "claim",
+      "weight": 15,
+      "title": "Finding 2",
+      "claim": "The mean eddy radius is about 132 km and the mean lifetime about 8.8 weeks.",
+      "paper_evidence": "Abstract (altimetry, winding-angle method, 17 years).",
+      "testability": "testable",
+      "how_to_test": "Mean radius and lifetime from the evaluator's run with the agent's parameters and from a default (minimum lifetime 4 weeks).",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: +/-30% of the evaluator's value for the agent's method)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q05-K3",
+      "kind": "claim",
+      "weight": 15,
+      "title": "Finding 3",
+      "claim": "Eddies propagate southwestward along the northern slope at about 5-9 cm/s and roughly westward in the central basin at about 2-6 cm/s; propagation east of Vietnam is random.",
+      "paper_evidence": "Abstract: 5.0-9.0 cm/s and 2.0-6.4 cm/s.",
+      "testability": "testable",
+      "how_to_test": "Propagation direction and speed by region.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: directions exact; speeds +/-2 cm/s)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q05-K4",
+      "kind": "claim",
+      "weight": 15,
+      "title": "Finding 4",
+      "claim": "Cyclonic eddies make the thermocline shallower, thinner and stronger; anticyclonic eddies make it deeper, thicker and weaker; the halocline under cyclones is shallower and thinner.",
+      "paper_evidence": "Abstract (Argo composites).",
+      "testability": "testable",
+      "how_to_test": "Composites of thermocline and halocline depth, thickness and intensity inside cyclones and anticyclones relative to the local seasonal climatology.",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: signs exact)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause."
+      }
+    },
+    {
+      "id": "Q05-K5",
+      "kind": "claim",
+      "weight": 10,
+      "title": "Finding 5",
+      "claim": "Eddy activity is sensitive to wind-stress curl and, in the northern South China Sea, related to the strength of the background flow.",
+      "paper_evidence": "Abstract.",
+      "testability": "partly testable",
+      "how_to_test": "Testable: the relation of northern eddy activity to the background flow (for example the slope current or the Kuroshio intrusion). Not testable: the wind-stress-curl link (no winds supplied).",
+      "expected": "to freeze before judging",
+      "tolerance": "to freeze before judging (suggested: sign of the background-flow relation exact)",
+      "anchors": {
+        "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
+        "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
+        "2": "Tested with an executed diagnostic, but with a material flaw in definition, masking, sampling or statistics, or with a verdict that disagrees with the frozen reference without explanation.",
+        "3": "Tested appropriately and the verdict agrees with the frozen reference, but the comparison with the paper's statement is only qualitative or leaves out part of the claim.",
+        "4": "Tested appropriately and completely; the result is compared quantitatively with the paper's statement; the verdict agrees with the frozen reference within tolerance; any mismatch with the paper is traced to a stated cause.",
+        "note": "Partly testable: a 4 also requires testing every testable part and stating plainly which part the supplied data cannot test and why. Presenting the untestable part as verified caps the score at 2."
+      }
+    },
+    {
+      "id": "Q05-M",
+      "kind": "method",
+      "weight": 10,
+      "title": "Method fidelity",
+      "focus": "Eddy detection and tracking adapted to model fields (closed streamlines, winding angle, Okubo-Weiss, or SSH reconstructed from dynamic height), with minimum lifetime and radius definitions comparable to the paper's; propagation speed; thermocline and halocline depth, thickness and intensity.",
+      "anchors": {
+        "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
+        "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
+        "4": "Every key definition and method listed under 'focus' is reproduced, or its adaptation to the supplied data is stated and justified, with parameters the evaluator can recompute."
+      }
+    },
+    {
+      "id": "Q05-D",
+      "kind": "differences",
+      "weight": 10,
+      "title": "Differences from the paper's setting",
+      "focus": "Model velocity versus altimetry (resolution and smoothing change counts and radii); 2011-2020 versus 1993-2009; model versus Argo profiles for the thermohaline composites; no winds.",
+      "anchors": {
+        "0": "No account of how the supplied data, period or region differ from the paper's.",
+        "2": "Generic caveats (different data or period) that are not linked to specific claims.",
+        "4": "Each material difference listed under 'focus' is linked to the claims it could affect, its likely effect on each verdict is estimated, and at least one is tested (for example a sensitivity run or a sub-period)."
+      }
+    },
+    {
+      "id": "Q05-R",
+      "kind": "report",
+      "weight": 10,
+      "title": "Verification report and traceability",
+      "anchors": {
+        "0": "No claim-by-claim result; numbers cannot be traced to code or outputs.",
+        "2": "Verdicts are given but scattered or only partly traceable.",
+        "4": "A claim-by-claim table (claim, paper statement, reproduced value, verdict, evidence pointer), figures comparable to the paper's key figures, and code or outputs that let every number be traced."
+      }
+    }
+  ],
+  "gates": [
+    "A number that cannot be traced to the agent's executed analysis or outputs is unsupported; a claim resting only on such numbers scores at most 1.",
+    "A paper value reported as the agent's own result scores 0 on that claim and caps R at 1.",
+    "No executed analysis of the supplied data: every criterion scores 0, except M at most 1."
+  ],
+  "evaluator_groups": [],
+  "frozen": {
+    "references_sha256": null,
+    "tolerances_frozen_at": null,
+    "frozen_by": null
+  }
+}
