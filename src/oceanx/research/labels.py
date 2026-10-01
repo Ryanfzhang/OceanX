@@ -35,10 +35,12 @@ Its result: {result}
 
 def auto_label(outcome: dict) -> str | None:
     """Rules over logged outcomes; ``None`` when the log is not informative."""
-    if outcome.get("kind") != "question" or not outcome.get("attempts"):
-        return None
+    if outcome.get("kind") != "question" or not outcome.get("attempts") or outcome.get("is_root"):
+        return None  # the root holds the final answer, not a branch that could be left out
+    # An adopted follow-up moved the tree even when it was placed elsewhere than under this node.
     moved = (outcome.get("hypothesis_evidence") or outcome.get("reopened")
-             or outcome.get("conflict_links") or outcome.get("spawned_children"))
+             or outcome.get("conflict_links") or outcome.get("spawned_children")
+             or outcome.get("follow_ups_adopted"))
     if outcome.get("cited_in_final"):
         return "decision-changing" if moved else "informative-but-not-decisive"
     if not moved and outcome.get("final_status") in {"closed", "failed", "completed"}:
@@ -87,7 +89,8 @@ def judge_labels(tree, llm: Callable[[str], str], *, final_report: str) -> dict[
     judged: dict[str, str] = {}
     for node_id, outcome in tree.store.outcomes().items():
         node = document["nodes"].get(node_id)
-        if node is None or node_id in human or not outcome.get("attempts"):
+        if (node is None or node.get("parent") is None or node_id in human
+                or not outcome.get("attempts")):
             continue
         reply = parse_json_object(llm(JUDGE_PROMPT.format(
             root=root.get("question", ""), final=final_report[:1500],

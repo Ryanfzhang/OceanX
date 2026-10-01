@@ -1,6 +1,6 @@
 # Bounded Research-Policy Self-Improvement for OceanX — Plan v3
 
-Date: 2026-09-29 · Status: implemented, then simplified 2026-09-30 (proposals adopted by the Coordinator; suggestions, replay, meta-model policy proposals and proxy scorers parked); experiments not yet run — see docs/research-policy-operations.md · History: v1 draft → v2 after Codex review → v3 comprehensive
+Date: 2026-09-29 · Status: implemented, then simplified 2026-09-30 (proposals adopted by the Coordinator; suggestions, replay, meta-model policy proposals and proxy scorers parked); 2026-10-01: approved lessons are written into the skills each role already reads, not into a prompt; experiments not yet run — see docs/research-policy-operations.md · History: v1 draft → v2 after Codex review → v3 comprehensive
 Owner: ryanfanzhang · Reviewers: Codex, Claude
 
 ## 0. Summary

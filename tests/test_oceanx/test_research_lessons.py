@@ -2,10 +2,13 @@
 import gzip
 import json
 import os
+import re
 import time
+from types import SimpleNamespace
 
 import pytest
 
+from oceanx.research import lessons
 from oceanx.research.lessons import MAX_WORDS, LessonBook
 from oceanx.research.memory import ResearchMemory, build_digest, task_key
 from oceanx.research.outcomes import record_task_outcomes
@@ -71,52 +74,236 @@ def mined(memory, tmp_path, n=4):
     return keys
 
 
-def fake_llm(proposals):
-    return lambda prompt: json.dumps({"proposals": proposals})
+def fake_llm(**by_role):
+    """A meta model that answers each role's prompt with the proposals given for that role."""
+    def reply(prompt):
+        role = "coordinator" if '<skill name="research-trajectory-planning"' in prompt else "expert"
+        return json.dumps({"proposals": by_role.get(role, [])})
+    return reply
+
+
+PLANNING, PHYSICS = "research-trajectory-planning", "ocean-physical-consistency-review"
+
+
+PROPOSING = ("Result: The residual dominates.\nEvidence and limitations: Daily fields only. Limits: "
+             "the residual includes analysis increments.\nFurther analysis:\n"
+             "1. Does the residual follow the surface layer? - separates flux from increments\n"
+             "2. Would a second year repeat it? - needs data that is not here")
+
+
+def decided_task(root, name):
+    """A task whose Coordinator retried an attempt, adopted one proposal and declined a candidate."""
+    tree = ResearchTree(root / name / "agents" / "coordinator" / "research_tree.json")
+    tree.update([
+        {"action": "add", "target": "ROOT", "question": f"Why is {name} warm?"},
+        {"action": "add", "target": "B1", "question": "Heat budget?", "status": "selected",
+         "why_it_matters": "Ranks the mechanisms."},
+        {"action": "add", "target": "B1", "question": "Eddies?"},
+    ])
+    for attempt in ("lost", "a"):  # the first delegation returns no report
+        tree.record_delegation(SimpleNamespace(
+            node_id="B1.1", delegation_id=f"d-{attempt}", attempt_id=attempt,
+            binding="structured", subagent_type="ocean_process_expert"))
+    tree.attach_result("B1.1", summary=PROPOSING, agent_key="p", report_path="/r", attempt_id="a",
+                       expert_role="ocean_process_expert")
+    tree.update([
+        {"action": "add", "target": "B1.1", "question": "Surface layer?",
+         "from_proposal": "B1.1#1", "status": "selected"},
+        {"action": "decline", "target": "B1.2", "reason": "No velocity data."},
+    ])
+    record_task_outcomes(tree, final_report="## Summary\nB1.1 decides it.",
+                         model_calls=[{"attempt_id": "a", "usage": {"input_tokens": 2_000_000}}])
+    return tree
+
+
+def test_digest_keeps_the_decision_history(tmp_path):
+    digest = build_digest(decided_task(tmp_path, "t").store.path)
+    budget = digest["outline"]["B1.1"]
+    assert budget["origin"] == {"type": "coordinator", "refs": []}
+    assert budget["expert"] == "ocean_process_expert"
+    assert [run["end"] is not None for run in budget["attempts"]] == [False, True]  # lost, then reported
+    assert budget["result"] == "The residual dominates."
+    assert budget["limits"] == "Limits: the residual includes analysis increments."
+    assert [p["adopted_as"] for p in budget["proposals"]] == ["B1.1.1", None]
+    assert digest["outline"]["B1.1.1"]["origin"]["refs"] == ["B1.1#1"]
+    declined = digest["outline"]["B1.2"]
+    assert declined["close_reason"] == "No velocity data." and declined["attempts"] == []
+    assert digest["started_at"] and digest["wall_minutes"] is not None
+
+
+def test_the_meta_agent_reads_the_skills_it_writes_into_and_each_roles_records(tmp_path, memory):
+    memory.digest(decided_task(tmp_path, "t").store.path)
+    book = LessonBook(memory)
+    tree_prompt, considered = book.mining_prompt("coordinator", memory.load_digests())
+    analysis_prompt, _ = book.mining_prompt("expert", memory.load_digests())
+    assert considered == 1
+    # It reads the full text of the skills it may write into, and only those of the role.
+    assert f'<skill name="{PLANNING}" read_by="coordinator">' in tree_prompt
+    assert "## Scientific value\nA useful question addresses" in tree_prompt
+    assert PHYSICS not in tree_prompt
+    assert f'<skill name="{PHYSICS}" read_by="ocean_process_expert">' in analysis_prompt
+    assert "A residual is not a measured forcing" in analysis_prompt  # so it is not proposed again
+    assert PLANNING not in analysis_prompt
+    # The Coordinator's lessons come from decisions: who proposed a question, retries, dropped follow-ups.
+    assert "- B1.1.1 | adopted from B1.1#1 |" in tree_prompt
+    assert re.search(r"attempt 1 from min [\d.]+ returned no report; "
+                     r"attempt 2 from min [\d.]+ reported at min [\d.]+ \| 2.0M tokens", tree_prompt)
+    assert "follow-ups: 1 -> B1.1.1 | 2 dropped: Would a second year repeat it?" in tree_prompt
+    assert re.search(r"- B1.2 \| added by the Coordinator \| created min [\d.]+ \| never run \| closed",
+                     tree_prompt)
+    assert "closed because: No velocity data." in tree_prompt and "limits:" not in tree_prompt
+    # The Experts' lessons come from analyses: results and their limits, only for questions that ran.
+    assert "- B1.1 | ocean_process_expert | 1 model calls | 1 of 2 attempts returned no report" in analysis_prompt
+    assert "limits: Limits: the residual includes analysis increments." in analysis_prompt
+    assert "follow-ups:" not in analysis_prompt and "- B1.2 |" not in analysis_prompt
+    # Each prompt also names what its reader is told elsewhere.
+    assert "# Research tree" in tree_prompt and "- xarray-array-ops:" in analysis_prompt
+
+
+def test_a_lesson_names_the_skill_and_section_it_is_written_into(tmp_path, memory):
+    keys = mined(memory, tmp_path)
+    book = LessonBook(memory)
+    digests = {d["task_key"]: d for d in memory.load_digests()}
+    lesson = {"role": "expert", "topic": "method", "skill": PHYSICS,
+              "text": "Bound the residual with a second estimator.",
+              "applies_when": "Unclosed budgets.", "supporting": keys[:3]}
+    assert book.validate_candidate({**lesson, "section": "heat budgets"}, digests)["section"] == "Heat budgets"
+    assert book.validate_candidate(lesson, digests)["section"] == "Method assumptions"  # opened for its topic
+    for change, problem in (({"skill": PLANNING}, "skill must be one of ocean-physical"),
+                            ({"skill": "xarray-array-ops"}, "skill must be one of"),
+                            ({"section": "Heat budget closure"}, f"is not a section of {PHYSICS}"),
+                            ({"topic": "adopt"}, "topic must be one of definition")):
+        with pytest.raises(ValueError, match=problem):
+            book.validate_candidate({**lesson, **change}, digests)
 
 
 def test_mining_validates_every_proposal(tmp_path, memory):
     keys = mined(memory, tmp_path)
     book = LessonBook(memory)
-    good = {"kind": "add", "role": "coordinator", "text": "Close eddy branches without velocity data.",
+    good = {"kind": "add", "topic": "adopt", "skill": PLANNING,
+            "text": "Drop eddy follow-ups without velocity data.",
             "applies_when": "No velocity fields are attached.", "supporting": keys[:3],
-            "counter": [], "rationale": "Repeated waste."}
+            "counter": [], "rationale": "B1.2 was never run in t0, t1 and t2."}
     weak = {**good, "text": "Another idea.", "supporting": keys[:2]}
     invented = {**good, "text": "Invented evidence.", "supporting": ["nope1", "nope2", "nope3"]}
-    long = {**good, "text": "word " * (MAX_WORDS + 1)}
-    result = book.mine(fake_llm([good, weak, invented, long, good]))
-    assert [p["text"] for p in result["created"]] == [good["text"]]
-    assert len(result["rejected"]) == 4  # weak, invented, too long, duplicate
+    analysis = {**good, "topic": "check", "skill": PHYSICS}
+    result = book.mine(fake_llm(
+        coordinator=[good, weak, invented],
+        expert=[{**good, "text": "Check units."},  # a Coordinator topic and skill
+                {**analysis, "text": "word " * (MAX_WORDS + 1)},
+                {**analysis, "text": "Test a second baseline."}]))
+    assert [(p["role"], p["skill"], p["section"], p["text"]) for p in result["created"]] == [
+        ("coordinator", PLANNING, "Adopting follow-ups", good["text"]),
+        ("expert", PHYSICS, "Checks", "Test a second baseline.")]
+    reasons = " | ".join(item["reason"] for item in result["rejected"])
+    assert len(result["rejected"]) == 4 and reasons.count("different questions") == 2
+    assert "topic must be one of definition" in reasons and "Lesson text must be" in reasons
     assert book.active() == [] and book.version() is None  # nothing applied yet
+    assert book.revised_skills() == {}  # and nothing written into a skill
+    # A proposal awaiting review is shown to the meta-agent and cannot be proposed again.
+    assert good["text"] in book.mining_prompt("coordinator", memory.load_digests())[0]
+    again = book.mine(fake_llm(coordinator=[good]))
+    assert again["created"] == [] and "Duplicate" in again["rejected"][0]["reason"]
 
 
-def test_approved_coordinator_lessons_join_its_guidance(tmp_path, memory):
+def test_repeated_runs_of_one_question_cannot_support_a_lesson(tmp_path, memory):
+    for run in ("r1", "r2", "r3"):
+        memory.digest(finished_task(tmp_path / run, "bay").store.path)
+    book, prompts = LessonBook(memory), []
+    result = book.mine(lambda prompt: prompts.append(prompt) or "{}")
+    assert result["questions"] == 1 and result["created"] == [] and prompts == []  # model not asked
+    digests = {d["task_key"]: d for d in memory.load_digests()}
+    with pytest.raises(ValueError, match="at least 3 different questions; these come from 1"):
+        book.validate_candidate({"role": "expert", "topic": "check", "skill": PHYSICS,
+                                 "text": "Check the baseline.", "applies_when": "Short records.",
+                                 "supporting": list(digests)}, digests)
+
+
+def test_prompt_budget_keeps_one_run_of_every_question_before_repeats(tmp_path, memory, monkeypatch):
+    for folder, name in (("a", "gulf"), ("b", "bay"), ("c", "bay")):  # oldest first
+        memory.digest(finished_task(tmp_path / folder, name).store.path)
+    digests = memory.load_digests()
+    sizes = [len(lessons._record(d, "coordinator")) for d in digests]
+    monkeypatch.setattr(lessons, "MAX_PROMPT_CHARS", 2 * max(sizes) + 10)
+    prompt, considered = LessonBook(memory).mining_prompt("coordinator", digests)
+    assert considered == 2 and prompt.count("## Task") == 2
+    assert "Why is gulf warm?" in prompt and prompt.count("Why is bay warm?") == 1
+
+
+def test_old_digests_stay_readable_and_are_rebuilt_while_the_store_exists(tmp_path, memory):
+    tree = finished_task(tmp_path, "t1")
+    current = memory.digest(tree.store.path)
+    path = memory.digests / f"{current['task_key']}.json"
+    old = {**current, "schema": "oceanx-research-digest/v1", "outline": {
+        node_id: {k: v for k, v in node.items() if k in {
+            "parent", "kind", "status", "relation", "question", "why_it_matters", "result",
+            "verdict", "close_reason"}} for node_id, node in current["outline"].items()}}
+    path.write_text(json.dumps(old))
+    [loaded] = memory.load_digests()
+    assert loaded["schema"].endswith("/v1")
+    assert "- B1.1 | added by the Coordinator" in LessonBook(memory).mining_prompt("coordinator", [loaded])[0]
+    assert memory.consolidate([tree.store.path])["digested"] == 1
+    assert memory.load_digests()[0]["schema"].endswith("/v2")
+
+
+def test_approved_lessons_are_written_into_the_skills_each_role_already_reads(tmp_path, memory):
+    pytest.importorskip("deepagents")
+    from oceanx.native_skills import prepare_skill_library
+    from oceanx.skills import load_ocean_skill
     keys = mined(memory, tmp_path)
     book = LessonBook(memory)
-    book.mine(fake_llm([{"kind": "add", "role": "coordinator",
-                         "text": "Test a rival mechanism before deepening one.",
-                         "applies_when": "Two drivers remain plausible.",
-                         "supporting": keys[:3], "counter": []}]))
-    [proposal] = book.pending()
+    book.mine(fake_llm(
+        coordinator=[{"kind": "add", "topic": "order", "skill": PLANNING,
+                      "text": "Test a rival mechanism before deepening one.",
+                      "applies_when": "Two drivers remain plausible.", "supporting": keys[:3]}],
+        expert=[{"kind": "add", "topic": "method", "skill": PHYSICS, "section": "Heat budgets",
+                 "text": "Bound the residual with a second estimator.",
+                 "applies_when": "Unclosed budgets.", "supporting": keys[:3]}]))
+    tree_proposal, analysis_proposal = book.pending()
+    assert (tree_proposal["skill"], tree_proposal["section"]) == (PLANNING, "Order of questions")
     with pytest.raises(ValueError):
-        book.decide(proposal["id"], approve=True, reviewer="", text=None)
-    book.decide(proposal["id"], approve=True, reviewer="owner",
+        book.decide(tree_proposal["id"], approve=True, reviewer="", text=None)
+    book.decide(tree_proposal["id"], approve=True, reviewer="owner",
                 text="Test a rival mechanism before deepening the leading one.")
     [lesson] = book.active("coordinator")
     assert lesson["edited"] and lesson["approved_by"] == "owner"
-    assert "rival mechanism" in book.coordinator_guidance()
-    assert not (book.skills_root / "method-lessons").exists()  # no Expert lesson yet
+    assert (lesson["skill"], lesson["section"]) == (PLANNING, "Order of questions")
+    book.decide(analysis_proposal["id"], approve=True, reviewer="owner")
+
+    def skill(role, name, revisions):
+        library = prepare_skill_library(tmp_path / "lib", role=role, revisions=revisions)
+        return (library / "skills" / name / "SKILL.md").read_text()
+
+    packaged = load_ocean_skill(PLANNING)[0]
+    planning = skill("coordinator", PLANNING, book.revised_skills())
+    # The packaged text is kept, and the lesson opens a section named after its topic.
+    assert planning.startswith(packaged.rstrip()) and "## Order of questions" not in packaged
+    assert "## Order of questions\n\nLearned from past OceanX tasks" in planning
+    assert planning.rstrip().endswith(
+        "- Test a rival mechanism before deepening the leading one. Applies when: Two drivers "
+        "remain plausible. (L001; seen in 3 tasks, 0 counterexamples.)")
+    # A lesson for an existing section is written at the end of that section.
+    physics = skill("ocean_process_expert", PHYSICS, book.revised_skills())
+    assert (physics.index("## Heat budgets") < physics.index("Bound the residual with a second")
+            < physics.index("## Transport and advection"))
+    # Without lessons a task gets the packaged skill, and the packaged file is never changed.
+    assert skill("coordinator", PLANNING, None) == packaged == load_ocean_skill(PLANNING)[0]
+    # The owner can read the revised skills; the meta-agent reads them too, lesson ids included.
+    assert (book.skills_root / PLANNING / "SKILL.md").read_text() == planning
+    assert "(L001; seen in 3 tasks" in book.mining_prompt("coordinator", memory.load_digests())[0]
+
     version = book.version()
     with pytest.raises(ValueError):
-        book.decide(proposal["id"], approve=False, reviewer="owner")  # already decided
-    book.mine(fake_llm([{"kind": "retire", "lesson_id": lesson["id"],
-                         "counter": keys[3:], "rationale": "Contradicted."}]))
+        book.decide(tree_proposal["id"], approve=False, reviewer="owner")  # already decided
+    book.mine(fake_llm(coordinator=[{"kind": "retire", "lesson_id": lesson["id"],
+                                     "counter": keys[3:], "rationale": "Contradicted."}]))
     [retire] = book.pending()
     overview = book.overview()
     assert overview["pending"][0]["evidence_tasks"]["counter"][0]["question"].startswith("Why is")
     book.decide(retire["id"], approve=True, reviewer="owner")
-    assert book.active() == [] and book.version() is None and version
-    assert book.coordinator_guidance() == ""
+    assert [l["role"] for l in book.active()] == ["expert"] and book.version() != version
+    # Retiring its last lesson returns the skill to its packaged text.
+    assert list(book.revised_skills()) == [PHYSICS] and not (book.skills_root / PLANNING).exists()
 
 
 def test_protocol_accepts_lesson_requests_and_rejects_bad_ids():
@@ -133,19 +320,3 @@ def test_protocol_accepts_lesson_requests_and_rejects_bad_ids():
             "proposal_id": "../../etc", "decision": "approve"}})
     listed = REQUEST_ADAPTER.validate_python({**base, "type": "research.lessons.list", "payload": {}})
     assert listed.type == "research.lessons.list"
-
-
-def test_expert_lessons_enter_the_expert_skill_library_only(tmp_path, memory):
-    pytest.importorskip("deepagents")
-    from oceanx.native_skills import prepare_skill_library
-    keys = mined(memory, tmp_path)
-    book = LessonBook(memory)
-    book.mine(fake_llm([{"kind": "add", "role": "expert", "text": "Check units before budgets.",
-                         "applies_when": "Heat budget questions.", "supporting": keys[:3]}]))
-    book.decide(book.pending()[0]["id"], approve=True, reviewer="owner")
-    expert = prepare_skill_library(tmp_path / "lib", role="ocean_process_expert",
-                                   extra_skill_dirs=(book.skills_root,))
-    coordinator = prepare_skill_library(tmp_path / "lib", role="coordinator",
-                                        extra_skill_dirs=(book.skills_root,))
-    assert (expert / "skills" / "method-lessons" / "SKILL.md").is_file()
-    assert not (coordinator / "skills" / "method-lessons").exists()

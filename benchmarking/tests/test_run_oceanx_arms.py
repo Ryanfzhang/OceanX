@@ -22,7 +22,12 @@ def test_lessons_are_installed_into_the_attempt_state(tmp_path, snapshot):
     record = run_oceanx.install_lessons(attempt)
     installed = attempt / "state" / "research" / "lessons"
     assert json.loads((installed / "lessons.json").read_text()) == json.loads((snapshot / "lessons.json").read_text())
-    assert (installed / "skills" / "method-lessons" / "SKILL.md").is_file()
+    # The lessons are written into the skills each role already reads (exported here for reading).
+    planning = (installed / "skills" / "research-trajectory-planning" / "SKILL.md").read_text()
+    assert "## Order of questions" in planning and "(lesson_fixture01; seen in 3 tasks" in planning
+    physics = (installed / "skills" / "ocean-physical-consistency-review" / "SKILL.md").read_text()
+    assert (physics.index("## Heat budgets") < physics.index("(lesson_fixture02;")
+            < physics.index("## Transport and advection"))
     assert record["sha256_before"] == run_oceanx.file_sha256(snapshot / "lessons.json")
 
 

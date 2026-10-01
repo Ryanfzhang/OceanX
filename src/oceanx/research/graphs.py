@@ -311,10 +311,12 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                  if run else task_root / "agents" / "coordinator")
     work_root.mkdir(parents=True, exist_ok=True)
     from oceanx.native_skills import prepare_skill_library
+    # Approved lessons reach a role only inside the skills it already reads, and only in
+    # research mode: they come from research trees and would work against a bounded request.
     library = prepare_skill_library(
         work_root / ".runtime" / "skills",
         role=role, capabilities=svc.skill_capabilities,
-        extra_skill_dirs=(_project().lessons.skills_root,))
+        revisions=_project().lessons.revised_skills() if research else None)
     from oceanx.native_backend import task_backend
     filesystem, working_directory = task_backend(host(), config, run=run, library=library)
     discussion = role == "scientific_discussion_partner"
@@ -541,8 +543,7 @@ async def _coordinator_agent(config):
         ))
     from oceanx.research.delegation import StructuredDelegationMiddleware
     tree = research_tree(config["configurable"]["task_id"])
-    guidance = "\n\n".join(filter(None, (tree.policy.guidance,
-                                         _project().lessons.coordinator_guidance())))
+    guidance = tree.policy.guidance  # lessons are not prompt text; see build()
     return await build(config, "coordinator", subagents=specs,
                        middleware=[StructuredDelegationMiddleware(tree)], suffix=(
         (f"\n{guidance}\n" if guidance else "")

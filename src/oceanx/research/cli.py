@@ -130,7 +130,9 @@ def consolidate(
         from oceanx.research.llm import default_llm
         mined = book.mine(default_llm(model_role))
         result["mining"] = {"created": [p["id"] for p in mined["created"]],
-                            "rejected": mined["rejected"]}
+                            "rejected": mined["rejected"],
+                            # A lesson needs support from at least three different questions.
+                            "questions": mined["questions"]}
     _echo(result)
 
 

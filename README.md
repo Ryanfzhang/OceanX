@@ -150,6 +150,11 @@ executed automatically. Small structural checks do not establish scientific corr
 
 Runtime guidance changes require an explicit edit to the bundled Skill files. Agents load only the
 role-appropriate method documents they need; no background process rewrites Skills from prior runs.
+The one exception is a project's approved lessons (`docs/research-policy-operations.md`). In research
+mode they are written into the copy of a bundled Skill that the task's library holds, at the end of
+the section each lesson names: research-tree decisions into the Coordinator's
+`research-trajectory-planning`, analysis lessons into the analysis Skills. The packaged files are not
+modified, and a lesson is written only after the project owner approves its exact wording and place.
 
 ## Model providers
 

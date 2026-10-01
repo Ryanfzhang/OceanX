@@ -75,6 +75,7 @@ def compute_outcomes(tree_doc: dict, events: list[dict], attempts: list[dict],
         links = tree_doc["links"]
         outcomes[node_id] = {
             "kind": kind(node),
+            "is_root": node.get("parent") is None,
             "final_status": node["status"],
             "verdict": node.get("verdict"),
             "attempts": len(node_attempts),

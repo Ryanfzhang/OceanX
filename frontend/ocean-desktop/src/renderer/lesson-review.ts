@@ -7,6 +7,9 @@ export type LessonProposal = {
   kind: 'add' | 'retire';
   role: LessonRole;
   lesson_id: string | null;
+  /** The skill and section the lesson is written into once approved (empty for a retirement). */
+  skill: string;
+  section: string;
   text: string;
   applies_when: string;
   rationale: string;
@@ -16,6 +19,8 @@ export type LessonProposal = {
 export type ActiveLesson = {
   id: string;
   role: LessonRole;
+  skill: string;
+  section: string;
   text: string;
   applies_when: string;
   approved_by?: string;
@@ -62,6 +67,8 @@ export function parseLessonOverview(result: EventPayload): LessonOverview | null
       kind: item.kind === 'retire' ? 'retire' : 'add',
       role: role(item.role),
       lesson_id: typeof item.lesson_id === 'string' ? item.lesson_id : null,
+      skill: text(item.skill),
+      section: text(item.section),
       text: text(item.text),
       applies_when: text(item.applies_when),
       rationale: text(item.rationale),
@@ -71,6 +78,8 @@ export function parseLessonOverview(result: EventPayload): LessonOverview | null
     active: records(data.active).filter((item) => text(item.id)).map((item) => ({
       id: text(item.id),
       role: role(item.role),
+      skill: text(item.skill),
+      section: text(item.section),
       text: text(item.text),
       applies_when: text(item.applies_when),
       approved_by: text(item.approved_by) || undefined,

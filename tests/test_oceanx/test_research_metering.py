@@ -3,6 +3,8 @@ import asyncio
 import uuid
 from types import SimpleNamespace
 
+from langchain_core.messages import AIMessage
+
 from oceanx.research.metering import INSIDE_EXPERT, CallMeter
 
 CONFIG = {"configurable": {"request_id": "request", "thread_id": "thread"}}
@@ -65,3 +67,22 @@ def test_failed_call_records_the_transport_cause_chain():
     record = store.records[str(run_id)]
     assert (record["state"], record["error_type"]) == ("failed", "RuntimeError")
     assert record["error_causes"] == ["ConnectionError", "TimeoutError"]
+
+
+def test_a_call_records_which_skills_it_opened():
+    store = _Store()
+    meter = CallMeter(store, CONFIG, "coordinator")
+    run_id = uuid.uuid4()
+    message = AIMessage(content="", tool_calls=[
+        {"name": "read_file", "id": "1",
+         "args": {"file_path": "/skills/research-trajectory-planning/SKILL.md", "limit": 1000}},
+        {"name": "read_file", "id": "2", "args": {"file_path": "/work/report.md"}},
+        {"name": "update_research_tree", "id": "3", "args": {"changes": []}}])
+
+    async def scenario():
+        await _start(meter, run_id)
+        await meter.on_llm_end(SimpleNamespace(generations=[[SimpleNamespace(message=message)]]),
+                               run_id=run_id)
+
+    asyncio.run(scenario())
+    assert store.records[str(run_id)]["skills_read"] == ["research-trajectory-planning"]

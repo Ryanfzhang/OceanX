@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 import hashlib
-import shutil
 import tempfile
 from pathlib import Path
 
@@ -21,32 +20,17 @@ from oceanx.skills import (
 )
 
 
-def _extra_skill_directories(roots, role: str) -> list[Path]:
-    """Human-approved project skills (e.g. research lessons) scoped by frontmatter roles."""
-    from oceanx.skills import _skill_frontmatter, _skill_roles
-
-    found = []
-    for root in roots:
-        root = Path(root)
-        if not root.is_dir():
-            continue
-        for directory in sorted(root.iterdir()):
-            skill = directory / "SKILL.md"
-            if directory.is_dir() and skill.is_file():
-                roles = _skill_roles(_skill_frontmatter(skill.read_text(encoding="utf-8")))
-                if role in roles:
-                    found.append(directory)
-    return found
-
-
-def prepare_skill_library(root: Path, *, role: str, capabilities=(), extra_skill_dirs=()) -> Path:
+def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=None) -> Path:
     """Use the current bundled content, never a legacy snapshot or database overlay.
 
     Existing snapshots remain immutable for active readers. A changed bundle
     gets a new directory without deleting past research or altering its files.
-    ``extra_skill_dirs`` adds human-approved project skills (research lessons);
-    they are part of the content hash, so a lesson change selects a new snapshot.
+    ``revisions`` maps a bundled skill's name to its SKILL.md with the project's
+    human-approved lessons written in (see research/lessons.py). The packaged file
+    is not modified; the revised text is part of the content hash, so a lesson
+    change selects a new snapshot.
     """
+    revisions = revisions or {}
     allowed = {s.name for s in ocean_skill_metadata(role=role, capabilities=capabilities)}
     files = []
     for source in ocean_skill_dirs(capabilities=capabilities):
@@ -55,18 +39,19 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), extra_skill
                 files.extend((p, Path("skills") / directory.name / p.relative_to(directory))
                              for p in sorted(directory.rglob("*"))
                              if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc")
-    for directory in _extra_skill_directories(extra_skill_dirs, role):
-        if directory.name in allowed:
-            continue  # bundled skills cannot be shadowed by project files
-        files.extend((p, Path("skills") / directory.name / p.relative_to(directory))
-                     for p in sorted(directory.rglob("*")) if p.is_file())
     references = ocean_reference_root()
     files.extend((p, Path("references") / p.relative_to(references))
                  for p in sorted(references.rglob("*"))
                  if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc")
+
+    def content(source: Path, relative: Path) -> bytes:
+        revised = (revisions.get(relative.parts[1])
+                   if relative.parts[0] == "skills" and relative.parts[2:] == ("SKILL.md",) else None)
+        return revised.encode("utf-8") if revised is not None else source.read_bytes()
+
     digest = hashlib.sha256()
     for source, relative in files:
-        digest.update(str(relative).encode() + b"\0" + source.read_bytes() + b"\0")
+        digest.update(str(relative).encode() + b"\0" + content(source, relative) + b"\0")
     target = root / digest.hexdigest()
     if target.is_dir():
         return target
@@ -77,7 +62,7 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), extra_skill
         for source, relative in files:
             destination = staging / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, destination)
+            destination.write_bytes(content(source, relative))
         # Concurrent native subagents can prepare the same role snapshot. An
         # existing complete snapshot wins; readers never see a partial copy.
         try:

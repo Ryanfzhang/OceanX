@@ -3,7 +3,7 @@ import {describe, expect, it} from 'vitest';
 import {approvalProblem, decisionPayload, parseLessonOverview, wordCount} from './lesson-review.js';
 
 const overviewResult = {lessons: {
-  pending: [{id: 'lp_0123456789ab', kind: 'add', role: 'coordinator', text: 'Test a rival hypothesis before deepening characterisation.', applies_when: 'mechanism questions with two plausible drivers', rationale: 'seen often', created_at: '2026-09-30T00:00:00Z', evidence_tasks: {supporting: [{task_key: 'k1', question: 'Q1'}], counter: []}},
+  pending: [{id: 'lp_0123456789ab', kind: 'add', role: 'coordinator', skill: 'research-trajectory-planning', section: 'Order of questions', text: 'Test a rival hypothesis before deepening characterisation.', applies_when: 'mechanism questions with two plausible drivers', rationale: 'seen often', created_at: '2026-09-30T00:00:00Z', evidence_tasks: {supporting: [{task_key: 'k1', question: 'Q1'}], counter: []}},
     {id: 'not-a-proposal', kind: 'add'}],
   active: [{id: 'L001', role: 'expert', text: 'Use the 0.03 kg/m3 MLD threshold.', applies_when: 'daily profiles', evidence_tasks: {supporting: [], counter: []}}],
   limits: {max_active_per_role: 1, max_words: 40, max_condition_words: 25, min_support: 3},
@@ -15,6 +15,8 @@ describe('lesson review', () => {
     const overview = parseLessonOverview(overviewResult)!;
     expect(overview.pending.map((item) => item.id)).toEqual(['lp_0123456789ab']);
     expect(overview.active[0].role).toBe('expert');
+    expect([overview.pending[0].skill, overview.pending[0].section]).toEqual(['research-trajectory-planning', 'Order of questions']);
+    expect(overview.active[0].skill).toBe('');
     expect(parseLessonOverview({})).toBeNull();
   });
 

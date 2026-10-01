@@ -39,7 +39,7 @@ function ProposalCard({proposal, overview, busy, onDecide}: {
   const retire = proposal.kind === 'retire';
   return <article className="lesson-card" aria-label={text('Lesson proposal', '经验提议')}>
     <header>
-      <span className={`lesson-role lesson-role-${proposal.role}`}>{proposal.role === 'coordinator' ? text('Guidance lesson · Coordinator', '指导经验 · 协调者') : text('Method lesson · Experts', '方法经验 · 专家')}</span>
+      <span className={`lesson-role lesson-role-${proposal.role}`}>{proposal.role === 'coordinator' ? text('Tree-decision lesson · Coordinator', '研究树决策经验 · 协调者') : text('Analysis lesson · Experts', '分析经验 · 专家')}</span>
       {retire ? <span className="lesson-kind">{text(`Retire ${proposal.lesson_id ?? ''}`, `停用 ${proposal.lesson_id ?? ''}`)}</span> : <span className="lesson-kind">{text('New lesson', '新经验')}</span>}
     </header>
     {retire ? <p className="lesson-text">{proposal.text}<br /><small>{text('Applies when', '适用条件')}: {proposal.applies_when}</small></p> : <>
@@ -50,6 +50,7 @@ function ProposalCard({proposal, overview, busy, onDecide}: {
         <input value={draft.appliesWhen} disabled={busy} onChange={(event) => setDraft((current) => ({...current, appliesWhen: event.target.value}))} />
       </label>
     </>}
+    {proposal.skill ? <p className="lesson-rationale">{text('Written into', '写入技能')}: <code>{proposal.skill}</code> › {proposal.section}</p> : null}
     {proposal.rationale ? <p className="lesson-rationale">{text('Why proposed', '提议理由')}: {proposal.rationale}</p> : null}
     <EvidenceList tasks={proposal.evidence_tasks.supporting} label={text('Supporting tasks', '支持的任务')} />
     <EvidenceList tasks={proposal.evidence_tasks.counter} label={text('Counterexamples', '反例')} />
@@ -67,7 +68,7 @@ function ActiveLessonRow({lesson, busy, onRetire}: {lesson: ActiveLesson; busy: 
   const [retiring, setRetiring] = useState(false);
   const [reason, setReason] = useState('');
   return <li className="lesson-active">
-    <div><strong>{lesson.id}</strong> {lesson.text}<br /><small>{text('Applies when', '适用条件')}: {lesson.applies_when} · {text(`${lesson.evidence_tasks.supporting.length} supporting / ${lesson.evidence_tasks.counter.length} counter`, `${lesson.evidence_tasks.supporting.length} 个支持 / ${lesson.evidence_tasks.counter.length} 个反例`)}{lesson.edited ? text(' · edited by reviewer', ' · 审核者修改过') : ''}</small></div>
+    <div><strong>{lesson.id}</strong> {lesson.text}<br /><small>{text('Applies when', '适用条件')}: {lesson.applies_when}{lesson.skill ? ` · ${lesson.skill} › ${lesson.section}` : ''} · {text(`${lesson.evidence_tasks.supporting.length} supporting / ${lesson.evidence_tasks.counter.length} counter`, `${lesson.evidence_tasks.supporting.length} 个支持 / ${lesson.evidence_tasks.counter.length} 个反例`)}{lesson.edited ? text(' · edited by reviewer', ' · 审核者修改过') : ''}</small></div>
     {retiring ? <div className="lesson-retire"><input autoFocus placeholder={text('Reason for retiring', '停用理由')} value={reason} onChange={(event) => setReason(event.target.value)} /><button disabled={busy || !reason.trim()} onClick={() => onRetire(lesson, reason)}>{text('Retire', '停用')}</button><button onClick={() => setRetiring(false)}>{text('Cancel', '取消')}</button></div>
       : <button disabled={busy} title={text('Retire lesson', '停用经验')} onClick={() => setRetiring(true)}><Archive size={14} /></button>}
   </li>;
@@ -105,13 +106,15 @@ export function ResearchLessonsDialog({open, onClose, request, onPendingCount, t
     const cleanup = result.consolidation as Record<string, unknown> | undefined;
     const parts = [];
     if (cleanup) parts.push(text(`Digested ${String(cleanup.digested ?? 0)}, archived ${String(cleanup.archived ?? 0)} task records.`, `已摘要 ${String(cleanup.digested ?? 0)} 个、归档 ${String(cleanup.archived ?? 0)} 个任务记录。`));
-    if (mining) parts.push(text(`${String(mining.created ?? 0)} new proposals; ${Array.isArray(mining.rejected) ? mining.rejected.length : 0} rejected by the limits.`, `新增 ${String(mining.created ?? 0)} 条提议；${Array.isArray(mining.rejected) ? mining.rejected.length : 0} 条因不符合限制被丢弃。`));
+    const needed = overview?.limits.min_support ?? 3;
+    if (mining && typeof mining.questions === 'number' && mining.questions < needed) parts.push(text(`Lessons need finished tasks on at least ${needed} different questions; this project has ${mining.questions}.`, `经验需要至少 ${needed} 个不同问题的已完成任务；当前项目只有 ${mining.questions} 个。`));
+    else if (mining) parts.push(text(`${String(mining.created ?? 0)} new proposals; ${Array.isArray(mining.rejected) ? mining.rejected.length : 0} rejected by the limits.`, `新增 ${String(mining.created ?? 0)} 条提议；${Array.isArray(mining.rejected) ? mining.rejected.length : 0} 条因不符合限制被丢弃。`));
     setNotice(parts.join(' ') || null);
   });
 
   const roles = [
-    {key: 'coordinator', title: text('Guidance lessons (Coordinator)', '指导经验（协调者）')},
-    {key: 'expert', title: text('Method lessons (Experts)', '方法经验（专家）')},
+    {key: 'coordinator', title: text('Tree-decision lessons (Coordinator)', '研究树决策经验（协调者）')},
+    {key: 'expert', title: text('Analysis lessons (Experts)', '分析经验（专家）')},
   ] as const;
 
   const tabs = [
@@ -123,7 +126,7 @@ export function ResearchLessonsDialog({open, onClose, request, onPendingCount, t
     <header><div><BookOpenCheck size={17} /><strong>{text('Research review', '研究审核')}</strong></div><button data-dialog-dismiss onClick={onClose} title={text('Close', '关闭')} aria-label={text('Close', '关闭')}><X size={15} /></button></header>
     <nav className="review-tabs" role="tablist">{tabs.map((item) => <button key={item.key} role="tab" aria-selected={tab === item.key} className={tab === item.key ? 'primary' : ''} onClick={() => setTab(item.key)}>{item.label}</button>)}</nav>
     {tab === 'labels' ? <BranchLabelPanel request={request} taskId={taskId} /> : tab === 'policies' ? <PolicyPanel request={request} taskId={taskId} /> : <>
-    <p className="lessons-intro">{text('Lessons are short, human-approved notes distilled from past research trees. Coordinator lessons join its guidance; Expert lessons are read only when relevant. Nothing is added without your approval.', '经验是从以往研究树中提炼、并经你批准的简短说明。协调者经验加入其指导；专家经验仅在相关时读取。未经你批准不会加入任何经验。')}</p>
+    <p className="lessons-intro">{text('Lessons are short, human-approved notes distilled from past research trees. An approved lesson is written into a skill its role already reads: research-tree decisions for the Coordinator, analysis pitfalls for the Experts. Nothing is written without your approval.', '经验是从以往研究树中提炼、并经你批准的简短说明。批准后的经验会写入对应角色已有的技能：协调者的研究树决策经验，专家的分析注意事项。未经你批准不会写入任何内容。')}</p>
     <div className="lessons-actions">
       <button disabled={busy} onClick={() => consolidate(false)}><RefreshCw size={14} />{text('Clean up records', '清理记录')}</button>
       <button disabled={busy} className="primary" onClick={() => consolidate(true)}><Sparkles size={14} />{text('Clean up and propose lessons', '清理并生成经验提议')}</button>

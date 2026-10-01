@@ -1509,7 +1509,8 @@ class OceanRequestRouter:
                     mined = await run(book.mine, default_llm())
                     result["mining"] = {"created": len(mined["created"]),
                                         "rejected": mined["rejected"],
-                                        "tasks_considered": mined["tasks_considered"]}
+                                        "tasks_considered": mined["tasks_considered"],
+                                        "questions": mined["questions"]}
             elif isinstance(request, ResearchLabelSetRequest):
                 tree = self._task_research_tree(request, payload.task_id)
                 await run(project.set_label, tree, payload.node_id, payload.label)

@@ -51,11 +51,24 @@ def test_auto_labels_follow_logged_outcomes(tmp_path):
     assert auto_label({**base, "final_status": "closed"}) == "misleading-or-wasteful"
     assert auto_label({**base, "final_status": "selected"}) is None
     assert auto_label({"kind": "question", "attempts": 0, "cited_in_final": True}) is None
+    # A node whose follow-ups were pursued moved the tree, wherever they were placed.
+    assert auto_label({**base, "cited_in_final": True, "follow_ups_adopted": 1}) == "decision-changing"
+    assert auto_label({**base, "final_status": "completed", "follow_ups_adopted": 2}) is None
     tree = tree_with_results(tmp_path)
     record_task_outcomes(tree, final_report="## Summary\nB1.1 explains it.", model_calls=[])
     labels = tree.store.labels(sources=("auto",))
     assert labels["B1.1"]["label"] == "decision-changing"  # cited and spawned B1.1.1
     assert labels["B1.2"]["label"] == "misleading-or-wasteful"  # completed, never cited
+
+
+def test_the_root_is_never_labelled(tmp_path):
+    tree = tree_with_results(tmp_path)
+    tree.attach_result("B1", summary="Flux explains it.", agent_key="coordinator", report_path="/final.md")
+    record_task_outcomes(tree, final_report="## Summary\nB1 is answered by B1.1.", model_calls=[])
+    assert tree.store.outcomes()["B1"]["cited_in_final"] and "B1" not in tree.store.labels()
+    judged = judge_labels(tree, lambda prompt: json.dumps(
+        {"label": "decision-changing", "reason": "It is the answer."}), final_report="x")
+    assert set(judged) == {"B1.1", "B1.2"}  # the root holds the answer; it is not a branch
 
 
 def test_review_set_is_small_and_judge_disagreement_is_surfaced(tmp_path):

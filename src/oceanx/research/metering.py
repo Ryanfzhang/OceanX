@@ -1,4 +1,5 @@
 """Record framework model calls as telemetry, never as execution authority."""
+import re
 import time
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -8,6 +9,14 @@ from langchain_core.callbacks import AsyncCallbackHandler
 # True while a native Expert runs. The Coordinator's meter is inherited by that nested
 # run, so it skips those calls and leaves them to the Expert's own meter.
 INSIDE_EXPERT: ContextVar[bool] = ContextVar("oceanx_inside_expert", default=False)
+_SKILL_FILE = re.compile(r"/skills/([a-z0-9-]+)/SKILL\.md")
+
+
+def _skills_read(tool_calls) -> list[str]:
+    """The skills a call opened, so a run shows whether its lesson skill was read."""
+    paths = (str((call.get("args") or {}).get("file_path", ""))
+             for call in tool_calls if call.get("name") == "read_file")
+    return sorted({match.group(1) for path in paths if (match := _SKILL_FILE.search(path))})
 
 
 class CallMeter(AsyncCallbackHandler):
@@ -52,6 +61,7 @@ class CallMeter(AsyncCallbackHandler):
         message = response.generations[0][0].message
         self.calls[key].update(usage=message.usage_metadata,
             tool_calls=len(message.tool_calls),
+            skills_read=_skills_read(message.tool_calls),
             model=message.response_metadata.get("model_name"),
             finish_reason=message.response_metadata.get("finish_reason"), state="completed")
         self._finish(key)

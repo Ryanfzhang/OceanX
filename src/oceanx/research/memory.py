@@ -11,21 +11,27 @@ Layout under ``<project>/.oceanx/research/``::
 
 Raw per-task stores keep full events and attempts for as long as they are useful;
 lesson mining reads only digests, so its input stays bounded. A digest keeps the
-outline, outcomes and labels, so archiving a raw store loses no evidence it needs.
+outline, the decision history (who proposed each question, when it was created, run
+and answered, and what became of the follow-ups it proposed), outcomes and labels,
+so archiving a raw store loses no evidence mining needs.
 """
 from __future__ import annotations
 
 import gzip
 import hashlib
 import json
+import re
 import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from oceanx.research.tree import kind, nodes
+from oceanx.research.tree import kind, nodes, summary_field
 from oceanx.research.tree_store import TreeStore, atomic_write_text
 
-DIGEST_SCHEMA = "oceanx-research-digest/v1"
+DIGEST_SCHEMA = "oceanx-research-digest/v2"
+# v1 digests lack the decision history. They stay readable and are rebuilt while their raw
+# store exists.
+READABLE_DIGESTS = {"oceanx-research-digest/v1", DIGEST_SCHEMA}
 DEFAULT_RETENTION_DAYS = 30
 DEFAULT_INTERVAL_DAYS = 7
 MAX_TEXT = 240
@@ -34,6 +40,13 @@ MAX_TEXT = 240
 def _clip(text: str | None, limit: int = MAX_TEXT) -> str:
     text = " ".join((text or "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _limits(summary: str) -> str:
+    """The limitations an Expert reported, starting where the field first names a limit."""
+    text = " ".join(summary_field(summary, "Evidence and limitations").split())
+    match = re.search(r"\b[Ll]imit", text)
+    return _clip(text[match.start():] if match else text, 500)
 
 
 def task_key(store_path: Path) -> str:
@@ -49,15 +62,49 @@ def build_digest(store_path: Path) -> dict | None:
     found = nodes(document)
     outcomes = store.outcomes()
     labels, human_labels = store.labels(), store.labels(sources=("human",))
-    events = store.events()
+    events, attempts = store.events(), store.attempts()
+    began = datetime.fromisoformat(events[0]["ts"]) if events else None
+
+    def minute(ts: str | None) -> float | None:
+        """Minutes since the task's first tree event."""
+        if not ts or began is None:
+            return None
+        return round((datetime.fromisoformat(ts) - began).total_seconds() / 60, 1)
+
+    # Per node, every delegation in order: when it started and when it reported. A delegation
+    # that returned no report leaves no attempt record, so its "end" stays None.
+    created, runs, experts = {}, {}, {}
+    for event in events:
+        if event["type"] == "created":
+            created.setdefault(event["node_id"], event["ts"])
+        elif event["type"] == "delegated":
+            runs.setdefault(event["node_id"], {})[event["payload"].get("attempt_id")] = {
+                "start": minute(event["ts"]), "end": None}
+    for attempt in attempts:  # oldest first
+        run = runs.setdefault(attempt["node_id"], {}).setdefault(
+            attempt["attempt_id"], {"start": minute(attempt["started_at"]), "end": None})
+        run["end"] = minute(attempt["ended_at"])
+        experts[attempt["node_id"]] = attempt["expert_role"]
+    adopted_as = {ref: node_id for node_id, node in found.items()
+                  for ref in node["origin"]["refs"] if "#" in ref}
     outline = {}
-    for node_id, node in found.items():
-        summary = (node.get("result") or {}).get("summary", "")
+    for node_id, node in found.items():  # in the order the Coordinator created them
+        result = node.get("result") or {}
+        summary = result.get("summary", "")
         outline[node_id] = {
             "parent": node.get("parent"), "kind": kind(node), "status": node["status"],
             "relation": node.get("relation"), "question": _clip(node.get("question")),
             "why_it_matters": _clip(node.get("why_it_matters"), 160),
-            "result": _clip(summary), "verdict": node.get("verdict"),
+            "origin": node["origin"],
+            "expert": experts.get(node_id) or node.get("expert_role"),
+            "result": _clip(summary_field(summary, "Result") or summary, 300),
+            "limits": _limits(summary),
+            # Follow-ups this node proposed; adopted_as is the question that pursued one, else null.
+            "proposals": [{"text": _clip(text, 140), "adopted_as": adopted_as.get(f"{node_id}#{i}")}
+                          for i, text in enumerate(result.get("proposals") or [], 1)],
+            "created_min": minute(created.get(node_id)),
+            "attempts": list(runs.get(node_id, {}).values()),
+            "verdict": node.get("verdict"),
             "close_reason": _clip(node.get("close_reason"), 160) or None,
         }
     root = next((n for n in outline.values() if n["parent"] is None), {})
@@ -68,6 +115,8 @@ def build_digest(store_path: Path) -> dict | None:
         "digested_at": datetime.now(UTC).isoformat(),
         "question": root.get("question", ""),
         "policy_versions": sorted({e["policy_version"] for e in events}),
+        "started_at": events[0]["ts"] if events else None,
+        "wall_minutes": minute(events[-1]["ts"]) if events else None,
         "finished": bool(outcomes),
         "outline": outline,
         "outcomes": outcomes,
@@ -135,7 +184,7 @@ class ResearchMemory:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if data.get("schema") == DIGEST_SCHEMA:
+            if data.get("schema") in READABLE_DIGESTS:
                 out.append(data)
         return out
 
@@ -157,11 +206,14 @@ class ResearchMemory:
                 continue
             key = task_key(store_path)
             digest_path = self.digests / f"{key}.json"
-            if not digest_path.is_file() or digest_path.stat().st_mtime < store_path.stat().st_mtime:
+            try:
+                digest = json.loads(digest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                digest = None
+            if (digest is None or digest.get("schema") != DIGEST_SCHEMA
+                    or digest_path.stat().st_mtime < store_path.stat().st_mtime):
                 digest = self.digest(store_path)
                 digested += digest is not None
-            else:
-                digest = json.loads(digest_path.read_text(encoding="utf-8"))
             if digest is None or not digest.get("finished") or key in protected_keys:
                 skipped += 1
                 continue

@@ -2,10 +2,40 @@
   "lessons": [
     {
       "id": "lesson_fixture01",
+      "role": "coordinator",
+      "topic": "order",
+      "skill": "research-trajectory-planning",
+      "section": "Order of questions",
+      "text": "Run a robustness check of the target's definition beside the first mechanism question; a late check cannot redirect questions that already ran.",
+      "applies_when": "the target of the question depends on a baseline, region or period choice",
+      "evidence": {
+        "supporting": [
+          "fixture-task-1",
+          "fixture-task-2",
+          "fixture-task-3"
+        ],
+        "counter": []
+      },
+      "status": "active",
+      "approved_by": "fixture",
+      "approved_at": "2026-10-01T00:00:00+00:00"
+    },
+    {
+      "id": "lesson_fixture02",
       "role": "expert",
-      "text": "Keep arrays labeled by dimension name before combining fields, and check dimension order explicitly.",
-      "applies_when": "combining multidimensional ocean fields from different files",
-      "evidence": {"supporting": ["fixture-task-1", "fixture-task-2", "fixture-task-3"], "counter": []},
+      "topic": "check",
+      "skill": "ocean-physical-consistency-review",
+      "section": "Heat budgets",
+      "text": "Bound an unclosed residual with a second, independent estimator before attributing it; one estimator cannot show how much of the residual is its own error.",
+      "applies_when": "a budget residual carries the conclusion",
+      "evidence": {
+        "supporting": [
+          "fixture-task-1",
+          "fixture-task-2",
+          "fixture-task-3"
+        ],
+        "counter": []
+      },
       "status": "active",
       "approved_by": "fixture",
       "approved_at": "2026-10-01T00:00:00+00:00"
