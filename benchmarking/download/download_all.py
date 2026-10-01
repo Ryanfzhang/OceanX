@@ -110,6 +110,60 @@ def verify_existing(group, chunks, root):
         erddap.transfer(chunk, root, runner=no_network)
 
 
+def saved_plan(path, group=None):
+    """Read a checked plan, optionally requiring the current group specification."""
+    if not path.is_file():
+        return None
+    saved = json.loads(path.read_text())
+    chunks = saved.get("chunks")
+    if not chunks or saved.get("plan_sha256") != erddap.fingerprint(chunks):
+        raise ValueError("Saved request plan is empty or corrupted")
+    paths = [c["relative_path"] for c in chunks]
+    if len(paths) != len(set(paths)):
+        raise ValueError("Duplicate destinations in saved request plan")
+    if group is not None and saved.get("group_sha256") != erddap.fingerprint(group):
+        return None
+    return saved
+
+
+def reuse_erddap_chunks(chunks, previous, root):
+    """Keep verified observations when an extended provider time axis shifts URL indices.
+
+    Reuse requires identical product, release, variable, grid and observation time.
+    A matching period name alone is insufficient. transfer() still checks the receipt and
+    SHA-256 before skipping; an incompatible collection is never replaced.
+    """
+    if previous is None:
+        return chunks
+    old = {(c["period"], tuple(c["variables"])): c for c in previous["chunks"]}
+    identity = lambda c: {k: v for k, v in c.items()
+                          if k not in {"url", "request_sha256", "relative_path"}}
+    result = []
+    for chunk in chunks:
+        candidate = old.get((chunk["period"], tuple(chunk["variables"])))
+        if (candidate is not None and identity(candidate) == identity(chunk)
+                and candidate["url"].split("?")[0] == chunk["url"].split("?")[0]
+                and Path(candidate["relative_path"]).parent == Path(chunk["relative_path"]).parent
+                and erddap.safe_destination(root, candidate["relative_path"]).is_file()):
+            result.append(candidate)
+        else:
+            result.append(chunk)
+    return result
+
+
+def acquisition_plan(group, path, root):
+    """Reuse an unchanged local plan; ERDDAP needs metadata only for missing observations."""
+    previous = saved_plan(path)
+    same = previous is not None and previous.get("group_sha256") == erddap.fingerprint(group)
+    if same and (group["adapter"] != "erddap" or all(
+            erddap.safe_destination(root, c["relative_path"]).is_file() for c in previous["chunks"])):
+        return previous["chunks"], "saved"
+    chunks = group_plan(group)
+    if group["adapter"] == "erddap":
+        chunks = reuse_erddap_chunks(chunks, previous, root)
+    return chunks, "current"
+
+
 def coverage(manifest, reports):
     ready = {key: bool(report.get("complete") and report.get("group_sha256") == erddap.fingerprint(manifest["groups"][key]))
              for key, report in reports.items() if key in manifest["groups"]}
@@ -211,6 +265,7 @@ def main(argv=None):
         failed = False
         for key, group in selected.items():
             report = {"group_sha256": erddap.fingerprint(group), "complete": False, "completed_files": 0,
+                      "skipped_files": 0, "downloaded_files": 0,
                       "workers": args.workers if args.phase == "services" else 1, "failed_files": []}
             report_path = control / f"{key}.report.json"
             plan_path = control / f"{key}.plan.json"
@@ -227,23 +282,29 @@ def main(argv=None):
             refresh_summary(control, manifest)
             try:
                 if args.phase == "verify":
-                    saved = json.loads(plan_path.read_text())
-                    if saved["group_sha256"] != report["group_sha256"]:
-                        raise ValueError("Saved request plan is from a different manifest")
+                    saved = saved_plan(plan_path, group)
+                    if saved is None:
+                        raise ValueError("Saved request plan is missing or from a different manifest")
                     chunks = saved["chunks"]
-                    if not chunks or saved["plan_sha256"] != erddap.fingerprint(chunks):
-                        raise ValueError("Saved request plan is empty or corrupted")
+                    report["plan_source"] = "saved"
                 else:
-                    chunks = group_plan(group)
+                    chunks, report["plan_source"] = acquisition_plan(group, plan_path, root)
                     erddap.write_json(plan_path, {"group_sha256": report["group_sha256"], "plan_sha256": erddap.fingerprint(chunks), "chunks": chunks})
+                print(f"{key}: {len(chunks)} files; {report['plan_source']} plan", flush=True)
                 report["expected_files"] = len(chunks)
                 def record(result, report=report, key=key, chunks=chunks, report_path=report_path):
                     report["completed_files"] += 1
-                    print(f"{key}: {report['completed_files']}/{len(chunks)} {result['path']}", flush=True)
+                    state = result.get("state", "completed")
+                    if state == "verified_existing":
+                        report["skipped_files"] += 1
+                    elif state == "downloaded":
+                        report["downloaded_files"] += 1
+                    print(f"{key}: {report['completed_files']}/{len(chunks)} {state}: {result['path']}", flush=True)
                     erddap.write_json(report_path, report)
                 if args.phase == "verify":
                     verify_existing(group, chunks, root)
                     report["completed_files"] = len(chunks)
+                    report["skipped_files"] = len(chunks)
                 elif group["adapter"] == "ncei":
                     ncei_oisst.execute(chunks, root, record)
                 elif group["adapter"] in {"cmems", "era5"}:
@@ -260,6 +321,8 @@ def main(argv=None):
                     for chunk in chunks:
                         record(erddap.transfer(chunk, root))
                 report["complete"] = report["completed_files"] == report["expected_files"] and bool(chunks)
+                print(f"{key}: skipped {report['skipped_files']} existing, downloaded "
+                      f"{report['downloaded_files']}, failed {len(report['failed_files'])}", flush=True)
             except Exception as exc:
                 # Provider exceptions can contain credential-bearing URLs. Do not persist them.
                 report["error_type"] = type(exc).__name__

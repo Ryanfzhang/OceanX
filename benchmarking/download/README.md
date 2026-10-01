@@ -30,6 +30,14 @@ How the downloader behaves:
   are kept.
 - **Re-runs:** verified files are skipped; corrupt or foreign files are never overwritten; a failed group
   makes the phase return non-zero.
+- **Existing plans:** an intact saved plan for the same group is reused. A fully downloaded ERDDAP group
+  can therefore be checked and skipped without contacting the metadata server. Missing observations or
+  a changed scope require a fresh provider plan. When extending a time range, existing ERDDAP observations
+  keep their original paths even if provider URL indices shift, but only when product, release, grid and
+  observation time match; receipt and SHA-256 checks still apply.
+- **Progress:** each group reports `skipped_files` and `downloaded_files`, and prints whether its plan came
+  from the saved archive or the current specification. Skipping still reads files to verify SHA-256; it
+  does not mean instant completion or trusting old coverage reports.
 - **Gaps:** a provider missing a requested month or day stops the group (no gap-filling).
 - **Two terminals:** `public` and `services` can run at the same time; the same phase twice, or anything
   during `verify`, is refused by locks.
@@ -50,3 +58,30 @@ The adapters are:
 
 The Gulf of Mexico and East China Sea groups (test suite) are unchanged from the 2026-09 catalogue,
 so files downloaded then are verified and reused.
+
+## Server checkout and existing archive
+
+The owner's checkout on `macyang9` is `/home/mafzhang/code/OceanX`. Update that checkout with
+`git pull --ff-only` before checking the catalogue; similarly named OceanMind directories may belong
+to the older repository. The benchmark Python is `/home/mafzhang/miniconda3/envs/oceanx-bench/bin/python`
+and the shared data root is `/import/home4/share/mafzhang`.
+
+The 2026-10-01 check against catalogue `2026-10-01-v6` found:
+
+| Group | Existing files / required files | Compatibility |
+|---|---:|---|
+| P_GULF | 252 / 252 | Exact current request plan |
+| P_ECS | 420 / 420 | Exact current request plan |
+| P_ERA5 | 560 / 560 | Exact current request plan |
+| P_OISST | 30,680 / 30,680 | Exact current request plan |
+| P_MODIS | 180 / 216 | Existing 2003–2017 scope matches; 2018–2020 is missing |
+| P_ARAB_PHY / P_ARAB_BGC | 0 / 720 + 360 | Not staged |
+| P_CCS_PHY / P_CCS_SURF / P_CCS_BGC | 0 / 720 + 336 + 1,008 | Not staged |
+| P_TAS_PHY / P_TAS_SURF / P_TAS_BGC | 0 / 720 + 336 + 1,008 | Not staged |
+
+Every listed existing file had a receipt, the saved plan hashes matched, and one file per existing
+group passed the downloader's SHA-256 skip check. This was an inventory and sample check, not a new
+full-archive hash verification. No scientific data were downloaded or replaced. CMOMS, requested
+CMOMS_DIA fields and evaluator-only groups were absent from their prescribed folders in this data root;
+that does not establish that the owner has no copies elsewhere. Old NOAA wind files are not inputs to
+this catalogue and are left untouched.

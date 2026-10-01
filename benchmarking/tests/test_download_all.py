@@ -20,6 +20,121 @@ def _refresh_in_process(control, manifest, key):
 import download_all as all_data
 import download_data as down
 import ncei_oisst as ncei
+from test_download_data import job, provider
+
+
+def save_plan(path, group, chunks):
+    down.write_json(path, {"group_sha256": down.fingerprint(group),
+                           "plan_sha256": down.fingerprint(chunks), "chunks": chunks})
+
+
+def archive_fixture(root, chunk):
+    final = down.safe_destination(root, chunk["relative_path"])
+    down.ensure_collection(final, chunk)
+    final.parent.mkdir(parents=True, exist_ok=True)
+    final.write_bytes(b"verified archive fixture")
+    down.write_json(final.with_suffix(".receipt.json"), {
+        "request_sha256": chunk["request_sha256"], "sha256": down.file_hash(final),
+        "bytes": final.stat().st_size,
+    })
+
+
+def test_complete_public_group_skips_provider_metadata_and_counts_reused_files(tmp_path, monkeypatch):
+    group = {"phase": "public", "adapter": "erddap", "data_type": "TEST",
+             "folders": ["chlor_a"]}
+    manifest = {"version": "test", "groups": {"p": group}, "tasks": {"Q01": ["p"]}, "masks": {}}
+    chunks = down.plan_product(job(), provider())["chunks"]
+    for chunk in chunks:
+        archive_fixture(tmp_path, chunk)
+    save_plan(tmp_path / "_download_all/p.plan.json", group, chunks)
+    monkeypatch.setattr(all_data, "load_manifest", lambda: manifest)
+
+    def offline(*args, **kwargs):
+        pytest.fail("A complete saved group must not contact the provider")
+
+    monkeypatch.setattr(all_data, "group_plan", offline)
+    monkeypatch.setattr(down, "curl", offline)
+    assert all_data.main(["public", "--output", str(tmp_path), "--execute"]) == 0
+    report = json.loads((tmp_path / "_download_all/p.report.json").read_text())
+    assert report["complete"] and report["plan_source"] == "saved"
+    assert report["skipped_files"] == 3 and report["downloaded_files"] == 0
+
+
+def test_missing_public_observation_refreshes_metadata_and_only_downloads_the_gap(tmp_path, monkeypatch):
+    group = {"adapter": "erddap"}
+    chunks = down.plan_product(job(), provider())["chunks"]
+    archive_fixture(tmp_path, chunks[0])
+    path = tmp_path / "plan.json"
+    save_plan(path, group, chunks)
+    refreshed = []
+    monkeypatch.setattr(all_data, "group_plan", lambda g: refreshed.append(g) or chunks)
+    planned, source = all_data.acquisition_plan(group, path, tmp_path)
+    assert source == "current" and refreshed == [group]
+    downloads = []
+
+    def fetch(url, destination, timeout):
+        downloads.append(url)
+        destination.write_bytes(b"new download fixture")
+
+    records = [down.transfer(c, tmp_path, runner=fetch, verifier=lambda *a: {"chlor_a": 1})
+               for c in planned]
+    assert len(downloads) == 2
+    assert [r["state"] for r in records] == ["verified_existing", "downloaded", "downloaded"]
+
+
+def test_erddap_extension_reuses_old_observations_even_if_provider_indices_shift(tmp_path, monkeypatch):
+    chunks = down.plan_product(job(), provider())["chunks"]
+    archive_fixture(tmp_path, chunks[0])
+    path = tmp_path / "plan.json"
+    old_group, new_group = {"adapter": "erddap", "end": "2011-01"}, {"adapter": "erddap", "end": "2011-03"}
+    save_plan(path, old_group, chunks[:1])
+    current = copy.deepcopy(chunks)
+    current[0]["url"] += "changed-time-index"
+    current[0]["request_sha256"] = "new-index-hash"
+    current[0]["relative_path"] = chunks[0]["relative_path"].replace(chunks[0]["request_sha256"][:16], "new-index-hash")
+    monkeypatch.setattr(all_data, "group_plan", lambda g: current)
+    planned, source = all_data.acquisition_plan(new_group, path, tmp_path)
+    assert source == "current" and planned == chunks
+    assert down.transfer(planned[0], tmp_path)["state"] == "verified_existing"
+
+
+@pytest.mark.parametrize("change", ["dataset", "version_label", "provider_processing_version", "expected", "relative_path"])
+def test_erddap_reuse_never_substitutes_a_different_product_grid_time_or_archive(tmp_path, change):
+    chunk = down.plan_product(job(), provider())["chunks"][0]
+    archive_fixture(tmp_path, chunk)
+    current = copy.deepcopy(chunk)
+    current[change] = ({**chunk["expected"], "time": {"count": 1, "first": "2011-01-01", "last": "2011-01-01"}}
+                       if change == "expected" else "different")
+    assert all_data.reuse_erddap_chunks([current], {"chunks": [chunk]}, tmp_path) == [current]
+
+
+def test_saved_plan_identity_and_integrity_are_checked(tmp_path):
+    group = {"adapter": "cmems"}
+    chunks = down.plan_product(job(), provider())["chunks"]
+    path = tmp_path / "plan.json"
+    save_plan(path, group, chunks)
+    assert all_data.saved_plan(path, group)["chunks"] == chunks
+    assert all_data.saved_plan(path, {"adapter": "ncei"}) is None
+    saved = json.loads(path.read_text())
+    saved["chunks"].pop()
+    down.write_json(path, saved)
+    with pytest.raises(ValueError, match="corrupted"):
+        all_data.saved_plan(path, group)
+
+
+def test_cached_corrupt_file_fails_without_redownload(tmp_path, monkeypatch):
+    group = {"adapter": "erddap"}
+    chunks = down.plan_product(job(), provider())["chunks"]
+    for chunk in chunks:
+        archive_fixture(tmp_path, chunk)
+    path = tmp_path / "plan.json"
+    save_plan(path, group, chunks)
+    (tmp_path / chunks[0]["relative_path"]).write_bytes(b"corrupt")
+    monkeypatch.setattr(all_data, "group_plan", lambda g: pytest.fail("must stay offline"))
+    planned, source = all_data.acquisition_plan(group, path, tmp_path)
+    assert source == "saved"
+    with pytest.raises(down.DownloadError, match="mismatch"):
+        down.transfer(planned[0], tmp_path)
 
 
 def test_catalogue_groups_and_coverage():
