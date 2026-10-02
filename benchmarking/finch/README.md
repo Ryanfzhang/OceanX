@@ -20,7 +20,7 @@ git -C /home/mafzhang/code/finch-baseline checkout aea66fdf2dd2be827727de50a73ca
 conda create -n finch-bench python=3.12 pip -y
 /home/mafzhang/miniconda3/envs/finch-bench/bin/python -m pip install \
   -c /home/mafzhang/code/OceanX/benchmarking/finch/constraints.txt \
-  -e /home/mafzhang/code/finch-baseline pyyaml 'python-dotenv>=1.0,<2'
+  -e /home/mafzhang/code/finch-baseline pyyaml 'python-dotenv>=1.0,<2' 'httpx[socks]>=0.27,<1'
 /home/mafzhang/miniconda3/envs/finch-bench/bin/python -m pip install \
   -r /home/mafzhang/code/OceanX/benchmarking/finch/kernel-requirements.txt
 ```
@@ -88,6 +88,27 @@ Run the supervisor in oceanx-bench; `--python` selects the separate Finch worker
 
 All model requests use BENCH_MODEL (DeepSeek Flash), the shared key and endpoints in benchmarking/.env;
 credentials are not written to manifests or supplied to the calculation kernel.
+Finch preserves upstream's two-call ReAct step (explicit reasoning, then required
+tool selection). For DeepSeek's OpenAI-compatible endpoint the adapter explicitly
+sends `thinking.type=disabled` on every request: provider thinking rejects
+`tool_choice=required`, and the pinned interfaces do not replay `reasoning_content`.
+This does **not** remove Finch's own reasoning step or replace required tool calls
+with auto selection. It is not a retry/fallback. `arm.json` and `manifest.json`
+record `model_compatibility`; report this mode difference in comparisons with
+OceanX/Claude, rather than claiming identical provider reasoning settings.
+See [DeepSeek's API contract](https://api-docs.deepseek.com/api/create-chat-completion/).
+
+If SOCKS support was installed in oceanx-bench only, install it in the actual
+Finch worker environment too:
+
+```bash
+/home/mafzhang/miniconda3/envs/finch-bench/bin/python -m pip install 'httpx[socks]>=0.27,<1'
+```
+
+After updating the adapter or dependencies, use a **new** `BENCH_EXPERIMENT` for
+the smoke run. Old failed attempt folders remain intact; resume intentionally
+rejects changed code/runtime. Do not edit the shared config while another method
+is still running. No live API smoke run is performed by the installation tests.
 No Edison/FutureHouse account is required and no files are uploaded to its platform.
 **Notebook content, plots and tool observations are still sent to the configured
 LLM provider.** Local execution is not a guarantee that private derived data never

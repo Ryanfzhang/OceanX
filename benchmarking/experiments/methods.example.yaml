@@ -14,6 +14,7 @@ arms:
   Claude: {agent: claude-code, cli_version: <installed version>, host_sandbox: false}
   Finch: {agent: finch-local, commit: aea66fdf2dd2be827727de50a73cae60dff59972,
           backend: linux-bubblewrap-notebook-v1, max_steps: 60,
+          agent_reasoning: upstream_two_call_react, provider_thinking: disabled,
           execution_timeout: 300, memory_mb_per_process: 8192, cpus_affinity: 2}
 repeats: 2
 timeout_seconds: 10800

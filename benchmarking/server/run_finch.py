@@ -24,6 +24,7 @@ from uuid import uuid4
 
 from benchmark_config import load_config
 from finch_sandbox import BACKEND, cpu_ids, sandbox_command
+from finch_worker import model_compatibility
 from run_claude import inventory, supervise, write_json
 
 from oceanx.batch import load_queries
@@ -283,6 +284,7 @@ def main(argv=None):
     identity = {"agent": "finch-local", "arm": args.arm, "finch_commit": args.finch_commit,
                 "finch_root": str(args.finch_root), "python": args.python,
                 "runtime": runtime, "model_protocol": config.public(),
+                "model_compatibility": model_compatibility(config),
                 "max_steps": args.max_steps, "temperature": args.temperature,
                 "timeout": args.timeout, "execution_timeout": args.execution_timeout,
                 "memory_mb": args.memory_mb, "cpus": args.cpus,
@@ -302,6 +304,7 @@ def main(argv=None):
             write_json(output / "manifest.json", {"identity": identity})
             write_json(output / "arm.json", {"arm": args.arm, "agent": "finch-local",
                 "policy": None, "lessons": None, "model": config.model, "runtime": runtime,
+                "model_compatibility": model_compatibility(config),
                 "finch_commit": args.finch_commit, "search_available": False})
         stopped = [False]
         previous = {s: signal.signal(s, lambda *_: stopped.__setitem__(0, True))

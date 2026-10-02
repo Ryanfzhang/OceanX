@@ -112,11 +112,27 @@ def install_meter(attempt, secret):
     return lambda: setattr(litellm.Router, "acompletion", original)
 
 
+def model_compatibility(config):
+    """Keep Finch's explicit ReAct reasoning and mandatory action selection.
+
+    DeepSeek thinking rejects required/named tool choices. Disable that provider
+    feature for the entire Finch conversation, not just the failing call: the
+    pinned message interfaces also do not replay DeepSeek reasoning_content.
+    This is an explicit baseline mode, never an error-triggered fallback.
+    """
+    extra = ({"thinking": {"type": "disabled"}}
+             if config.oceanx_api == "openai" and config.model.startswith("deepseek-") else {})
+    return {"agent_reasoning": "upstream_two_call_react", "tool_choice": "upstream_required",
+            "provider_thinking": "disabled" if extra else "provider_default",
+            "request_extra_body": extra}
+
+
 def install_model(config):
     """Explicit endpoint/provider; no inherited defaults or credential lookup."""
     import ldp.graph.common_ops as common
     from lmi import LiteLLMModel
     endpoint = config.endpoint(config.oceanx_api)
+    compatibility = model_compatibility(config)
     original = common.LLMModel
     def configured_model(config):
         # Finch's pinned LiteLLM predates Flash: qualify the alias as well as the
@@ -124,7 +140,9 @@ def install_model(config):
         settings = {"name": provider_model, "model_list": [{
             "model_name": provider_model, "litellm_params": {
                 "model": provider_model, "api_base": endpoint.url,
-                "api_key": endpoint.api_key, "max_tokens": max_tokens}}],
+                "api_key": endpoint.api_key, "max_tokens": max_tokens,
+                **({"extra_body": compatibility["request_extra_body"]}
+                   if compatibility["request_extra_body"] else {})}}],
             "router_kwargs": {"num_retries": 2}}
         return LiteLLMModel(name=provider_model, config=settings)
     provider_model = f"{config.oceanx_api}/{config.model}"

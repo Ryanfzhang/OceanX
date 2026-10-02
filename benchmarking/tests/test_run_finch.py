@@ -12,6 +12,7 @@ import run_finch as runner
 from finch_sandbox import BACKEND, notebook_command, sandbox_command
 
 from oceanx.batch import QueryCase
+from benchmark_config import load_config
 from test_prepare_queries import archive as archive
 
 
@@ -87,6 +88,10 @@ def test_success_resume_and_artifacts(setup):
     assert "input.nc" not in str(evidence)
     identity = (output / "manifest.json").read_text()
     assert "secret-test-key" not in identity
+    mode = json.loads(identity)["identity"]["model_compatibility"]
+    assert mode["agent_reasoning"] == "upstream_two_call_react"
+    assert mode["tool_choice"] == "upstream_required"
+    assert json.loads((output / "arm.json").read_text())["model_compatibility"] == mode
     assert runner.main([*args, "--resume"]) == 0
     assert len(results(output)) == 1 and removed == []
     with pytest.raises(ValueError, match="Resume"):
@@ -172,6 +177,33 @@ def test_unknown_tokens_are_not_zero():
     assert runner.token_accounting([known, {"state": "failed"}])["input_tokens"] is None
     assert worker.normalized_usage({"prompt_tokens": 10, "completion_tokens": 3,
         "prompt_tokens_details": {"cached_tokens": 8}})["input_tokens"] == 10
+
+
+def test_deepseek_mode_is_explicit_and_other_models_are_unchanged(tmp_path):
+    path = tmp_path / ".env"
+    path.write_text("DEEPSEEK_API_KEY=test-key\n")
+    mode = worker.model_compatibility(load_config(path))
+    assert mode == {"agent_reasoning": "upstream_two_call_react",
+                    "tool_choice": "upstream_required", "provider_thinking": "disabled",
+                    "request_extra_body": {"thinking": {"type": "disabled"}}}
+    path.write_text("DEEPSEEK_API_KEY=test-key\nBENCH_MODEL=test-model\n")
+    assert worker.model_compatibility(load_config(path))["request_extra_body"] == {}
+
+
+def test_deepseek_mode_is_saved_and_old_mode_cannot_resume(setup):
+    root, output, invoke, _ = setup
+    config = root / ".env"
+    config.write_text(config.read_text().replace("test-model", "deepseek-flash"))
+    args = invoke([("Analyze", 5)])
+    assert runner.main(args) == 0
+    arm = json.loads((output / "arm.json").read_text())
+    assert arm["model_compatibility"]["provider_thinking"] == "disabled"
+    manifest = output / "manifest.json"
+    old = json.loads(manifest.read_text())
+    del old["identity"]["model_compatibility"]
+    manifest.write_text(json.dumps(old))
+    with pytest.raises(ValueError, match="Resume"):
+        runner.main([*args, "--resume"])
 
 
 def test_namespace_boundary():
