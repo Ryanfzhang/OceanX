@@ -1,9 +1,13 @@
 import json
 import os
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
-from benchmark_config import Config, Endpoint, load_config, claude_environment
-from benchmark_models import install_oceanx_models
+from benchmark_config import Config, Endpoint, claude_environment, load_config
+from benchmark_models import install_oceanx_models, run_oceanx_gateway
+
 from oceanx import model_config
 from oceanx.agent import load_model_profile as imported_loader
 
@@ -110,3 +114,147 @@ def test_missing_env_message_and_default_path(tmp_path):
     assert DEFAULT_CONFIG == ROOT / 'benchmarking' / '.env'
     with pytest.raises(ValueError, match='benchmarking/.env.example'):
         load_config(tmp_path / 'missing.env')
+
+
+def test_gateway_adapts_only_its_launcher_and_restores_it(tmp_path, monkeypatch):
+    import asyncio
+
+    from oceanx.research import launcher
+
+    env_file = tmp_path / '.env'
+    env_file.write_text('DEEPSEEK_API_KEY=only-in-file\n')
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(env_file))
+    original = launcher.asyncio
+    observed = []
+
+    async def spawn(*args, **kwargs):
+        observed.append((args, kwargs))
+        return 'child'
+
+    async def gateway(state):
+        assert launcher.asyncio is not asyncio
+        assert launcher.asyncio.sleep is asyncio.sleep
+        return await launcher.asyncio.create_subprocess_exec(
+            sys.executable, '-m', 'oceanx.research.server', '--state', str(state), '--port', '1234',
+            env={'OCEAN_SERVER_TOKEN': 'launcher-token'}, stdin='stdin', stdout='log', stderr='log')
+
+    monkeypatch.setattr(asyncio, 'create_subprocess_exec', spawn)
+    monkeypatch.setattr(launcher, 'run_desktop_gateway', gateway)
+    assert asyncio.run(run_oceanx_gateway(tmp_path / 'state')) == 'child'
+    assert launcher.asyncio is original
+    args, kwargs = observed[0]
+    assert args == (sys.executable,
+                    str(Path(__file__).resolve().parents[1] / 'server/benchmark_agent_server.py'),
+                    '--state', str(tmp_path / 'state'), '--port', '1234')
+    assert kwargs == {'env': {'OCEAN_SERVER_TOKEN': 'launcher-token',
+                              'OCEAN_BENCH_CONFIG': str(env_file)},
+                      'stdin': 'stdin', 'stdout': 'log', 'stderr': 'log'}
+    assert 'only-in-file' not in repr(observed)
+
+    async def changed_gateway(state):
+        await launcher.asyncio.create_subprocess_exec(sys.executable, '-m', 'other.server', env={})
+
+    monkeypatch.setattr(launcher, 'run_desktop_gateway', changed_gateway)
+    with pytest.raises(RuntimeError, match='launch changed'):
+        asyncio.run(run_oceanx_gateway(tmp_path / 'state'))
+    assert launcher.asyncio is original
+    assert len(observed) == 1
+
+
+@pytest.mark.parametrize('protocol', ['openai', 'anthropic'])
+def test_backend_loads_flash_in_actual_server_child_despite_stored_pro(tmp_path, protocol):
+    """Real runner -> production gateway -> real child, with only server I/O stubbed.
+
+    No LLM requests: the stub reads real profiles and builds the real API adapters
+    at the production run_server boundary, then exits instead of serving HTTP.
+    """
+    root = Path(__file__).resolve().parents[2]
+    server = root / 'benchmarking/server'
+    desktop = tmp_path / 'desktop'
+    desktop.mkdir()
+    settings = {'provider': 'openai', 'model': 'deepseek-v4-pro',
+                'base_url': 'https://api.deepseek.com', 'max_tokens': 65536}
+    (desktop / 'settings.json').write_text(json.dumps(settings))
+    (desktop / 'credentials.json').write_text(json.dumps({'openai': {'api_key': 'stored-pro-key'}}))
+    env_file = tmp_path / '.env'
+    env_file.write_text('DEEPSEEK_API_KEY=benchmark-flash-key\nBENCH_MODEL=deepseek-flash\n'
+                        f'BENCH_OCEANX_API={protocol}\n')
+    attempt = tmp_path / 'attempt'
+    attempt.mkdir()
+    # Only replace the HTTP server's final entrypoint, not OceanX's launcher,
+    # model loader, adapter or server main. It captures what the agents will use.
+    stub = tmp_path / 'stub' / 'langgraph_api'
+    stub.mkdir(parents=True)
+    (stub / '__init__.py').write_text('')
+    (stub / 'cli.py').write_text('''
+import json
+import os
+from pathlib import Path
+
+def run_server(**kwargs):
+    from oceanx.model_config import load_model_profile, create_chat_model
+    profiles = {role: load_model_profile(role) for role in ('coordinator', 'expert', 'meta')}
+    models = {role: create_chat_model(p) for role, p in profiles.items()}
+    record = {'pid': os.getpid(), 'graphs': kwargs['graphs'],
+              'profiles': {role: {'model': p.model, 'provider': p.provider,
+                                 'base_url': p.base_url, 'max_tokens': p.max_tokens,
+                                 'correct_key': p.api_key == 'benchmark-flash-key',
+                                 'request_model': (models[role].model_name if p.provider == 'openai'
+                                                   else models[role].model)}
+                           for role, p in profiles.items()}}
+    Path('observed-models.json').write_text(json.dumps(record))
+''')
+    env = {**os.environ, 'OCEANMIND_CONFIG_DIR': str(desktop),
+           'OCEAN_BENCH_CONFIG': str(env_file),
+           'PYTHONPATH': os.pathsep.join([str(stub.parent), str(server), str(root / 'src'),
+                                        os.environ.get('PYTHONPATH', '')]),
+           'NO_PROXY': '127.0.0.1,localhost'}
+    # A fresh ordinary process still sees Pro; simply inheriting the benchmark
+    # .env path does not reconfigure it (and must not change desktop behavior).
+    ordinary = subprocess.run([sys.executable, '-c',
+                               ('from oceanx.model_config import load_model_profile; '
+                                'print(load_model_profile().model)')],
+                              env=env, cwd=tmp_path, capture_output=True, text=True, timeout=30, check=False)
+    assert ordinary.returncode == 0, ordinary.stderr
+    assert ordinary.stdout.strip() == 'deepseek-v4-pro'
+    process = subprocess.Popen([sys.executable, str(server / 'run_oceanx.py'), '--backend', str(attempt)],
+                               env=env, cwd=tmp_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               text=True)
+    try:
+        stdout, stderr = process.communicate(timeout=45)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate()
+    # The fake HTTP server exits intentionally, so the production readiness
+    # check reports failure. Its captured model configuration is the assertion.
+    assert process.returncode != 0
+    assert 'Agent Server failed to start' in stderr
+    observed = json.loads((attempt / 'state/observed-models.json').read_text())
+    policy = json.loads((attempt / 'model_protocol.json').read_text())
+    assert observed['pid'] != process.pid
+    assert policy['pid'] == observed['pid'] and policy['scope'] == 'agent_server_process'
+    assert observed['graphs'] == {'coordinator': 'oceanx.research.graphs:coordinator'}
+    endpoint = 'https://api.deepseek.com' + ('/anthropic' if protocol == 'anthropic' else '')
+    for role, profile in observed['profiles'].items():
+        assert profile == {'model': 'deepseek-flash', 'provider': protocol,
+                           'base_url': endpoint, 'max_tokens': 32768,
+                           'correct_key': True, 'request_model': 'deepseek-flash'}
+        assert policy['profiles'][role] == {k: v for k, v in profile.items()
+                                           if k not in {'correct_key', 'request_model'}}
+    assert 'benchmark-flash-key' not in json.dumps(policy) + stdout + stderr
+    assert json.loads((desktop / 'settings.json').read_text()) == settings
+
+
+def test_gateway_missing_config_does_not_fall_back_to_desktop(tmp_path, monkeypatch):
+    import asyncio
+
+    from oceanx.research import launcher
+
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(tmp_path / 'missing.env'))
+    original = launcher.asyncio
+    with pytest.raises(ValueError, match='Missing'):
+        asyncio.run(run_oceanx_gateway(tmp_path / 'state'))
+    assert launcher.asyncio is original
+    assert not (tmp_path / 'state').exists()
+    assert not (tmp_path / 'model_protocol.json').exists()

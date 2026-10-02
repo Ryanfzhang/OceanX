@@ -23,6 +23,7 @@ only the example is committed. Then launch each method with no arguments (RUNNIN
 |---|---|
 | [summary.md](summary.md) | All 54 questions, required data (type, time, space, variables), and brief assessment criteria |
 | [RUNNING.md](RUNNING.md) | Start here: one .env, automatic shared selection, three no-argument launch commands |
+| [METHODS_REVIEW.md](METHODS_REVIEW.md) | E10 diagnostic comparison, delivery audit and the historical model mismatch/benchmark bootstrap fix; not a formal score |
 | [SERVER_DATA.md](SERVER_DATA.md) | Server data audit, unchanged archive layout and safe CMOMS staging |
 | [DESIGN.md](DESIGN.md) | What is tested: allocation, the 30 + 24 questions, verified papers, design rules |
 | [DATA.md](DATA.md) | Data groups, server layout, CMOMS staging, the extra CMOMS variables to request, download commands |

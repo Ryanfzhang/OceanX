@@ -46,6 +46,12 @@ Moving data does not migrate old JSONLs; a new experiment generates new absolute
 
 OceanX Coordinator/Experts, offline meta-agent/node labels, Claude (including subagents)
 and Finch use one model/key. The independent scientific rubric judge is not reconfigured.
+OceanX's dedicated benchmark Agent Server loads this file before importing its graphs;
+the normal desktop model settings are neither used nor modified. Each attempt's
+`model_protocol.json` is written by that server process and includes its PID and the
+loaded model/provider/endpoint/token limit for Coordinator, Expert and meta roles, never keys.
+This is a loaded-configuration record, not proof of provider billing or returned model identity;
+check the per-call model ledger when comparing completed runs.
 
 ## 2. Run: three terminals, three commands
 
@@ -98,6 +104,57 @@ retry scored failures. Run under `tmux` to survive SSH disconnection.
 Advanced CLI flags still override individual launch defaults. Explicit `--queries`
 or `--query` requires explicit `--output` and bypasses automatic selection; do not
 mix that workflow with the three-command comparison.
+
+### Repeat OceanX after the model-configuration fix
+
+Earlier OceanX attempts can say Flash in `model_protocol.json` while their returned-model
+ledger says Pro: that record used to be written by the gateway, whose in-memory override
+did not reach the actual server child. Those attempts cannot serve as Flash results.
+
+After updating the server checkout, keep the same data, suite, task IDs and other scientific
+settings, but use a **new** `BENCH_EXPERIMENT` (for example `methods-oceanx-flash-r1`) and
+`BENCH_RESUME=false`, then run only:
+
+```bash
+python benchmarking/server/run_oceanx.py
+```
+
+For the E10 smoke comparison, keep `BENCH_SUITE=evolution`, `BENCH_EVOLUTION_SET=` and
+`BENCH_TASKS=E10`, with `BENCH_MODEL=deepseek-flash`. Do not delete or overwrite the earlier
+OceanX, Claude or Finch attempts. Changing runner source files invalidates the old automatic
+experiment selection, so a new arm name alone is not sufficient. The new query bindings
+must match the old query text and datasets before using the earlier baselines as comparators.
+This smoke repeat diagnoses the corrected model routing; it is not a new formal A/B claim.
+
+## OceanX review delivery
+
+The OceanX runner automatically creates a new `runs/OceanX/collected/collection-*`
+folder after the batch. Open its `index.md`, then each attempt's `review.md` for the
+answer, figure gallery, registered result data and links to saved reports/code.
+The collector reads `outputs.json.task_results`; it does not discover results by
+scanning ordinary NetCDF files, run models, rerun analysis, or modify the original answer.
+
+`summary.json` and each `collection_manifest.json` distinguish runtime status from
+collection status. `collection_status=complete` means the available answer and
+registered files were collected without errors, **not** scientific correctness or
+verified reproducibility. Missing previews, files, checksum mismatches and invalid
+indexes are reported explicitly. Notebook availability is a separate field.
+
+When saved per-execution notebooks exist, `execution_record.ipynb` groups their
+original cells and outputs by agent. It can include failed attempts and original
+server paths; it is **not** a clean, end-to-end `analysis.ipynb`. No missing cells
+are invented or repaired. Collection is for review, not an additional scientific
+completion step or an automatic increase in benchmark scores.
+
+Existing attempts can be recollected without rerunning them:
+
+```bash
+python benchmarking/server/collect_oceanx.py --run /import/home3/share/oceanx-bench/methods-public-r1/runs/OceanX
+```
+
+Replace `--run` with the saved OceanX method folder to review. Every collection uses
+a new directory and preserves previous attempts and collections. Historical receipt
+formats remain readable only when no current task-result index is present.
 
 ## 3. Before formal scoring
 

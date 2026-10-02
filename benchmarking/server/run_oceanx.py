@@ -1,7 +1,7 @@
 """Run OceanX through its production Agent Server path, as one experimental arm.
 
 The scientific query is submitted unchanged, without a research-tree instruction. All model roles use the
-benchmarking/.env API configuration in this process only. Every arm runs the default research policy
+benchmarking/.env API configuration inside the actual Agent Server subprocess. Every arm runs the default research policy
 unless --policy selects another; an arm fixes an optional frozen library (lessons and tools). Nothing is
 learned during the run, and every attempt checks that.
 """
@@ -165,15 +165,10 @@ def write_arm(attempt: Path) -> None:
 
 def main(argv=None):
     if argv is None and len(sys.argv) == 3 and sys.argv[1] == "--backend":
-        from benchmark_models import install_oceanx_models
-
-        model_policy = install_oceanx_models()
-
-        from oceanx.cli import app
+        from benchmark_models import run_oceanx_gateway
 
         attempt = Path(sys.argv[2]).resolve()
-        batch._write_json(attempt / "model_protocol.json", model_policy)
-        app(args=["backend", "--state-dir", str(attempt / "state")])
+        asyncio.run(run_oceanx_gateway(attempt / "state"))
         return
     parser = argparse.ArgumentParser(description=__doc__)
     query_input = parser.add_mutually_exclusive_group()
