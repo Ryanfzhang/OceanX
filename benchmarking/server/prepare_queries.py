@@ -123,6 +123,37 @@ def build_cases(task_ids, root, bindings, timeout=10800, literature_mode="search
     return cases
 
 
+def prepare_selection(root, suite, *, tasks=None, evolution_set=None, available_only=False,
+                      bindings_path=None, timeout=10800, literature_mode='search_only'):
+    """Validate and select once, shared by the explicit CLI and .env-driven runners."""
+    if evolution_set and suite != 'evolution':
+        raise ValueError('--set applies to the evolution suite only')
+    available = suite_tasks(suite, evolution_set)
+    tasks = tasks or available
+    if len(tasks) != len(set(tasks)):
+        raise ValueError('Choose unique task IDs')
+    if set(tasks) - set(available):
+        raise ValueError(f'Not in the {suite} suite: {sorted(set(tasks) - set(available))}')
+    root = Path(root).expanduser().resolve(strict=True)
+    if available_only:
+        if bindings_path:
+            raise ValueError('--available uses verified manifest coverage, not --bindings overrides')
+        _, coverage = read_coverage(root)
+        selected = []
+        for task in tasks:
+            state = coverage.get('tasks', {}).get(task, {})
+            if state.get('numerical_inputs_complete') is True:
+                selected.append(task)
+            else:
+                print(f"{task}: excluded; missing groups: {state.get('missing_groups', 'no completion record')}")
+        tasks = selected
+        if not tasks:
+            raise ValueError('No tasks with complete numerical inputs; no query file written')
+    bindings = (json.loads(Path(bindings_path).read_text()) if bindings_path
+                else manifest_bindings(tasks, root))
+    return build_cases(tasks, root, bindings, timeout, literature_mode)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=Path, required=True)
@@ -139,30 +170,10 @@ def main(argv=None):
     parser.add_argument("--literature-mode", choices=["search_only", "ask_before_download", "auto_download_open_access"],
                         default="search_only")
     args = parser.parse_args(argv)
-    if args.evolution_set and args.suite != "evolution":
-        raise ValueError("--set applies to the evolution suite only")
-    available = suite_tasks(args.suite, args.evolution_set)
-    tasks = args.tasks or available
-    if set(tasks) - set(available):
-        raise ValueError(f"Not in the {args.suite} suite: {sorted(set(tasks) - set(available))}")
     root = args.data_root.expanduser().resolve(strict=True)
-    if args.available:
-        if args.bindings:
-            raise ValueError("--available uses verified manifest coverage, not --bindings overrides")
-        _, coverage = read_coverage(root)
-        selected = []
-        for task in tasks:
-            state = coverage.get("tasks", {}).get(task, {})
-            if state.get("numerical_inputs_complete") is True:
-                selected.append(task)
-            else:
-                print(f"{task}: excluded; missing groups: {state.get('missing_groups', 'no completion record')}")
-        tasks = selected
-        if not tasks:
-            raise ValueError("No tasks with complete numerical inputs; no query file written")
-    bindings = (json.loads(args.bindings.read_text()) if args.bindings
-                else manifest_bindings(tasks, root))
-    cases = build_cases(tasks, root, bindings, args.timeout, args.literature_mode)
+    cases = prepare_selection(root, args.suite, tasks=args.tasks, evolution_set=args.evolution_set,
+                              available_only=args.available, bindings_path=args.bindings,
+                              timeout=args.timeout, literature_mode=args.literature_mode)
     target = args.output.expanduser().absolute()
     if target.resolve().is_relative_to(root):
         raise ValueError("Write runner inputs outside the shared data root")

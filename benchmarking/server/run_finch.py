@@ -231,23 +231,27 @@ def run_case(case, directory, args, env, cancelled):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--queries", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--queries", type=Path)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--finch-root", type=Path, required=True)
-    parser.add_argument("--finch-commit", default=FINCH_COMMIT)
-    parser.add_argument("--python", default=sys.executable, help="Finch Python 3.12+ interpreter")
+    parser.add_argument("--finch-root", type=Path)
+    parser.add_argument("--finch-commit")
+    parser.add_argument("--python", help="Finch Python 3.12+ interpreter")
     parser.add_argument("--kernel-python", help="Notebook interpreter; defaults to --python")
-    parser.add_argument("--bwrap", default="bwrap", help="Linux Bubblewrap executable")
-    parser.add_argument("--arm", default="F", help="External arm label; not an OceanX policy")
-    parser.add_argument("--max-steps", type=int, default=60)
-    parser.add_argument("--temperature", type=float, default=1.0)
-    parser.add_argument("--timeout", type=float, default=10800)
-    parser.add_argument("--execution-timeout", type=float, default=300)
-    parser.add_argument("--memory-mb", type=int, default=8192)
-    parser.add_argument("--cpus", type=float, default=2)
-    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--bwrap", help="Linux Bubblewrap executable")
+    parser.add_argument("--arm", help="External arm label; not an OceanX policy")
+    parser.add_argument("--max-steps", type=int)
+    parser.add_argument("--temperature", type=float)
+    parser.add_argument("--timeout", type=float)
+    parser.add_argument("--execution-timeout", type=float)
+    parser.add_argument("--memory-mb", type=int)
+    parser.add_argument("--cpus", type=float)
+    parser.add_argument("--resume", action="store_true", default=None)
     args = parser.parse_args(argv)
+    config = load_config(args.config)
+    config.endpoint(config.oceanx_api)
+    from benchmark_run import configure_run
+    configure_run(args, config, 'Finch')
     if sys.platform != "linux":
         raise ValueError("Finch runner requires Linux Bubblewrap; no Docker or unsandboxed fallback")
     if os.getuid() == 0:
@@ -257,10 +261,7 @@ def main(argv=None):
             raise ValueError("Step, time and resource limits must be positive and finite")
     if not math.isfinite(args.temperature) or not 0 <= args.temperature <= 2:
         raise ValueError("Temperature must be between 0 and 2")
-    config = load_config(args.config)
-    config.endpoint(config.oceanx_api)  # Fail before creating output or making any model call.
-    from benchmark_config import DEFAULT_CONFIG
-    args.config = Path(args.config or os.environ.get("OCEAN_BENCH_CONFIG", DEFAULT_CONFIG)).resolve()
+    args.config = config.source
     args.finch_root = args.finch_root.expanduser().resolve()
     args.kernel_python = shutil.which(args.kernel_python or args.python)
     args.python, args.bwrap = shutil.which(args.python), shutil.which(args.bwrap)

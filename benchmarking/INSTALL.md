@@ -12,7 +12,7 @@ command -v bwrap
 
 The host must allow user namespaces (see the OceanX installation guide, "Linux system components").
 
-## Models: one file
+## Models and run settings: one file
 
 Copy the template and fill its one `DEEPSEEK_API_KEY` on the server. The real `.env` is ignored by git;
 keep it out of data and result folders. No local key needs to be uploaded.
@@ -43,6 +43,11 @@ BENCH_ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 - **Evaluation:** the independent Codex rubric scoring is a separate manual judging step, not a model
   API invoked by these runners. Changing this `.env` does not reconfigure that judge.
 - **Your everyday settings:** OceanX settings in `~/.oceanmind` are neither read nor changed.
+
+The same `.env` also sets the data root, output root, experiment name, task suite/IDs,
+timeout/resume, optional OceanX library, Claude executable/tools and Finch environment/limits.
+Keep the run settings from `.env.example` when filling the key. With these configured,
+the three runners need no arguments; see [RUNNING.md](RUNNING.md).
 
 ## Checks
 

@@ -67,6 +67,12 @@ the whole repository/data root in place of a narrower dataset reference.
 
 ## Run an external arm
 
+Normal launch: set `BENCH_FINCH_ROOT`, `BENCH_FINCH_PYTHON`, dataset/task/output
+settings and resource limits in `benchmarking/.env`, then run
+`python benchmarking/server/run_finch.py` in `oceanx-bench`. It uses the same frozen
+input selection as OceanX and Claude; see [RUNNING.md](../RUNNING.md).
+The command below is the optional explicit-CLI workflow.
+
 Run the supervisor in oceanx-bench; `--python` selects the separate Finch worker:
 
 ```bash

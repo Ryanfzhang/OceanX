@@ -1,0 +1,161 @@
+""".env-only launch, immutable shared inputs and concurrent starts; no API calls."""
+from concurrent.futures import ThreadPoolExecutor
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from benchmark_config import load_config, ROOT
+from benchmark_run import configure_run, shared_queries
+from oceanx.batch import load_queries
+from test_prepare_queries import archive as archive
+
+
+@pytest.fixture
+def configured(archive, tmp_path):
+    file = tmp_path / '.env'
+    file.write_text(f'DEEPSEEK_API_KEY=private-test-key\nBENCH_DATA_ROOT={archive}\n'
+                    f'BENCH_OUTPUT_ROOT={tmp_path / "results"}\nBENCH_EXPERIMENT=pilot-r1\n'
+                    'BENCH_TASKS=Q07,Q08\n')
+    return file
+
+
+def test_template_contains_all_launch_settings_and_an_empty_key():
+    config = load_config(ROOT / 'benchmarking/.env.example')
+    assert config.run['BENCH_DATA_ROOT'] == '/import/home3/share/mafzhang'
+    assert config.run['BENCH_TASKS'] == 'available'
+    assert config.run['BENCH_FINCH_PYTHON'].endswith('/finch-bench/bin/python')
+    assert config.run['BENCH_CLAUDE_ALLOW_TOOLS']
+    with pytest.raises(ValueError, match='DEEPSEEK_API_KEY'):
+        config.endpoint('openai')
+
+
+def test_concurrent_methods_share_one_selection(configured):
+    config = load_config(configured)
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        selections = list(pool.map(lambda _: shared_queries(config), range(3)))
+    assert len(set(selections)) == 1
+    queries, outputs = selections[0]
+    assert [c.id for c in load_queries(queries)] == ['Q07', 'Q08']
+    assert outputs == configured.parent / 'results/pilot-r1/runs'
+    record = json.loads(queries.with_name('selection.json').read_text())
+    assert record['task_ids'] == ['Q07', 'Q08']
+    assert 'private-test-key' not in json.dumps(record)
+    assert not list(outputs.parent.rglob('*.nc'))
+
+
+def test_available_is_frozen_even_when_more_data_arrive(configured, archive):
+    configured.write_text(configured.read_text().replace('BENCH_TASKS=Q07,Q08', 'BENCH_TASKS=available'))
+    coverage = archive / '_download_all/coverage.json'
+    doc = json.loads(coverage.read_text())
+    doc['tasks']['Q09']['numerical_inputs_complete'] = False
+    doc['tasks']['Q09']['missing_groups'] = ['P_GULF']
+    coverage.write_text(json.dumps(doc))
+    queries, _ = shared_queries(load_config(configured))
+    original = queries.read_bytes()
+    assert 'Q09' not in [c.id for c in load_queries(queries)]
+    doc['tasks']['Q09']['numerical_inputs_complete'] = True
+    coverage.write_text(json.dumps(doc))
+    assert shared_queries(load_config(configured))[0].read_bytes() == original
+
+
+@pytest.mark.parametrize('change', ['BENCH_MODEL=changed', 'BENCH_TIMEOUT_SECONDS=120',
+                                   'BENCH_TASKS=Q07', 'BENCH_FINCH_MAX_STEPS=30'])
+def test_changed_configuration_cannot_reuse_an_experiment(configured, change):
+    shared_queries(load_config(configured))
+    field = change.split('=')[0]
+    content = '\n'.join(line for line in configured.read_text().splitlines() if not line.startswith(field + '='))
+    configured.write_text(content + '\n' + change + '\n')
+    with pytest.raises(ValueError, match='new BENCH_EXPERIMENT'):
+        shared_queries(load_config(configured))
+
+
+def test_resume_and_key_rotation_do_not_change_the_selection(configured):
+    original = shared_queries(load_config(configured))
+    configured.write_text(configured.read_text().replace('private-test-key', 'rotated-test-key')
+                          + 'BENCH_RESUME=true\n')
+    assert shared_queries(load_config(configured)) == original
+
+
+def test_corrupted_queries_fail_instead_of_regenerating(configured):
+    queries, _ = shared_queries(load_config(configured))
+    queries.write_text(queries.read_text() + '\n')
+    with pytest.raises(ValueError, match='inputs/config changed'):
+        shared_queries(load_config(configured))
+
+
+@pytest.mark.parametrize('change', ['BENCH_TASKS=Q07,Q07', 'BENCH_TASKS=E01', 'BENCH_TASKS=',
+                                   'BENCH_EXPERIMENT=../bad', 'BENCH_TIMEOUT_SECONDS=nan',
+                                   'BENCH_SUITE=test\nBENCH_EVOLUTION_SET=A'])
+def test_invalid_selection_fails_without_a_query_file(configured, change):
+    field = change.split('=')[0]
+    content = '\n'.join(line for line in configured.read_text().splitlines() if not line.startswith(field + '='))
+    configured.write_text(content + '\n' + change + '\n')
+    with pytest.raises(ValueError):
+        shared_queries(load_config(configured))
+    assert not list(configured.parent.rglob('queries.jsonl'))
+
+
+def test_results_cannot_be_inside_input_data(configured, archive):
+    configured.write_text(configured.read_text().replace(str(configured.parent / 'results'), str(archive / 'runs')))
+    with pytest.raises(ValueError, match='separate'):
+        shared_queries(load_config(configured))
+    assert not (archive / 'runs').exists()
+
+
+def test_evolution_set_and_space_separated_tasks(configured):
+    configured.write_text(configured.read_text().replace('BENCH_TASKS=Q07,Q08',
+                          'BENCH_SUITE=evolution\nBENCH_EVOLUTION_SET=B\nBENCH_TASKS=E17 E18'))
+    queries, _ = shared_queries(load_config(configured))
+    assert [c.id for c in load_queries(queries)] == ['E17', 'E18']
+
+
+def test_no_argument_oceanx_launch(configured, monkeypatch):
+    import benchmark_config
+    import run_oceanx
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(configured))
+    monkeypatch.setenv('OCEANX_RESEARCH_POLICY', 'v0-coordinator-bfs')
+    monkeypatch.setattr(benchmark_config, 'preflight', lambda **_: None)
+    monkeypatch.setattr(run_oceanx, 'LIBRARY', None)
+    monkeypatch.setattr(run_oceanx, 'ARM', {})
+    monkeypatch.setattr(run_oceanx.batch, 'BatchClient', run_oceanx.batch.BatchClient)
+    monkeypatch.setattr(run_oceanx.batch, 'interaction_answer', run_oceanx.batch.interaction_answer)
+    observed = {}
+    async def batch(cases, output, resume):
+        observed.update(ids=[c.id for c in cases], output=output, resume=resume)
+        return [{'status': 'completed'}]
+    monkeypatch.setattr(run_oceanx.batch, 'run_batch', batch)
+    with pytest.raises(SystemExit) as exc:
+        run_oceanx.main([])
+    assert exc.value.code == 0
+    assert observed == {'ids': ['Q07', 'Q08'], 'output': configured.parent / 'results/pilot-r1/runs/OceanX',
+                        'resume': False}
+    assert run_oceanx.ARM['policy'] == 'v2-nested'
+
+
+def test_distinct_method_output_names_are_required(configured):
+    configured.write_text(configured.read_text() + 'BENCH_CLAUDE_ARM=OceanX\n')
+    with pytest.raises(ValueError, match='distinct'):
+        shared_queries(load_config(configured))
+
+
+def test_shared_resume_starts_an_unstarted_method(configured):
+    configured.write_text(configured.read_text() + 'BENCH_RESUME=true\n')
+    args = SimpleNamespace(queries=None, output=None, resume=None, arm=None, claude=None, allow_tools=None)
+    configure_run(args, load_config(configured), 'Claude')
+    assert args.resume is False
+    args.output.mkdir(parents=True)
+    other = SimpleNamespace(queries=None, output=None, resume=None, arm=None, claude=None, allow_tools=None)
+    configure_run(other, load_config(configured), 'Claude')
+    assert other.resume is True
+
+
+def test_explicit_cli_still_works_without_shared_roots(configured):
+    file = configured.parent / 'minimal.env'
+    file.write_text('DEEPSEEK_API_KEY=test-key\n')
+    args = SimpleNamespace(queries=Path('explicit.jsonl'), output=Path('explicit-output'),
+                           resume=None, arm=None, claude=None, allow_tools=None)
+    configure_run(args, load_config(file), 'Claude')
+    assert args.queries == Path('explicit.jsonl') and args.output == Path('explicit-output')
+    assert args.claude == 'claude' and args.allow_tools == [] and not args.resume

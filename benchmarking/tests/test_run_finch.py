@@ -12,6 +12,7 @@ import run_finch as runner
 from finch_sandbox import BACKEND, notebook_command, sandbox_command
 
 from oceanx.batch import QueryCase
+from test_prepare_queries import archive as archive
 
 
 @pytest.fixture
@@ -90,6 +91,21 @@ def test_success_resume_and_artifacts(setup):
     assert len(results(output)) == 1 and removed == []
     with pytest.raises(ValueError, match="Resume"):
         runner.main([*args, "--resume", "--max-steps", "30"])
+
+
+def test_no_argument_launch_from_env(setup, archive, monkeypatch):
+    root, _, _, _ = setup
+    file = root / '.env'
+    file.write_text(file.read_text() + f'BENCH_DATA_ROOT={archive}\nBENCH_OUTPUT_ROOT={root / "automatic"}\n'
+                    f'BENCH_FINCH_ROOT={root / "finch"}\nBENCH_FINCH_PYTHON={sys.executable}\n'
+                    'BENCH_TASKS=Q07\nBENCH_FINCH_MAX_STEPS=17\n')
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(file))
+    assert runner.main([]) == 0
+    output = root / 'automatic/methods-public-r1/runs/Finch'
+    assert results(output)[0]['id'] == 'Q07'
+    identity = json.loads((output / 'manifest.json').read_text())['identity']
+    assert identity['max_steps'] == 17
+    assert 'secret-test-key' not in json.dumps(identity)
 
 
 def test_timeout_partial_delivery_children_and_retry(setup):

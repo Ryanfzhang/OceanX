@@ -11,6 +11,18 @@ DEFAULT_CONFIG = ROOT / 'benchmarking' / '.env'
 DEFAULT_MODEL = 'deepseek-flash'
 DEFAULT_ENDPOINTS = {'openai': 'https://api.deepseek.com',
                      'anthropic': 'https://api.deepseek.com/anthropic'}
+RUN_DEFAULTS = {
+    'BENCH_DATA_ROOT': '', 'BENCH_OUTPUT_ROOT': '', 'BENCH_EXPERIMENT': 'methods-public-r1',
+    'BENCH_SUITE': 'test', 'BENCH_EVOLUTION_SET': '', 'BENCH_TASKS': 'available',
+    'BENCH_TIMEOUT_SECONDS': '10800', 'BENCH_LITERATURE_MODE': 'search_only', 'BENCH_RESUME': 'false',
+    'BENCH_OCEANX_ARM': 'OceanX', 'BENCH_OCEANX_LIBRARY': '', 'BENCH_OCEANX_MAX_PARALLEL_EXPERTS': '2',
+    'BENCH_CLAUDE_EXECUTABLE': 'claude', 'BENCH_CLAUDE_ARM': 'Claude', 'BENCH_CLAUDE_ALLOW_TOOLS': '',
+    'BENCH_FINCH_ROOT': '', 'BENCH_FINCH_PYTHON': '', 'BENCH_FINCH_KERNEL_PYTHON': '',
+    'BENCH_FINCH_COMMIT': 'aea66fdf2dd2be827727de50a73cae60dff59972',
+    'BENCH_FINCH_BWRAP': 'bwrap', 'BENCH_FINCH_ARM': 'Finch', 'BENCH_FINCH_MAX_STEPS': '60',
+    'BENCH_FINCH_TEMPERATURE': '1', 'BENCH_FINCH_EXECUTION_TIMEOUT': '300',
+    'BENCH_FINCH_MEMORY_MB': '8192', 'BENCH_FINCH_CPUS': '2',
+}
 
 
 @dataclass(frozen=True)
@@ -25,6 +37,8 @@ class Config:
     oceanx_api: str
     endpoints: dict[str, Endpoint] = field(repr=False)
     max_tokens: int = 32768
+    run: dict[str, str] = field(default_factory=dict, repr=False)
+    source: Path | None = field(default=None, repr=False)
 
     def endpoint(self, protocol):
         e = self.endpoints.get(protocol)
@@ -55,7 +69,7 @@ def load_config(path=None):
                     raise ValueError(f'Duplicate benchmark .env field at line {binding.original.line}')
                 raw[binding.key] = binding.value or ''
     allowed = {'DEEPSEEK_API_KEY', 'BENCH_MODEL', 'BENCH_OCEANX_API', 'BENCH_MAX_TOKENS',
-               'BENCH_OPENAI_BASE_URL', 'BENCH_ANTHROPIC_BASE_URL'}
+               'BENCH_OPENAI_BASE_URL', 'BENCH_ANTHROPIC_BASE_URL'} | set(RUN_DEFAULTS)
     if set(raw) - allowed:
         raise ValueError('benchmark .env has unsupported fields; use the fields in benchmarking/.env.example')
     model = raw.get('BENCH_MODEL', DEFAULT_MODEL).strip()
@@ -73,7 +87,8 @@ def load_config(path=None):
     key = raw.get('DEEPSEEK_API_KEY', '').strip()
     endpoints = {name: Endpoint(raw.get(f'BENCH_{name.upper()}_BASE_URL', url).strip(), key)
                  for name, url in DEFAULT_ENDPOINTS.items()}
-    return Config(model, protocol, endpoints, tokens)
+    return Config(model, protocol, endpoints, tokens,
+                  {k: raw.get(k, v).strip() for k, v in RUN_DEFAULTS.items()}, path)
 
 
 def configure_runtime():
@@ -110,4 +125,5 @@ def claude_environment(config):
                ANTHROPIC_DEFAULT_SONNET_MODEL=config.model,
                ANTHROPIC_DEFAULT_HAIKU_MODEL=config.model,
                CLAUDE_CODE_SUBAGENT_MODEL=config.model)
+    env['DISABLE_AUTOUPDATER'] = '1'
     return env

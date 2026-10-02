@@ -1,5 +1,11 @@
 # Server scripts
 
+The normal workflow needs only `python benchmarking/server/run_oceanx.py`,
+`python benchmarking/server/run_claude.py` and `python benchmarking/server/run_finch.py`.
+All paths, task selection and limits come from `benchmarking/.env`; a shared selection
+is created once under the configured experiment. See [RUNNING.md](../RUNNING.md).
+The explicit flags below remain available for advanced/manual experiments.
+
 | Script | Purpose |
 |---|---|
 | `prepare_queries.py` | Write a suite's runner input (JSONL) from the data root. Folders come from `download/data_manifest.json`. `--set A` or `--set B` selects one evolution set. It refuses incomplete downloads and any evaluator material. |
@@ -8,7 +14,7 @@
 | `collect_oceanx.py` | Collect finished attempts into `collected/` for reading (run automatically at the end of a run). |
 | `run_claude.py` | The same JSONL with Claude Code; exports arm identity, derived evidence and CLI token totals for unified blinding/inventory. Not part of the library experiment automatically. |
 | `run_finch.py`, `finch_worker.py`, `finch_sandbox.py` | Optional local Finch analysis-component baseline using the same JSONL/config, a separate Python 3.12 environment and a read-only-data Linux Bubblewrap notebook kernel; no Docker. See [Finch setup](../finch/README.md). Not full Robin and not part of the three-arm experiment automatically. |
-| `check_setup.py`, `benchmark_config.py`, `benchmark_models.py` | Unified model/key configuration from `benchmarking/.env` and setup checks. Only `.env.example` belongs in Git. |
+| `check_setup.py`, `benchmark_config.py`, `benchmark_models.py`, `benchmark_run.py` | Unified model/key/run configuration from `benchmarking/.env`, automatic shared input selection and setup checks. Only `.env.example` belongs in Git. |
 
 ## Prepare inputs
 

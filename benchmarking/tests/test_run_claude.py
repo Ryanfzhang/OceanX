@@ -9,6 +9,7 @@ import time
 import pytest
 
 import run_claude as runner
+from test_prepare_queries import archive as archive
 
 
 @pytest.fixture
@@ -88,6 +89,21 @@ def test_success_files_model_config_and_resume(setup):
     assert result['external_usage']['input_tokens'] is None  # incomplete CLI usage is not zero
     with pytest.raises(ValueError, match="Model differs"):
         runner.main([*args, "--resume", "--model", "changed-model"])
+
+
+def test_no_argument_launch_from_env(setup, archive, monkeypatch):
+    root, _, _ = setup
+    file = root / '.env'
+    file.write_text(file.read_text() + f'BENCH_DATA_ROOT={archive}\nBENCH_OUTPUT_ROOT={root / "automatic"}\n'
+                    f'BENCH_CLAUDE_EXECUTABLE={root / "fake-claude"}\nBENCH_TASKS=Q07\n'
+                    'BENCH_CLAUDE_ALLOW_TOOLS=Read,Bash,Write\n')
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(file))
+    assert runner.main([]) == 0
+    output = root / 'automatic/methods-public-r1/runs/Claude'
+    assert results(output)[0]['id'] == 'Q07'
+    identity = json.loads((output / 'manifest.json').read_text())['identity']
+    assert identity['allow_tools'] == ['Read', 'Bash', 'Write']
+    assert 'test-key' not in json.dumps(identity)
 
 
 @pytest.mark.parametrize("query,status", [("API_ERROR", "failed"), ("MALFORMED", "failed"),

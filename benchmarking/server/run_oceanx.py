@@ -163,8 +163,8 @@ def write_arm(attempt: Path) -> None:
         batch._write_json(path, {**ARM, "started_utc": dt.datetime.now(dt.UTC).isoformat()})
 
 
-def main():
-    if len(sys.argv) == 3 and sys.argv[1] == "--backend":
+def main(argv=None):
+    if argv is None and len(sys.argv) == 3 and sys.argv[1] == "--backend":
         from benchmark_models import install_oceanx_models
 
         model_policy = install_oceanx_models()
@@ -176,40 +176,43 @@ def main():
         app(args=["backend", "--state-dir", str(attempt / "state")])
         return
     parser = argparse.ArgumentParser(description=__doc__)
-    query_input = parser.add_mutually_exclusive_group(required=True)
+    query_input = parser.add_mutually_exclusive_group()
     query_input.add_argument("--queries", type=Path)
     query_input.add_argument("--query", help="A single ad-hoc test question")
     parser.add_argument("--dataset", action="append", default=[], type=Path)
     parser.add_argument("--timeout", type=float, default=None)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--resume", action="store_true", default=None)
     parser.add_argument("--config", type=Path, help="benchmarking/.env by default")
-    parser.add_argument("--arm", default="default", help="Arm label recorded in arm.json, e.g. B or C1")
+    parser.add_argument("--arm", help="Arm label recorded in arm.json, e.g. B or C1")
     parser.add_argument("--policy", help="Research policy for every case; the default (v2-nested) when omitted")
     parser.add_argument("--library", "--lessons", dest="library", type=Path,
                         help="Frozen library snapshot (lessons.json and tools.json, made by "
                              "research_cli.py snapshot); copied into every attempt")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    from benchmark_config import load_config, preflight
+    from benchmark_run import configure_run
+    config = load_config(args.config)
+    config.endpoint(config.oceanx_api)
+    args.config = config.source
+    os.environ["OCEAN_BENCH_CONFIG"] = str(config.source)
+    configure_run(args, config, 'OceanX')
     from oceanx.research.review import LIBRARY_FILES, LIBRARY_FROZEN_ENV
     global LIBRARY
+    LIBRARY = None
     # Nothing is learned while a benchmark runs: no attempt reviews its lessons or counts tool calls
     # into its library. Learning is a separate step on the evolution project (research_cli.py).
     os.environ[LIBRARY_FROZEN_ENV] = "1"  # inherited by every backend subprocess
-    if args.policy:
-        from oceanx.research.policy import POLICY_ENV, find_policy
-        find_policy(args.policy)  # fail before any model call on an unknown name
-        os.environ[POLICY_ENV] = args.policy  # inherited by every backend subprocess
+    from oceanx.research.policy import DEFAULT_POLICY, POLICY_ENV, find_policy
+    args.policy = args.policy or DEFAULT_POLICY
+    find_policy(args.policy)  # fail before any model call on an unknown name
+    os.environ[POLICY_ENV] = args.policy  # ignore stale shell policy, inherited by every backend subprocess
     if args.library:
         LIBRARY = args.library.expanduser().resolve()
         if not any((LIBRARY / name).is_file() for name in LIBRARY_FILES):
             parser.error("--library must be a folder containing lessons.json or tools.json")
     ARM.update(arm_record(args))
     check_arm(args.output.expanduser().resolve())
-    from benchmark_config import DEFAULT_CONFIG, load_config, preflight
-    config_path = (args.config or DEFAULT_CONFIG).expanduser().resolve()
-    config = load_config(config_path)
-    config.endpoint(config.oceanx_api)
-    os.environ["OCEAN_BENCH_CONFIG"] = str(config_path)
     preflight(require_sandbox=True)
     if args.queries and args.dataset:
         parser.error("Use --dataset with --query; JSONL cases contain their own datasets")

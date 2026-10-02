@@ -344,19 +344,22 @@ def export_delivery(workspace, directory):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--queries", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--claude", default="claude", help="Executable path/name, not a shell command")
+    parser.add_argument("--queries", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--claude", help="Executable path/name, not a shell command")
     parser.add_argument("--config", type=Path, help="benchmarking/.env by default")
     parser.add_argument("--model", help="Compatibility option; must match BENCH_MODEL in benchmarking/.env")
     parser.add_argument("--model-label", default="configured", help="Experiment label, not an API override")
-    parser.add_argument("--arm", default="Claude", help="External comparison label recorded in arm.json")
-    parser.add_argument("--allow-tools", nargs="+", default=[],
+    parser.add_argument("--arm", help="External comparison label recorded in arm.json")
+    parser.add_argument("--allow-tools", nargs="+",
                         help="Explicit tool approvals, e.g. Read Glob Grep Bash Write Edit NotebookEdit")
-    parser.add_argument("--resume", action="store_true", help="Skip completed; new attempts for other tasks")
+    parser.add_argument("--resume", action="store_true", default=None, help="Skip completed; new attempts for other tasks")
     args = parser.parse_args(argv)
     from benchmark_config import load_config, preflight, claude_environment
     config = load_config(args.config)
+    config.endpoint('anthropic')
+    from benchmark_run import configure_run
+    configure_run(args, config, 'Claude')
     if args.model and args.model != config.model:
         raise ValueError("Model differs from benchmarking/.env; change BENCH_MODEL there for all agents")
     args.model = config.model

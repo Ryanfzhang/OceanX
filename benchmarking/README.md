@@ -16,12 +16,13 @@ Catalogue `2026-10-02-v7`:
 
 Everything runs on the Linux server.
 All runner/meta models use DeepSeek Flash via `benchmarking/.env`. Copy `.env.example`
-to `.env` on the server and fill the single key; only the example is committed.
+to `.env` on the server and fill the single key, data/output paths and task selection;
+only the example is committed. Then launch each method with no arguments (RUNNING.md).
 
 | Read | For |
 |---|---|
 | [summary.md](summary.md) | All 54 questions, required data (type, time, space, variables), and brief assessment criteria |
-| [RUNNING.md](RUNNING.md) | Start here: partial-data selection and OceanX / Claude Code / Finch in three terminals |
+| [RUNNING.md](RUNNING.md) | Start here: one .env, automatic shared selection, three no-argument launch commands |
 | [SERVER_DATA.md](SERVER_DATA.md) | Server data audit, unchanged archive layout and safe CMOMS staging |
 | [DESIGN.md](DESIGN.md) | What is tested: allocation, the 30 + 24 questions, verified papers, design rules |
 | [DATA.md](DATA.md) | Data groups, server layout, CMOMS staging, the extra CMOMS variables to request, download commands |
@@ -50,8 +51,10 @@ tests/                                   python -m pytest benchmarking/tests
 python -u benchmarking/download/download_all.py public   --output "$DATA_ROOT" --execute
 python -u benchmarking/download/download_all.py services --output "$DATA_ROOT" --execute
 python benchmarking/download/download_all.py private --output "$DATA_ROOT"      # after staging CMOMS
-python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --output <test.jsonl>
-python benchmarking/server/run_oceanx.py --queries <test.jsonl> --output <arm folder> --arm B
+# Configure benchmarking/.env, then in separate terminals:
+python benchmarking/server/run_oceanx.py
+python benchmarking/server/run_claude.py
+python benchmarking/server/run_finch.py
 ```
 
 Never mount the repository, `evaluator/` folders or `_evaluator_only/` data into an agent run, and never
