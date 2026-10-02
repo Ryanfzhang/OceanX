@@ -5,7 +5,7 @@
   "topic": "Kuroshio Loop Current",
   "title": "The Kuroshio Loop Current in the winters of 2014-2017",
   "query": "Using the supplied CMOMS daily velocity, temperature and salinity for 2011-2020, test the following findings of Sun et al. (2020, Journal of Physical Oceanography, doi:10.1175/JPO-D-20-0058.1) on the Kuroshio Loop Current in the northeastern South China Sea, which they observed with a mooring array from June 2014 to June 2017: (1) the loop current occurs mainly in winter; (2) it was moderate, weak and strong in the winters of 2014/15, 2015/16 and 2016/17; (3) near the Luzon Strait it is confined to the upper 500 m, and it becomes more barotropic as it extends into the South China Sea interior; (4) the 2016/17 event was the strongest since 1993; (5) the loop current is stronger in La Nina winters and weaker in El Nino winters, because the northeast monsoon does more wind work. Winds and sea surface height are not supplied; define a loop-current measure from the model fields and justify it. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",

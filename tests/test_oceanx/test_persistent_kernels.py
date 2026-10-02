@@ -95,3 +95,44 @@ async def test_cancel_destroys_busy_kernel_not_just_its_wait(tmp_path, monkeypat
     pool.kernels["one"] = Kernel(manager, Client(), Path(sys.executable))
     await pool.close("one")
     assert manager.stopped and "one" not in pool.kernels and "one" in pool.lost
+
+
+@pytest.mark.asyncio
+async def test_kernel_has_the_helper_functions_and_logs_their_calls_per_execution(tmp_path, monkeypatch):
+    from oceanx.expert_execution import read_tool_log
+    from oceanx.research.memory import ResearchMemory
+    from oceanx.research.toolbook import ToolBook
+    monkeypatch.setenv("OCEAN_SANDBOX_PYTHON", sys.executable)
+    runtime = current_python_runtime()
+    pool = KernelPool()
+    root = tmp_path / "one"
+    output, support = root / "outputs", root / "code"
+    for directory in (output, support):
+        directory.mkdir(parents=True)
+    # What the execution service installs: the project's helper module with its call counter.
+    _install_result_runtime(support, ToolBook(ResearchMemory(tmp_path / "research")).module_source())
+
+    async def run(code, log):
+        return await pool.execute(key="one", executable=Path(sys.executable),
+            policy=SandboxExecutionPolicy(read_only_roots=(), runtime_read_roots=runtime.read_roots,
+                writable_roots=(root,), output_root=output, temporary_root=root,
+                limits=ResourceLimits(wall_time_seconds=0, cpu_time_seconds=0, memory_bytes=0,
+                                      disk_bytes=0, process_count=0, open_files=0), allow_network=True),
+            cwd=output, environment={"OCEAN_TOOL_LOG": str(root / log)}, support_path=support, code=code)
+    try:
+        # The helpers are one name away without an import.
+        first = await run("print(ao.rate_per_day(2.0, input_unit='per_day'))", "first.log")
+        assert first.returncode == 0, first.stderr.decode()
+        assert b"2.0" in first.stdout
+        # A variable the code itself calls ao is left alone, also in later cells.
+        own = await run("ao = 'mine'", "second.log")
+        assert own.returncode == 0 and b"mine" in (await run("print(ao)", "second.log")).stdout
+        third = await run("import oceanx_array_ops as ao\n"
+                          "for _ in range(2): ao.rate_per_day(1.0, input_unit='per_second')", "third.log")
+        assert third.returncode == 0, third.stderr.decode()
+        # Each execution logs its own calls, although the kernel imported the module only once.
+        assert read_tool_log(root / "first.log") == {"rate_per_day": 1}
+        assert read_tool_log(root / "second.log") == {}
+        assert read_tool_log(root / "third.log") == {"rate_per_day": 2}
+    finally:
+        await pool.close()

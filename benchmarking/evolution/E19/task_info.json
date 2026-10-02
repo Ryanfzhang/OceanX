@@ -6,7 +6,7 @@
   "open_kind": "checkable",
   "title": "How fast the sea surface has warmed since 1993",
   "query": "Using the supplied GLORYS12 daily near-surface temperature for 1993-2020 in the western Tasman Sea off south-eastern Australia (46-26 S, 147-162 E), determine how fast the sea surface has warmed since 1993, where and in which seasons the warming is fastest, whether it is a steady trend or decadal variability, and what the spatial pattern suggests about its cause.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v6",
   "region": {
     "code": "TAS",

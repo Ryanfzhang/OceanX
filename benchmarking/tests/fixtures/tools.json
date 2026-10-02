@@ -1,0 +1,47 @@
+{
+  "tools": {
+    "anomaly": {
+      "source": "learned",
+      "status": "listed",
+      "human": null,
+      "code": "def anomaly(array, baseline, *, dim):\n    \"\"\"Difference between an array and the mean of a baseline along a named dimension, in the array's units.\"\"\"\n    if dim not in array.dims or dim not in baseline.dims:\n        raise ValueError(\"dim must name an axis of the array and of the baseline\")\n    return array - baseline.mean(dim)\n",
+      "test": "assert ao.anomaly is not None",
+      "signature": "anomaly(array, baseline, *, dim)",
+      "summary": "Difference between an array and the mean of a baseline along a named dimension, in the array's units.",
+      "created_at": "2026-10-01T00:00:00+00:00",
+      "evidence": {
+        "replaces": [
+          "anomaly"
+        ],
+        "questions": 3,
+        "tasks": [
+          "fixture-task-1",
+          "fixture-task-2",
+          "fixture-task-3"
+        ]
+      },
+      "stats": {
+        "tasks": 0,
+        "tasks_called": 0,
+        "calls": 0,
+        "idle": 0
+      }
+    },
+    "small_sample": {
+      "source": "packaged",
+      "status": "unlisted",
+      "reason": "not called in 20 tasks",
+      "stats": {
+        "tasks": 24,
+        "tasks_called": 0,
+        "calls": 0,
+        "idle": 24
+      }
+    }
+  },
+  "counted": [
+    "fixture-task-1",
+    "fixture-task-2",
+    "fixture-task-3"
+  ]
+}

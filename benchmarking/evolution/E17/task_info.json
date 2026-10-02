@@ -6,7 +6,7 @@
   "open_kind": "checkable",
   "title": "Deep winter mixed layers and the water they form",
   "query": "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer thickness for 2011-2020 in the western Tasman Sea off south-eastern Australia (46-26 S, 147-162 E), determine where and when the deepest winter mixed layers form, the temperature and salinity of the water they produce, how much their depth and volume vary from year to year, and what controls that variability. Surface heat fluxes and winds are not supplied.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v6",
   "region": {
     "code": "TAS",

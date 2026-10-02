@@ -1,12 +1,12 @@
-"""Versioned research policies: the human-authored experiment arms for how the tree is explored.
+"""Versioned research policies: how the Coordinator explores the research tree.
 
 A policy is a bundled directory with ``policy.yaml`` and ``guidance.md``. Its version is
 the name plus a content hash and is recorded on every tree event. A policy only sets
 whether hypothesis nodes are enabled, the frontier mode, and guidance text for the
-Coordinator. Learned Coordinator advice lives in approved lessons (lessons.py).
+Coordinator. Learned Coordinator advice lives in lessons (lessons.py).
 
-Selection: ``OCEANX_RESEARCH_POLICY`` (experiments, paired runs) > the project's choice
-in the desktop (``.oceanx/research/active_policy``) > ``v0-coordinator-bfs``.
+OceanX runs ``v2-nested``. ``OCEANX_RESEARCH_POLICY`` selects another bundled policy for an
+experiment arm or a paired run; nothing else changes the policy.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import yaml
 
 from oceanx.research.tree import FRONTIER_MODES
 
-DEFAULT_POLICY = "v0-coordinator-bfs"
+DEFAULT_POLICY = "v2-nested"
 POLICY_ENV = "OCEANX_RESEARCH_POLICY"
 BUNDLED_POLICIES = Path(__file__).resolve().parents[1] / "resources" / "policies"
 POLICY_KEYS = {"name", "description", "hypotheses", "frontier"}
@@ -69,23 +69,16 @@ def find_policy(name: str) -> Path:
     return candidate
 
 
-def project_choice(research_root: Path | None) -> str | None:
-    """The policy the owner activated for this project in the desktop, if any."""
-    path = Path(research_root) / "active_policy" if research_root else None
-    return (path.read_text(encoding="utf-8").strip() or None) if path and path.is_file() else None
-
-
 @lru_cache(maxsize=16)
 def _cached(name: str, stamp: float) -> ResearchPolicy:
     return load_policy(find_policy(name))
 
 
-def active_policy(research_root: Path | None = None) -> ResearchPolicy:
-    name = os.environ.get(POLICY_ENV) or project_choice(research_root) or DEFAULT_POLICY
+def active_policy() -> ResearchPolicy:
+    name = os.environ.get(POLICY_ENV) or DEFAULT_POLICY
     directory = find_policy(name)
     return _cached(name, max(p.stat().st_mtime for p in directory.iterdir()))
 
 
 __all__ = ["DEFAULT_POLICY", "POLICY_ENV", "ResearchPolicy", "active_policy",
-           "available_policies", "find_policy", "load_policy", "project_choice",
-           "validate_policy_document"]
+           "available_policies", "find_policy", "load_policy", "validate_policy_document"]

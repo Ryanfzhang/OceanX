@@ -31,3 +31,6 @@ would change the explanation or the next research choice. A negative or inconclu
 can be informative. If several plausible explanations remain compatible with the observations,
 that uncertainty is part of the result, not a reason to claim all explanations were tested.
 Keep exploratory findings distinct from predictions specified before examining the data.
+
+<!-- oceanx:lessons max=4 for="coordinator" about="which sub-questions and proposed follow-ups were worth asking, in what order, how deep to follow a line, and when the question was answered well enough to stop" -->
+<!-- /oceanx:lessons -->

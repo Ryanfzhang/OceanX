@@ -1789,389 +1789,7 @@
       "title": "RequestStatusGetRequest",
       "type": "object"
     },
-    "ResearchLabelSetPayload": {
-      "additionalProperties": false,
-      "properties": {
-        "label": {
-          "enum": [
-            "decision-changing",
-            "informative-but-not-decisive",
-            "misleading-or-wasteful"
-          ],
-          "title": "Label",
-          "type": "string"
-        },
-        "node_id": {
-          "maxLength": 64,
-          "pattern": "^B\\d+(?:\\.\\d+)*$",
-          "title": "Node Id",
-          "type": "string"
-        },
-        "task_id": {
-          "maxLength": 128,
-          "minLength": 1,
-          "title": "Task Id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "task_id",
-        "node_id",
-        "label"
-      ],
-      "title": "ResearchLabelSetPayload",
-      "type": "object"
-    },
-    "ResearchLabelSetRequest": {
-      "additionalProperties": false,
-      "properties": {
-        "context": {
-          "$ref": "#/$defs/RequestContext"
-        },
-        "expected_task_revision": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expected Task Revision"
-        },
-        "expected_workspace_revision": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expected Workspace Revision"
-        },
-        "payload": {
-          "$ref": "#/$defs/ResearchLabelSetPayload"
-        },
-        "protocol_version": {
-          "const": 2,
-          "title": "Protocol Version",
-          "type": "integer"
-        },
-        "request_id": {
-          "maxLength": 128,
-          "pattern": "^req_[A-Za-z0-9_-]+$",
-          "title": "Request Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "research.labels.set",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "protocol_version",
-        "request_id",
-        "type",
-        "payload",
-        "context"
-      ],
-      "title": "ResearchLabelSetRequest",
-      "type": "object"
-    },
-    "ResearchLessonDecidePayload": {
-      "additionalProperties": false,
-      "description": "A human decision on one lesson proposal; wording may be edited before approval.",
-      "properties": {
-        "applies_when": {
-          "anyOf": [
-            {
-              "maxLength": 400,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Applies When"
-        },
-        "decision": {
-          "enum": [
-            "approve",
-            "reject"
-          ],
-          "title": "Decision",
-          "type": "string"
-        },
-        "proposal_id": {
-          "pattern": "^lp_[a-f0-9]{12}$",
-          "title": "Proposal Id",
-          "type": "string"
-        },
-        "reason": {
-          "anyOf": [
-            {
-              "maxLength": 600,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Reason"
-        },
-        "text": {
-          "anyOf": [
-            {
-              "maxLength": 600,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Text"
-        }
-      },
-      "required": [
-        "proposal_id",
-        "decision"
-      ],
-      "title": "ResearchLessonDecidePayload",
-      "type": "object"
-    },
-    "ResearchLessonDecideRequest": {
-      "additionalProperties": false,
-      "properties": {
-        "context": {
-          "$ref": "#/$defs/RequestContext"
-        },
-        "expected_task_revision": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expected Task Revision"
-        },
-        "expected_workspace_revision": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expected Workspace Revision"
-        },
-        "payload": {
-          "$ref": "#/$defs/ResearchLessonDecidePayload"
-        },
-        "protocol_version": {
-          "const": 2,
-          "title": "Protocol Version",
-          "type": "integer"
-        },
-        "request_id": {
-          "maxLength": 128,
-          "pattern": "^req_[A-Za-z0-9_-]+$",
-          "title": "Request Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "research.lessons.decide",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "protocol_version",
-        "request_id",
-        "type",
-        "payload",
-        "context"
-      ],
-      "title": "ResearchLessonDecideRequest",
-      "type": "object"
-    },
-    "ResearchLessonRetirePayload": {
-      "additionalProperties": false,
-      "properties": {
-        "lesson_id": {
-          "pattern": "^L\\d{3,}$",
-          "title": "Lesson Id",
-          "type": "string"
-        },
-        "reason": {
-          "maxLength": 600,
-          "minLength": 1,
-          "title": "Reason",
-          "type": "string"
-        }
-      },
-      "required": [
-        "lesson_id",
-        "reason"
-      ],
-      "title": "ResearchLessonRetirePayload",
-      "type": "object"
-    },
-    "ResearchLessonRetireRequest": {
-      "additionalProperties": false,
-      "properties": {
-        "context": {
-          "$ref": "#/$defs/RequestContext"
-        },
-        "expected_task_revision": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expected Task Revision"
-        },
-        "expected_workspace_revision": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expected Workspace Revision"
-        },
-        "payload": {
-          "$ref": "#/$defs/ResearchLessonRetirePayload"
-        },
-        "protocol_version": {
-          "const": 2,
-          "title": "Protocol Version",
-          "type": "integer"
-        },
-        "request_id": {
-          "maxLength": 128,
-          "pattern": "^req_[A-Za-z0-9_-]+$",
-          "title": "Request Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "research.lessons.retire",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "protocol_version",
-        "request_id",
-        "type",
-        "payload",
-        "context"
-      ],
-      "title": "ResearchLessonRetireRequest",
-      "type": "object"
-    },
-    "ResearchLessonsConsolidatePayload": {
-      "additionalProperties": false,
-      "description": "Digest and clean up research memory; optionally ask the meta-agent for proposals.",
-      "properties": {
-        "propose": {
-          "default": false,
-          "title": "Propose",
-          "type": "boolean"
-        }
-      },
-      "title": "ResearchLessonsConsolidatePayload",
-      "type": "object"
-    },
-    "ResearchLessonsConsolidateRequest": {
-      "additionalProperties": false,
-      "properties": {
-        "context": {
-          "$ref": "#/$defs/RequestContext"
-        },
-        "expected_task_revision": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expected Task Revision"
-        },
-        "expected_workspace_revision": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expected Workspace Revision"
-        },
-        "payload": {
-          "$ref": "#/$defs/ResearchLessonsConsolidatePayload"
-        },
-        "protocol_version": {
-          "const": 2,
-          "title": "Protocol Version",
-          "type": "integer"
-        },
-        "request_id": {
-          "maxLength": 128,
-          "pattern": "^req_[A-Za-z0-9_-]+$",
-          "title": "Request Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "research.lessons.consolidate",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "protocol_version",
-        "request_id",
-        "type",
-        "payload",
-        "context"
-      ],
-      "title": "ResearchLessonsConsolidateRequest",
-      "type": "object"
-    },
-    "ResearchLessonsListRequest": {
+    "ResearchLibraryGetRequest": {
       "additionalProperties": false,
       "properties": {
         "context": {
@@ -2218,7 +1836,7 @@
           "type": "string"
         },
         "type": {
-          "const": "research.lessons.list",
+          "const": "research.library.get",
           "title": "Type",
           "type": "string"
         }
@@ -2230,26 +1848,44 @@
         "payload",
         "context"
       ],
-      "title": "ResearchLessonsListRequest",
+      "title": "ResearchLibraryGetRequest",
       "type": "object"
     },
-    "ResearchPolicyActivatePayload": {
+    "ResearchLibraryMarkPayload": {
       "additionalProperties": false,
-      "description": "Choose the research policy used for this project's new tasks.",
+      "description": "The owner's view of one lesson or tool: right keeps it, wrong removes it.",
       "properties": {
-        "name": {
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
-          "title": "Name",
+        "id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "lesson",
+            "tool"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "right",
+            "wrong"
+          ],
+          "title": "Verdict",
           "type": "string"
         }
       },
       "required": [
-        "name"
+        "kind",
+        "id",
+        "verdict"
       ],
-      "title": "ResearchPolicyActivatePayload",
+      "title": "ResearchLibraryMarkPayload",
       "type": "object"
     },
-    "ResearchPolicyActivateRequest": {
+    "ResearchLibraryMarkRequest": {
       "additionalProperties": false,
       "properties": {
         "context": {
@@ -2282,7 +1918,7 @@
           "title": "Expected Workspace Revision"
         },
         "payload": {
-          "$ref": "#/$defs/ResearchPolicyActivatePayload"
+          "$ref": "#/$defs/ResearchLibraryMarkPayload"
         },
         "protocol_version": {
           "const": 2,
@@ -2296,7 +1932,7 @@
           "type": "string"
         },
         "type": {
-          "const": "research.policies.activate",
+          "const": "research.library.mark",
           "title": "Type",
           "type": "string"
         }
@@ -2308,32 +1944,23 @@
         "payload",
         "context"
       ],
-      "title": "ResearchPolicyActivateRequest",
+      "title": "ResearchLibraryMarkRequest",
       "type": "object"
     },
-    "ResearchReviewGetPayload": {
+    "ResearchLibraryUpdatePayload": {
       "additionalProperties": false,
-      "description": "Policies and, for one task, the few nodes worth a human label.",
+      "description": "Bring the project's task records and call counts up to date. With ``review`` the\nmeta-agent also reviews the lessons and learns tools (model calls).",
       "properties": {
-        "task_id": {
-          "anyOf": [
-            {
-              "maxLength": 128,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Task Id"
+        "review": {
+          "default": false,
+          "title": "Review",
+          "type": "boolean"
         }
       },
-      "title": "ResearchReviewGetPayload",
+      "title": "ResearchLibraryUpdatePayload",
       "type": "object"
     },
-    "ResearchReviewGetRequest": {
+    "ResearchLibraryUpdateRequest": {
       "additionalProperties": false,
       "properties": {
         "context": {
@@ -2366,7 +1993,7 @@
           "title": "Expected Workspace Revision"
         },
         "payload": {
-          "$ref": "#/$defs/ResearchReviewGetPayload"
+          "$ref": "#/$defs/ResearchLibraryUpdatePayload"
         },
         "protocol_version": {
           "const": 2,
@@ -2380,7 +2007,7 @@
           "type": "string"
         },
         "type": {
-          "const": "research.review.get",
+          "const": "research.library.update",
           "title": "Type",
           "type": "string"
         }
@@ -2392,7 +2019,7 @@
         "payload",
         "context"
       ],
-      "title": "ResearchReviewGetRequest",
+      "title": "ResearchLibraryUpdateRequest",
       "type": "object"
     },
     "SessionOpenPayload": {
@@ -3932,13 +3559,9 @@
       "portable.export.create": "#/$defs/PortableExportCreateRequest",
       "request.cancel": "#/$defs/RequestCancelRequest",
       "request.status.get": "#/$defs/RequestStatusGetRequest",
-      "research.labels.set": "#/$defs/ResearchLabelSetRequest",
-      "research.lessons.consolidate": "#/$defs/ResearchLessonsConsolidateRequest",
-      "research.lessons.decide": "#/$defs/ResearchLessonDecideRequest",
-      "research.lessons.list": "#/$defs/ResearchLessonsListRequest",
-      "research.lessons.retire": "#/$defs/ResearchLessonRetireRequest",
-      "research.policies.activate": "#/$defs/ResearchPolicyActivateRequest",
-      "research.review.get": "#/$defs/ResearchReviewGetRequest",
+      "research.library.get": "#/$defs/ResearchLibraryGetRequest",
+      "research.library.mark": "#/$defs/ResearchLibraryMarkRequest",
+      "research.library.update": "#/$defs/ResearchLibraryUpdateRequest",
       "session.open": "#/$defs/SessionOpenRequest",
       "session.submit": "#/$defs/SessionSubmitRequest",
       "source.import": "#/$defs/LocalSourceImportRequest",
@@ -4067,25 +3690,13 @@
       "$ref": "#/$defs/DisclosurePolicySetRequest"
     },
     {
-      "$ref": "#/$defs/ResearchLessonsListRequest"
+      "$ref": "#/$defs/ResearchLibraryGetRequest"
     },
     {
-      "$ref": "#/$defs/ResearchLessonDecideRequest"
+      "$ref": "#/$defs/ResearchLibraryUpdateRequest"
     },
     {
-      "$ref": "#/$defs/ResearchLessonRetireRequest"
-    },
-    {
-      "$ref": "#/$defs/ResearchLessonsConsolidateRequest"
-    },
-    {
-      "$ref": "#/$defs/ResearchReviewGetRequest"
-    },
-    {
-      "$ref": "#/$defs/ResearchLabelSetRequest"
-    },
-    {
-      "$ref": "#/$defs/ResearchPolicyActivateRequest"
+      "$ref": "#/$defs/ResearchLibraryMarkRequest"
     }
   ]
 }

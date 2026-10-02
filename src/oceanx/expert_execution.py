@@ -9,7 +9,7 @@ import os
 import re
 import shutil
 import zipfile
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -130,14 +130,28 @@ def _analysis_probe_source() -> Path:
     return source
 
 
-def _install_result_runtime(code_root: Path) -> None:
-    """Install the small public result API and private deterministic renderer."""
+def read_tool_log(path: Path) -> dict[str, int]:
+    """Helper-function calls one execution logged, by name; empty when it called none."""
+    try:
+        names = path.read_text(encoding="utf-8").split()
+    except OSError:
+        return {}
+    return {name: names.count(name) for name in sorted(set(names))}
+
+
+def _install_result_runtime(code_root: Path, helper_module: str | None = None) -> None:
+    """Install the small public result API, the private deterministic renderer and the helper
+    functions. ``helper_module`` is the helper source the project mounts (see toolbook.py);
+    without it the packaged functions are installed as they are."""
     package_root = code_root / "oceanx"
     package_root.mkdir(parents=True, exist_ok=True)
     for support_name in ("scientific_view.py", "figure_preview.py", "figure_reproduction.py", "palettes.py"):
         shutil.copy2(_result_support_source(support_name), package_root / support_name)
-    shutil.copy2(Path(__file__).resolve().parent / "resources" / "skills" / "core" /
-                 "xarray-array-ops" / "scripts" / "oceanx_array_ops.py", code_root / "oceanx_array_ops.py")
+    if helper_module is None:
+        shutil.copy2(Path(__file__).resolve().parent / "resources" / "skills" / "core" /
+                     "xarray-array-ops" / "scripts" / "oceanx_array_ops.py", code_root / "oceanx_array_ops.py")
+    else:
+        (code_root / "oceanx_array_ops.py").write_text(helper_module, encoding="utf-8")
     (package_root / "__init__.py").write_text(
         '"""OceanX sandbox runtime support."""\n\n'
         "from .scientific_view import ScientificFigure, ScientificPanel\n\n"
@@ -172,6 +186,7 @@ class ExpertCodeExecutionResult:
     reused_existing_execution: bool = False
     invalid_candidate_results: tuple[str, ...] = ()
     changed_output_files: tuple[str, ...] = ()
+    tool_calls: dict[str, int] = field(default_factory=dict)
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -205,6 +220,7 @@ class ExpertCodeExecutionResult:
             "discovered_results": [dict(item) for item in self.discovered_results],
             "reused_existing_execution": self.reused_existing_execution,
             "invalid_candidate_results": list(self.invalid_candidate_results),
+            "tool_calls": dict(self.tool_calls),
         }
 
 
@@ -292,6 +308,15 @@ class ExpertCodeExecutionService:
                if agent_thread_id else None)
         return [path.resolve() for path in sorted(root.iterdir())
                 if path.is_dir() and not path.is_symlink() and path.resolve() != own]
+
+    def _helper_module(self) -> str | None:
+        """The helper functions this project's code can import: the packaged ones, the ones the
+        project learned, and the counter that logs which of them analysis code calls."""
+        try:
+            from oceanx.research.review import ProjectResearch
+            return ProjectResearch(self.paths).tools.module_source()
+        except Exception:  # noqa: BLE001 - a broken tool registry must not stop code from running
+            return None
 
     def require_runtime(self) -> ExpertPythonRuntime:
         """Resolve the interpreter only for actual code/metadata execution.
@@ -648,7 +673,7 @@ class ExpertCodeExecutionService:
         ):
             directory.mkdir(exist_ok=True)
 
-        _install_result_runtime(code_root)
+        _install_result_runtime(code_root, self._helper_module())
 
         editable_code = work_root / "analysis.py"
         editable_code.write_text(code, encoding="utf-8")
@@ -858,6 +883,7 @@ class ExpertCodeExecutionService:
             "OCEAN_WORK_DIR": str(working_root),
             "OCEAN_OUTPUT_DIR": str(output_root),
             "OCEAN_RESULT_MANIFEST": str(result_manifest),
+            "OCEAN_TOOL_LOG": str(result_manifest.with_name("tool-calls.log")),
             "OCEAN_AGENT_KEY": execution_record.agent_thread_id,
             "OCEAN_ORIGIN_REQUEST_ID": origin_request_id or "",
             "OCEAN_TEMP_DIR": str(temporary_root),
@@ -977,6 +1003,8 @@ class ExpertCodeExecutionService:
             "outputs": output_records,
             "discovered_results": list(discovered_results),
             "invalid_candidate_results": declaration_errors,
+            # Helper functions this run's code called, by name (see research/toolbook.py).
+            "tool_calls": read_tool_log(result_manifest.with_name("tool-calls.log")),
             "output_bytes": result.output_summary.total_bytes,
             "stdout": self._bounded_evidence_text(stdout),
             "stderr": self._bounded_evidence_text(stderr, limit=2_000),
@@ -1020,6 +1048,7 @@ class ExpertCodeExecutionService:
             discovered_results=discovered_results,
             invalid_candidate_results=tuple(declaration_errors),
             changed_output_files=tuple(changed_output_files),
+            tool_calls=dict(result_bundle["tool_calls"]),
         )
         self.store.finish_code_execution(
             execution_id=execution_id,

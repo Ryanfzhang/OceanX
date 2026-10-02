@@ -4,9 +4,8 @@ Layout under ``<project>/.oceanx/research/``::
 
     digests/<task_key>.json    one small digest per task (what lesson mining reads)
     archive/<task_key>.sqlite3.gz  raw stores past retention (never read by agents)
-    lessons/                   approved lessons + rendered skills (see lessons.py)
-    proposals/lessons/         lesson proposals awaiting a human decision
-    active_policy              the policy chosen for new tasks in the desktop (optional)
+    lessons/                   lessons, their change log and the rendered skills (lessons.py)
+    tools/                     learned helper functions and call counts (toolbook.py)
     state.json                 last consolidation time and counters
 
 Raw per-task stores keep full events and attempts for as long as they are useful;
@@ -108,6 +107,10 @@ def build_digest(store_path: Path) -> dict | None:
             "close_reason": _clip(node.get("close_reason"), 160) or None,
         }
     root = next((n for n in outline.values() if n["parent"] is None), {})
+    root_id = next((n for n, node in outline.items() if node["parent"] is None), None)
+    # What the task ran with and used. None for a task recorded before this was logged, so
+    # such a task is not read as "the lessons and tools went unused".
+    library = outcomes.get(root_id, {}).get("library") or {}
     return {
         "schema": DIGEST_SCHEMA,
         "task_key": task_key(store_path),
@@ -126,6 +129,10 @@ def build_digest(store_path: Path) -> dict | None:
                          for t in sorted({e["type"] for e in events})},
         "tokens": sum(int(o.get("input_tokens", 0)) + int(o.get("output_tokens", 0))
                       for o in outcomes.values()),
+        "lessons_shown": library.get("lessons_shown"),
+        "lessons_cited": library.get("lessons_cited"),
+        "tools_mounted": library.get("tools_mounted"),
+        "tool_calls": library.get("tool_calls"),
     }
 
 

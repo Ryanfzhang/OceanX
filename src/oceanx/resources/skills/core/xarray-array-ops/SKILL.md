@@ -14,20 +14,14 @@ Keep coordinate meaning attached to dimensions. Equal lengths do not prove two a
 refer to the same locations. Before `.values`, choose an explicit dimension order;
 with labeled arrays, align shared coordinates exactly before combining fields.
 
-The optional helper [oceanx_array_ops.py](/skills/xarray-array-ops/scripts/oceanx_array_ops.py)
-is available in the OceanX Python kernel as `import oceanx_array_ops as ao`.
-Import it once and reuse it. It checks structure, not scientific validity; no data
-are inspected automatically. To check installation: `ao.self_test()`.
+The helper functions below are in [oceanx_array_ops.py](/skills/xarray-array-ops/scripts/oceanx_array_ops.py).
+The OceanX Python kernel has already imported them as `ao`; in a script you run yourself,
+start with `import oceanx_array_ops as ao`. They check structure, not scientific validity:
+no data are inspected automatically, and every scientific choice (dimensions, units,
+weights) is an argument you pass. To check installation: `ao.self_test()`.
 
-- `ao.check_dims(field, ("time", "depth", "lat", "lon"))` verifies the intended order.
-- `ao.exact_align(field, mask)` refuses silently intersected/misaligned coordinates.
-- `ao.column_take(array, indices, axis=1)` gathers one index per remaining column,
-  rejecting flattened, out-of-range or differently shaped indices.
-- `ao.masked_values(field, mask)` supports a same-shape mask, refusing an accidental
-  mix of flattened and two-dimensional arrays. Preserve the same point order for weights.
-- `ao.small_sample(ds, n=5)` takes a bounded positional sample without loading the
-  whole dataset. Include a wet point and relevant boundary cases yourself: the first
-  five positions may be land and are not a scientifically representative sample.
+<!-- oceanx:tools max=12 -->
+<!-- /oceanx:tools -->
 
 Read [examples](/skills/xarray-array-ops/references/examples.md) for the specific
 operation in use, then compare a few output values with a direct scalar calculation.

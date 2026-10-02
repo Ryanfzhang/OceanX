@@ -5,7 +5,7 @@
   "topic": "typhoon and chlorophyll",
   "title": "Typhoon Merbok and the vertical chlorophyll distribution, June 2017",
   "query": "Using the supplied CMOMS daily chlorophyll, temperature, salinity and velocity for 2011-2020, test the following findings of Fang et al. (2022, Journal of Geophysical Research: Oceans, doi:10.1029/2022JC019350) on Typhoon Merbok, which crossed the northern South China Sea and made landfall near the Pearl River Estuary in June 2017: (1) after the typhoon, chlorophyll in the bottom or subsurface chlorophyll maximum decreased both nearshore and offshore; (2) the maximum layer became shallower nearshore and deeper offshore; (3) during the typhoon, movement of plume water changed surface chlorophyll nearshore, while vertical mixing raised chlorophyll in the upper layer and lowered it in the maximum layer offshore; (4) after the typhoon, surface chlorophyll rose and bottom chlorophyll fell nearshore, and as mixing weakened, upwelling shoaled the maximum layer and phytoplankton production raised its chlorophyll. Winds and primary production are not supplied. State how you define the chlorophyll maximum and the nearshore and offshore regions, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used field observations and its own coupled model.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",

@@ -97,6 +97,9 @@ competing explanations. Keep weighting, baseline and selection choices inspectab
 If reasonable methods disagree, quantify or report the material difference. Preserve unresolved
 limitations that could change the answer rather than describing an unperformed check as passed.
 
+<!-- oceanx:lessons max=6 for="expert" about="baseline, weighting, dependence or uncertainty choices that changed or invalidated a statistical result, and checks that caught such an error" -->
+<!-- /oceanx:lessons -->
+
 ## relevant_references
 Read `references/methods/anomaly.md` for anomaly definitions, `references/methods/trend.md` for
 trend estimation, or `references/coding/large-array-practices.md` for large-array execution only

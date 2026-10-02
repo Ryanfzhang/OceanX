@@ -6,7 +6,7 @@
   "topic": "water masses",
   "title": "Spreading and dilution of the Gulf outflow water in the Arabian Sea",
   "query": "Using the supplied GLORYS12 monthly temperature, salinity and velocity for 2011-2020 in the western and northern Arabian Sea (47-70 E, 4-26 N), determine how the high-salinity water that leaves the Gulf of Oman at about 200-350 m (Persian Gulf Water) spreads and is diluted in the Arabian Sea: along which paths, how fast, in which seasons, and by which processes.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "ARAB",

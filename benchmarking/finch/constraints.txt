@@ -1,0 +1,7 @@
+# Interface-compatible host dependencies for the pinned Finch/LDP checkout.
+# Install Finch in its OWN Python 3.12 environment, not oceanx-bench.
+ldp==0.26.0
+fhaviary==0.19.0
+fhlmi==0.26.0
+litellm==1.67.4.post1
+pydantic==2.11.4

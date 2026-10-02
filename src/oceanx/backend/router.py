@@ -89,13 +89,9 @@ from oceanx.protocol.v2.models import (
     DisclosurePolicyGetRequest,
     DisclosurePolicySetRequest,
     DisclosurePolicySummary,
-    ResearchLabelSetRequest,
-    ResearchLessonDecideRequest,
-    ResearchLessonRetireRequest,
-    ResearchLessonsConsolidateRequest,
-    ResearchLessonsListRequest,
-    ResearchPolicyActivateRequest,
-    ResearchReviewGetRequest,
+    ResearchLibraryGetRequest,
+    ResearchLibraryMarkRequest,
+    ResearchLibraryUpdateRequest,
     DisclosurePolicyUpdatedEvent,
     DisclosurePolicyUpdatedPayload,
     ErrorCode,
@@ -693,11 +689,9 @@ class OceanRequestRouter:
         if isinstance(request, PortableExportCreateRequest):
             await self._portable_export_create(client, request)
             return
-        if isinstance(request, (ResearchLessonsListRequest, ResearchLessonDecideRequest,
-                                ResearchLessonRetireRequest, ResearchLessonsConsolidateRequest,
-                                ResearchReviewGetRequest, ResearchLabelSetRequest,
-                                ResearchPolicyActivateRequest)):
-            await self._research_review(client, request)
+        if isinstance(request, (ResearchLibraryGetRequest, ResearchLibraryUpdateRequest,
+                                ResearchLibraryMarkRequest)):
+            await self._research_library(client, request)
             return
         if isinstance(request, DisclosurePolicyGetRequest):
             await self._disclosure_policy_get(client, request)
@@ -1434,18 +1428,12 @@ class OceanRequestRouter:
         self.store.commit_terminal(request.request_id, terminal)
         await self._broadcast_committed_terminal(client, terminal)
 
-    # --- research memory and human-approved lessons ------------------------------
+    # --- the project's learned library: lessons and tools ----------------------------
     def _project_research(self):
         from oceanx.research.review import ProjectResearch
         if self.task_workspace_projector is None:
             raise RequestStoreError("Research memory requires an open project.")
         return ProjectResearch(self.task_workspace_projector.paths)
-
-    def _task_research_tree(self, request: RequestEnvelope, task_id: str):
-        from oceanx.research.tree import ResearchTree
-        self._task_in_workspace(task_id, request)
-        return ResearchTree(self.task_workspace_projector.ensure_task_root(task_id)
-                            / "agents" / "coordinator" / "research_tree.json")
 
     def _research_tree_stores(self, workspace_id: str) -> list[Path]:
         stores = []
@@ -1460,17 +1448,32 @@ class OceanRequestRouter:
                 stores.append(candidate)
         return stores
 
-    def _consolidate_research(self, workspace_id: str, *, force: bool = False) -> dict | None:
-        project = self._project_research()
-        if not force and not project.memory.due():
+    def _update_library(self, workspace_id: str, *, review: bool) -> dict:
+        """Bring records and call counts up to date; with ``review`` the meta-agent also
+        reviews the lessons and learns tools."""
+        from oceanx.research.llm import default_llm
+        llm = default_llm() if review else None
+        return self._project_research().update(self._research_tree_stores(workspace_id),
+                                               llm=llm, reviewer=llm)
+
+    def _maintain_library(self, workspace_id: str) -> dict | None:
+        """Regular upkeep after a research request. Records and call counts are refreshed every
+        time (no model call); the meta-agent reviews at most once a day. A frozen library (an
+        experiment arm) is never touched."""
+        from oceanx.research.review import LIBRARY_FROZEN_ENV
+        if os.environ.get(LIBRARY_FROZEN_ENV):
             return None
-        result = project.memory.consolidate(self._research_tree_stores(workspace_id),
-                                            protected_keys=project.lessons.protected_task_keys())
-        result["review_proposals"] = len(project.lessons.review_stale())
-        return result
+        due = self._project_research().lessons.review_due()
+        try:
+            return self._update_library(workspace_id, review=due)
+        except Exception:  # e.g. no model configured for the meta-agent
+            if not due:
+                raise
+            _LOGGER.exception("The meta-agent's library review failed; records were kept current")
+            return self._update_library(workspace_id, review=False)
 
     def _schedule_research_consolidation(self, request: RequestEnvelope) -> None:
-        """Regular cleanup after research requests: digests + retention, no model calls."""
+        """Keep the project's library current after research requests, off the request path."""
         if self._closing or self.task_workspace_projector is None:
             return
         try:
@@ -1480,51 +1483,26 @@ class OceanRequestRouter:
 
         async def run() -> None:
             try:
-                await asyncio.to_thread(self._consolidate_research, workspace_id)
+                await asyncio.to_thread(self._maintain_library, workspace_id)
             except Exception:  # noqa: BLE001 - maintenance must never affect research
-                _LOGGER.exception("Research memory consolidation failed")
+                _LOGGER.exception("Research library upkeep failed")
 
         asyncio.get_running_loop().create_task(run())
 
-    async def _research_review(self, client: BackendClient, request: RequestEnvelope) -> None:
-        """Human review of lessons, node labels and research policies for one project."""
-        from oceanx.research.llm import default_llm
-        from oceanx.research.review import REVIEWER
+    async def _research_library(self, client: BackendClient, request: RequestEnvelope) -> None:
+        """The project's lessons and tools: look at them, update them now, or mark one right
+        or wrong."""
         run = asyncio.to_thread
         try:
             project = self._project_research()
-            book, payload = project.lessons, request.payload
+            payload = request.payload
             result: dict[str, Any] = {}
-            if isinstance(request, ResearchLessonDecideRequest):
-                result["proposal"] = await run(
-                    book.decide, payload.proposal_id, approve=payload.decision == "approve",
-                    reviewer=REVIEWER, text=payload.text, applies_when=payload.applies_when,
-                    reason=payload.reason)
-            elif isinstance(request, ResearchLessonRetireRequest):
-                await run(book.retire, payload.lesson_id, reviewer=REVIEWER, reason=payload.reason)
-            elif isinstance(request, ResearchLessonsConsolidateRequest):
-                result["consolidation"] = await run(
-                    self._consolidate_research, self._workspace_id(request), force=True)
-                if payload.propose:
-                    mined = await run(book.mine, default_llm())
-                    result["mining"] = {"created": len(mined["created"]),
-                                        "rejected": mined["rejected"],
-                                        "tasks_considered": mined["tasks_considered"],
-                                        "questions": mined["questions"]}
-            elif isinstance(request, ResearchLabelSetRequest):
-                tree = self._task_research_tree(request, payload.task_id)
-                await run(project.set_label, tree, payload.node_id, payload.label)
-            elif isinstance(request, ResearchPolicyActivateRequest):
-                await run(project.activate_policy, payload.name)
-            if isinstance(request, (ResearchReviewGetRequest, ResearchLabelSetRequest,
-                                    ResearchPolicyActivateRequest)):
-                task_id = getattr(payload, "task_id", None)
-                result["policies"] = await run(project.policies)
-                result["labels"] = (await run(project.label_review,
-                                              self._task_research_tree(request, task_id))
-                                    if task_id else [])
-            else:
-                result["lessons"] = await run(book.overview)
+            if isinstance(request, ResearchLibraryMarkRequest):
+                await run(project.mark, payload.kind, payload.id, payload.verdict)
+            elif isinstance(request, ResearchLibraryUpdateRequest):
+                result["update"] = await run(
+                    self._update_library, self._workspace_id(request), review=payload.review)
+            result["library"] = await run(project.overview)
         except (ValueError, RequestStoreError, OSError) as exc:
             await self._fail_request(client, request, code="invalid_request", message=str(exc),
                                      recoverable=True, details={})

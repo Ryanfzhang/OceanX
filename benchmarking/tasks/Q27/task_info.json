@@ -6,7 +6,7 @@
   "topic": "marine heatwaves",
   "title": "Are East China Sea marine heatwaves increasing, and how the baseline changes the answer",
   "query": "Studies disagree on whether marine heatwaves in the East China Sea are becoming more frequent and intense, partly because of how the baseline climatology is defined. Using the supplied OISST daily sea surface temperature for 1982-2023 over the East China Sea, quantify the change in summer (June-September) marine heatwaves, determine how much of it reflects long-term warming rather than changing variability, and explain how methodological choices change the answer.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "ECS",

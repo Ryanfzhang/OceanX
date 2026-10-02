@@ -6,7 +6,7 @@
   "topic": "coastal upwelling",
   "title": "What drives the summer upwelling off Zhejiang and Fujian",
   "query": "The summer coastal upwelling off Zhejiang and Fujian (China) has been attributed both to the southwesterly monsoon and to Kuroshio subsurface water intruding onshore along the bottom, guided by topography and the Taiwan Warm Current. Using the supplied GLORYS12 daily temperature and velocity for May-November of 1993-2011 and 2023, quantify the upwelling's strength, location and timing in each year, and determine which of the proposed drivers the data support.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "ECS",

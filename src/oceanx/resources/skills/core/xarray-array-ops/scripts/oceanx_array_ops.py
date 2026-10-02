@@ -3,6 +3,7 @@ import numpy as np
 
 
 def check_dims(array, expected_dims):
+    """Verify the intended dimension order; transpose explicitly if it differs."""
     actual = tuple(array.dims)
     if actual != tuple(expected_dims):
         raise ValueError(f"Expected dimensions {tuple(expected_dims)}, got {actual}; transpose explicitly")
@@ -10,11 +11,14 @@ def check_dims(array, expected_dims):
 
 
 def exact_align(*arrays):
+    """Align labeled arrays exactly; refuse silently intersected or misaligned coordinates."""
     import xarray as xr
     return xr.align(*arrays, join="exact", copy=False)
 
 
 def column_take(array, indices, *, axis):
+    """Gather one index per remaining column along an axis;
+    reject flattened, out-of-range or differently shaped indices."""
     values, index = np.asarray(array), np.asarray(indices)
     if not -values.ndim <= axis < values.ndim:
         raise ValueError("axis is outside the array dimensions")
@@ -30,6 +34,8 @@ def column_take(array, indices, *, axis):
 
 
 def masked_values(array, mask):
+    """Select values with a same-shape Boolean mask; refuse a mix of flattened and
+    gridded arrays. Select any weights with the same mask so the point order matches."""
     if hasattr(array, "dims") and hasattr(mask, "dims"):
         check_dims(mask, array.dims)
         array, mask = exact_align(array, mask)
@@ -40,6 +46,8 @@ def masked_values(array, mask):
 
 
 def small_sample(dataset, n=5):
+    """Take a bounded positional sample without loading the whole dataset. The first
+    positions may be land: choose a wet point and boundary cases yourself."""
     if not isinstance(n, int) or isinstance(n, bool) or n < 1:
         raise ValueError("n must be a positive integer")
     return dataset.isel({dim: slice(0, min(n, size)) for dim, size in dataset.sizes.items()})

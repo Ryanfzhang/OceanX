@@ -10,8 +10,7 @@ import {ProjectTaskSidebar} from './components/ProjectTaskSidebar.js';
 import {ReportWorkbench} from './components/ReportWorkbench.js';
 import {ResultWorkbench} from './components/SpatialWorkbench.js';
 import {DesktopSettingsDialog} from './components/dialogs/DesktopSettingsDialog.js';
-import {ResearchLessonsDialog} from './components/dialogs/ResearchLessonsDialog.js';
-import {parseLessonOverview} from './lesson-review.js';
+import {ResearchLibraryDialog} from './components/dialogs/ResearchLibraryDialog.js';
 import {ProjectRemoveDialog} from './components/dialogs/ProjectRemoveDialog.js';
 import {TaskDeleteDialog} from './components/dialogs/TaskDeleteDialog.js';
 import {useUiLanguage} from './i18n.js';
@@ -150,8 +149,7 @@ export function App(): React.JSX.Element {
   const [deleteCandidate, setDeleteCandidate] = useState<DeleteCandidate | null>(null);
   const [projectRemoveCandidate, setProjectRemoveCandidate] = useState<ProjectCatalogEntry | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [lessonsOpen, setLessonsOpen] = useState(false);
-  const [pendingLessons, setPendingLessons] = useState(0);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [modelProvider, setModelProvider] = useState<ModelProviderStatus | null>(null);
   const [modelSaving, setModelSaving] = useState(false);
   const [runtime, setRuntime] = useState<ReturnType<typeof parseDesktopRuntimeCapabilities>>(null);
@@ -272,15 +270,10 @@ export function App(): React.JSX.Element {
     return id;
   }, [send]);
 
-  const lessonRequest = useCallback((type: string, payload: EventPayload, onResult: (result: EventPayload) => void, onError: (message: string) => void) => {
+  const libraryRequest = useCallback((type: string, payload: EventPayload, onResult: (result: EventPayload) => void, onError: (message: string) => void) => {
     const id = request(type, payload, onResult, false, false, (message) => onError(message));
     if (!id) onError(text('Open a project first.', '请先打开项目。'));
   }, [request, text]);
-  useEffect(() => {
-    // Badge only: count pending lesson proposals whenever a project connects.
-    if (!context) return;
-    request('research.lessons.list', {}, (result) => setPendingLessons(parseLessonOverview(result)?.pending.length ?? 0), false, false, () => setPendingLessons(0));
-  }, [context, request]);
 
   const refreshTasks = useCallback(() => {
     request('task.list', {include_archived: false, limit: 200}, (result) => {
@@ -1149,8 +1142,7 @@ export function App(): React.JSX.Element {
         if (task) setDeleteCandidate({task, projectPath: path});
       }}
       onOpenSettings={() => setSettingsOpen(true)}
-      onOpenLessons={() => setLessonsOpen(true)}
-      pendingLessons={pendingLessons}
+      onOpenLibrary={() => setLibraryOpen(true)}
     />
     <section className="conversation-pane">
       <header className="conversation-toolbar">{activeTask ? <div className="conversation-title"><strong>{activeTask.title}</strong></div> : <span />}{activeTask ? <div className="conversation-actions"><button onClick={() => setDeleteCandidate({task: activeTask, projectPath: workspacePath ?? ''})} title={text('Delete task', '删除任务')}><Trash2 size={16} /></button></div> : <span />}</header>
@@ -1206,7 +1198,7 @@ export function App(): React.JSX.Element {
     </section>
     {resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} error={resultError} onClose={closeResult} />}
     <DesktopSettingsDialog open={settingsOpen} status={status} projectName={projectName} runtime={runtime} modelProvider={modelProvider} modelProviderSaving={modelSaving} displayDensity={density} onDisplayDensity={setDensity} appearanceTheme={appearanceTheme} onAppearanceTheme={setAppearanceTheme} onConfigureModelProvider={configureModel} update={update} onCheckForUpdate={() => void window.oceanDesktop.checkForUpdate().then(setUpdate)} onInstallUpdate={() => void window.oceanDesktop.installPreparedUpdate().then(setUpdate)} onClose={() => setSettingsOpen(false)} />
-    <ResearchLessonsDialog open={lessonsOpen} onClose={() => setLessonsOpen(false)} onPendingCount={setPendingLessons} request={lessonRequest} taskId={activeTask?.task_id ?? null} />
+    <ResearchLibraryDialog open={libraryOpen} onClose={() => setLibraryOpen(false)} request={libraryRequest} />
     <TaskDeleteDialog task={deleteCandidate?.task ?? null} onCancel={() => setDeleteCandidate(null)} onConfirm={deleteTask} />
     <ProjectRemoveDialog project={projectRemoveCandidate} onCancel={() => setProjectRemoveCandidate(null)} onConfirm={() => void removeProject()} />
   </main>;

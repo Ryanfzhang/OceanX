@@ -5,7 +5,7 @@
   "topic": "western boundary current",
   "title": "The weakest winter western boundary current, 2015-2016",
   "query": "Using the supplied CMOMS daily velocity, temperature and salinity for 2011-2020, test the following findings of Zhao and Zhu (2016, Journal of Geophysical Research: Oceans, doi:10.1002/2016JC012252) on the South China Sea western boundary current in boreal winter (November-February): (1) in winter 2015-2016 its southwestward volume transport fell to a minimum of 3.7 Sv, against about 5.2 Sv in normal winters, the weakest winter on record; (2) the basin-scale cyclonic gyre was significantly weaker that winter; (3) the current is weaker in El Nino winters and stronger in La Nina winters (4.7 Sv and 5.6 Sv on average); (4) the cause was a weaker wind-stress curl over the South China Sea, set up by an anticyclone over the Philippine Sea. No winds or ENSO index are supplied; you may use published ENSO event classifications. Define the section you use across the boundary current and justify it. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used in situ and satellite observations.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "SCS",

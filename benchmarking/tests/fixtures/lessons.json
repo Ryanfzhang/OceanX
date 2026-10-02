@@ -1,11 +1,9 @@
 {
   "lessons": [
     {
-      "id": "lesson_fixture01",
-      "role": "coordinator",
-      "topic": "order",
+      "id": "L001",
       "skill": "research-trajectory-planning",
-      "section": "Order of questions",
+      "role": "coordinator",
       "text": "Run a robustness check of the target's definition beside the first mechanism question; a late check cannot redirect questions that already ran.",
       "applies_when": "the target of the question depends on a baseline, region or period choice",
       "evidence": {
@@ -17,15 +15,14 @@
         "counter": []
       },
       "status": "active",
-      "approved_by": "fixture",
-      "approved_at": "2026-10-01T00:00:00+00:00"
+      "human": null,
+      "added_by": "meta-agent",
+      "added_at": "2026-10-01T00:00:00+00:00"
     },
     {
-      "id": "lesson_fixture02",
-      "role": "expert",
-      "topic": "check",
+      "id": "L002",
       "skill": "ocean-physical-consistency-review",
-      "section": "Heat budgets",
+      "role": "expert",
       "text": "Bound an unclosed residual with a second, independent estimator before attributing it; one estimator cannot show how much of the residual is its own error.",
       "applies_when": "a budget residual carries the conclusion",
       "evidence": {
@@ -37,8 +34,27 @@
         "counter": []
       },
       "status": "active",
-      "approved_by": "fixture",
-      "approved_at": "2026-10-01T00:00:00+00:00"
+      "human": null,
+      "added_by": "meta-agent",
+      "added_at": "2026-10-01T00:00:00+00:00"
+    },
+    {
+      "id": "L003",
+      "skill": "ocean-analysis-design",
+      "role": "expert",
+      "text": "A lesson the meta-agent retired stays in the file and reaches no reader.",
+      "applies_when": "never",
+      "evidence": {
+        "supporting": [],
+        "counter": []
+      },
+      "status": "retired",
+      "human": null,
+      "added_by": "meta-agent",
+      "added_at": "2026-10-01T00:00:00+00:00",
+      "retired_by": "rule",
+      "retired_at": "2026-10-02T00:00:00+00:00",
+      "retired_reason": "contradicted"
     }
   ]
 }

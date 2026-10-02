@@ -99,7 +99,9 @@ def verify_service_file(path, chunk):
                 raw = ds.variables[coord][:]
                 if np.ma.getmaskarray(raw).any():
                     raise DownloadError(f"Masked spatial coordinate: {coord}")
-                x = np.asarray(raw)
+                # Promote before longitude wrapping: float32 addition at 147-162 E
+                # otherwise rounds a valid 1/12-degree grid beyond the tolerance.
+                x = np.asarray(raw, dtype=np.float64)
                 if coord == "longitude":
                     x = (x + 180) % 360 - 180
                 if x.size == 0 or not np.isfinite(x).all() or x.min() < bounds[0]-1e-5 or x.max() > bounds[1]+1e-5:

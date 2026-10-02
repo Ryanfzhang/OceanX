@@ -40,9 +40,20 @@ def _executions_for(attempts: list[dict], executions: list[dict]) -> list[dict]:
     return runs
 
 
+def _tool_calls(executions: list[dict]) -> dict[str, int]:
+    """Helper-function calls summed over code runs, by function name."""
+    total: dict[str, int] = {}
+    for execution in executions:
+        for name, count in (execution.get("tool_calls") or {}).items():
+            total[name] = total.get(name, 0) + int(count)
+    return dict(sorted(total.items()))
+
+
 def compute_outcomes(tree_doc: dict, events: list[dict], attempts: list[dict],
                      *, final_report: str, model_calls: list[dict],
-                     code_executions: list[dict] = ()) -> dict[str, dict]:
+                     code_executions: list[dict] = (), library: dict | None = None) -> dict[str, dict]:
+    """``library`` says which lessons and tools the task ran with (see graphs.coordinator);
+    it is kept on the first root, with the helper calls of the whole task."""
     found = nodes(tree_doc)
     prose = _prose(final_report)
     calls_by_attempt: dict[str, list[dict]] = {}
@@ -103,16 +114,21 @@ def compute_outcomes(tree_doc: dict, events: list[dict], attempts: list[dict],
             "code_seconds": round(sum(float(r.get("duration_seconds") or 0) for r in runs), 1),
             "code_failures": [str(r.get("error") or "")[:200] for r in runs
                               if r.get("state") not in {"succeeded", "running"}][:3],
+            "tool_calls": _tool_calls(runs),
         }
+    if root is not None and library is not None:
+        # A code run of an attempt that returned no report belongs to no node, so the task's
+        # calls are summed over every run, not over the nodes.
+        outcomes[root]["library"] = {**library, "tool_calls": _tool_calls(list(code_executions))}
     return outcomes
 
 
 def record_task_outcomes(tree, *, final_report: str, model_calls: list[dict],
-                         code_executions: list[dict] = ()) -> dict[str, dict]:
+                         code_executions: list[dict] = (), library: dict | None = None) -> dict[str, dict]:
     """Store outcomes and the automatic labels derived from them (see labels.py)."""
     outcomes = compute_outcomes(tree.document(), tree.events(), tree.attempts(),
                                 final_report=final_report, model_calls=model_calls,
-                                code_executions=code_executions)
+                                code_executions=code_executions, library=library)
     tree.store.write_outcomes(outcomes)
     apply_auto_labels(tree, outcomes)
     return outcomes

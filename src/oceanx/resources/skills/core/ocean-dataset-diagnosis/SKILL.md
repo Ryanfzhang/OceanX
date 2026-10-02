@@ -40,5 +40,8 @@ Never assume a positive-down depth, Gregorian calendar, regular grid, or Celsius
 ## stop_or_escalation_conditions
 Explain which conclusions are limited if material coordinate semantics, units, grid metrics or calendar remain unresolved.
 
+<!-- oceanx:lessons max=4 for="expert" about="properties of a supplied data product (resolution, coverage, processing, missing fields) that limited what an analysis could conclude" -->
+<!-- /oceanx:lessons -->
+
 ## relevant_references
 `references/data/cf-conventions.md`, `references/data/calendars.md`, `references/data/grids-and-coordinates.md`, `references/data/common-variables-and-units.md`.

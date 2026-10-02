@@ -14,7 +14,6 @@ $DATA_ROOT/
   CMOMS/<var>/<year>/*.nc                       private, staged by the owner (test suite, South China Sea)
   CMOMS_DIA/<var>/<year>/*.nc                 requested agent-visible production/carbon diagnostics
   CMOMS/grid/*.nc                               private grid, masks, cell areas, depths, bathymetry
-  _evaluator_only/CMOMS_DIA/<var>/<year>/*.nc   private answer-key data; never an agent input
   MODIS_Aqua/chlorophyll/<year>/...             public (test suite)
   OISST/<var>/<year>/...                        public, East China Sea crop (test suite)
   CMEMS_Gulf/..., CMEMS_ECS/..., ERA5/...       services (test suite)
@@ -39,8 +38,6 @@ The machine-readable source is `download/data_manifest.json`. Every task file li
 | C_CORE | private | CMOMS model output (owner) | temp, salt, u, v, oxygen, chlorophyll + grid | daily, 2011-2020, full depth | CMOMS domain | Q01-Q06, Q11-Q14, Q16, Q17, Q22 | have; stage as below |
 | C_PRODUCTION | private, agent-visible | CMOMS primary-production diagnostics (dia file) | P_Production, NO3_uptake | 2011-2020; native interval averages, daily requested; 0-100 m | 116-120 E, 16-20 N, wet cells northwest of Luzon | Q14 | **request; not yet staged** |
 | C_CARBON | private, agent-visible | CMOMS surface air-sea carbon diagnostics (dia file) | CO2_airsea, pCO2 | 2011-2020; native interval averages, daily requested; surface | 112-116 E, 20-23 N; Q16 uses wet shelf cells with depth <=200 m | Q16 | **request; not yet staged** |
-| X_HEAT | private, evaluator-only | CMOMS heat budget (dia file) | temp_rate, temp_hadv, temp_vadv, temp_hdiff, temp_vdiff | 2011-2020, upper 300 m is enough | CMOMS domain | answer keys Q11, Q12 | **request** |
-| X_OXY | private, evaluator-only, optional | CMOMS oxygen budget (dia file) | oxygen_rate, oxygen_hadv, oxygen_vadv, oxygen_hdiff, oxygen_vdiff | May-Sep 2011-2020 | Pearl River shelf is enough | answer keys Q05, Q13 | optional request |
 | P_MODIS | public | MODIS-Aqua monthly chlorophyll (ERDDAP `erdMH1chlamday_R2022SQ`) | chlor_a | 2003-2020 | 104-122 E, 1-25 N | Q22 | 2003-2017 likely present; adds 2018-2020 |
 | P_GULF | services | GLORYS12 daily `cmems_mod_glo_phy_my_0.083deg_P1D-m`, version 202311 | thetao, so, zos | 2011-2017, 0-2000 m | 98-80 W, 18-31 N | Q07-Q09, Q23-Q26 | present, unchanged |
 | P_OISST | public | NOAA OISST v2.1 daily (NCEI originals, cropped) | sst, ice | 1982-2023 | 120-128 E, 25-34 N | Q10, Q27, Q30 | present, unchanged |
@@ -106,7 +103,7 @@ set has been downloaded yet, so the first transfer checks them.
    - the model domain (which straits are inside it);
    - the atmospheric forcing product, because Q05 and Q06 depend on whether it contains the typhoons.
 4. **The queries say "daily".** If the files are not daily means, stop and tell the owner before any run.
-5. Restrict permissions to the benchmark user: `chmod -R go-rwx $DATA_ROOT/CMOMS $DATA_ROOT/_evaluator_only`.
+5. Restrict permissions to the benchmark user: `chmod -R go-rwx $DATA_ROOT/CMOMS`; apply the same restriction to staged CMOMS_DIA and EVAL_ROOT.
 
 The OceanX sandbox only lets an agent read the folders bound to its question, so it never sees
 `_evaluator_only`. Query preparation also refuses any path containing `_evaluator_only`, `evaluator` or
@@ -115,19 +112,19 @@ The OceanX sandbox only lets an agent read the folders bound to its question, so
 ## Requesting extra CMOMS variables
 
 The variable lists in `avg_info.cdl` (32 variables) and `dia_info.cdl` (174 terms) offer much more. The
-agent-visible request adds two small regional groups for 2011-2020. Existing evaluator-only budget
-requests remain separate:
+agent-visible request adds two small regional groups for 2011-2020. Native heat and oxygen budget
+archives are not requested; Q05 and Q11-Q13 use independent reference diagnostics from their core inputs:
 
 | Priority | Variables (dia file) | Why | If not granted |
 |---|---|---|---|
 | Required for Q14 | `P_Production, NO3_uptake` | Winter chlorophyll versus measured primary production and nitrate uptake, northwest of Luzon (116-120 E, 16-20 N), upper 100 m; retain all months to evaluate seasonality | Do not run Q14 until both fields are staged and their sampling is documented. |
 | Required for Q16 | `CO2_airsea, pCO2` | Seasonal and annual source/sink exchange on the Pearl River adjacent shelf (112-116 E, 20-23 N); surface fields only | Do not run Q16 until both fields, sign conventions and sampling are documented. |
-| Required | `temp_rate, temp_hadv, temp_vadv, temp_hdiff, temp_vdiff` | The closed heat budget is the hidden answer key for the mechanism parts of Q11 (subsurface heatwaves) and Q12 (Hainan upwelling). The agent never sees it: it gets temperature and velocity and must infer the mechanism. | The evaluator computes the advective terms from velocity and temperature and takes the rest as a residual. The answer key is weaker, but the questions stay. |
-| Optional | `oxygen_rate, oxygen_hadv, oxygen_vadv, oxygen_hdiff, oxygen_vdiff`, May-September, Pearl River shelf only | Answer key for Q13 (biological versus physical control of hypoxia; the biological term is the residual), and a check of the oxygen-consumption and intrusion findings of the paper question Q05 | Q05 and Q13 use their reference diagnostics (already in the rubrics). |
 
-The request uses the same grid, depth layout and sampling as the core archive. If size is a concern, the
-heat budget can be limited to the upper 300 m, because every answer key uses the upper ocean (0-50 m to
-0-300 m).
+The requests use the same grid, depth layout and sampling as the core archive. For Q05 and Q11-Q13,
+freeze independent event, transport, stratification and association diagnostics before judging. These
+references do not establish a closed heat or oxygen budget. A residual is unresolved; oxygen decline
+is not measured respiration, and ocean currents alone do not establish wind forcing. Keep the
+reference calculations private under EVAL_ROOT even though they use the same core inputs as the agent.
 
 For the two new groups, stage each field as `$DATA_ROOT/CMOMS_DIA/<variable>/<year>/*.nc` for every
 year 2011-2020. Include a provider-conventions file with each bound variable folder: units, the meaning
@@ -169,7 +166,7 @@ Without `--execute` the same command prints the fixed scope of those groups and 
 - **Running together:** `public` and `services` can run at the same time in two terminals. A re-run skips
   verified files.
 - **The private phase:** checks that every variable and year folder holds a readable NetCDF file naming that
-  variable. X_OXY may be missing (it is optional); C_CORE and X_HEAT may not.
+  variable. C_CORE, C_PRODUCTION and C_CARBON must be staged for the tasks that bind them.
 - **The coverage report:** `$DATA_ROOT/_download_all/coverage.json` lists, per task, missing agent inputs
   and missing answer-key data.
 

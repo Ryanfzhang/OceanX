@@ -6,7 +6,7 @@
   "open_kind": "checkable",
   "title": "Temperature fronts of the upwelling zone",
   "query": "Using the supplied GLORYS12 daily near-surface temperature for 1993-2020 off California and Oregon (30-48 N, 130-116 W), map the main sea surface temperature fronts, describe their seasonal cycle, determine how their strength and position changed over the record and during the 2014-2016 warm anomalies, and explain the changes.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "CCS",

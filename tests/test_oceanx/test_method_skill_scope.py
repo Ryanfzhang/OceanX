@@ -39,9 +39,15 @@ def test_methods_keep_discoverable_headers_without_coordination_protocols(name):
 def test_numeric_method_examples_remain_available_on_demand():
     analysis, _ = load_ocean_skill("ocean-analysis-design")
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
-    array, _ = load_ocean_skill("xarray-array-ops")
+    from oceanx.skill_regions import packaged_skill
+    from oceanx.skills import ocean_skill_dirs
+    array = packaged_skill(ocean_skill_dirs()[0] / "xarray-array-ops", load_ocean_skill("xarray-array-ops")[0])
     assert "/skills/xarray-array-ops/SKILL.md" in analysis
-    assert "ao.column_take" in array
+    # The function list is written from the code, so every helper is described where it is read.
+    for name in ("check_dims", "exact_align", "column_take", "masked_values", "small_sample",
+                 "weighted_mean", "rate_per_day", "angular_gradient_per_metre"):
+        assert f"- `ao.{name}(" in array
+    assert "oceanx:" not in array
     assert "numerator and denominator" in analysis
     assert "rho * cp * H * tendency_K_per_day / 86400" in physical
     assert "residual" in physical

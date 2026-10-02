@@ -1,6 +1,6 @@
 {
- "version": "2026-10-01-v6",
- "scope": "Inputs of the v6 test suite (Q01-Q30) and the two evolution sets (A: E01-E12, B: E13-E24). South China Sea questions use owner-staged CMOMS (2011-2020), two with requested diagnostic groups; the Gulf of Mexico, East China Sea and Arabian Sea questions, the California Current evolution questions (set A) and the Tasman Sea evolution questions (set B) use public products. Public groups are downloaded; private groups are owner-staged and checked; evaluator-only groups are never bound to agents.",
+ "version": "2026-10-02-v7",
+ "scope": "Inputs of the v7 test suite (Q01-Q30) and the two evolution sets (A: E01-E12, B: E13-E24). South China Sea questions use owner-staged CMOMS (2011-2020), two with requested diagnostic groups; the Gulf of Mexico, East China Sea and Arabian Sea questions, the California Current evolution questions (set A) and the Tasman Sea evolution questions (set B) use public products. Public groups are downloaded; private groups are owner-staged and checked; Q05 and Q11-Q13 use independent reference diagnostics from core fields without native heat or oxygen budget groups.",
  "phases": {
   "public": "anonymous HTTPS downloads",
   "services": "Copernicus Marine (login) and Google ARCO-ERA5",
@@ -121,73 +121,6 @@
     "pCO2": "atm"
    },
    "note": "Agent-visible dia-file diagnostics for Q16 only, Pearl River adjacent shelf. Request surface fields for 2011-2020. Provider must state CO2_airsea sign, pCO2 convention, time intervals and native wet mask; atmosphere, wind, DIC and alkalinity are not assumed supplied."
-  },
-  "X_HEAT": {
-   "phase": "private",
-   "adapter": "private",
-   "evaluator_only": true,
-   "data_type": "CMOMS_DIA",
-   "variables": [
-    "temp_rate",
-    "temp_hadv",
-    "temp_vadv",
-    "temp_hdiff",
-    "temp_vdiff"
-   ],
-   "folders": [
-    "temp_rate",
-    "temp_hadv",
-    "temp_vadv",
-    "temp_hdiff",
-    "temp_vdiff"
-   ],
-   "years": [
-    2011,
-    2012,
-    2013,
-    2014,
-    2015,
-    2016,
-    2017,
-    2018,
-    2019,
-    2020
-   ],
-   "note": "Requested from the CMOMS provider (dia file). Evaluator answer key only (Q11, Q12); stored under _evaluator_only/. The upper 300 m is enough."
-  },
-  "X_OXY": {
-   "phase": "private",
-   "adapter": "private",
-   "evaluator_only": true,
-   "optional": true,
-   "data_type": "CMOMS_DIA",
-   "variables": [
-    "oxygen_rate",
-    "oxygen_hadv",
-    "oxygen_vadv",
-    "oxygen_hdiff",
-    "oxygen_vdiff"
-   ],
-   "folders": [
-    "oxygen_rate",
-    "oxygen_hadv",
-    "oxygen_vadv",
-    "oxygen_hdiff",
-    "oxygen_vdiff"
-   ],
-   "years": [
-    2011,
-    2012,
-    2013,
-    2014,
-    2015,
-    2016,
-    2017,
-    2018,
-    2019,
-    2020
-   ],
-   "note": "Optional request (dia file); May-September on the Pearl River shelf is enough. Answer key for Q05 and Q13 only; both fall back to reference diagnostics without it."
   },
   "P_MODIS": {
    "phase": "public",
@@ -1084,20 +1017,7 @@
    "P_TAS_BGC"
   ]
  },
- "evaluator_groups": {
-  "Q05": [
-   "X_OXY"
-  ],
-  "Q11": [
-   "X_HEAT"
-  ],
-  "Q12": [
-   "X_HEAT"
-  ],
-  "Q13": [
-   "X_OXY"
-  ]
- },
+ "evaluator_groups": {},
  "masks": {
   "gulf_analysis": [
    -98,

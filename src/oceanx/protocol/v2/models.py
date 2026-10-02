@@ -161,43 +161,19 @@ class EmptyPayload(StrictModel):
     """Explicit empty object payload for commands with no inputs."""
 
 
-class ResearchLessonDecidePayload(StrictModel):
-    """A human decision on one lesson proposal; wording may be edited before approval."""
+class ResearchLibraryUpdatePayload(StrictModel):
+    """Bring the project's task records and call counts up to date. With ``review`` the
+    meta-agent also reviews the lessons and learns tools (model calls)."""
 
-    proposal_id: str = Field(pattern=r"^lp_[a-f0-9]{12}$")
-    decision: Literal["approve", "reject"]
-    text: str | None = Field(default=None, min_length=1, max_length=600)
-    applies_when: str | None = Field(default=None, min_length=1, max_length=400)
-    reason: str | None = Field(default=None, max_length=600)
+    review: bool = False
 
 
-class ResearchLessonRetirePayload(StrictModel):
-    lesson_id: str = Field(pattern=r"^L\d{3,}$")
-    reason: str = Field(min_length=1, max_length=600)
+class ResearchLibraryMarkPayload(StrictModel):
+    """The owner's view of one lesson or tool: right keeps it, wrong removes it."""
 
-
-class ResearchReviewGetPayload(StrictModel):
-    """Policies and, for one task, the few nodes worth a human label."""
-
-    task_id: str | None = Field(default=None, min_length=1, max_length=128)
-
-
-class ResearchLabelSetPayload(StrictModel):
-    task_id: str = Field(min_length=1, max_length=128)
-    node_id: str = Field(pattern=r"^B\d+(?:\.\d+)*$", max_length=64)
-    label: Literal["decision-changing", "informative-but-not-decisive", "misleading-or-wasteful"]
-
-
-class ResearchPolicyActivatePayload(StrictModel):
-    """Choose the research policy used for this project's new tasks."""
-
-    name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-
-
-class ResearchLessonsConsolidatePayload(StrictModel):
-    """Digest and clean up research memory; optionally ask the meta-agent for proposals."""
-
-    propose: bool = False
+    kind: Literal["lesson", "tool"]
+    id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+    verdict: Literal["right", "wrong"]
 
 
 class RequestStatusGetPayload(StrictModel):
@@ -615,45 +591,21 @@ class PortableExportCreateRequest(RequestBase):
     context: RequestContext
 
 
-class ResearchLessonsListRequest(RequestBase):
-    type: Literal["research.lessons.list"]
+class ResearchLibraryGetRequest(RequestBase):
+    type: Literal["research.library.get"]
     payload: EmptyPayload
     context: RequestContext
 
 
-class ResearchLessonDecideRequest(RequestBase):
-    type: Literal["research.lessons.decide"]
-    payload: ResearchLessonDecidePayload
+class ResearchLibraryUpdateRequest(RequestBase):
+    type: Literal["research.library.update"]
+    payload: ResearchLibraryUpdatePayload
     context: RequestContext
 
 
-class ResearchLessonRetireRequest(RequestBase):
-    type: Literal["research.lessons.retire"]
-    payload: ResearchLessonRetirePayload
-    context: RequestContext
-
-
-class ResearchLessonsConsolidateRequest(RequestBase):
-    type: Literal["research.lessons.consolidate"]
-    payload: ResearchLessonsConsolidatePayload
-    context: RequestContext
-
-
-class ResearchReviewGetRequest(RequestBase):
-    type: Literal["research.review.get"]
-    payload: ResearchReviewGetPayload
-    context: RequestContext
-
-
-class ResearchLabelSetRequest(RequestBase):
-    type: Literal["research.labels.set"]
-    payload: ResearchLabelSetPayload
-    context: RequestContext
-
-
-class ResearchPolicyActivateRequest(RequestBase):
-    type: Literal["research.policies.activate"]
-    payload: ResearchPolicyActivatePayload
+class ResearchLibraryMarkRequest(RequestBase):
+    type: Literal["research.library.mark"]
+    payload: ResearchLibraryMarkPayload
     context: RequestContext
 
 
@@ -706,13 +658,9 @@ RequestEnvelope = Annotated[
         PortableExportCreateRequest,
         DisclosurePolicyGetRequest,
         DisclosurePolicySetRequest,
-        ResearchLessonsListRequest,
-        ResearchLessonDecideRequest,
-        ResearchLessonRetireRequest,
-        ResearchLessonsConsolidateRequest,
-        ResearchReviewGetRequest,
-        ResearchLabelSetRequest,
-        ResearchPolicyActivateRequest,
+        ResearchLibraryGetRequest,
+        ResearchLibraryUpdateRequest,
+        ResearchLibraryMarkRequest,
     ],
     Field(discriminator="type"),
 ]

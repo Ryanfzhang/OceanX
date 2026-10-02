@@ -1,7 +1,9 @@
 # Research-policy self-improvement — implementation and operator guide
 
-Implements `docs/research-tree-rsi-plan.md` (v3, simplified 2026-09-30). The improvement loop is
-bounded: models propose, logs and a frozen A/B test measure, and a human decides every change.
+Implements `docs/research-tree-rsi-plan.md` (v3, simplified 2026-09-30; lessons and tools revised
+2026-10-02). The improvement loop is bounded: a meta-agent maintains lessons and tools inside the places
+the skills reserve for them, code enforces the rules, every change is logged, and the owner can mark any
+item right or wrong. The research policy itself changes only by a reviewed code change.
 
 ## Roles
 
@@ -16,9 +18,10 @@ bounded: models propose, logs and a frozen A/B test measure, and a human decides
   declines (which closes the candidate with its reason), closes and sets verdicts, binds each
   `task` call to a node with `node_id`, reads
   `view=full` once and writes the final `## Research Tree` section.
-- **Meta-agent**: runs offline, on request. It reads the saved records of finished tasks and the
-  skills it may write into, labels nodes and proposes lessons. It writes no prompt. A lesson the
-  owner approves is written into the skill and section the meta-agent named.
+- **Meta-agent**: runs outside tasks, at most once a day after a research task (or on request). It
+  reads the saved records of finished tasks and the skills that take lessons, then keeps, revises,
+  retires and adds lessons, and writes helper functions (tools) for code that Experts wrote again and
+  again. It writes no prompt and changes nothing outside the marked regions of the skills.
 
 ## Policies
 
@@ -36,9 +39,9 @@ not offer `set_verdict`, `refutes`/`inconclusive` links or hypothesis nodes at a
 Nesting and the frontier mode go together: under `shallowest`, a correctly nested follow-up waits for
 every unrelated shallower question, so `v2-nested` is the arm to use when follow-ups should nest.
 
-Selection: `OCEANX_RESEARCH_POLICY` > project choice (**Review → Policies**, stored in
-`.oceanx/research/active_policy`) > `v0-coordinator-bfs`. A new policy is a code change reviewed
-like any other, then compared with paired runs.
+OceanX runs `v2-nested` (`DEFAULT_POLICY`). `OCEANX_RESEARCH_POLICY` selects another bundled policy
+for an experiment arm or a paired run; the desktop has no policy switch. A new policy, or a new
+default, is a code change reviewed like any other, then compared with paired runs.
 
 ## Modules (`src/oceanx/research/`)
 
@@ -53,83 +56,104 @@ like any other, then compared with paired runs.
 | `outcomes.py` | Per-node cost, code runs, citation, children, proposals made/adopted, reopen/conflict, skills opened; the Coordinator's own calls count on the root |
 | `labels.py` | Auto and judge labels, the small human review set, judge–human agreement |
 | `memory.py` | Per-task digests (outline, decision history, outcomes, labels), process measures of a finished tree (`run_measures`), weekly consolidation and archiving |
-| `lessons.py` | The meta-agent's two mining prompts, proposal validation, approval, and writing lessons into skills |
+| `lessons.py` | The meta-agent's review of each skill's lessons (keep, revise, retire, add), the rules code enforces, the owner's marks and the change log |
+| `toolbook.py` | The helper functions a task mounts, the call counter, usage statistics, and tools learned from repeated code (static check, sandboxed test, independent review) |
+| `../skill_regions.py` | The marked regions of a SKILL.md (`oceanx:lessons`, `oceanx:tools`) and how they are filled |
 | `metering.py` | One record per model call: tokens, node attribution, and which skills the call opened |
 | `acceptance.py` + `resources/evals/research_policy_acceptance.yaml` | Frozen criteria with a hash lock |
 | `paired_runs.py` | Paired live runs and frozen-criteria evaluation |
-| `review.py`, `cli.py` | Desktop facade and `ocean research ...` commands |
+| `review.py`, `cli.py` | The project's library as the desktop and the CLI use it (update, mark, overview, frozen snapshots) and `ocean research ...` commands |
 
 ## Labels without rating everything
 
 When a task finishes, log rules label each executed node (`auto`). `ocean research judge-labels`
 adds a leave-one-out model judgement (`judge`). The root is never labelled: it holds the answer and
 is not a branch. A node whose proposed follow-ups were adopted counts as having moved the tree,
-wherever those follow-ups were placed. The owner labels only a small review set
-(top-level branches, cited nodes, auto/judge disagreements, two closed nodes) in
-**Review → Branch labels**. Effective label: human > judge > auto.
-`ocean research judge-agreement --runs <dirs>` reports how often the judge matches the owner;
-when it is high, fewer human labels are needed.
+wherever those follow-ups were placed. The owner may label nodes with `ocean research label`; this is
+optional, and the desktop no longer asks for it. Effective label: human > judge > auto.
+`ocean research judge-agreement --runs <dirs>` reports how often the judge matches the owner.
 
-## Lessons and memory
+## Lessons, tools and memory
 
 - **Digests.** A finished task is summarised into `.oceanx/research/digests/<task_key>.json`
   (tens of KB). Per question it keeps the wording, why it was added, who proposed it, when it was
   created, every delegation with its start and whether it reported, the result and its stated
   limits, the follow-ups it proposed and which question adopted each, cost, citation and label.
-  Lesson mining reads digests only. Digests written before this history was kept stay readable and
-  are rebuilt while their raw store exists.
-- **Cleanup.** After agent requests the backend consolidates at most weekly (no model calls):
-  refresh digests, gzip raw stores of finished tasks older than 30 days, and return lessons not
-  reviewed for 90 days as retire proposals.
-- **Written into the original skills.** The meta-agent's output is not prompt text and not a
-  separate skill. Each lesson names one of the skills its role already reads and a section of it.
+  It also keeps which lessons the task was shown and which it named, which helper functions it
+  could call and how often it called each. The meta-agent reads digests only. Digests written
+  before this history was kept stay readable and are rebuilt while their raw store exists.
+- **Marked regions.** A skill reserves a place for what the project learns:
 
-  | Role | Skills it may write into | A lesson must be about | Topics |
-  |---|---|---|---|
-  | Coordinator | `research-trajectory-planning` | A research-tree decision | `order`, `adopt`, `depth`, `retry`, `stop`, `assign` |
-  | Analysis Experts | `ocean-physical-consistency-review`, `ocean-analysis-design`, `ocean-dataset-diagnosis`, `hypothesis-experiment-design` | An analysis choice that changed, weakened or invalidated a result | `definition`, `data-limit`, `method`, `check`, `report` |
+  ```text
+  <!-- oceanx:lessons max=4 for="coordinator" about="which follow-ups were worth asking ..." -->
+  <!-- /oceanx:lessons -->
+  <!-- oceanx:tools max=12 -->
+  <!-- /oceanx:tools -->
+  ```
 
-- **Mining.** One model call per role. Each call gets:
-  - the full current text of the skills it may write into, including lessons already written,
-    and is told to propose nothing a skill already says;
-  - what its reader is told elsewhere (the Coordinator's tree rules or the Expert's base
-    instructions) and the names of the reader's other skills;
-  - the role's own view of the records: for the Coordinator, the questions in the order they
-    were created with their origin, timing, retries, cost, label and dropped follow-ups; for the
-    Experts, each analysed question with its Expert, result and limits. Each task is marked as run
-    with or without lessons, so a later round can propose retiring a lesson that such runs contradict.
+  `max` is how many items the region holds, `about` what belongs there, and `for` whose records
+  the meta-agent reads. The author of the skill decides both; the meta-agent can only fill the
+  region. Six skills take lessons: `research-trajectory-planning` (Coordinator, 4),
+  `ocean-analysis-design` (6), `ocean-physical-consistency-review` (6), `ocean-dataset-diagnosis` (4),
+  `hypothesis-experiment-design` (3) and `claim-grounded-writing` (3). `xarray-array-ops` has the
+  tools region. A skill without a region takes nothing, and no marker ever reaches a reader.
+- **Runtime.** Each task's skill library is generated from the packaged skills, the lessons and
+  the tools; the packaged files are never modified, so two runs of one OceanX version can differ in
+  the library alone. Lessons are written only in research mode. A lesson is one line under a
+  heading that marks it as learned, with its condition and its id. The tools region lists each
+  helper function with its signature and the first paragraph of its docstring, written from the
+  code. The version of the lessons and tools a task ran with is appended to the policy version on
+  every tree event.
+- **Upkeep.** After a research request the backend refreshes digests and call counts (no model
+  call). At most once a day it also lets the meta-agent review; **Review → Update now** does the
+  same on request. Nothing runs when `OCEANX_LIBRARY_FROZEN` is set (experiment arms).
+- **Lessons.** One model call per skill that takes lessons. The call gets the skill as its
+  readers get it, what the reader is told elsewhere, the lessons the owner marked wrong, and the
+  role's view of the records (about 200k characters, one run of every question before any repeat).
+  It judges every current lesson (keep, revise, retire) and may add at most 2. Code enforces:
+  - a new lesson needs supporting tasks from at least 3 different questions (with fewer, a skill
+    without lessons is not reviewed at all);
+  - a lesson contradicted by as many questions as support it is retired, whatever the model said;
+  - a skill never holds more than its region's `max`; when full, a new lesson must be better
+    supported than the weakest one, which it replaces;
+  - ≤40 words with no task keys or node IDs, and an applies-when of ≤25 words.
 
-  It is told not to propose programming advice, findings about one task's region or process, or
-  advice that needs data the tasks did not have, and to propose only where the records show a
-  contrast. A prompt holds about 200k characters of records, one run of every question before
-  any repeat.
-- **Limits.** At most 3 proposals per role per run; ≤40 words with no task keys or node IDs,
-  applies-when ≤25 words, a topic of the role, a writable skill of the role, a section that the
-  skill has (or none, which opens a section named after the topic), supporting tasks that exist
-  in the digests and come from at least 3 different questions (repeated runs of one question
-  count once; with fewer than 3 questions the model is not called), ≤12 active per role. A lesson
-  only adds text; it cannot change or remove what a skill already says. The owner edits, approves
-  or rejects each one in **Review → Lessons**, which shows the skill and section.
-- **Runtime.** In research mode each task's skill library is built from the packaged skills and
-  the approved lessons: a lesson appears at the end of its section, under a line that marks it as
-  learned, with its id and support count. The packaged files are never modified, so two runs of
-  one OceanX version can differ in lessons alone. `.oceanx/research/lessons/skills/` holds an
-  export of each revised skill for the owner to read; tasks do not load it. Every model call
-  records the skills it opened (`skills_read`), so a run shows whether a revised skill was read.
-  The lesson-set version is appended to the policy version on every tree event.
+  What passes takes effect at once. The order within a skill is: lessons the owner marked right,
+  then best supported (questions for minus questions against), then most recently confirmed.
+- **Tools.** A tool is a function of `oceanx_array_ops.py`, called as `ao.<name>`. The Python
+  kernel has `ao` imported; a script imports it itself. The mounted module is the packaged file,
+  the project's learned functions and a counter that logs each call analysis code makes
+  (`tool-calls.log` in the execution folder; a helper called by another helper is not counted).
+  - *Elimination by use.* A function no task called for 20 tasks in a row leaves the list. A
+    packaged function stays importable; a learned one is retired. A new function is listed ahead
+    of the others for its first 10 tasks.
+  - *Learning.* The update collects functions that Experts defined in the code of tasks on at
+    least 3 different questions. The meta-agent may turn them into at most 3 general functions per
+    review, each with a test. A function is mounted only if all of these pass: a static check (one
+    pure function with a docstring, ≤60 lines, imports limited to numpy, xarray, pandas, scipy, gsw
+    and math, no file, network, printing or global state), its test run in the sandbox, and a
+    review by a second model call that looks for a numerical or scientific error.
+- **The owner.** **Review** in the desktop lists every lesson and tool with its evidence, how
+  often it was shown, named or called, and the latest changes. Two buttons mark an item right (it
+  stays whatever later records say; a retired one comes back) or wrong (it goes and is not
+  proposed again). The same from the shell: `ocean research library --project <dir>` and
+  `ocean research mark --project <dir> --kind lesson|tool --id <id> --right|--wrong --reviewer <you>`.
+  Every change is logged with its reason in `lessons/changes.jsonl` and `tools/changes.jsonl`;
+  `lessons/skills/` and `tools/learned/` hold readable exports that tasks do not load.
+- **Cleanup.** The same upkeep gzips raw stores of finished tasks older than 30 days.
 - **Meta model.** `role_profiles.meta` in model settings if present, else the Expert profile.
 
 ## Operator workflow
 
 1. Run tasks normally, or with `OCEANX_RESEARCH_POLICY=v1-hypotheses`.
-2. Label the review set in the desktop (or `ocean research label --tree ... --node B1.2
-   --label decision-changing --labeler <you>`); optionally `judge-labels`.
+2. Optionally label nodes (`ocean research label --tree ... --node B1.2
+   --label decision-changing --labeler <you>`) and run `judge-labels`.
 3. Edit `research_policy_acceptance.yaml` (all values are drafts) and
    `ocean research freeze-acceptance --owner <you>`.
 4. `ocean research pairs --queries <held_out.jsonl> --output <dir> --policy-a v0-coordinator-bfs
    --policy-b v1-hypotheses`, rate each case once (`{case, better: A|B|same}` JSONL), then
    `ocean research evaluate-pairs --output <dir> --quality <file>`.
-5. If it passes, activate the policy in **Review → Policies**.
+5. If it passes, change `DEFAULT_POLICY` in a reviewed commit.
 
 ## Known limitations
 
@@ -141,7 +165,10 @@ when it is high, fewer human labels are needed.
 
 ## Verification status
 
-Research modules are tested in isolation (`test_research_*`, run with a pytest stand-in because
-PyPI was unreachable from the development sandbox). Not yet run: the full `tests/test_oceanx`
-suite, anything needing DeepAgents/LangGraph (middleware inside a real graph, `graphs.py`, router
-handlers), the desktop dialog in a running app, and any live model run.
+Covered by tests (`tests/test_oceanx`, no model): region parsing and filling, the lesson rules, the
+owner's marks, the call counter on the kernel path and the script path, usage statistics and
+elimination, the static check, a real sandboxed test run, admission with a stand-in reviewer, the
+library requests through the backend router, and frozen snapshots.
+
+Not yet run: a live meta-agent review with a real model, a live task that calls a learned tool, and
+the desktop dialog in a running app.

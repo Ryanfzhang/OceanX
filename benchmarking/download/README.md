@@ -7,8 +7,23 @@ it in four phases on the server:
 |---|---|---|
 | `public` | NOAA OISST (NCEI originals, cropped) and MODIS chlorophyll (ERDDAP) | anonymous HTTPS |
 | `services` | Copernicus Marine (GLORYS12 physics, the global biogeochemical reanalysis) and ERA5 (Google ARCO mirror) | CMEMS login |
-| `private` | Checks the owner-staged CMOMS folders, the requested diagnostics and the evaluator-only budget files | none |
+| `private` | Checks the owner-staged CMOMS core folders and requested production/carbon diagnostics | none |
 | `verify` | Re-checks every downloaded file's request identity and SHA-256 | none |
+
+Catalogue v7 requires no native heat or oxygen budget groups. Q05 and Q11-Q13 reference calculations
+use their core inputs and must still be frozen separately before judging.
+
+Longitude validation promotes coordinates to float64 before wrapping, so valid float32 CMEMS grids
+at 147-162 E pass the existing spacing tolerance. Missing or irregular grids still fail. To recover
+the Tasman files rejected by earlier validation, retain the existing `.nc.part` files and run:
+
+```bash
+python -u benchmarking/download/download_all.py services --output "$DATA_ROOT" --execute --workers 2 \
+  --groups P_TAS_PHY P_TAS_SURF
+```
+
+Each partial is fully validated, hashed and promoted before any provider request; valid partials do
+not need another download. Saved requests and all other verified groups remain reusable.
 
 ```bash
 python benchmarking/download/download_all.py public --output "$DATA_ROOT"              # preview only

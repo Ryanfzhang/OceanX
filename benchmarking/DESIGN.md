@@ -1,13 +1,13 @@
 # OceanX benchmark: design
 
-Catalogue `2026-10-01-v6`. Two suites:
+Catalogue `2026-10-02-v7`. Two suites:
 
 - **Test suite, Q01-Q30.** Scored. 10 paper verifications and 20 open problems. South China Sea questions
   use the private CMOMS model output. The other questions use public data in the Gulf of Mexico, the East
   China Sea and the Arabian Sea. Every scored measurement comes from this suite.
 - **Evolution suite, E01-E24.** Never scored. Open problems on public reanalyses, in two sets of twelve:
   set A on the California Current System and set B on the Tasman Sea and East Australian Current. OceanX
-  learns lessons from these runs in two rounds (see "Evolution suite").
+  learns lessons and tools from these runs in two rounds (see "Evolution suite").
 
 Everything runs on the Linux server, never on macOS.
 
@@ -19,8 +19,8 @@ Everything runs on the Linux server, never on macOS.
 1. Measure how well OceanX does two kinds of research work:
    - verifying published findings with data from the paper's own study period;
    - investigating typical open problems in physical and biogeochemical oceanography.
-2. Measure whether the research-policy choice and self-improvement (lessons learned from earlier runs) help
-   on questions OceanX has never seen, and whether a second round of learning adds to the first.
+2. Measure whether self-improvement (the lessons and tools learned from earlier runs) helps on questions
+   OceanX has never seen, and whether a second round of learning adds to the first.
 
 ## Design rules
 
@@ -37,10 +37,11 @@ Everything runs on the Linux server, never on macOS.
 | Paper verification needs real papers | The 10 papers were checked against Crossref (title, authors, volume, pages, DOI) and their abstracts on 2026-10-01. The findings in each query paraphrase the abstract. Six were also read in full (Q02, Q04, Q05, Q07, Q08, Q10); see "Papers". |
 | Different rubrics for the two types | Paper verification scores whether each finding of the paper was actually verified. Open problems are scored more broadly and deeply, on seven dimensions, against a hidden answer key (see "Rubrics"). |
 | No evaluator material reaches the agent | Rubrics live in `tasks/<task>/evaluator/`. Answer-key data lives under `_evaluator_only/` on the server. Query preparation refuses both. |
-| No evolution while benchmarking | Each attempt starts from empty OceanX state. An arm fixes the research policy and an optional frozen lesson set, and every attempt verifies its lessons were unchanged. |
+| No learning while benchmarking | Each attempt starts from empty OceanX state and its library is frozen. Every arm runs the default policy (`v2-nested`); an arm fixes an optional frozen library (lessons and tools), and every attempt verifies that library was unchanged. |
 | Evolution uses open problems on separate data | The evolution suite has 24 open problems and no paper verification. It uses two regions outside the test suite (the California Current System and the Tasman Sea) and the same kinds of public products. CMOMS never appears in evolution, so CMOMS questions measure transfer to data OceanX has never seen. |
-| Two rounds of learning | Set A runs without lessons and yields lesson set L1. Set B runs with L1 and yields L2. The test suite runs with no lessons, with L1 and with L2, so each round is measured separately. |
-| Lessons are judged by the research process too | Lessons are about research-tree decisions, so each run also reports process measures from its tree (see `EVALUATION.md`). One of them is a pre-registered endpoint. |
+| Two rounds of learning | Set A runs with nothing learned and yields the library L1. Set B runs with L1 and yields L2. The test suite runs with nothing learned, with L1 and with L2, so each round is measured separately. |
+| Learning is the meta-agent's, after each set | After a set has run, the meta-agent reviews its records once: it keeps, revises, retires and adds lessons inside the regions the skills reserve, and adds helper functions that pass a static check, their own test and an independent review. Call counts decide which tools stay listed. The owner can mark any item right or wrong; no approval is needed. |
+| The library is judged by the research process too | Lessons are about research-tree and analysis decisions and tools about code, so each run also reports process measures: tokens spent on questions that did not change the answer, failed code runs, helper calls and lessons named (see `EVALUATION.md`). One of them is a pre-registered endpoint. |
 
 ## Allocation (30 test questions)
 
@@ -81,9 +82,9 @@ exist, and a model may have memorised them. None exist for this CMOMS archive.
 | Q08 | GULF | paper | Vertical structure of a Loop Current eddy | P_GULF | Meunier et al. (2018) |
 | Q09 | GULF | paper | Erosion of the salinity maximum inside the Loop Current eddy Poseidon | P_GULF | Sosa-Gutierrez et al. (2020) |
 | Q10 | ECS | paper | The late-arriving 2023 East China Sea marine heatwave | P_OISST, P_ECS, P_ERA5 | Oh et al. (2024) |
-| Q11 | SCS | checkable | Subsurface marine heatwaves | C_CORE | hidden CMOMS budget (X_HEAT) + reference diagnostics |
-| Q12 | SCS | checkable | Year-to-year control of the upwelling off eastern Hainan | C_CORE | hidden CMOMS budget (X_HEAT) + reference diagnostics |
-| Q13 | SCS | checkable | Year-to-year control of hypoxia off the Pearl River Estuary | C_CORE | hidden CMOMS budget (X_OXY) + reference diagnostics |
+| Q11 | SCS | checkable | Subsurface marine heatwaves | C_CORE | independent core-field reference diagnostics |
+| Q12 | SCS | checkable | Year-to-year control of the upwelling off eastern Hainan | C_CORE | independent core-field reference diagnostics |
+| Q13 | SCS | checkable | Year-to-year control of hypoxia off the Pearl River Estuary | C_CORE | independent core-field reference diagnostics |
 | Q14 | SCS | checkable | Winter chlorophyll, primary production and nitrate uptake northwest of Luzon | C_CORE, C_PRODUCTION | reference diagnostics |
 | Q15 | ARAB | checkable | Year-to-year strength of the summer upwelling off Somalia and Oman | P_ARAB_PHY | reference diagnostics |
 | Q16 | SCS | checkable | Seasonal and interannual air-sea CO2 exchange on the Pearl River adjacent shelf | C_CORE, C_CARBON | reference diagnostics |
@@ -105,7 +106,7 @@ exist, and a model may have memorised them. None exist for this CMOMS archive.
 - **Where things live:** the query text, paper, period match, region and data groups are in
   `tasks/<task>/task_info.json`. The rubric (criteria, findings, answer key, probes, candidate causes and
   gates) is in `tasks/<task>/evaluator/rubric.json`.
-- **X_OXY:** it is optional. Without it, Q05 and Q13 use their reference diagnostics.
+- **Core-field references:** Q05 and Q11-Q13 require no native heat or oxygen budget archive. Freeze independent diagnostics and their uncertainty before judging; retain the distinction between net tendencies, proxies and measured processes.
 
 ### Papers (verified 2026-10-01)
 
@@ -190,14 +191,14 @@ Testability has three levels:
 | Framing and competing hypotheses (`F`) | 10 | Operational definitions; competing explanations with distinguishing predictions |
 | Data fitness and handling (`A`) | 10 | Correct handling; whether the data can answer the question (model realism, record length, resolution) |
 | Quantitative answer (`Q`) | 20 | The answer-key items for this criterion, within the frozen tolerances |
-| Mechanistic depth (`M`) | 20 | Dominant and secondary processes agree with the hidden answer key, established by process-based tests; competing explanations ruled in or out; the task's depth probes |
+| Mechanistic depth (`M`) | 20 | Quantitative tests of competing explanations agree with independent references; identifiability limits and uncertainty are stated; the task's depth probes. For Q11-Q13, justified unresolved attribution can receive full credit. |
 | Robustness and uncertainty (`R`) | 15 | Sensitivity to every choice that could change the conclusion; statistics for short, autocorrelated records |
 | Breadth and synthesis (`B`) | 15 | Links across scales, processes and variables; agreement and disagreement with published work; the task's breadth probes |
 | Insight, limits and next steps (`I`) | 10 | A clear quantified answer, what the data cannot settle, what would settle it, a non-obvious insight |
 
 The hidden answer key differs by question:
-- **Q11 and Q12:** the closed CMOMS heat budget (X_HEAT).
-- **Q13:** the CMOMS oxygen budget (X_OXY, optional).
+- **Q11 and Q12:** independent event, stratification, displacement and resolved-horizontal-advection diagnostics from core fields; missing forcing and vertical/mixing terms limit attribution.
+- **Q13:** independent hypoxia and candidate-association diagnostics from core fields, with collinearity and short-record uncertainty. No measured respiration or closed oxygen budget is assumed.
 - **Every open problem:** reference diagnostics that the evaluator computes on the same inputs.
 
 The answer-key values are filled in and frozen before any test run is judged.
@@ -222,17 +223,19 @@ the same three public products, each cropped to its own region:
 - **CMEMS global biogeochemical reanalysis monthly** oxygen, chlorophyll and nitrate, 1993-2020, 0-1000 m
   (`P_CCS_BGC`, `P_TAS_BGC`).
 
-The variable set mirrors CMOMS, so lessons about temperature, currents, oxygen and chlorophyll can transfer.
+The variable set mirrors CMOMS, so lessons and tools about temperature, currents, oxygen and chlorophyll can
+transfer.
 The regions do not: neither appears in the test suite.
 
 | Set | Region | Runs with | Yields |
 |---|---|---|---|
-| A, E01-E12 | California Current System, 30-48 N, 130-116 W: an eastern-boundary upwelling system | no lessons (L0) | lesson set L1 |
-| B, E13-E24 | Tasman Sea and East Australian Current, 46-26 S, 147-162 E: a western boundary current and an ocean-warming hotspot | L1 | lesson set L2 |
+| A, E01-E12 | California Current System, 30-48 N, 130-116 W: an eastern-boundary upwelling system | nothing learned (L0) | library L1 |
+| B, E13-E24 | Tasman Sea and East Australian Current, 46-26 S, 147-162 E: a western boundary current and an ocean-warming hotspot | L1 | library L2 |
 
-Set B is on other waters and another kind of circulation, so L2 is not learned where L1 was. It shows two
-things the first round cannot: whether tasks run with L1 still make the mistakes L1 addresses, and which
-lessons hold in a second region. The meta-agent may propose retiring an L1 lesson that set B contradicts.
+Set B is on other waters and another kind of circulation, so L2 is not learned where L1 was. It shows
+three things the first round cannot: whether tasks run with L1 still make the mistakes L1 addresses, which
+lessons hold in a second region, and which tools are called when they are offered. The meta-agent retires an
+L1 lesson that set B contradicts, and a tool that no set B run called leaves the list.
 
 ### Set A: California Current System
 
@@ -271,6 +274,22 @@ lessons hold in a second region. The meta-agent may propose retiring an L1 lesso
 Set B has the same mix as set A: ten checkable problems and two disagreement problems, across physics,
 surface temperature and biogeochemistry. Three problems state that surface fluxes or winds are not supplied
 (E15, E17, E21), and two combine products from different model systems (E20, E24).
+
+## What changed in v7
+
+- **The library is lessons and tools.** A snapshot (L1, L2) now freezes the lessons written into the skills
+  and the helper functions that analysis code can call. The arms compare the two together.
+- **The meta-agent decides.** Lessons and tools take effect when they pass the rules; the owner can mark any
+  of them right or wrong, but no approval step is needed. One review runs after each evolution set.
+- **The policy is fixed to `v2-nested`.** Arm A (`v0-coordinator-bfs`) is no longer run; the test suite
+  runs in three arms: nothing learned, L1 and L2.
+- **Three process measures were added:** failed code runs, helper calls and lessons named.
+- Native heat and oxygen budget archives are no longer benchmark dependencies. Q05 and Q11-Q13 use
+  independent reference calculations on their core fields; missing terms remain unresolved.
+- Q11-Q13 mechanism scoring accepts justified unresolved attribution with quantitative tests of
+  competing explanations, rather than requiring an exact dominant native-budget term.
+- Task queries and input groups are unchanged. The catalogue version changes to separate evaluations
+  under the revised rubric from earlier results.
 
 ## What changed in v6
 

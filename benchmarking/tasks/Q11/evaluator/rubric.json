@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.1",
   "task_id": "Q11",
   "type": "open_problem",
   "open_kind": "checkable",
@@ -64,11 +64,11 @@
         "depth_probes"
       ],
       "anchors": {
-        "0": "Description only, or a mechanism that the answer key contradicts.",
-        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
-        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
-        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
-        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+        "0": "Description only, or process evidence contradicted by independently computed reference diagnostics.",
+        "1": "A mechanism asserted from literature or intuition without a test in the supplied fields.",
+        "2": "One candidate explanation tested; alternatives or identifiability limits not examined.",
+        "3": "Quantitative process, conditional or lagged tests consistent with reference diagnostics; at least one alternative tested; unresolved causal attribution stated.",
+        "4": "Competing explanations tested with quantitative diagnostics and uncertainty, consistent with independent references; data-supported conclusions and unresolved alternatives clearly distinguished; depth probes addressed. A justified inability to identify a dominant cause can receive full credit."
       }
     },
     {
@@ -116,9 +116,7 @@
     }
   ],
   "answer_key": {
-    "oracle_groups": [
-      "X_HEAT"
-    ],
+    "oracle_groups": [],
     "items": [
       {
         "id": "Q11-A1",
@@ -130,12 +128,12 @@
       },
       {
         "id": "Q11-A2",
-        "quantity": "Mechanism of the three largest subsurface events",
-        "procedure": "Integrate temp_rate, temp_hadv, temp_vadv, temp_hdiff and temp_vdiff over each event volume from onset to peak and rank the terms.",
+        "quantity": "Process evidence for the three largest subsurface events",
+        "procedure": "Using core temp, salt, u and v plus grid geometry, compare event composites of isotherm/isopycnal displacement and temperature anomalies along density surfaces. Estimate resolved horizontal temperature advection on collocated physical coordinates, checking masks, rotation and differencing. Compare timing and magnitude with event warming; document missing vertical velocity, mixing and surface fluxes. A budget residual is unresolved, not a measured process.",
         "used_by": "Q11-M",
-        "oracle": "X_HEAT",
+        "oracle": "Independent reference diagnostics from C_CORE fields bound to this task",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: rank 1 exact; rank 2 bonus)"
+        "tolerance": "to freeze before judging (suggested: agreement in reference diagnostic signs and event contrasts under matched definitions; uncertainty and unresolved alternatives reported)"
       },
       {
         "id": "Q11-A3",
@@ -148,10 +146,10 @@
     ]
   },
   "depth_probes": [
-    "Separates heave (vertical displacement of isotherms by eddies, waves or downwelling) from warming along isopycnals.",
-    "Tests anticyclonic eddies and Kuroshio intrusion against vertical mixing and surface heat flux as causes.",
-    "Uses heat-budget or equivalent process diagnostics (advection computed from the velocity) rather than correlations alone.",
-    "Checks that conclusions survive the baseline choice (ten-year climatology, detrending) and the depth levels."
+    "Separates isotherm/isopycnal heave from warming along density surfaces using temperature and salinity.",
+    "Compares eddy and intrusion evidence against predictions of mixing and surface forcing, stating which alternatives missing fields prevent settling.",
+    "Estimates resolved horizontal advection with grid-aware diagnostics and sensitivity; does not label an unclosed residual as measured mixing or surface heat flux.",
+    "Checks baseline, detrending, event definition and depth sensitivity."
   ],
   "breadth_probes": [
     "Relates subsurface events to surface events, seasons and ENSO years.",
@@ -162,9 +160,7 @@
     "A different target (region, period or quantity) without justification: Q and M score at most 1.",
     "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
   ],
-  "evaluator_groups": [
-    "X_HEAT"
-  ],
+  "evaluator_groups": [],
   "frozen": {
     "references_sha256": null,
     "tolerances_frozen_at": null,

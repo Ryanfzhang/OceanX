@@ -198,16 +198,34 @@ def _project():
 
 
 def research_tree(task_id: str):
-    """The task tree bound to the active research policy (v0 unless an experiment selects one).
+    """The task tree bound to the research policy (v2-nested unless an experiment selects one).
 
-    The recorded version also names the active approved lessons, so experiments can
-    attribute outcomes to policy and lessons together.
+    The recorded version also names the lessons and tools the task runs with, so experiments
+    can attribute outcomes to the policy and the learned library together.
     """
     from oceanx.research.tree import ResearchTree
     project = _project()
-    policy, lessons = project.policy(), project.lessons.version()
+    policy, library = project.policy(), project.version()
     return ResearchTree(research_tree_path(task_id), policy=policy,
-                        policy_version=f"{policy.version}+{lessons}" if lessons else None)
+                        policy_version=f"{policy.version}+{library}" if library else None)
+
+
+def _library_record(tree, final_report: str) -> dict:
+    """Which lessons and tools this task ran with, and which lessons it named. The project's
+    periodic update reads this to see what is used (lessons.py, toolbook.py)."""
+    from oceanx.research.lessons import cited_lessons
+    project = _project()
+    shown = project.lessons.shown_ids()
+    texts = [final_report, json.dumps(tree.document(), ensure_ascii=False)]
+    for attempt in tree.attempts():
+        report = Path(str(attempt.get("report_path") or ""))
+        try:
+            if report.is_file():
+                texts.append(report.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+    return {"lessons_shown": shown, "lessons_cited": cited_lessons(shown, texts),
+            "tools_mounted": [tool["name"] for tool in project.tools.mounted()]}
 
 
 def research_mode(config) -> bool:
@@ -311,12 +329,12 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                  if run else task_root / "agents" / "coordinator")
     work_root.mkdir(parents=True, exist_ok=True)
     from oceanx.native_skills import prepare_skill_library
-    # Approved lessons reach a role only inside the skills it already reads, and only in
-    # research mode: they come from research trees and would work against a bounded request.
+    # What the project learned reaches a role only inside the regions its skills reserve:
+    # the helper functions always, lessons only in research mode (see ProjectResearch.skills).
     library = prepare_skill_library(
         work_root / ".runtime" / "skills",
         role=role, capabilities=svc.skill_capabilities,
-        revisions=_project().lessons.revised_skills() if research else None)
+        revisions=_project().skills(research=research))
     from oceanx.native_backend import task_backend
     filesystem, working_directory = task_backend(host(), config, run=run, library=library)
     discussion = role == "scientific_discussion_partner"
@@ -550,6 +568,8 @@ async def _coordinator_agent(config):
         + f"\nBackend-assigned final report file: {report}\n"
         "Native task receipts contain Result, Evidence and limitations, Further analysis, and Report. "
         "Use those compact fields for tree decisions and read report.md only when synthesis needs more detail. "
+        "Before you first choose which follow-up questions to pursue, read "
+        "/skills/research-trajectory-planning/SKILL.md once. "
         "Only the server-verified keys under Published results are desktop bindings; preserve those exactly. "
         "Never invent result1, cite an ordinary output file as a desktop result, or embed a local preview "
         "path. If a claim has no published result, refer to the Expert report in prose without bracket syntax. "
@@ -609,8 +629,10 @@ async def coordinator(config):
                         "duration_seconds": (r.result or {}).get("duration_seconds"),
                         "error": (r.result or {}).get("error")
                         or ((r.result or {}).get("stderr") or "").strip()[-200:],
+                        "tool_calls": (r.result or {}).get("tool_calls"),
                     } for r in host().store.list_task_code_executions(
-                        workspace_id=c["workspace_id"], task_id=c["task_id"])])
+                        workspace_id=c["workspace_id"], task_id=c["task_id"])],
+                    library=_library_record(tree, report_text or answer))
                 # Keep the bounded digest current; periodic cleanup runs elsewhere.
                 _project().memory.digest(tree.store.path)
             except Exception:  # noqa: BLE001 - analysis data must never fail delivery

@@ -1,14 +1,13 @@
 """Labels (auto, judge, human), review set, judge agreement, code cost, bounded view,
-frontier mode, stale lessons, project policy choice and review protocol requests."""
+frontier mode, the fixed policy, and the project's library as the desktop and the CLI use it."""
 import json
-import os
-from datetime import UTC, datetime, timedelta
+import re
 from types import SimpleNamespace
 
 import pytest
 
 from oceanx.research.labels import auto_label, judge_agreement, judge_labels, review_set
-from oceanx.research.lessons import LessonBook
+from oceanx.research.memory import task_key
 from oceanx.research.outcomes import compute_outcomes, record_task_outcomes
 from oceanx.research.review import ProjectResearch
 from oceanx.research.tree import ResearchTree, frontier
@@ -98,14 +97,21 @@ def test_code_runs_are_attributed_to_the_attempt_window():
     attempts = [{"node_id": "B1.1", "attempt_id": "a", "agent_key": "physics",
                  "report_path": "/r", "started_at": "2026-09-30T01:00", "ended_at": "2026-09-30T02:00"}]
     runs = [{"agent_thread_id": "physics", "state": "succeeded", "started_at": "2026-09-30T01:10",
-             "duration_seconds": 4.0},
+             "duration_seconds": 4.0, "tool_calls": {"weighted_mean": 2}},
             {"agent_thread_id": "physics", "state": "failed", "started_at": "2026-09-30T01:20",
-             "duration_seconds": 1.0, "error": "KeyError: 'thetao'"},
-            {"agent_thread_id": "physics", "state": "succeeded", "started_at": "2026-09-30T03:00"}]
-    outcome = compute_outcomes(doc, [], attempts, final_report="", model_calls=[],
-                               code_executions=runs)["B1.1"]
+             "duration_seconds": 1.0, "error": "KeyError: 'thetao'", "tool_calls": {"weighted_mean": 1}},
+            {"agent_thread_id": "physics", "state": "succeeded", "started_at": "2026-09-30T03:00",
+             "tool_calls": {"rate_per_day": 1}}]
+    outcomes = compute_outcomes(doc, [], attempts, final_report="", model_calls=[], code_executions=runs,
+                                library={"lessons_shown": ["L001"], "lessons_cited": [], "tools_mounted": []})
+    outcome = outcomes["B1.1"]
     assert (outcome["code_runs"], outcome["code_seconds"]) == (2, 5.0)
     assert outcome["code_failures"] == ["KeyError: 'thetao'"]
+    assert outcome["tool_calls"] == {"weighted_mean": 3}  # the helper calls of its own code runs
+    # The task's record counts every run, also one that belongs to no node.
+    assert outcomes["B1"]["library"] == {"lessons_shown": ["L001"], "lessons_cited": [], "tools_mounted": [],
+                                         "tool_calls": {"rate_per_day": 1, "weighted_mean": 3}}
+    assert "library" not in compute_outcomes(doc, [], attempts, final_report="", model_calls=[])["B1"]
 
 
 def test_view_is_bounded_but_full_view_lists_everything(tmp_path):
@@ -129,47 +135,121 @@ def test_any_depth_frontier_lets_deep_follow_ups_run(tmp_path):
     assert "B1.1.1" in frontier({**doc, "frontier_mode": "any_depth"})
 
 
-def test_stale_lessons_return_to_the_owner(tmp_path):
-    from oceanx.research.memory import ResearchMemory
-    book = LessonBook(ResearchMemory(tmp_path / "research"))
-    old = (datetime.now(UTC) - timedelta(days=120)).isoformat()
-    book._save([{"id": "L001", "role": "coordinator", "text": "Test rivals first.",
-                 "applies_when": "Two drivers.", "evidence": {"supporting": [], "counter": []},
-                 "status": "active", "approved_by": "o", "approved_at": old}])
-    [proposal] = book.review_stale()
-    assert book.review_stale() == []  # not duplicated while pending
-    book.decide(proposal["id"], approve=False, reviewer="owner")  # keep it
-    assert book.active()[0]["reviewed_at"] and book.review_stale() == []
-
-
-def test_project_policy_choice_is_a_file_the_owner_sets(tmp_path, monkeypatch):
+def test_the_policy_is_v2_nested_unless_an_experiment_selects_another(tmp_path, monkeypatch):
     monkeypatch.delenv("OCEANX_RESEARCH_POLICY", raising=False)
     project = ProjectResearch(SimpleNamespace(root=tmp_path / ".oceanx"))
-    assert project.policy().name == "v0-coordinator-bfs"
-    project.activate_policy("v1-hypotheses")
-    overview = project.policies()
-    assert (overview["active"], overview["project_choice"]) == ("v1-hypotheses", "v1-hypotheses")
-    assert {p["name"] for p in overview["available"]} == {
-        "v0-coordinator-bfs", "v1-hypotheses", "v2-nested"}
-    with pytest.raises(ValueError):
-        project.activate_policy("v9-invented")
+    assert project.policy().name == "v2-nested"
+    # A choice an older desktop left in the project folder no longer changes anything.
+    (tmp_path / ".oceanx" / "research").mkdir(parents=True)
+    (tmp_path / ".oceanx" / "research" / "active_policy").write_text("v1-hypotheses")
+    assert project.policy().name == "v2-nested"
     monkeypatch.setenv("OCEANX_RESEARCH_POLICY", "v0-coordinator-bfs")
-    assert project.policy().name == "v0-coordinator-bfs"  # the environment overrides
+    assert project.policy().name == "v0-coordinator-bfs"  # an experiment arm
+    monkeypatch.setenv("OCEANX_RESEARCH_POLICY", "v9-invented")
+    with pytest.raises(ValueError):
+        project.policy()
 
 
-def test_review_protocol_requests():
+CODE = "def area_mean(field, lat):\n    weights = np.cos(np.deg2rad(lat))\n    return (field * weights).sum() / weights.sum()\n"
+TOOL = ('def area_mean(field, weights, *, dims):\n    """Mean of a field over named dimensions with explicit '
+        'weights, in the field\'s units."""\n    return (field * weights).sum(dims) / weights.sum(dims)\n')
+
+
+def finished_project(tmp_path, tasks=4):
+    """A project whose tasks each ran one question and wrote the same small function."""
+    project, stores = ProjectResearch(SimpleNamespace(root=tmp_path / ".oceanx")), []
+    for index in range(tasks):
+        root = tmp_path / "tasks" / f"t{index}"
+        tree = ResearchTree(root / "agents" / "coordinator" / "research_tree.json")
+        tree.update([{"action": "add", "target": "ROOT", "question": f"Why is basin {index} warm?"},
+                     {"action": "add", "target": "B1", "question": "Heat budget?", "status": "selected"}])
+        tree.attach_result("B1.1", summary=SUMMARY, agent_key="p", report_path="/r", attempt_id="a")
+        record_task_outcomes(
+            tree, final_report="## Summary\nB1.1 decides it.", model_calls=[],
+            code_executions=[{"agent_thread_id": "p", "state": "succeeded", "tool_calls": {"weighted_mean": 1}}],
+            library={"lessons_shown": [], "lessons_cited": [],
+                     "tools_mounted": [tool["name"] for tool in project.tools.mounted()]})
+        code = root / "agents" / "physics" / ".runtime" / "executions" / "e1" / "code" / "analysis.py"
+        code.parent.mkdir(parents=True)
+        code.write_text(CODE)
+        stores.append(tree.store.path)
+    return project, stores
+
+
+def test_the_periodic_update_counts_calls_and_lets_the_meta_agent_revise_the_library(tmp_path, monkeypatch):
+    from oceanx.research import toolbook
+    monkeypatch.setattr(toolbook, "run_tool_test", lambda module, test: None)  # the sandbox run
+    project, stores = finished_project(tmp_path)
+    keys = [task_key(store) for store in stores]
+    assert project.version() is None and project.skills(research=True)  # nothing learned yet
+    # Without a model: records and call counts only.
+    result = project.update(stores)
+    assert result["consolidation"]["digested"] == 4 and set(result) == {"consolidation", "tool_usage"}
+    assert result["tool_usage"] == {"tasks_counted": 4, "removed": []}
+    used = next(tool for tool in project.overview()["tools"] if tool["name"] == "weighted_mean")
+    assert used["stats"] == {"tasks": 4, "tasks_called": 4, "calls": 4, "idle": 0}
+    prompts = []
+
+    def llm(prompt):
+        prompts.append(prompt)
+        skill = re.search(r'<skill name="([^"]+)">', prompt)
+        if skill is None:  # the tool-writing prompt
+            return json.dumps({"tools": [{"name": "area_mean", "code": TOOL, "replaces": ["area_mean"],
+                                          "test": "assert ao.area_mean is not None", "rationale": "Repeated."}]})
+        if skill.group(1) != "research-trajectory-planning":
+            return "{}"
+        return json.dumps({"add": [{"text": "Ask the heat budget before the eddies.",
+                                    "applies_when": "Both are open.", "supporting": keys[:3],
+                                    "rationale": "B1.1 decided every task."}]})
+
+    reviewed = []
+    result = project.update(stores, llm=llm, reviewer=lambda prompt: reviewed.append(prompt) or json.dumps(
+        {"verdict": "accept", "reason": "Fine."}))
+    assert result["lessons"]["changes"] == [{"lesson": "L001", "change": "added"}]
+    assert result["tools"]["created"] == ["area_mean"] and len(reviewed) == 1
+    assert len(prompts) == 7  # six skills with a lessons region, one tool-writing call
+    # Both are in force for the next task, and the version names both.
+    version = project.version()
+    assert re.fullmatch(r"lessons@[0-9a-f]{12}\+tools@[0-9a-f]{12}", version)
+    skills = project.skills(research=True)
+    assert "(L001)" in skills["research-trajectory-planning"]
+    assert "- `ao.area_mean(field, weights, *, dims)`: Mean of a field" in skills["xarray-array-ops"]
+    assert "def area_mean(field, weights, *, dims)" in project.tools.module_source()
+    script = "xarray-array-ops/scripts/oceanx_array_ops.py"
+    assert set(skills) == {"xarray-array-ops", script, *project.lessons.regions()}
+    assert all("oceanx:" not in text for text in skills.values())
+    # The script the skill links to holds the learned function too, without the call counter.
+    assert "def area_mean(field, weights, *, dims)" in skills[script] and "_oceanx_count_calls" not in skills[script]
+    # A bounded request gets the tools but not the lessons, which come from research trees.
+    bounded = project.skills(research=False)
+    assert "(L001)" not in bounded["research-trajectory-planning"] and "ao.area_mean" in bounded["xarray-array-ops"]
+    # Nothing finished since: the next update asks no model.
+    quiet = project.update(stores, llm=lambda prompt: pytest.fail("the model must not be asked"))
+    assert quiet["lessons"]["new_tasks"] == 0 and "tools" not in quiet
+
+    overview = project.overview()
+    assert overview["version"] == version and len(overview["skills"]) == 6 and len(overview["tools"]) == 9
+    assert [change["tool"] for change in overview["tool_changes"]] == ["area_mean"]
+    # The owner marks either kind right or wrong.
+    project.mark("lesson", "L001", "wrong")
+    project.mark("tool", "area_mean", "wrong")
+    assert project.version() != version and project.lessons.active() == []
+    assert "def area_mean(field, weights, *, dims)" not in project.tools.module_source()
+    with pytest.raises(ValueError, match="kind must be lesson or tool"):
+        project.mark("policy", "v2-nested", "right")
+
+
+def test_library_protocol_requests():
     from pydantic import ValidationError
 
     from oceanx.protocol.v2.models import REQUEST_ADAPTER
     base = {"protocol_version": 2, "request_id": "req_1",
             "context": {"client_id": "c", "session_id": "s", "workspace_id": "ws"}}
-    REQUEST_ADAPTER.validate_python({**base, "type": "research.labels.set", "payload": {
-        "task_id": "t", "node_id": "B1.2", "label": "decision-changing"}})
-    REQUEST_ADAPTER.validate_python({**base, "type": "research.policies.activate",
-                                     "payload": {"name": "v1-hypotheses"}})
+    assert REQUEST_ADAPTER.validate_python(
+        {**base, "type": "research.library.update", "payload": {}}).payload.review is False
     with pytest.raises(ValidationError):
-        REQUEST_ADAPTER.validate_python({**base, "type": "research.policies.activate",
-                                         "payload": {}})
+        REQUEST_ADAPTER.validate_python({**base, "type": "research.library.update", "payload": {"propose": True}})
     with pytest.raises(ValidationError):
-        REQUEST_ADAPTER.validate_python({**base, "type": "research.labels.set", "payload": {
-            "task_id": "t", "node_id": "../B1", "label": "decision-changing"}})
+        REQUEST_ADAPTER.validate_python({**base, "type": "research.library.mark", "payload": {"kind": "tool"}})
+    with pytest.raises(ValidationError):
+        REQUEST_ADAPTER.validate_python({**base, "type": "research.review.get", "payload": {}})

@@ -1,8 +1,9 @@
 """Run OceanX through its production Agent Server path, as one experimental arm.
 
 The scientific query is submitted unchanged, without a research-tree instruction. All model roles use the
-root benchmark.yaml API configuration in this process only. An arm fixes the research policy and an
-optional frozen lesson snapshot; nothing evolves during the run, and every attempt checks that.
+root benchmark.yaml API configuration in this process only. Every arm runs the default research policy
+unless --policy selects another; an arm fixes an optional frozen library (lessons and tools). Nothing is
+learned during the run, and every attempt checks that.
 """
 from __future__ import annotations
 
@@ -12,18 +13,18 @@ import datetime as dt
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
 from oceanx import __version__, batch
 
 _original_interaction_answer = batch.interaction_answer
 REPO = Path(__file__).resolve().parents[2]
-# Set by main() for this process: the frozen lesson snapshot copied into every attempt, if any.
-LESSONS: Path | None = None
+# Set by main() for this process: the frozen library snapshot copied into every attempt, if any.
+LIBRARY: Path | None = None
 
 
 def file_sha256(path: Path) -> str | None:
@@ -38,27 +39,24 @@ def git_identity() -> dict:
     return {"commit": git("rev-parse", "HEAD"), "dirty": bool(status) if status is not None else None}
 
 
-def lessons_version(snapshot: Path) -> str | None:
+def project_library(state: Path):
+    """The lessons and tools of the OceanX state folder an attempt's backend runs on."""
+    from oceanx.research.review import ProjectResearch
+    return ProjectResearch(SimpleNamespace(root=state))
+
+
+def snapshot_version(snapshot: Path) -> str | None:
     """The same content version OceanX records on tree events, whatever the snapshot folder is called."""
     import tempfile
-
-    from oceanx.research.lessons import LessonBook
-    from oceanx.research.memory import ResearchMemory
     with tempfile.TemporaryDirectory() as temporary:
-        (Path(temporary) / "lessons").mkdir()
-        shutil.copyfile(snapshot / "lessons.json", Path(temporary) / "lessons" / "lessons.json")
-        return LessonBook(ResearchMemory(Path(temporary))).version()
+        project = project_library(Path(temporary))
+        project.install(snapshot)
+        return project.version()
 
 
-def install_lessons(attempt: Path) -> dict:
-    """Copy the frozen lessons into the attempt's own state before its backend starts."""
-    from oceanx.research.lessons import LessonBook
-    from oceanx.research.memory import ResearchMemory
-    research = attempt / "state" / "research"
-    (research / "lessons").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(LESSONS / "lessons.json", research / "lessons" / "lessons.json")
-    LessonBook(ResearchMemory(research)).render_skills()
-    return {"snapshot": str(LESSONS), "sha256_before": file_sha256(research / "lessons" / "lessons.json")}
+def install_library(attempt: Path) -> dict:
+    """Copy the frozen lessons and tools into the attempt's own state before its backend starts."""
+    return {"snapshot": str(LIBRARY), "sha256_before": project_library(attempt / "state").install(LIBRARY)}
 
 
 def oceanx_prompt(case):
@@ -85,8 +83,8 @@ class BenchmarkClient(batch.BatchClient):
 
     async def start(self):
         write_arm(self.directory)
-        if LESSONS is not None:
-            batch._write_json(self.directory / "arm_lessons.json", install_lessons(self.directory))
+        if LIBRARY is not None:
+            batch._write_json(self.directory / "arm_library.json", install_library(self.directory))
         self.process = await asyncio.create_subprocess_exec(
             sys.executable, str(Path(__file__).resolve()), "--backend",
             str(self.directory.resolve()),
@@ -112,11 +110,11 @@ class BenchmarkClient(batch.BatchClient):
 
     async def close(self):
         await super().close()
-        record = self.directory / "arm_lessons.json"
-        if LESSONS is not None and record.exists():
-            # Proof that the lesson set did not change while this attempt ran.
+        record = self.directory / "arm_library.json"
+        if LIBRARY is not None and record.exists():
+            # Proof that the lessons and tools did not change while this attempt ran.
             saved = json.loads(record.read_text())
-            after = file_sha256(self.directory / "state" / "research" / "lessons" / "lessons.json")
+            after = project_library(self.directory / "state").library_hashes()
             batch._write_json(record, {**saved, "sha256_after": after, "unchanged": after == saved["sha256_before"]})
 
 
@@ -138,10 +136,14 @@ def library_versions() -> dict:
 
 
 def arm_record(args) -> dict:
-    return {"arm": args.arm, "policy": args.policy, "oceanx_version": __version__, **git_identity(),
+    from oceanx.research.policy import active_policy
+    from oceanx.research.review import LIBRARY_FILES
+    # The policy every backend subprocess will run: --policy if given, otherwise the default.
+    return {"arm": args.arm, "policy": active_policy().name, "oceanx_version": __version__, **git_identity(),
             "libraries": library_versions(),
-            "lessons": None if LESSONS is None else {"snapshot": str(LESSONS), "version": lessons_version(LESSONS),
-                                                    "sha256": file_sha256(LESSONS / "lessons.json")},
+            "library": None if LIBRARY is None else {
+                "snapshot": str(LIBRARY), "version": snapshot_version(LIBRARY),
+                "sha256": {name: file_sha256(LIBRARY / name) for name in LIBRARY_FILES}},
             "queries": str(args.queries) if args.queries else None,
             "max_parallel_experts": os.environ.get("OCEANX_MAX_PARALLEL_EXPERTS", "2")}
 
@@ -151,7 +153,7 @@ def check_arm(output: Path) -> None:
     path = output / "arm.json"
     if path.exists():
         prior = json.loads(path.read_text())
-        if {k: prior.get(k) for k in ("arm", "policy", "lessons")} != {k: ARM[k] for k in ("arm", "policy", "lessons")}:
+        if {k: prior.get(k) for k in ("arm", "policy", "library")} != {k: ARM[k] for k in ("arm", "policy", "library")}:
             raise SystemExit("ERROR: this output folder belongs to a different arm; use a new --output")
 
 
@@ -182,20 +184,25 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--config", type=Path, help="Root benchmark.yaml by default")
-    parser.add_argument("--arm", default="default", help="Arm label recorded in arm.json, e.g. A_v0")
-    parser.add_argument("--policy", help="Research policy for every case, e.g. v0-coordinator-bfs or v2-nested")
-    parser.add_argument("--lessons", type=Path,
-                        help="Frozen lesson snapshot folder containing lessons.json; copied into every attempt")
+    parser.add_argument("--arm", default="default", help="Arm label recorded in arm.json, e.g. B or C1")
+    parser.add_argument("--policy", help="Research policy for every case; the default (v2-nested) when omitted")
+    parser.add_argument("--library", "--lessons", dest="library", type=Path,
+                        help="Frozen library snapshot (lessons.json and tools.json, made by "
+                             "research_cli.py snapshot); copied into every attempt")
     args = parser.parse_args()
-    global LESSONS
+    from oceanx.research.review import LIBRARY_FILES, LIBRARY_FROZEN_ENV
+    global LIBRARY
+    # Nothing is learned while a benchmark runs: no attempt reviews its lessons or counts tool calls
+    # into its library. Learning is a separate step on the evolution project (research_cli.py).
+    os.environ[LIBRARY_FROZEN_ENV] = "1"  # inherited by every backend subprocess
     if args.policy:
         from oceanx.research.policy import POLICY_ENV, find_policy
         find_policy(args.policy)  # fail before any model call on an unknown name
         os.environ[POLICY_ENV] = args.policy  # inherited by every backend subprocess
-    if args.lessons:
-        LESSONS = args.lessons.expanduser().resolve()
-        if not (LESSONS / "lessons.json").is_file():
-            parser.error("--lessons must be a folder containing lessons.json")
+    if args.library:
+        LIBRARY = args.library.expanduser().resolve()
+        if not any((LIBRARY / name).is_file() for name in LIBRARY_FILES):
+            parser.error("--library must be a folder containing lessons.json or tools.json")
     ARM.update(arm_record(args))
     check_arm(args.output.expanduser().resolve())
     from benchmark_config import DEFAULT_CONFIG, load_config, preflight

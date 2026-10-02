@@ -132,5 +132,8 @@ focused correction or the evidence needed to settle them. Explain a no-effect ju
 claim's actual precision and level. Preserve unresolved interpretation limits; partial findings support only the checks actually performed.
 The existence of additional possible checks alone is not a reason to withhold supported findings.
 
+<!-- oceanx:lessons max=6 for="expert" about="physical method assumptions (budgets, transport, stratification, mixing) that did not hold, and checks that caught a physically wrong result" -->
+<!-- /oceanx:lessons -->
+
 ## relevant_references
 `references/review/physical-consistency.md`, `references/data/common-variables-and-units.md`, `references/methods/transport.md`.

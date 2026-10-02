@@ -139,10 +139,11 @@ def test_cached_corrupt_file_fails_without_redownload(tmp_path, monkeypatch):
 
 def test_catalogue_groups_and_coverage():
     m = all_data.load_manifest()
-    assert len(m["tasks"]) == 54 and len(m["groups"]) == 18
+    assert len(m["tasks"]) == 54 and len(m["groups"]) == 16
     assert {g["adapter"] for g in m["groups"].values()} == {"cmems", "era5", "erddap", "ncei", "private"}
     assert all(not m["groups"][g].get("evaluator_only") for groups in m["tasks"].values() for g in groups)
-    assert m["evaluator_groups"]["Q11"] == ["X_HEAT"]
+    assert m["evaluator_groups"] == {}
+    assert not {"X_HEAT", "X_OXY"} & m["groups"].keys()
     assert not all_data.coverage(m, {})["all_numerical_inputs_complete"]
     reports = {key: {"complete": True, "group_sha256": down.fingerprint(g)} for key, g in m["groups"].items()}
     status = all_data.coverage(m, reports)
@@ -154,9 +155,11 @@ def test_catalogue_groups_and_coverage():
     assert status["tasks"]["Q01"]["numerical_inputs_complete"]
     reports["P_CCS_BGC"]["group_sha256"] = "old"
     assert not all_data.coverage(m, reports)["tasks"]["E03"]["numerical_inputs_complete"]
-    reports["X_HEAT"]["complete"] = False
     status = all_data.coverage(m, reports)
-    assert status["tasks"]["Q11"]["missing_evaluator_groups"] == ["X_HEAT"]
+    for task in ["Q05", "Q11", "Q12", "Q13"]:
+        assert status["tasks"][task]["missing_evaluator_groups"] == []
+        # No extra native-budget archive is needed. Reference freezing is separate.
+        assert status["tasks"][task]["evaluator_inputs_complete"]
 
 
 def test_evaluator_groups_are_never_agent_inputs(tmp_path, monkeypatch):
@@ -166,7 +169,8 @@ def test_evaluator_groups_are_never_agent_inputs(tmp_path, monkeypatch):
     for binding in all_data.bindings(m).values():
         assert not any(p.startswith("_evaluator_only") or Path(p).name in hidden_variables
                        for p in binding["datasets"])
-    m["tasks"]["Q11"] = m["tasks"]["Q11"] + ["X_HEAT"]
+    m["groups"]["TEST_ORACLE"] = {"evaluator_only": True}
+    m["tasks"]["Q11"] = m["tasks"]["Q11"] + ["TEST_ORACLE"]
     leaked = tmp_path / "data_manifest.json"
     leaked.write_text(json.dumps(m))
     monkeypatch.setattr(all_data, "MANIFEST", leaked)

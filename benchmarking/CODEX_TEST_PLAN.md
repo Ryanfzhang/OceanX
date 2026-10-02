@@ -1,17 +1,17 @@
 # Benchmark test plan for Codex
 
-You are the benchmark tester and the single judge for the OceanX benchmark (catalogue `2026-10-01-v6`). This document lists every test
+You are the benchmark tester and the single judge for the OceanX benchmark (catalogue `2026-10-02-v7`). This document lists every test
 to execute, in order, with commands, pass criteria and what to report. Background:
 - `DESIGN.md`: what the questions are;
 - `DATA.md`: the data;
-- `EVALUATION.md`: the process, labels and lessons;
+- `EVALUATION.md`: the process, labels, and how lessons and tools are learned;
 - `evaluation/CODEX_JUDGE.md`: how to score.
 
 ## Rules
 
 1. **Server only.** Work on the Linux server in the `oceanx-bench` conda environment, from the repository
    root. Never on macOS.
-2. **Do not change OceanX** (`src/`) or any frozen file (frozen rubrics, the pre-registration, lesson
+2. **Do not change OceanX** (`src/`) or any frozen file (frozen rubrics, the pre-registration, library
    snapshots L1 and L2). If a benchmarking script needs a fix, make it on a branch, explain it in your report, and
    wait for the owner before using it in the test phase.
 3. **Keep evaluator material away from agents.** Never put rubrics, references, answer-key data or score files
@@ -29,7 +29,7 @@ Variables used below (set them in your shell):
 export DATA_ROOT=/import/home4/share/mafzhang
 export RUNS_ROOT=$HOME/oceanx-bench/runs
 export EVAL_ROOT=$HOME/oceanx-bench/eval
-export EXP=test-v6-2026-10                  # experiment name; must match the pre-registration
+export EXP=test-v7-2026-10                  # experiment name; must match the pre-registration
 ```
 
 ## T0. Environment and repository
@@ -68,9 +68,8 @@ Report the commit. Every arm of the experiment must use this commit.
      --groups P_TAS_PHY P_TAS_SURF P_TAS_BGC
    ```
 2. **Owner step:** stage CMOMS as `DATA.md` "Staging CMOMS" describes, including `CMOMS/grid/README.md`.
-   When granted, also stage:
-   - the heat budget under `_evaluator_only/CMOMS_DIA/`;
-   - the production and carbon diagnostics for Q14 and Q16 under `CMOMS_DIA/`.
+   When granted, also stage the production and carbon diagnostics for Q14 and Q16 under `CMOMS_DIA/`.
+   No heat or oxygen budget archive is needed (catalogue v7).
 3. Check the staging and re-verify the downloads:
 
    ```bash
@@ -85,7 +84,7 @@ Pass:
 - `coverage.json` shows `numerical_inputs_complete: true` for all 54 tasks. Q14 and Q16 stay incomplete
   until their requested diagnostics are staged; report this, and run the other tasks only if the owner
   agrees;
-- evaluator inputs are complete for Q11 and Q12 (Q05 and Q13 may lack the optional X_OXY);
+- Q05 and Q11-Q13 need no extra native-budget groups; their independent core-field references and tolerances are frozen before judging (coverage alone does not establish reference readiness);
 - `verify` passes;
 - CMOMS sampling is daily, or the owner has been told.
 
@@ -127,7 +126,7 @@ EOF
 ```
 
 Negative checks. Each must fail with an error:
-- a `--bindings` file that binds `$DATA_ROOT/_evaluator_only/CMOMS_DIA/temp_rate`;
+- a `--bindings` file that binds a synthetic private reference under `$DATA_ROOT/_evaluator_only/reference`;
 - one that binds `benchmarking/tasks/Q11/evaluator`;
 - writing the output inside `$DATA_ROOT`.
 
@@ -145,24 +144,33 @@ its own arm folder:
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --tasks Q05 Q27 \
   --output $RUNS_ROOT/smoke/inputs/test.jsonl
 python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/smoke/inputs/test.jsonl \
-  --output $RUNS_ROOT/smoke/arm-B --arm B --policy v2-nested
+  --output $RUNS_ROOT/smoke/arm-B --arm B
 ```
 
-Also check the lesson injection on one short evolution question, with a throwaway snapshot:
+Also check that a library reaches the agents, on one short evolution question, with a throwaway snapshot
+(two fixture lessons and one fixture helper function, `anomaly`):
 
 ```bash
-mkdir -p $RUNS_ROOT/smoke/L0 && cp benchmarking/tests/fixtures/lessons.json $RUNS_ROOT/smoke/L0/
+mkdir -p $RUNS_ROOT/smoke/library-fixture
+cp benchmarking/tests/fixtures/lessons.json benchmarking/tests/fixtures/tools.json $RUNS_ROOT/smoke/library-fixture/
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution --tasks E10 \
   --output $RUNS_ROOT/smoke/inputs/evolution.jsonl
 python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/smoke/inputs/evolution.jsonl \
-  --output $RUNS_ROOT/smoke/arm-C --arm C-smoke --policy v2-nested --lessons $RUNS_ROOT/smoke/L0
+  --output $RUNS_ROOT/smoke/arm-C --arm C-smoke --library $RUNS_ROOT/smoke/library-fixture
+A=$(ls -d $RUNS_ROOT/smoke/arm-C/E10/attempt-* | tail -1)
+cat $A/arm_library.json
+grep -c "(L001)" $A/state/research/lessons/skills/research-trajectory-planning/SKILL.md
+grep -l "ao.anomaly" $(find $A/workspace -path "*skills/xarray-array-ops/SKILL.md") | head -3
+grep -l "def anomaly" $(find $A/workspace -path "*executions/*/code/oceanx_array_ops.py") | head -3
 ```
 
 Pass:
 - both attempts complete;
-- `arm.json` shows the commit, policy and parallel-Expert limit;
-- the C-smoke attempt has `arm_lessons.json` with `unchanged: true`, and its state folder holds
-  `research/lessons/skills/research-trajectory-planning/SKILL.md` with the fixture lesson written in;
+- `arm.json` shows the commit, the policy `v2-nested` and the parallel-Expert limit, and for arm C-smoke
+  the library version;
+- the C-smoke attempt has `arm_library.json` with `unchanged: true`;
+- the fixture lesson `(L001)` is in the planning skill, an Expert's copy of `xarray-array-ops` lists
+  `ao.anomaly`, and the helper module of a code run defines `anomaly`;
 - the answers cite only supplied data.
 
 Then check that each run kept everything, and that the process measures can be read:
@@ -183,8 +191,8 @@ report path.
 Report:
 - wall time, tokens and failed code runs per attempt. These calibrate the time budget: the time limit must
   be at least 1.5 times the longest run;
-- from `process.md`: whether the Coordinator opened its planning skill in each run, and how many questions'
-  Experts opened an analysis skill;
+- from `process.md`: whether the Coordinator opened its planning skill in each run, how many questions'
+  Experts opened an analysis skill, the share of code runs that failed, and the helper calls;
 - from `inventory.md`: tokens, model calls and disk use per attempt, and from `run_record.json` how much
   of the disk use is scratch arrays, to plan storage.
 
@@ -202,12 +210,13 @@ For every test task, follow `EVALUATION.md` "References and frozen rubrics":
    and `references_sha256`.
 
 Order:
-- first Q11 and Q12 (heat-budget answer keys);
-- then the ten paper questions;
+- first Q05 and Q11-Q13, whose references are independent diagnostics computed from the core fields;
+- then the other paper questions;
 - then the rest.
 
-For the heat-budget answer keys, confirm the budget closes: rate equals the sum of the terms, within 5% over
-the region and period used.
+The references of Q05 and Q11-Q13 are not a closed heat or oxygen budget. Record which terms they resolve
+(for example horizontal advection) and which stay unresolved, and never label a residual as a measured
+process.
 
 Paper questions:
 - Q01, Q03, Q06 and Q09 were checked from the abstract only. With the PDF from the owner, confirm each
@@ -222,8 +231,7 @@ Paper questions:
 open problem and one disagreement question.
 
 Pass:
-- 30 frozen rubrics (28 while Q14 and Q16 wait for their diagnostics), each with references and a closed
-  budget where one is used;
+- 30 frozen rubrics (28 while Q14 and Q16 wait for their diagnostics), each with references;
 - the owner's spot-check accepted.
 
 ## T5. Noise pilot
@@ -234,8 +242,8 @@ repeats each:
 ```bash
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite test --tasks Q05 Q12 Q27 \
   --output $RUNS_ROOT/pilot/inputs/pilot.jsonl
-python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/pilot/inputs/pilot.jsonl --output $RUNS_ROOT/pilot/r1/arm-B --arm B --policy v2-nested
-python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/pilot/inputs/pilot.jsonl --output $RUNS_ROOT/pilot/r2/arm-B --arm B --policy v2-nested
+python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/pilot/inputs/pilot.jsonl --output $RUNS_ROOT/pilot/r1/arm-B --arm B
+python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/pilot/inputs/pilot.jsonl --output $RUNS_ROOT/pilot/r2/arm-B --arm B
 ```
 
 Blind both repeats, judge them (T6 calibration happens here too), and report the score difference between
@@ -256,98 +264,121 @@ Pass:
 
 Otherwise, tighten your reading of the anchors, write down how, and repeat.
 
-## T7. Lesson pilot (gate before the evolution rounds)
+## T7. Learning pilot (gate before the evolution rounds)
 
-Three questions of set A, one run each, without lessons. They use three different data groups and are
-three different questions, the least the meta-agent needs to propose a lesson.
+Three questions of set A, one run each, with nothing learned. They use three different data groups and are
+three different questions, the least the meta-agent needs to add a lesson or a tool.
 
 ```bash
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution --tasks E01 E05 E08 \
-  --output $RUNS_ROOT/lesson-pilot/inputs/pilot.jsonl
-python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/lesson-pilot/inputs/pilot.jsonl \
-  --output $RUNS_ROOT/lesson-pilot/runs/arm-E1 --arm E1 --policy v2-nested
-for tree in $(find $RUNS_ROOT/lesson-pilot/runs -name research_tree.sqlite3); do
+  --output $RUNS_ROOT/learning-pilot/inputs/pilot.jsonl
+python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/learning-pilot/inputs/pilot.jsonl \
+  --output $RUNS_ROOT/learning-pilot/runs/arm-E1 --arm E1
+for tree in $(find $RUNS_ROOT/learning-pilot/runs -name research_tree.sqlite3); do
   python benchmarking/server/research_cli.py judge-labels --tree "$tree"
 done
-python benchmarking/server/research_cli.py consolidate --project $RUNS_ROOT/lesson-pilot/runs --propose
-python benchmarking/server/research_cli.py lessons --project $RUNS_ROOT/lesson-pilot/runs
-python benchmarking/evaluation/evaluate.py process --runs $RUNS_ROOT/lesson-pilot/runs/arm-E1 \
-  --out $RUNS_ROOT/lesson-pilot/report
+python benchmarking/evaluation/evaluate.py process --runs $RUNS_ROOT/learning-pilot/runs/arm-E1 \
+  --out $RUNS_ROOT/learning-pilot/report
+python benchmarking/server/research_cli.py consolidate --project $RUNS_ROOT/learning-pilot/runs \
+  --review --retention-days 3650 | tee $RUNS_ROOT/learning-pilot/report/review.json
+python benchmarking/server/research_cli.py library --project $RUNS_ROOT/learning-pilot/runs \
+  > $RUNS_ROOT/learning-pilot/report/library.json
 ```
 
-Send the owner the proposals in full (text, condition, skill, section and rationale) and `process.md`.
+`review.json` says what the meta-agent changed and what the rules refused, with the reason for each
+refusal. `library.json` lists every lesson (text, condition, skill, evidence) and every tool (signature,
+call counts, and for a learned one its code and test under `.oceanx/research/tools/learned/`).
 
-**Owner step:** judge the proposals. This is a check of the meta-agent, not a source of lessons: the pilot
-folder is separate from the experiment and nothing from it is frozen.
+Send the owner `review.json`, `library.json` and `process.md`.
+
+**Owner step:** judge what the meta-agent wrote. This is a check of the meta-agent, not a source of the
+library: the pilot folder is separate from the experiment and nothing from it is frozen.
 
 Pass:
 - the three runs finish inside the time limit;
 - the Coordinator opened its planning skill in at least two of the three runs;
-- at least one Coordinator proposal is a research-tree decision that holds for all three questions and is
-  not already in the skill, in the owner's judgement.
+- at least one lesson is, in the owner's judgement, a research-tree or analysis decision that holds for all
+  three questions and is not already in its skill;
+- every learned tool passed its test in the sandbox (`review.json` lists the refused ones and why), and
+  the owner finds no scientific error in a learned tool's code.
 
-If the gate fails, stop and report. The two evolution rounds and the two lesson arms would test nothing.
+Report also how many helper calls each run made (`process.md`). If no run called a helper function, tell
+the owner before the evolution rounds: the tools would then be compared on zero use.
+
+If the gate fails, stop and report. The two evolution rounds and the two library arms would test nothing.
 
 ## T8. Evolution round 1: set A yields L1
 
 ```bash
 for r in 1 2; do
   python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/$EXP/inputs/evolution-A-r$r.jsonl \
-    --output $RUNS_ROOT/$EXP/evolution/A/r$r/arm-E1 --arm E1 --policy v2-nested
+    --output $RUNS_ROOT/$EXP/evolution/A/r$r/arm-E1 --arm E1
 done
 for tree in $(find $RUNS_ROOT/$EXP/evolution/A -name research_tree.sqlite3); do
   python benchmarking/server/research_cli.py judge-labels --tree "$tree"
 done
 ```
 
-**Owner step:** label each run's review set (`EVALUATION.md`, "User labels"). Then:
-
-```bash
-python benchmarking/server/research_cli.py consolidate --project $RUNS_ROOT/$EXP/evolution --propose
-python benchmarking/server/research_cli.py lessons --project $RUNS_ROOT/$EXP/evolution
-python benchmarking/server/research_cli.py judge-agreement --runs $RUNS_ROOT/$EXP/evolution
-```
-
-Each run proposes at most three lessons per role (Coordinator: research-tree decisions; Experts: analysis),
-each naming the skill and section it would be written into. Run `consolidate --propose` up to three times
-if fewer than three proposals per role survive validation.
-
-**Owner step:** approve or reject each proposal with `lesson-decide`.
-
-Freeze the snapshot:
-
-```bash
-mkdir -p $EVAL_ROOT/lessons/L1
-cp $RUNS_ROOT/$EXP/evolution/.oceanx/research/lessons/lessons.json $EVAL_ROOT/lessons/L1/
-sha256sum $EVAL_ROOT/lessons/L1/lessons.json > $EVAL_ROOT/lessons/L1/SHA256
-chmod -R a-w $EVAL_ROOT/lessons/L1
-```
-
-Check that the round kept everything before it is mined:
+Check that the round kept everything before it is learned from:
 
 ```bash
 python benchmarking/evaluation/evaluate.py inventory --runs $RUNS_ROOT/$EXP/evolution/A/r*/arm-E1 \
   --out $EVAL_ROOT/$EXP/report/evolution-A
 ```
 
+Then let the meta-agent review the round, once:
+
+```bash
+python benchmarking/server/research_cli.py consolidate --project $RUNS_ROOT/$EXP/evolution \
+  --review --retention-days 3650 | tee $EVAL_ROOT/$EXP/report/evolution-A/review.json
+python benchmarking/server/research_cli.py library --project $RUNS_ROOT/$EXP/evolution \
+  > $EVAL_ROOT/$EXP/report/evolution-A/library.json
+```
+
+- `--retention-days 3650` keeps the attempt folders whole. Never run `consolidate` without it in this
+  experiment: with the default, tree stores older than 30 days are moved out of their attempt folders.
+- Run the review once per round. Repeat it with `--force` only if it stopped on a model or network error.
+- What the meta-agent decides takes effect at once: there is no approval step. It adds at most two lessons
+  per skill and three tools per review.
+
+Send the owner `review.json` and `library.json`. Search the library for the test-suite regions and report
+any hit:
+
+```bash
+grep -n -i -E "south china sea|gulf of mexico|east china sea|arabian sea" $EVAL_ROOT/$EXP/report/evolution-A/library.json
+```
+
+**Owner step (optional):** mark a lesson or tool wrong, or right, with `research_cli.py mark` (`EVALUATION.md`,
+"How OceanX learns"). The owner may also label tree nodes; a human label outranks the model's.
+
+Freeze the snapshot:
+
+```bash
+python benchmarking/server/research_cli.py snapshot --project $RUNS_ROOT/$EXP/evolution \
+  --output $EVAL_ROOT/library/L1
+chmod -R a-w $EVAL_ROOT/library/L1
+```
+
 Pass:
 - 24 attempts, or failures reported;
 - `inventory` shows nothing missing for the completed attempts;
-- labels done;
-- L1 frozen with at least one approved lesson.
+- model labels done;
+- L1 frozen, with at least one lesson or one learned tool, and nothing in it names a test-suite region.
 
-If no lesson is approved, report it: the lesson comparisons have nothing to test, and round 2 is skipped.
+If the meta-agent added nothing, report it: the library comparisons have nothing to test, and round 2 is
+skipped.
 
 ## T9. Evolution round 2: set B, run with L1, yields L2
 
-Decide no proposal while these runs are going: the project's lessons must stay equal to L1.
+Leave the evolution project alone while these runs are going (no `consolidate`, no `mark`): its library
+must stay equal to L1.
 
 ```bash
 for r in 1 2; do
   python benchmarking/server/run_oceanx.py --queries $RUNS_ROOT/$EXP/inputs/evolution-B-r$r.jsonl \
-    --output $RUNS_ROOT/$EXP/evolution/B/r$r/arm-E2 --arm E2 --policy v2-nested --lessons $EVAL_ROOT/lessons/L1
+    --output $RUNS_ROOT/$EXP/evolution/B/r$r/arm-E2 --arm E2 --library $EVAL_ROOT/library/L1
 done
-python benchmarking/evaluation/evaluate.py lessons-check --runs $RUNS_ROOT/$EXP/evolution/B
+python benchmarking/evaluation/evaluate.py library-check --runs $RUNS_ROOT/$EXP/evolution/B
 python benchmarking/evaluation/evaluate.py inventory --runs $RUNS_ROOT/$EXP/evolution/B/r*/arm-E2 \
   --out $EVAL_ROOT/$EXP/report/evolution-B
 for tree in $(find $RUNS_ROOT/$EXP/evolution/B -name research_tree.sqlite3); do
@@ -359,31 +390,34 @@ python benchmarking/evaluation/evaluate.py process \
 ```
 
 The process report here compares different questions in different regions, so it is descriptive only. Read
-one row in it: whether the skills holding L1 were opened in arm E2.
+three things in it for arm E2: whether the skills holding L1 lessons were opened, how many lessons the runs
+named, and how many helper calls they made.
 
-**Owner step:** label the review sets of the set B runs. Then mine and review as in T8, with the same
-`consolidate --project $RUNS_ROOT/$EXP/evolution --propose` command. The meta-agent now reads both sets and
-the skills with L1 written in, and may propose retiring an L1 lesson.
-
-**Owner step:** approve or reject each proposal with `lesson-decide`.
-
-Freeze the snapshot:
+Then review, read and freeze as in T8, with the same commands and `evolution-B` as the report folder. The
+meta-agent now reads both sets. It keeps, revises or retires each L1 lesson and may add new ones, and the
+call counts of the set B runs decide which tools stay on the skill's list.
 
 ```bash
-mkdir -p $EVAL_ROOT/lessons/L2
-cp $RUNS_ROOT/$EXP/evolution/.oceanx/research/lessons/lessons.json $EVAL_ROOT/lessons/L2/
-sha256sum $EVAL_ROOT/lessons/L2/lessons.json > $EVAL_ROOT/lessons/L2/SHA256
-chmod -R a-w $EVAL_ROOT/lessons/L2
-cmp $EVAL_ROOT/lessons/L1/lessons.json $EVAL_ROOT/lessons/L2/lessons.json && echo "L2 equals L1"
+python benchmarking/server/research_cli.py consolidate --project $RUNS_ROOT/$EXP/evolution \
+  --review --retention-days 3650 | tee $EVAL_ROOT/$EXP/report/evolution-B/review.json
+python benchmarking/server/research_cli.py library --project $RUNS_ROOT/$EXP/evolution \
+  > $EVAL_ROOT/$EXP/report/evolution-B/library.json
+python benchmarking/server/research_cli.py snapshot --project $RUNS_ROOT/$EXP/evolution \
+  --output $EVAL_ROOT/library/L2
+chmod -R a-w $EVAL_ROOT/library/L2
+grep '"version"' $EVAL_ROOT/library/L1/snapshot.json $EVAL_ROOT/library/L2/snapshot.json
 ```
 
-Pass:
-- 24 attempts, or failures reported, and `lessons-check` reports nothing changed;
-- `inventory` shows nothing missing for the completed attempts;
-- labels done;
-- L2 frozen.
+**Owner step (optional):** mark items before the snapshot is frozen, as in T8.
 
-If L2 equals L1, report it and leave arm C2 and the two L2 comparisons out of the pre-registration.
+Pass:
+- 24 attempts, or failures reported, and `library-check` reports nothing changed;
+- `inventory` shows nothing missing for the completed attempts;
+- model labels done;
+- L2 frozen, and nothing in it names a test-suite region.
+
+If the two versions are equal, L2 equals L1: report it and leave arm C2 and the two L2 comparisons out of
+the pre-registration.
 
 ## T10. Pre-registration
 
@@ -410,16 +444,15 @@ Pass: the `.sha256` file exists. From now on no frozen file changes.
 
 ## T11. Test phase
 
-For each repeat `r`, start the four arms in parallel on the same shuffled JSONL:
+For each repeat `r`, start the three arms in parallel on the same shuffled JSONL:
 
 ```bash
 J=$RUNS_ROOT/$EXP/inputs/test-r$r.jsonl
-python benchmarking/server/run_oceanx.py --queries $J --output $RUNS_ROOT/$EXP/test/r$r/arm-A --arm A --policy v0-coordinator-bfs &
-python benchmarking/server/run_oceanx.py --queries $J --output $RUNS_ROOT/$EXP/test/r$r/arm-B --arm B --policy v2-nested &
-python benchmarking/server/run_oceanx.py --queries $J --output $RUNS_ROOT/$EXP/test/r$r/arm-C1 --arm C1 --policy v2-nested --lessons $EVAL_ROOT/lessons/L1 &
-python benchmarking/server/run_oceanx.py --queries $J --output $RUNS_ROOT/$EXP/test/r$r/arm-C2 --arm C2 --policy v2-nested --lessons $EVAL_ROOT/lessons/L2 &
+python benchmarking/server/run_oceanx.py --queries $J --output $RUNS_ROOT/$EXP/test/r$r/arm-B --arm B &
+python benchmarking/server/run_oceanx.py --queries $J --output $RUNS_ROOT/$EXP/test/r$r/arm-C1 --arm C1 --library $EVAL_ROOT/library/L1 &
+python benchmarking/server/run_oceanx.py --queries $J --output $RUNS_ROOT/$EXP/test/r$r/arm-C2 --arm C2 --library $EVAL_ROOT/library/L2 &
 wait
-python benchmarking/evaluation/evaluate.py lessons-check --runs $RUNS_ROOT/$EXP/test
+python benchmarking/evaluation/evaluate.py library-check --runs $RUNS_ROOT/$EXP/test
 python benchmarking/evaluation/evaluate.py inventory --runs $RUNS_ROOT/$EXP/test/r$r/arm-* \
   --out $EVAL_ROOT/$EXP/report/test-r$r
 ```
@@ -429,9 +462,12 @@ attempts in one arm fail for the same infrastructure reason, stop and report.
 
 Pass:
 - every attempt has a `result.json`;
-- every `arm.json` has the same commit;
-- `lessons-check` reports nothing changed;
+- every `arm.json` has the same commit and the policy `v2-nested`;
+- `library-check` reports nothing changed;
 - `inventory` shows nothing missing for the completed attempts.
+
+Do not run `consolidate` on `$RUNS_ROOT/$EXP/test` or on any folder that contains it: the library must come
+from evolution records only.
 
 Never prune an attempt folder: its `state/` holds the token ledger and the agents' conversations. If the
 disk runs short, report the scratch share that `inventory` printed and let the owner decide; delete nothing
@@ -476,9 +512,10 @@ python benchmarking/evaluation/evaluate.py process --runs $RUNS_ROOT/$EXP/test/r
 Send the owner:
 - `report.md`, `process.md` and the `inventory.md` of each repeat;
 - the differences by question type and by data access (private CMOMS, public);
-- for each lesson comparison, the score result and the process result side by side, with the spread
+- for each library comparison, the score result and the process result side by side, with the spread
   between control repeats;
-- how often the skills holding lessons were opened in arms C1 and C2;
+- for arms B, C1 and C2: how often the skills holding lessons were opened, how many lessons the runs named,
+  the helper calls and the share of code runs that failed;
 - the five largest per-task differences in each direction, with one line on why;
 - failures by arm;
 - total cost.
@@ -490,9 +527,9 @@ Do not change any rule after seeing the results. Proposals for the next experime
 | Phase | Attempts | Estimate |
 |---|---|---|
 | T3-T5 smoke and pilot | 9 | half a day |
-| T7 lesson pilot | 3 | half a day, plus the owner's review |
-| T8 evolution round 1 | 24 | 1-2 days, plus the owner's labelling and approval |
-| T9 evolution round 2 | 24 | 1-2 days, plus the owner's labelling and approval |
-| T11 test (4 arms x 30 x repeats) | 120 per repeat | 2-4 days per repeat with four parallel arms |
+| T7 learning pilot | 3 | half a day, plus the owner's review |
+| T8 evolution round 1 | 24 | 1-2 days; the meta-agent's review is at most ten model calls |
+| T9 evolution round 2 | 24 | 1-2 days; the meta-agent's review is at most ten model calls |
+| T11 test (3 arms x 30 x repeats) | 90 per repeat | 2-4 days per repeat with the three arms in parallel |
 | T4 references | - | several days of evaluator work; can overlap T8 and T9 |
-| T12 judging | 120 per repeat | 1-2 days per repeat, plus the judge labels |
+| T12 judging | 90 per repeat | 1-2 days per repeat, plus the judge labels |

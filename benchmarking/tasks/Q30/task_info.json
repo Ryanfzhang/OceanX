@@ -6,7 +6,7 @@
   "topic": "ocean fronts",
   "title": "Changes in East China Sea temperature fronts",
   "query": "Using the supplied OISST daily sea surface temperature for 1982-2023 over the East China Sea, map the main sea surface temperature fronts, determine how their strength, position and seasonality have changed over the record, and explain the changes.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v3",
   "region": {
     "code": "ECS",

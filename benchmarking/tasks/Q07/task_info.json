@@ -5,7 +5,7 @@
   "topic": "hydrography",
   "title": "Hydrography of the deep Gulf of Mexico, 2011-2015",
   "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, test the following findings of Hamilton et al. (2018, Journal of Physical Oceanography, doi:10.1175/JPO-D-17-0205.1), who used 706 profiles from 14 autonomous floats in the deep Gulf between July 2011 and August 2015: (1) Subtropical Underwater, Antarctic Intermediate Water and North Atlantic Deep Water show east-west gradients consistent with their sources in the Loop Current and the Yucatan Channel; (2) the deep Gulf has a two-layer structure, with isotherms deeper in the Loop Current and its eddies and shallower in cyclones, as classified by sea surface height; (3) the mean seasonal mixed-layer depth has a maximum of about 60 m in January and a minimum of about 20 m in June-July; (4) basin-mean steric height from 0-50 m dynamic height and sea surface height have a seasonal range of about 12 cm, with significant interannual variability; (5) the translation of Loop Current eddies across the western basin produces a region of low, homogeneous potential vorticity over its deepest part. Use July 2011-August 2015. Give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper's float observations.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "GULF",

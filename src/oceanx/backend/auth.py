@@ -57,13 +57,9 @@ REQUEST_CAPABILITIES = {
     "portable.export.create": "workspace.write",
     "disclosure.policy.get": "workspace.read",
     "disclosure.policy.set": "workspace.write",
-    "research.lessons.list": "workspace.read",
-    "research.lessons.decide": "workspace.write",
-    "research.lessons.retire": "workspace.write",
-    "research.lessons.consolidate": "workspace.write",
-    "research.review.get": "workspace.read",
-    "research.labels.set": "workspace.write",
-    "research.policies.activate": "workspace.write",
+    "research.library.get": "workspace.read",
+    "research.library.update": "workspace.write",
+    "research.library.mark": "workspace.write",
     "system.shutdown": "system.shutdown",
 }
 

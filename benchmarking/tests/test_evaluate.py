@@ -27,7 +27,7 @@ def make_arm(root, arm, policy, scores_by_task):
         status = "completed" if scores_by_task[task] is not None else "failed"
         (attempt / "result.json").write_text(json.dumps({"status": status, "elapsed_seconds": 3600,
             "coordinator_usage": {"input_tokens": 1000, "output_tokens": 100}}))
-    (arm_dir / "arm.json").write_text(json.dumps({"arm": arm, "policy": policy, "lessons": None}))
+    (arm_dir / "arm.json").write_text(json.dumps({"arm": arm, "policy": policy, "library": None}))
     return arm_dir
 
 
@@ -112,16 +112,21 @@ def test_freeze_summarize_and_decisions(tmp_path):
                        "--out", str(eval_root / "report2")])
 
 
-def test_lessons_check(tmp_path):
+def test_library_check(tmp_path, capsys):
     (tmp_path / "a").mkdir()
-    (tmp_path / "a" / "arm_lessons.json").write_text(json.dumps({"unchanged": True}))
+    (tmp_path / "a" / "arm_library.json").write_text(json.dumps({"unchanged": True}))
     (tmp_path / "b").mkdir()
-    (tmp_path / "b" / "arm_lessons.json").write_text(json.dumps({"sha256_before": "x"}))
-    report = evaluate.lessons_check(type("A", (), {"runs": tmp_path})())
-    assert report["checked"] == 2 and report["changed_or_unfinished"] == [str(tmp_path / "b" / "arm_lessons.json")]
+    (tmp_path / "b" / "arm_library.json").write_text(json.dumps({"sha256_before": {"lessons.json": "x"}}))
+    (tmp_path / "c").mkdir()
+    (tmp_path / "c" / "arm_lessons.json").write_text(json.dumps({"unchanged": True}))  # an older run
+    report = evaluate.library_check(type("A", (), {"runs": tmp_path})())
+    assert report["checked"] == 3 and report["changed_or_unfinished"] == [str(tmp_path / "b" / "arm_library.json")]
+    assert evaluate.main(["library-check", "--runs", str(tmp_path)]) == 0
+    assert evaluate.main(["lessons-check", "--runs", str(tmp_path)]) == 0  # the earlier name still works
+    assert capsys.readouterr().out.count('"checked": 3') == 2
 
 
-def make_tree(attempt, task, *, side_tokens, planning_opened):
+def make_tree(attempt, task, *, side_tokens, planning_opened, library=None, executions=()):
     """A finished research tree with one decisive question and one side question."""
     from oceanx.research.outcomes import record_task_outcomes
     from oceanx.research.tree import ResearchTree
@@ -138,7 +143,8 @@ def make_tree(attempt, task, *, side_tokens, planning_opened):
         {"attempt_id": "a", "usage": {"input_tokens": 1_000_000}, "skills_read": ["ocean-analysis-design"]},
         {"attempt_id": "b", "usage": {"input_tokens": side_tokens}, "skills_read": []},
         {"role": "coordinator", "usage": {"input_tokens": 100_000},
-         "skills_read": ["research-trajectory-planning"] if planning_opened else []}])
+         "skills_read": ["research-trajectory-planning"] if planning_opened else []}],
+        code_executions=list(executions), library=library)
     tree.label("B1.1", "decision-changing", labeler="model-judge", source="judge")
     tree.label("B1.2", "informative-but-not-decisive", labeler="model-judge", source="judge")
 
@@ -149,11 +155,23 @@ def test_process_measures_compare_arms_on_the_research_tree(tmp_path):
         for arm, side in (("B", control_side), ("C1", 1_000_000)):
             arm_dir = make_arm(tmp_path / f"r{repeat}", arm, "v2-nested", {"Q07": 2, "Q17": 2, "Q25": None})
             for task in ("Q07", "Q17"):
-                make_tree(arm_dir / task / "attempt-1", task, side_tokens=side, planning_opened=arm == "C1")
+                attempt = arm_dir / task / "attempt-1"
+                if arm == "C1":  # ran with a library: one lesson shown and named, one helper called twice
+                    make_tree(attempt, task, side_tokens=side, planning_opened=True,
+                              executions=[{"agent_thread_id": "p", "state": "succeeded",
+                                           "tool_calls": {"weighted_mean": 2}}],
+                              library={"lessons_shown": ["L001"], "lessons_cited": ["L001"],
+                                       "tools_mounted": ["weighted_mean"]})
+                    make_state(attempt, [], code=[("succeeded", 1.0)] * 3 + [("failed", 1.0)])
+                else:
+                    make_tree(attempt, task, side_tokens=side, planning_opened=False)
+                    make_state(attempt, [], code=[("succeeded", 1.0), ("failed", 1.0)])
             runs.append(arm_dir)
     prereg = tmp_path / "preregistration.yaml"
     prereg.write_text("experiment: unit\nbootstrap: {resamples: 200, seed: 1}\ncomparisons: []\n"
                       "process_comparisons:\n  - {name: lessons-L1-process, metric: nondecisive_token_share, "
+                      "treatment: C1, control: B, rule: {type: lower, margin: 0}}\n"
+                      "  - {name: library-L1-code, metric: code_failure_share, "
                       "treatment: C1, control: B, rule: {type: lower, margin: 0}}\n")
     evaluate.main(["freeze", "--prereg", str(prereg)])
     out = tmp_path / "report"
@@ -167,7 +185,12 @@ def test_process_measures_compare_arms_on_the_research_tree(tmp_path):
     assert control["repeat_noise"]["nondecisive_token_share"] == pytest.approx(0.75 - 2 / 3)
     assert (control["planning_skill_opened"], treated["planning_skill_opened"]) == (0.0, 1.0)
     assert treated["questions_reading_an_analysis_skill"] == 0.5 and treated["rule_only_labels"] == 0
-    [comparison] = result["comparisons"]
+    # What the library is meant to change. Arm B recorded no library, so it reports no count, not zero.
+    assert (control["code_failure_share"], treated["code_failure_share"]) == (0.5, 0.25)
+    assert (control["helper_calls"], treated["helper_calls"]) == (None, 2)
+    assert (control["lessons_cited"], treated["lessons_cited"]) == (None, 1)
+    comparison, code = result["comparisons"]
+    assert (code["metric"], code["mean_diff"], code["decision"]) == ("code_failure_share", -0.25, True)
     assert comparison["tasks"] == 2 and comparison["decision"] is True
     assert comparison["mean_diff"] == pytest.approx(0.5 - (0.75 + 2 / 3) / 2)
     assert comparison["control_repeat_noise"] == pytest.approx(0.75 - 2 / 3)

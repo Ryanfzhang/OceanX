@@ -128,7 +128,14 @@ class KernelPool:
                      f"_ox_os.environ.update({environment!r})\n"
                      f"_ox_os.chdir({str(cwd)!r})\n"
                      f"_ox_sys.path.insert(0, {str(support_path)!r})\n"
-                     "from oceanx.scientific_view import ScientificFigure\n")
+                     "from oceanx.scientific_view import ScientificFigure\n"
+                     # The helper functions are one name away; a variable the code already
+                     # calls ``ao`` is left alone.
+                     "if 'ao' not in globals():\n"
+                     "    try:\n"
+                     "        import oceanx_array_ops as ao\n"
+                     "    except Exception:\n"
+                     "        pass\n")
             started = time.monotonic()
             msg_id = kernel.client.execute(setup + code, stop_on_error=True)
             stdout, stderr = [notice] if notice else [], []

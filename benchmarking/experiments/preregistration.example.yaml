@@ -3,17 +3,17 @@
 #   python benchmarking/evaluation/evaluate.py freeze --prereg <EVAL_ROOT>/<experiment>/preregistration.yaml
 # A frozen file cannot be edited; a change means a new experiment name.
 
-experiment: test-v6-2026-10            # unique name; also the folder under EVAL_ROOT and RUNS_ROOT
+experiment: test-v7-2026-10            # unique name; also the folder under EVAL_ROOT and RUNS_ROOT
 suite: test                            # Q01-Q30
 code_commit: <git commit used by every arm>
-model: <model id from benchmark.yaml>  # same model for every arm, for lesson mining and for node labels
+model: <model id from benchmark.yaml>  # same model for every arm, for the meta-agent and for node labels
 judge: {name: codex, model: <codex model>, single_judge: true}
 
-arms:                                  # run_oceanx.py --arm/--policy/--lessons
-  A: {policy: v0-coordinator-bfs, lessons: null}
-  B: {policy: v2-nested, lessons: null}                     # L0: no lessons
-  C1: {policy: v2-nested, lessons: <EVAL_ROOT>/lessons/L1}  # learned on evolution set A
-  C2: {policy: v2-nested, lessons: <EVAL_ROOT>/lessons/L2}  # L1 revised after evolution set B
+policy: v2-nested                      # the default research policy; every arm runs it
+arms:                                  # run_oceanx.py --arm/--library
+  B: {library: null}                     # L0: nothing learned
+  C1: {library: <EVAL_ROOT>/library/L1}  # lessons and tools learned on evolution set A
+  C2: {library: <EVAL_ROOT>/library/L2}  # L1 revised after evolution set B
 repeats: 2                             # runs per task and arm; the noise pilot decides 1, 2 or 3
 order: randomized per repeat           # arm order shuffled per task; arms interleaved in time
 max_parallel_cases: 4                  # concurrent run_oceanx.py processes on the server
@@ -23,29 +23,26 @@ primary_metric: total_score            # 0-100 Codex rubric score per attempt, a
 failed_attempt_score: 0                # failed, timed-out or empty attempts score 0 and are also counted
 
 comparisons:                           # on the primary metric, paired by task
-  - name: policy                       # which research policy becomes the default
-    treatment: B
-    control: A
-    rule: {type: noninferior_and_better_or_cheaper, margin: -2, token_reduction: 0.15}
-  - name: lessons-L1                   # do lessons from one round help on unseen questions
+  - name: library-L1                   # do the lessons and tools of one round help on unseen questions
     treatment: C1
     control: B
     rule: {type: superior, margin: 0}
-  - name: lessons-L2                   # does a second round add to the first
+  - name: library-L2                   # does a second round add to the first
     treatment: C2
     control: C1
     rule: {type: superior, margin: 0}
 
-# The lessons are about research-tree decisions, so the tree is measured as well as the answer.
-# Metric: share of a run's Expert tokens spent on questions that did not change the answer
-# (labels from judge-labels on every test tree). Lower is better.
+# The library is about research decisions and analysis code, so the process is measured as well as the
+# answer. Metric: share of a run's Expert tokens spent on questions that did not change the answer
+# (labels from judge-labels on every test tree). Lower is better. Other metrics evaluate.py process
+# accepts: code_failure_share (what the tools are meant to lower), helper_calls, lessons_cited.
 process_comparisons:                   # evaluate.py process, paired by task
-  - name: lessons-L1-process
+  - name: library-L1-process
     metric: nondecisive_token_share
     treatment: C1
     control: B
     rule: {type: lower, margin: 0}
-  - name: lessons-L2-process
+  - name: library-L2-process
     metric: nondecisive_token_share
     treatment: C2
     control: C1

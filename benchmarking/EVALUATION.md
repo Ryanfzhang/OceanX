@@ -1,44 +1,51 @@
 # Evaluation: how runs are made, stored and judged
 
-One experiment answers three questions with one set of test runs:
+One experiment answers two questions with one set of test runs:
 
-1. **Policy:** should the default research policy be `v0-coordinator-bfs` or `v2-nested`?
-2. **Lesson transfer:** do lessons learned on one evolution set improve research on the test suite?
-3. **A second round:** do lessons revised after a second evolution set, itself run with the first
-   lessons, improve it further?
+1. **Transfer of what was learned:** does the library learned on one evolution set improve research on the
+   test suite? The library is the lessons written into the skills and the helper functions (tools) that
+   analysis code can call.
+2. **A second round:** does the library revised after a second evolution set, itself run with the first
+   library, improve it further?
 
-Questions 2 and 3 are each answered twice: by the judged score of the answer, and by a measure of how
-the research tree went. Lessons are about tree decisions, so an unchanged tree with a better-worded
-answer would not count as learning.
+Each question is answered twice: by the judged score of the answer, and by a measure of how
+the research went. Lessons are about tree decisions and analysis choices, and tools are about code that
+fails or is written again, so an unchanged run with a better-worded answer would not count as learning.
+
+The arms differ in lessons and tools together. The experiment says whether the library helps. Which half
+helped can only be read from the process measures (lessons named, helper calls, failed code runs).
 
 ## The process
 
 | Phase | What happens | Who |
 |---|---|---|
 | 0. Prepare | Data downloaded and staged; references computed and rubrics frozen | Codex; owner signs off |
-| 1. Evolve, round 1 | Evolution set A (E01-E12) runs without lessons; tree nodes labelled; lessons mined, reviewed and frozen as L1 | Codex runs; **owner labels and approves** |
-| 2. Evolve, round 2 | Evolution set B (E13-E24) runs with L1; nodes labelled; lessons added or retired; the result frozen as L2 | Codex runs; **owner labels and approves** |
-| 3. Test | Pre-registration frozen. Test suite (Q01-Q30) runs in four arms, nothing evolving | Codex |
+| 1. Evolve, round 1 | Evolution set A (E01-E12) runs with nothing learned; the model judge labels the tree nodes; the meta-agent reviews the runs once; the resulting lessons and tools are frozen as L1 | Codex; the owner may look and mark |
+| 2. Evolve, round 2 | Evolution set B (E13-E24) runs with L1; nodes labelled; the meta-agent keeps, revises, retires and adds; the result is frozen as L2 | Codex; the owner may look and mark |
+| 3. Test | Pre-registration frozen. Test suite (Q01-Q30) runs in three arms, nothing learned | Codex |
 | 4. Judge | Outputs blinded; Codex scores every attempt against the frozen rubric; the model judge labels the test trees | Codex |
 | 5. Decide | Paired comparisons of scores and of the process metric; pre-registered rules applied; report written | Codex; owner decides |
 
 Arms (fixed in the pre-registration):
 
-| Arm | Policy | Lessons | Used for |
-|---|---|---|---|
-| A | v0-coordinator-bfs | none | control for the policy comparison |
-| B | v2-nested | none (L0) | treatment for policy; control for L1 |
-| C1 | v2-nested | frozen snapshot L1 | treatment for L1; control for L2 |
-| C2 | v2-nested | frozen snapshot L2 | treatment for L2 |
+| Arm | Library | Used for |
+|---|---|---|
+| B | none (L0): the packaged skills and helper functions | control for L1 |
+| C1 | frozen snapshot L1 | treatment for L1; control for L2 |
+| C2 | frozen snapshot L2 | treatment for L2 |
+
+Every arm runs the default research policy, `v2-nested`. The policy is fixed, so the experiment does not
+compare policies: the earlier arm A (`v0-coordinator-bfs`) is no longer run, and the other arms keep their
+letters.
 
 ## Storage
 
 ```text
 $RUNS_ROOT/<experiment>/
-  evolution/A/r<k>/arm-E1/<E01..E12>/attempt-*/   round 1: set A, no lessons (arm.json at arm level)
-  evolution/B/r<k>/arm-E2/<E13..E24>/attempt-*/   round 2: set B, lessons L1
-  evolution/.oceanx/research/                     digests, lesson proposals and decisions of both rounds
-  test/r<k>/arm-A|arm-B|arm-C1|arm-C2/<Q01..Q30>/attempt-*/
+  evolution/A/r<k>/arm-E1/<E01..E12>/attempt-*/   round 1: set A, nothing learned (arm.json at arm level)
+  evolution/B/r<k>/arm-E2/<E13..E24>/attempt-*/   round 2: set B, library L1
+  evolution/.oceanx/research/                     digests, lessons, tools and their change logs, of both rounds
+  test/r<k>/arm-B|arm-C1|arm-C2/<Q01..Q30>/attempt-*/
 $EVAL_ROOT/<experiment>/
   preregistration.yaml (+ .sha256)             frozen before the test phase
   rubrics/<task>.json                          frozen rubrics (template + reference values + answer key)
@@ -47,12 +54,13 @@ $EVAL_ROOT/<experiment>/
   blind_map.json                               blind ID -> arm, run; the judge opens it only after scoring
   scores/<blind_id>.json                       Codex score files
   report/                                      summary.json, report.md, process.json and process.md
-$EVAL_ROOT/lessons/L1/lessons.json (+ SHA256, approvals.json)   frozen after round 1
-$EVAL_ROOT/lessons/L2/lessons.json (+ SHA256, approvals.json)   frozen after round 2
+$EVAL_ROOT/library/L1/     frozen after round 1: lessons.json, tools.json, snapshot.json (version and
+                           SHA-256), lessons-changes.jsonl and tools-changes.jsonl (what changed and why)
+$EVAL_ROOT/library/L2/     frozen after round 2, same files
 ```
 
-`arm.json` records arm, policy, lesson version and SHA-256, git commit (and whether the tree was dirty),
-OceanX version, library versions and the parallel-Expert limit.
+`arm.json` records arm, policy, the version and SHA-256 of the library snapshot, git commit (and whether the
+tree was dirty), OceanX version, package versions and the parallel-Expert limit.
 
 ### What every attempt keeps
 
@@ -71,7 +79,9 @@ folder, so a later evaluation needs no new runs.
 | Agent conversations, whole | `state/.langgraph_api/.langgraph_checkpoint.*.pckl` | Every message and tool call, in the agent framework's own format; read them with the library versions in `arm.json` |
 | Agent conversations, readable part | `agents/<agent>/.runtime/context/conversation_history/session_*.md` | The messages an agent's context dropped when it was compacted, as text. A short conversation has no such file |
 | Event stream and logs | `events.jsonl`, `backend.log`, `state/agent-server.log` | What the desktop would have shown, and server diagnostics |
-| Arm identity | `arm.json`, `arm_lessons.json`, `model_protocol.json` | Policy, lessons, commit, library versions and model |
+| Arm identity | `arm.json`, `arm_library.json`, `model_protocol.json` | Policy, lessons and tools, commit, package versions and model |
+| Skills and helper functions as given | `agents/<agent>/.runtime/skills/*/skills/<skill>/SKILL.md`, `agents/<agent>/.runtime/executions/<run>/code/oceanx_array_ops.py` | What each agent could read and call: the skills with the arm's lessons and tool list written in, and the helper module with the arm's learned functions |
+| Helper calls | `agents/<agent>/.runtime/executions/<run>/tool-calls.log`, and `tool_calls` in each code run's record | Which helper functions each code run called |
 
 ```bash
 python benchmarking/evaluation/evaluate.py inventory --runs <arm folders> --out <report folder>
@@ -111,30 +121,37 @@ Four rules follow:
 
 ```bash
 python benchmarking/server/run_oceanx.py --queries <suite.jsonl> --output <arm folder> \
-  --arm A --policy v0-coordinator-bfs                      # arm A
-  --arm B --policy v2-nested                               # arm B
-  --arm C1 --policy v2-nested --lessons $EVAL_ROOT/lessons/L1  # arm C1
-  --arm C2 --policy v2-nested --lessons $EVAL_ROOT/lessons/L2  # arm C2
+  --arm B                                      # arm B
+  --arm C1 --library $EVAL_ROOT/library/L1     # arm C1
+  --arm C2 --library $EVAL_ROOT/library/L2     # arm C2
 ```
 
-- One JSONL per repeat with the task order shuffled (`seed = repeat number`). Run the four arm processes
+No `--policy` is passed: every arm runs the default, `v2-nested`, and `arm.json` records it.
+
+- One JSONL per repeat with the task order shuffled (`seed = repeat number`). Run the arm processes
   in parallel on the same JSONL, so time-dependent effects (provider load, web search results) hit all arms
   equally. With limited memory, run them one after another per repeat and keep the order.
 - Every arm uses the same per-attempt time limit, set when the JSONL is prepared (`--timeout`, three hours
   by default) and recorded in the pre-registration. A timed-out attempt scores 0, so a limit that is too
   short penalises the arm that explores more.
-- Use the same commit, `benchmark.yaml` model and literature mode (`search_only`) for every arm. No merges
+- Use the same commit, policy, `benchmark.yaml` model and literature mode (`search_only`) for every arm. No merges
   or setting changes until the test phase ends.
 - A failed, timed-out or empty attempt scores 0 and is reported separately. Do not re-run a failed
   attempt for a better score. `--resume` only completes attempts that never finished.
 
-### Nothing evolves during benchmarking
+### Nothing is learned during benchmarking
 
-- Each attempt starts with empty OceanX state (its own state folder), so no memory, digest or lesson
-  carries over between attempts.
-- Arms C1 and C2 copy their frozen snapshot into each attempt. The attempt records the lesson file's
-  SHA-256 before and after; `evaluate.py lessons-check --runs <test folder>` must report nothing changed.
-- During the test phase, do not run `consolidate`, `lesson-decide` or anything else that edits lessons.
+- Each attempt starts with empty OceanX state (its own state folder), so no memory, digest, lesson or
+  tool carries over between attempts.
+- `run_oceanx.py` freezes the library of every attempt (`OCEANX_LIBRARY_FROZEN`): no attempt reviews its
+  lessons, learns a tool or counts calls into its library. In the desktop app the same upkeep runs after
+  every research task.
+- Arms C1 and C2 copy their frozen snapshot into each attempt. The attempt records the SHA-256 of
+  `lessons.json` and `tools.json` before and after; `evaluate.py library-check --runs <test folder>` must
+  report nothing changed.
+- Learning happens only in the evolution project, between rounds, with `research_cli.py consolidate
+  --review`. Never run it on a folder that contains test-suite runs: the library must come from evolution
+  records only.
 
 ## References and frozen rubrics (phase 0)
 
@@ -209,6 +226,11 @@ python benchmarking/evaluation/evaluate.py process --runs <every arm folder of t
 | Follow-ups adopted | How many of the Experts' proposed follow-ups the Coordinator pursued |
 | Attempts without a report | Delegations that returned nothing |
 | Skills opened | Whether the Coordinator opened its planning skill, and the share of questions whose Expert opened an analysis skill. A lesson can only act if the skill that holds it was opened. |
+| Code runs that failed (`code_failure_share`) | Share of the attempt's code runs that did not succeed. This is what helper functions are meant to lower. |
+| Helper calls (`helper_calls`) | Calls the analysis code made to the helper functions. A tool can only act if it is called. |
+| Lessons named (`lessons_cited`) | Lessons the agents named in a reason or a report. It is the agents' own word that a lesson changed what they did, so it is counted, not trusted as proof. |
+
+The last two are "n/a" only for runs made before OceanX logged them.
 
 How to read them:
 - **With the score.** Fewer non-decisive tokens with a lower score is not an improvement.
@@ -216,38 +238,29 @@ How to read them:
   repeats of the control arm. A difference smaller than that spread is noise.
 - **As a proxy.** "Decisive" is the model judge's label for each question (would the conclusion change
   without it), made without knowing the arm. It is the same model as the runs, not a human.
-- **Before a null result.** If the skills were rarely opened, the lessons were not tested.
+- **Before a null result.** If the skills were rarely opened, the lessons were not tested. If no helper was
+  called, the tools were not tested.
 
-## How the research policy is chosen
+## The research policy
 
-A research policy is the set of rules the Coordinator follows for its research tree.
+A research policy is the set of rules the Coordinator follows for its research tree. OceanX runs
+`v2-nested`: each follow-up is placed under the question it continues and starts as soon as its own parent
+has an answer. The owner fixed this on 2026-10-02, so the experiment does not compare policies and every
+arm runs `v2-nested`.
 
-- **v0-coordinator-bfs** (current default) runs the shallowest open questions first: a follow-up waits
-  until every question above it has finished.
-- **v2-nested** puts each follow-up under the question it continues and starts it as soon as its own parent
-  has an answer.
-- **v1-hypotheses** adds hypothesis nodes. It is not part of this experiment.
+Where the policy is set:
+- **The default:** `DEFAULT_POLICY` in `src/oceanx/research/policy.py`, changed only in a reviewed commit.
+  The desktop app has no policy switch.
+- **Benchmark runs:** nothing to pass. `arm.json` records the policy every arm ran with; check that it says
+  `v2-nested`.
 
-How the choice is made:
+Two other policies stay in the code for paired runs outside this experiment: `v0-coordinator-bfs` (the
+shallowest open questions first) and `v1-hypotheses` (hypothesis nodes). `run_oceanx.py --policy <name>`
+selects one for such a run.
 
-1. Arms A and B run the same 30 questions with everything else identical. Codex scores each answer
-   without knowing the arm.
-2. For each question, take B's score minus A's (averaged over repeats). Average over the questions and
-   compute a 95% bootstrap interval.
-3. Pre-registered rule: adopt v2-nested if it is **not worse by more than 2 points** (the interval's lower end
-   is at least -2) **and** it is either better on average or at least 15% cheaper in tokens. Otherwise keep v0.
+## Labels: what they are and how they are used
 
-Example: mean B-A = +3.1 points, 95% interval [-0.8, +6.9], 21 wins and 7 losses, tokens -9%. The lower end is
-above -2 and the mean is above 0, so v2-nested is adopted.
-
-Applying the decision:
-- **Benchmark runs:** pass `--policy`.
-- **The desktop app:** choose it in **Review → Policies**.
-- **Everyone's default:** change `DEFAULT_POLICY` in `src/oceanx/research/policy.py` in a reviewed commit.
-
-## User labels: what they are and how they are used
-
-A label is your judgement of one research-tree node (one question an Expert answered) from an evolution run:
+A label says how much one research-tree node (one question an Expert answered) mattered:
 
 | Label | Meaning |
 |---|---|
@@ -255,17 +268,9 @@ A label is your judgement of one research-tree node (one question an Expert answ
 | informative-but-not-decisive | Useful context, but the conclusions would be the same without it |
 | misleading-or-wasteful | Wrong, or costly without informing anything |
 
-Every executed node gets an automatic label from simple rules when the task ends. `judge-labels` adds a model
-judgement. You label only a small **review set** per run:
-- the top-level branches;
-- the nodes cited in the final report;
-- the nodes where the automatic and model labels disagree;
-- two closed nodes.
-
-That is usually 4-8 nodes, a few minutes per run. The label that counts is yours, then the model's, then the
-automatic one.
-
-How to label on the server (tree path: `<attempt>/workspace/OceanX Tasks/<task folder>/agents/coordinator/research_tree.sqlite3`):
+Every executed node gets an automatic label from simple rules when the task ends. `judge-labels` adds a
+model judgement, made without knowing the arm. The owner can label any node as well; this is optional. The
+label that counts is the owner's, then the model's, then the automatic one.
 
 ```bash
 python benchmarking/server/research_cli.py show --tree <tree path>          # tree, outcomes, current labels
@@ -273,81 +278,122 @@ python benchmarking/server/research_cli.py label --tree <tree path> --node B1.3 
   --label decision-changing --labeler <your name> --note "changed the mechanism conclusion"
 ```
 
-How labels are applied: **a label changes nothing by itself.** It is evidence for lessons.
-- **Digests:** `consolidate` writes a digest per finished run. For each question it holds who proposed it, when
-  it was created and run, every retry, its result and stated limits, its cost, its effective label, and which
-  of its proposed follow-ups were adopted or dropped.
-- **Mining:** the meta-agent reads the digests and the skills it may write into, and proposes lessons with
-  one model call per role:
-  - Coordinator: research-tree decisions, such as the order of questions, which follow-ups to adopt, how
-    deep to go, retries and when to stop. These are written into `research-trajectory-planning`.
-  - Analysis Experts: what to watch for in an analysis, such as definitions, limits of the data, method
-    assumptions and checks. These are written into the analysis skills, for example
-    `ocean-physical-consistency-review`.
+(tree path: `<attempt>/workspace/OceanX Tasks/<task folder>/agents/coordinator/research_tree.sqlite3`)
 
-  Each proposal names its skill and section. A lesson needs supporting runs from at least three different
-  questions; two repeats of one question count once. Programming advice, findings about one region or
-  process, and anything a skill already says are excluded by the instructions.
-- **Approval:** you approve, edit or reject each proposal. An approved lesson is written into the named
-  skill, at the end of the named section. Nothing is added to a prompt, and the packaged skill files are
-  not changed: arms B and C run the same commit and differ only in the lessons written into those skills.
-- **Was the skill read?** Every model call records the skills it opened (`skills_read` in the model-call
-  records of the attempt's workspace database). Check this before reading a null result as "lessons do not
-  help".
-- **Checking the model judge:** `judge-agreement` tells you how often the model's labels match yours. When it agrees well,
-  you can label fewer nodes in later rounds.
+**A label changes nothing by itself.** It is part of the record the meta-agent reads, and it defines the
+pre-registered process metric. `judge-agreement` reports how often the model's labels match the owner's.
 
-## Lessons: two rounds of learning (phases 1 and 2)
+## How OceanX learns: lessons and tools
+
+What OceanX learns is kept in two marked places of the skills its agents already read. Nothing is added to
+a prompt, and the packaged skill files are never changed: each task's copy of the skills is generated.
+Arms B, C1 and C2 run the same commit and differ only in what stands in those two places.
+
+**Where.** A skill reserves a region with a marker line, for example
+`<!-- oceanx:lessons max=4 for="coordinator" about="..." -->`. The marker says how many lessons the skill
+holds and what they are about. Six skills take lessons (the Coordinator's planning skill and five analysis
+skills); `xarray-array-ops` has the tools region, which lists the helper functions that analysis code calls
+as `ao.<name>`. A skill without a region takes nothing.
+
+**Records.** `consolidate` writes one digest per finished run. For each question it holds who proposed it,
+when it was created and run, every retry, its result and stated limits, its cost, its label, and which of
+its proposed follow-ups were adopted or dropped. The digest also holds which lessons the run was shown,
+which it named, which helper functions it could call and how often it called each.
+
+**Lessons.** With `consolidate --review` the meta-agent makes one model call per skill that takes lessons.
+It reads the skill as its readers get it and the records, then:
+- judges every current lesson: keep, revise or retire;
+- may add at most two lessons to that skill.
+
+What it decides takes effect at once. Code, not the model, enforces these rules:
+- a new lesson needs supporting runs from at least three different questions (two repeats of one question
+  count once);
+- a lesson contradicted by as many questions as support it is retired, whatever the model said;
+- a skill never holds more lessons than its region allows; when it is full, a new lesson must be better
+  supported than the weakest one, which it replaces;
+- a lesson is at most 40 words with an explicit "applies when" condition, and names no task or node.
+
+The instructions exclude programming advice, findings about one region or process, and anything the skill
+already says.
+
+**Tools.** The same update counts the helper calls of every finished run and then:
+- takes a function that no run called for 20 runs in a row off the skill's list (a packaged function stays
+  importable; a learned one is retired);
+- looks for small functions the Experts wrote again in runs of at least three different questions, and asks
+  the meta-agent for general versions of them, at most three per review, each with a test.
+
+A proposed function is mounted only if all three checks pass: a static check (one pure function, no file,
+network or printing, a short list of allowed imports), its own test run in the sandbox, and a review by a
+second model call that looks for a numerical or scientific error.
+
+**The owner.** No approval step stands between the meta-agent and the library. The owner can read every
+lesson and tool and mark it right (it stays, whatever later records say) or wrong (it goes and is not
+proposed again):
+
+```bash
+python benchmarking/server/research_cli.py library --project <evolution project>
+python benchmarking/server/research_cli.py mark --project <evolution project> --kind lesson --id L003 \
+  --wrong --reviewer <your name>
+python benchmarking/server/research_cli.py mark --project <evolution project> --kind tool --id area_mean \
+  --right --reviewer <your name>
+```
+
+Every change, by the meta-agent, a rule or the owner, is logged with its reason in
+`.oceanx/research/lessons/changes.jsonl` and `.oceanx/research/tools/changes.jsonl`.
+
+**Was it used?** Every model call records the skills it opened, every code run the helper functions it
+called, and every run the lessons it named. Check these before reading a null result as "the library does
+not help".
+
+## The library: two rounds of learning (phases 1 and 2)
 
 Both rounds use one evolution project, `$RUNS_ROOT/<experiment>/evolution`, so the second round sees the
-first round's records and lessons.
+first round's records, lessons and tools. The meta-agent reviews once per round, after the round's runs.
 
 ### Round 1: set A yields L1
 
-1. **Run** set A as arm E1 (`--policy v2-nested`, no lessons), two repeats.
+1. **Run** set A as arm E1 (no library), two repeats.
 2. **Model labels:** `research_cli.py judge-labels --tree <tree>` for every tree of the round.
-3. **Your labels:** label the review set of each tree (above).
-4. **Mine:** `research_cli.py consolidate --project $RUNS_ROOT/<experiment>/evolution --propose`. This creates
-   `evolution/.oceanx/research/` with one digest per run and at most three lesson proposals per role. Run
-   it again for more proposals; proposals awaiting review are shown to the meta-agent and duplicates are
-   refused.
-5. **Review:** `research_cli.py lessons --project ...` lists the proposals.
-   - Approve one: `lesson-decide --project ... --proposal lp_... --approve --reviewer <you>`, optionally with
-     `--text` and `--applies-when` edits.
-   - Reject one: `--reject --reason "..."`.
-   - Approve only general advice. Reject any lesson naming a test-suite region (South China Sea, Gulf of
-     Mexico, East China Sea, Arabian Sea), paper or phenomenon.
-6. **Freeze:** copy `evolution/.oceanx/research/lessons/lessons.json` to `$EVAL_ROOT/lessons/L1/`, write its
-   SHA-256 and the list of approved proposals, and never edit L1 again.
+3. **Review:** `research_cli.py consolidate --project $RUNS_ROOT/<experiment>/evolution --review
+   --retention-days 3650`. This creates `evolution/.oceanx/research/` with one digest per run, counts the
+   helper calls and lets the meta-agent write lessons and tools. `--retention-days 3650` keeps every attempt
+   folder whole: with the default, tree stores older than 30 days are moved into the project's archive.
+4. **Read** the result: `research_cli.py library --project ...`. The owner may mark items right or wrong
+   (optional). Mark wrong any lesson or tool that names a test-suite region (South China Sea, Gulf of
+   Mexico, East China Sea, Arabian Sea), paper or phenomenon.
+5. **Freeze:** `research_cli.py snapshot --project ... --output $EVAL_ROOT/library/L1`, then make the folder
+   read-only. A snapshot is never edited.
 
 ### Round 2: set B, run with L1, yields L2
 
-1. **Run** set B as arm E2 (`--policy v2-nested --lessons $EVAL_ROOT/lessons/L1`), two repeats. Decide no
-   proposal while these runs are going, so the project's lessons stay equal to L1.
-2. **Labels:** model labels and your labels, as in round 1.
-3. **Mine** again with the same `consolidate --propose` command. The meta-agent now reads:
+1. **Run** set B as arm E2 (`--library $EVAL_ROOT/library/L1`), two repeats. Leave the
+   evolution project alone while these runs are going, so its library stays equal to L1.
+2. **Model labels**, as in round 1.
+3. **Review** with the same `consolidate --review` command. The meta-agent now reads:
    - the records of both sets, each marked as run with or without lessons;
-   - the skills with the L1 lessons written in, each with its id.
+   - each skill with its L1 lessons, and for each lesson in how many runs it was shown and named.
 
-   It can propose new lessons, and it can propose retiring an L1 lesson that the set B runs contradict.
-4. **Review** as in round 1. A new lesson still needs support from three different questions; these may come
-   from either set.
-5. **Freeze** the project's `lessons.json` as `$EVAL_ROOT/lessons/L2/`. L2 is L1 plus the lessons approved
-   in round 2, minus those retired.
+   It keeps, revises or retires each L1 lesson and may add new ones. A new lesson still needs support from
+   three different questions; these may come from either set. The call counts of the set B runs decide
+   which tools stay listed.
+4. **Read** and optionally mark, as in round 1.
+5. **Freeze** as `$EVAL_ROOT/library/L2`.
 
-If round 2 changes nothing, L2 equals L1. Report that, and leave arm C2 out of the pre-registration.
+If round 2 changes nothing, the two `snapshot.json` files show the same version. Report that, and leave arm
+C2 out of the pre-registration.
 
 The meta model is the `benchmark.yaml` model (through `research_cli.py`), the same as the runs.
 
 ## Why this design
 
-- **Fair comparison:** all four arms share the same period, data, model, commit, time limit and judge, so
-  the differences come from policy and lessons.
-- **The lesson answers are about generalisation:** lessons come only from the evolution suite (two other
-  regions, open problems only, no CMOMS data), and you approve them before seeing any test result.
+- **Fair comparison:** all arms share the same period, data, model, commit, policy, time limit and judge,
+  so the differences come from the library.
+- **The library answers are about generalisation:** lessons and tools come only from the evolution suite
+  (two other regions, open problems only, no CMOMS data), and each snapshot is frozen before any test run.
 - **Each round is measured on its own:** C1 against B shows what one round of learning gives, and C2
-  against C1 shows what the second round adds. A single lesson arm could not separate the two.
-- **Lessons are judged where they act:** they are written into skills and are about tree decisions, so the
-  experiment checks that the skills were opened and compares the trees, not only the final answers.
+  against C1 shows what the second round adds. A single library arm could not separate the two.
+- **The library is judged where it acts:** lessons are written into skills and tools are called from code,
+  so the experiment checks that the skills were opened and the helpers called, and compares the research
+  process, not only the final answers.
 - **Decisions cannot follow the results:** the pre-registration and the rubrics are frozen before the test
   runs, so the decision rules cannot be tuned after the scores are known.

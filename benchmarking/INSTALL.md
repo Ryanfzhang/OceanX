@@ -30,7 +30,8 @@ openai:
 ```
 
 - **Runs:** every OceanX role in benchmark runs uses this model.
-- **Lessons and labels:** `server/research_cli.py` uses the same model for lesson mining and model labels.
+- **Learning and labels:** `server/research_cli.py` uses the same model for the meta-agent (lessons and
+  tools) and for model labels.
 - **Your everyday settings:** OceanX settings in `~/.oceanmind` are neither read nor changed.
 
 ## Checks

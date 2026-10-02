@@ -6,7 +6,7 @@
   "open_kind": "checkable",
   "title": "Southward or eastward: the two pathways of the separated current",
   "query": "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer thickness for 2011-2020 in the western Tasman Sea off south-eastern Australia (46-26 S, 147-162 E), determine how the flow of the East Australian Current divides, after it leaves the coast, between the eastward path across the Tasman Sea and the southward extension along the coast, how that division varies by season and from year to year, and what controls it.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v6",
   "region": {
     "code": "TAS",

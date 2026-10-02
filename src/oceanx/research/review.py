@@ -1,22 +1,35 @@
-"""One project's research-improvement state, as the desktop and CLI review it.
+"""One project's learned library, as its tasks, the desktop and the CLI use it.
 
-Bundles the project's research memory, lessons, node-label review and policy
-choice under ``<project>/.oceanx/research/``. Every change here is a human
-decision; the meta model only ever creates lesson proposals.
+Bundles the project's research memory, its lessons and its tools under
+``<project>/.oceanx/research/``. The meta-agent maintains both; the owner can look at every
+lesson and tool and mark it right or wrong.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import shutil
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
-from oceanx.research import acceptance
-from oceanx.research.labels import review_set
 from oceanx.research.lessons import LessonBook
 from oceanx.research.memory import ResearchMemory
-from oceanx.research.policy import (
-    DEFAULT_POLICY, active_policy, available_policies, find_policy, project_choice)
-from oceanx.research.tree_store import atomic_write_text
+from oceanx.research.policy import active_policy
+from oceanx.research.toolbook import MODULE as TOOL_MODULE
+from oceanx.research.toolbook import SKILL as TOOL_SKILL
+from oceanx.research.toolbook import ToolBook
+from oceanx.skill_regions import fill_regions
 
 REVIEWER = "desktop user"
+# Set for an experiment arm: its lessons and tools are a frozen snapshot that nothing may change.
+LIBRARY_FROZEN_ENV = "OCEANX_LIBRARY_FROZEN"
+# The two files that are a project's library, by their name in a frozen snapshot.
+LIBRARY_FILES = {"lessons.json": "lessons/lessons.json", "tools.json": "tools/tools.json"}
+
+
+def _sha256(path: Path) -> str | None:
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
 
 
 class ProjectResearch:
@@ -24,28 +37,94 @@ class ProjectResearch:
         self.root = Path(paths.root) / "research"
         self.memory = ResearchMemory(self.root)
         self.lessons = LessonBook(self.memory)
-
-    def policy(self):
-        return active_policy(self.root)
-
-    def policies(self) -> dict:
-        return {"active": self.policy().name, "project_choice": project_choice(self.root),
-                "acceptance_frozen": acceptance.is_frozen(),
-                "available": [{"name": p.name, "version": p.version, "description": p.description}
-                              for p in available_policies()]}
-
-    def activate_policy(self, name: str) -> None:
-        find_policy(name)  # must exist
-        atomic_write_text(self.root / "active_policy", "" if name == DEFAULT_POLICY else name)
+        self.tools = ToolBook(self.memory)
 
     @staticmethod
-    def label_review(tree) -> list[dict]:
-        return review_set(tree) if tree.store.path.exists() else []
+    def policy():
+        return active_policy()
 
-    def set_label(self, tree, node_id: str, label: str) -> None:
-        tree.label(node_id, label, labeler=REVIEWER)
-        if tree.store.path.exists():
-            self.memory.digest(tree.store.path)  # keep the digest's labels current
+    def skills(self, *, research: bool) -> dict[str, str]:
+        """The skill files this project changes, as its agents get them: the SKILL.md of every
+        skill that reserves a region, by skill name, and the helper script by its path.
+
+        The tools region always lists the helper functions the project mounts, and the script
+        the skill links to holds the same functions. Lessons come from research trees and would
+        work against a bounded request, so they are written only for research tasks.
+        """
+        from oceanx.skills import load_ocean_skill
+        rendered = {TOOL_SKILL: fill_regions(load_ocean_skill(TOOL_SKILL)[0],
+                                             {"tools": self.tools.block()}),
+                    f"{TOOL_SKILL}/scripts/{TOOL_MODULE}.py": self.tools.source()}
+        for skill, region in self.lessons.regions().items():
+            block = self.lessons.block(skill, region) if research else ""
+            rendered[skill] = fill_regions(load_ocean_skill(skill)[0], {"lessons": block})
+        return rendered
+
+    def version(self) -> str | None:
+        """Names the lessons and tools a task runs with; None when the project has neither."""
+        parts = [part for part in (self.lessons.version(), self.tools.version()) if part]
+        return "+".join(parts) or None
+
+    def update(self, stores: list[Path], *, llm: Callable[[str], str] | None = None,
+               reviewer: Callable[[str], str] | None = None, force: bool = False,
+               retention_days: int | None = None) -> dict:
+        """The periodic update. Without a model it only brings the records and the call counts
+        up to date; with one, the meta-agent also reviews the lessons and learns tools."""
+        options = {} if retention_days is None else {"retention_days": retention_days}
+        result = {"consolidation": self.memory.consolidate(stores, **options)}
+        digests = self.memory.load_digests()
+        result["tool_usage"] = self.tools.record_usage(digests)
+        if llm is not None:
+            result["lessons"] = self.lessons.review(llm, force=force)
+            if result["lessons"]["new_tasks"] or force:
+                result["tools"] = self.tools.learn(llm, stores, reviewer=reviewer)
+        return result
+
+    def mark(self, kind: str, item_id: str, verdict: str, *, reviewer: str = REVIEWER) -> None:
+        if kind == "lesson":
+            self.lessons.mark(item_id, verdict, reviewer=reviewer)
+        elif kind == "tool":
+            self.tools.mark(item_id, verdict, reviewer=reviewer)
+        else:
+            raise ValueError("kind must be lesson or tool.")
+
+    def overview(self) -> dict:
+        return {**self.lessons.overview(), "tools": self.tools.overview(),
+                "tool_changes": self.tools.changes(), "version": self.version()}
+
+    # --- frozen snapshots, for experiment arms ---------------------------------------
+    def library_hashes(self) -> dict[str, str | None]:
+        """SHA-256 of each library file; None for one the project does not have."""
+        return {name: _sha256(self.root / relative) for name, relative in LIBRARY_FILES.items()}
+
+    def snapshot(self, target: Path) -> dict:
+        """Freeze the library into ``target``: the lessons and tools as they are now, and the
+        change logs that say how each came about. A snapshot is never overwritten."""
+        target = Path(target)
+        if target.exists() and any(target.iterdir()):
+            raise ValueError(f"{target} is not empty; a frozen snapshot is never edited.")
+        target.mkdir(parents=True, exist_ok=True)
+        for name, relative in LIBRARY_FILES.items():
+            if (self.root / relative).is_file():
+                shutil.copyfile(self.root / relative, target / name)
+        for kind in ("lessons", "tools"):
+            if (self.root / kind / "changes.jsonl").is_file():
+                shutil.copyfile(self.root / kind / "changes.jsonl", target / f"{kind}-changes.jsonl")
+        record = {"version": self.version(), "sha256": self.library_hashes(),
+                  "frozen_at": datetime.now(UTC).isoformat(),
+                  "lessons": self.lessons.shown_ids(),
+                  "tools": [tool["name"] for tool in self.tools.mounted()]}
+        (target / "snapshot.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        return record
+
+    def install(self, snapshot: Path) -> dict[str, str | None]:
+        """Start this project from a frozen snapshot. Returns the hashes of what it now has."""
+        for name, relative in LIBRARY_FILES.items():
+            if (Path(snapshot) / name).is_file():
+                (self.root / relative).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(Path(snapshot) / name, self.root / relative)
+        self.lessons.render_skills()  # for reading; tasks build their skills from the two files
+        return self.library_hashes()
 
 
-__all__ = ["ProjectResearch", "REVIEWER"]
+__all__ = ["LIBRARY_FILES", "LIBRARY_FROZEN_ENV", "REVIEWER", "ProjectResearch"]

@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.1",
   "task_id": "Q12",
   "type": "open_problem",
   "open_kind": "checkable",
@@ -64,11 +64,11 @@
         "depth_probes"
       ],
       "anchors": {
-        "0": "Description only, or a mechanism that the answer key contradicts.",
-        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
-        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
-        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
-        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+        "0": "Description only, or process evidence contradicted by independently computed reference diagnostics.",
+        "1": "A mechanism asserted from literature or intuition without a test in the supplied fields.",
+        "2": "One candidate explanation tested; alternatives or identifiability limits not examined.",
+        "3": "Quantitative process, conditional or lagged tests consistent with reference diagnostics; at least one alternative tested; unresolved causal attribution stated.",
+        "4": "Competing explanations tested with quantitative diagnostics and uncertainty, consistent with independent references; data-supported conclusions and unresolved alternatives clearly distinguished; depth probes addressed. A justified inability to identify a dominant cause can receive full credit."
       }
     },
     {
@@ -116,9 +116,7 @@
     }
   ],
   "answer_key": {
-    "oracle_groups": [
-      "X_HEAT"
-    ],
+    "oracle_groups": [],
     "items": [
       {
         "id": "Q12-A1",
@@ -130,12 +128,12 @@
       },
       {
         "id": "Q12-A2",
-        "quantity": "Controlling term",
-        "procedure": "Yearly June-August anomalies of vertical advection, horizontal advection, vertical and horizontal diffusion in the coastal box; the term explaining most of the interannual variance of the cooling.",
+        "quantity": "Ocean-state evidence for interannual cooling",
+        "procedure": "Using core temp, salt, u and v plus grid geometry, compute June-August coastal cooling, stratification, isotherm depth and along-shelf current anomalies. Test associations with cooling using contrasting-year composites and conditional or lagged analyses. Estimate resolved horizontal temperature advection where grid geometry permits. Do not identify vertical advection, diffusion or wind forcing from a residual or from currents alone.",
         "used_by": "Q12-M",
-        "oracle": "X_HEAT",
+        "oracle": "Independent reference diagnostics from C_CORE fields bound to this task",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: exact)"
+        "tolerance": "to freeze before judging (suggested: agreement in reference anomaly signs and year contrasts under matched definitions; no exact dominant-budget-term requirement)"
       },
       {
         "id": "Q12-A3",
@@ -148,10 +146,10 @@
     ]
   },
   "depth_probes": [
-    "Distinguishes wind-driven Ekman upwelling (inferred from the along-shelf current) from current-induced bottom-Ekman or topographic upwelling and from tidal mixing.",
-    "Identifies the source depth of the upwelled water from its temperature and salinity, and its year-to-year change.",
-    "Quantifies the processes with budget-like diagnostics (vertical advection from continuity or the velocity fields).",
-    "Tests remote influences such as the basin-scale summer circulation and El Nino decaying summers."
+    "Tests circulation and source-water signatures compatible with competing upwelling mechanisms; currents alone cannot establish wind-driven, bottom-Ekman or tidal forcing.",
+    "Tests source-depth estimates from temperature and salinity and their year-to-year change.",
+    "Quantifies resolved horizontal transport and isotherm displacement where geometry permits; a reconstructed vertical velocity requires explicit continuity and boundary assumptions.",
+    "Tests basin-scale circulation contrasts and candidate remote influences, distinguishing observed associations from unmeasured forcing."
   ],
   "breadth_probes": [
     "Connects the upwelling to SST, the mixed layer and chlorophyll.",
@@ -162,9 +160,7 @@
     "A different target (region, period or quantity) without justification: Q and M score at most 1.",
     "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
   ],
-  "evaluator_groups": [
-    "X_HEAT"
-  ],
+  "evaluator_groups": [],
   "frozen": {
     "references_sha256": null,
     "tolerances_frozen_at": null,

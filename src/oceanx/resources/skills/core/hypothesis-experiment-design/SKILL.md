@@ -57,3 +57,6 @@ the available data cannot discriminate the competing explanations at the require
 For physical mechanism checks, consult `references/review/physical-consistency.md`. For trend or
 anomaly designs, consult `references/methods/trend.md` or `references/methods/anomaly.md` only when
 those analyses are part of the assigned question.
+
+<!-- oceanx:lessons max=3 for="expert" about="how a mechanism or claim was turned into a test that could, or could not, discriminate competing explanations" -->
+<!-- /oceanx:lessons -->

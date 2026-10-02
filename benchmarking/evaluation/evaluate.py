@@ -35,7 +35,8 @@ TEXT = {".md", ".py", ".ipynb", ".csv", ".json", ".txt"}
 IMAGES = {".png", ".jpg", ".jpeg", ".svg"}
 MAX_TEXT, MAX_OUTPUT, MAX_TOTAL = 2 * 1024**2, 20 * 1024**2, 400 * 1024**2
 # Research-tree exports carry the policy (frontier mode, policy version), so they would reveal the arm.
-NEVER_COPY = {"research_tree.json", "research_tree.sqlite3", "research_tree.lock", "arm.json", "arm_lessons.json"}
+NEVER_COPY = {"research_tree.json", "research_tree.sqlite3", "research_tree.lock", "arm.json",
+              "arm_library.json", "arm_lessons.json"}
 
 
 def sha256(path: Path) -> str:
@@ -74,6 +75,26 @@ def latest_attempts(arm_dir: Path):
 def evidence_files(attempt: Path):
     """Answer, Agent reports, published outputs and small code/tables; never state, logs or the tree."""
     yield attempt / "answer.md"
+    manifest = attempt / "evidence_manifest.json"
+    if manifest.is_file():
+        # External baselines export an explicit allowlist, not an OceanX workspace.
+        # Never follow an input mount/link or expose raw transcripts/credentials.
+        for name in json.loads(manifest.read_text()).get("files", []):
+            relative = Path(name)
+            if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+                raise ValueError("Unsafe external evidence path")
+            if relative.parts[0] not in {"workspace", "outputs", "figures", "code"}:
+                raise ValueError("External evidence must be a notebook or a published output")
+            if {"inputs", "scratch", "state", ".runtime", "kernel"} & set(relative.parts):
+                continue
+            path = attempt / relative
+            if path.name in NEVER_COPY or any(p.is_symlink() for p in (path, *path.parents)):
+                continue
+            if not path.is_file():
+                continue
+            suffix, size = path.suffix.lower(), path.stat().st_size
+            if suffix in TEXT and size <= MAX_TEXT or suffix in IMAGES | {".nc", ".pdf"} and size <= MAX_OUTPUT:
+                yield path
     tasks_root = attempt / "workspace" / "OceanX Tasks"
     for path in sorted(tasks_root.rglob("*")) if tasks_root.is_dir() else []:
         if not path.is_file() or path.is_symlink() or path.name in NEVER_COPY:
@@ -126,13 +147,20 @@ def blind(args) -> dict:
                                               "status": result.get("status")})
             spent = usage(attempt, result)
             mapping[blind_id] = {"task_id": task_id, "arm": arm["arm"], "policy": arm.get("policy"),
-                                 "lessons_version": (arm.get("lessons") or {}).get("version"),
+                                 "library_version": library_version(arm),
                                  "arm_dir": str(arm_dir), "attempt": str(attempt), "status": result.get("status"),
                                  "elapsed_seconds": result.get("elapsed_seconds"),
-                                 "tokens": spent["input_tokens"] + spent["output_tokens"], "usage": spent}
+                                 "tokens": (spent["input_tokens"] + spent["output_tokens"]
+                                            if spent["input_tokens"] is not None and spent["output_tokens"] is not None
+                                            else None), "usage": spent}
             created += 1
     write_json(mapping_path, mapping)
     return {"created": created, "total": len(mapping), "blind_folder": str(out), "map": str(mapping_path)}
+
+
+def library_version(arm: dict) -> str | None:
+    """The lessons and tools an arm ran with ("lessons" in arm records written before tools existed)."""
+    return (arm.get("library") or arm.get("lessons") or {}).get("version")
 
 
 def state_rows(attempt: Path, sql: str) -> list[tuple]:
@@ -164,6 +192,8 @@ def usage(attempt: Path, result: dict, calls: list[dict] | None = None) -> dict:
     and a failed or timed-out attempt reports none. The ledger has every call of every agent.
     result.json is used only when the attempt has no state database.
     """
+    if isinstance(result.get("external_usage"), dict):
+        return result["external_usage"]
     calls = ledger(attempt) if calls is None else calls
     if not calls:
         reported = result.get("coordinator_usage") or {}
@@ -280,15 +310,23 @@ def summarize(args) -> dict:
     by = {}
     for row in rows:
         by.setdefault((row["arm"], row["task_id"]), []).append(row)
+    def known_mean(values):
+        values = list(values)
+        return statistics.fmean(values) if values and all(v is not None for v in values) else None
+
+    def known_sum(values):
+        values = list(values)
+        return sum(values) if values and all(v is not None for v in values) else None
+
     cell = {key: {"score": statistics.fmean(r["total"] for r in group),
-                  "tokens": statistics.fmean(r["tokens"] for r in group),
+                  "tokens": known_mean(r["tokens"] for r in group),
                   "elapsed": statistics.fmean(r["elapsed_seconds"] or 0 for r in group),
                   "failures": sum(r["status"] != "completed" for r in group), "n": len(group)}
             for key, group in by.items()}
     arms = sorted({arm for arm, _ in cell})
     per_arm = {arm: {"mean_score": statistics.fmean(v["score"] for (a, _), v in cell.items() if a == arm),
                      "failures": sum(v["failures"] for (a, _), v in cell.items() if a == arm),
-                     "tokens": sum(v["tokens"] for (a, _), v in cell.items() if a == arm),
+                     "tokens": known_sum(v["tokens"] for (a, _), v in cell.items() if a == arm),
                      "elapsed_hours": sum(v["elapsed"] for (a, _), v in cell.items() if a == arm) / 3600}
                for arm in arms}
     boot = prereg.get("bootstrap", {})
@@ -301,14 +339,15 @@ def summarize(args) -> dict:
             comparisons.append({**spec, "tasks": 0, "decision": None})
             continue
         low, high = bootstrap_ci(diffs, int(boot.get("resamples", 10000)), int(boot.get("seed", 7)))
-        tokens_t = sum(cell[(treat, t)]["tokens"] for t in tasks)
-        tokens_c = sum(cell[(control, t)]["tokens"] for t in tasks)
+        tokens_t = known_sum(cell[(treat, t)]["tokens"] for t in tasks)
+        tokens_c = known_sum(cell[(control, t)]["tokens"] for t in tasks)
         elapsed_t = sum(cell[(treat, t)]["elapsed"] for t in tasks)
         elapsed_c = sum(cell[(control, t)]["elapsed"] for t in tasks)
         comparison = {"name": spec["name"], "treatment": treat, "control": control, "tasks": len(tasks),
                       "mean_diff": statistics.fmean(diffs), "ci_low": low, "ci_high": high,
                       "wins": sum(d > 0 for d in diffs), "losses": sum(d < 0 for d in diffs),
-                      "token_reduction": (tokens_c - tokens_t) / tokens_c if tokens_c else None,
+                      "token_reduction": ((tokens_c - tokens_t) / tokens_c
+                                          if tokens_c and tokens_t is not None else None),
                       "time_reduction": (elapsed_c - elapsed_t) / elapsed_c if elapsed_c else None,
                       "by_type": breakdown(diffs, tasks, "type"), "by_data": breakdown(diffs, tasks, "data_access")}
         comparison["decision"] = decide(spec["rule"], comparison)
@@ -318,7 +357,8 @@ def summarize(args) -> dict:
     out = args.out.expanduser().resolve()
     write_json(out / "summary.json", summary)
     lines = [f"# {prereg['experiment']}", "", "| Arm | Mean score | Failures | Tokens | Hours |", "|---|---|---|---|---|"]
-    lines += [f"| {a} | {v['mean_score']:.1f} | {v['failures']} | {v['tokens']:.3g} | {v['elapsed_hours']:.1f} |"
+    lines += [f"| {a} | {v['mean_score']:.1f} | {v['failures']} | "
+              f"{format(v['tokens'], '.3g') if v['tokens'] is not None else 'n/a'} | {v['elapsed_hours']:.1f} |"
               for a, v in per_arm.items()]
     lines += ["", "| Comparison | Tasks | Mean diff | 95% CI | Wins/losses | Token cut | Time cut | Decision |",
               "|---|---|---|---|---|---|---|---|"]
@@ -342,7 +382,8 @@ def summarize(args) -> dict:
 # ------------------------------------------------------------------------------------------ process
 # Measures averaged per arm; a pre-registered process metric must be one of them.
 PROCESS_MEASURES = ("nondecisive_token_share", "last_decisive_fraction", "tokens", "wall_minutes",
-                    "questions_run", "followups_adopted", "attempts_without_report")
+                    "questions_run", "followups_adopted", "attempts_without_report",
+                    "code_failure_share", "helper_calls", "lessons_cited")
 
 
 def tree_store(attempt: Path) -> Path | None:
@@ -352,21 +393,32 @@ def tree_store(attempt: Path) -> Path | None:
 
 def attempt_measures(attempt: Path) -> dict | None:
     """Process measures of one attempt's research tree; None when it has no finished tree."""
-    from oceanx.research.lessons import WRITABLE
+    from oceanx.research.lessons import LessonBook
     from oceanx.research.memory import build_digest, run_measures
     store = tree_store(attempt)
     digest = build_digest(store) if store else None
     if not digest or not digest.get("finished"):
         return None
     measures = run_measures(digest)
-    # Whether the skills that lessons are written into were opened by the agents they are for.
+    # Whether the skills that hold lessons were opened by the agents they are for.
+    holds = {"coordinator": set(), "expert": set()}
+    for skill, region in LessonBook.regions().items():
+        holds[LessonBook.reader(skill, region)].add(skill)
     opened = measures["coordinator_skills_read"]
-    measures["planning_skill_opened"] = None if opened is None else bool(set(opened) & set(WRITABLE["coordinator"]))
+    measures["planning_skill_opened"] = None if opened is None else bool(set(opened) & holds["coordinator"])
     by_question = [digest["outcomes"].get(n, {}).get("skills_read") for n, node in digest["outline"].items()
                    if node.get("parent") is not None and node.get("attempts")]
     measures["questions_reading_an_analysis_skill"] = (
         None if any(names is None for names in by_question)
-        else sum(bool(set(names) & set(WRITABLE["expert"])) for names in by_question))
+        else sum(bool(set(names) & holds["expert"]) for names in by_question))
+    # What the learned library is meant to change: code that fails, helpers that are called,
+    # lessons that the agents name. None for a run recorded before these were logged.
+    states = [row[0] for row in state_rows(attempt, "SELECT state FROM code_executions")]
+    measures["code_failure_share"] = (
+        sum(state not in {"succeeded", "running"} for state in states) / len(states) if states else None)
+    calls, cited = digest.get("tool_calls"), digest.get("lessons_cited")
+    measures["helper_calls"] = None if calls is None else sum(calls.values())
+    measures["lessons_cited"] = None if cited is None else len(cited)
     return measures
 
 
@@ -436,14 +488,17 @@ def process(args) -> dict:
 
     header = ("| Arm | Finished trees | Tokens in non-decisive questions | Last decisive result, share of run time | "
               "Tokens | Minutes | Questions run | Follow-ups adopted | Attempts without a report | "
-              "Coordinator opened its planning skill | Questions whose Expert opened an analysis skill |")
-    lines = ["# Process measures", "", header, "|---|---|---|---|---|---|---|---|---|---|---|"]
+              "Coordinator opened its planning skill | Questions whose Expert opened an analysis skill | "
+              "Code runs that failed | Helper calls | Lessons named |")
+    lines = ["# Process measures", "", header, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for arm, v in per_arm.items():
         lines.append(f"| {arm} | {v['finished_trees']}/{v['attempts']} | {show(v['nondecisive_token_share'], True)} | "
                      f"{show(v['last_decisive_fraction'], True)} | {show(v['tokens'])} | {show(v['wall_minutes'])} | "
                      f"{show(v['questions_run'])} | {show(v['followups_adopted'])} | "
                      f"{show(v['attempts_without_report'])} | {show(v['planning_skill_opened'], True)} | "
-                     f"{show(v['questions_reading_an_analysis_skill'], True)} |")
+                     f"{show(v['questions_reading_an_analysis_skill'], True)} | "
+                     f"{show(v['code_failure_share'], True)} | {show(v['helper_calls'])} | "
+                     f"{show(v['lessons_cited'])} |")
     unjudged = {arm: v["rule_only_labels"] for arm, v in per_arm.items() if v["rule_only_labels"]}
     if unjudged:
         lines += ["", f"Questions labelled by the log rules only (run judge-labels first): {unjudged}"]
@@ -557,6 +612,8 @@ def disk(attempt: Path) -> dict:
 def run_record(attempt: Path, arm: dict) -> dict:
     """What one attempt cost and kept, and what a later evaluation would find missing."""
     result = json.loads((attempt / "result.json").read_text())
+    if result.get("agent") == "finch-local":
+        return external_run_record(attempt, arm, result)
     completed = result.get("status") == "completed"
     calls = ledger(attempt)
     spent = usage(attempt, result, calls)
@@ -598,7 +655,7 @@ def run_record(attempt: Path, arm: dict) -> dict:
         missing.append("part of events.jsonl")
     return {
         "task_id": attempt.parent.name, "attempt": attempt.name, "arm": arm.get("arm"),
-        "policy": arm.get("policy"), "lessons_version": (arm.get("lessons") or {}).get("version"),
+        "policy": arm.get("policy"), "library_version": library_version(arm),
         "commit": arm.get("commit"), "status": result.get("status"),
         "time": {key: result.get(key) for key in ("elapsed_seconds", "setup_seconds", "analysis_seconds")}
         | {"model_seconds": spent["model_seconds"],
@@ -619,6 +676,55 @@ def run_record(attempt: Path, arm: dict) -> dict:
         "disk": disk(attempt),
         "complete": not missing, "missing": missing,
     }
+
+
+def external_run_record(attempt: Path, arm: dict, result: dict) -> dict:
+    """Finch keeps JSONL conversations and a notebook, not an OceanX tree/checkpoint."""
+    def records(name):
+        found = []
+        path = attempt / name
+        if path.is_file():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    found.append(json.loads(line))
+                except ValueError:
+                    continue
+        return found
+
+    executions = {r["execution_id"]: r for r in records("code_runs.jsonl")}
+    calls = records("model_calls.jsonl")
+    conversations = attempt / "transcript.jsonl"
+    missing = []
+    if result.get("status") == "completed":
+        answer = attempt / "answer.md"
+        if not answer.is_file() or not answer.read_text().strip():
+            missing.append("answer.md")
+        if not (attempt / "workspace/notebook.ipynb").is_file():
+            missing.append("notebook.ipynb")
+    if not calls:
+        missing.append("model-call ledger")
+    if not conversations.is_file() or not conversations.stat().st_size:
+        missing.append("agent conversations")
+    documents_ = [{"path": str(p.relative_to(attempt)), "bytes": p.stat().st_size,
+                   "kind": ("final report" if p.name == "answer.md" else
+                            "notebook" if p.name in {"notebook.ipynb", "notebook.md"} else "output")}
+                  for p in evidence_files(attempt) if p.is_file()]
+    spent = usage(attempt, result)
+    return {"task_id": attempt.parent.name, "attempt": attempt.name, "arm": arm["arm"],
+        "policy": None, "library_version": None, "commit": arm.get("finch_commit"),
+        "status": result["status"], "time": {"elapsed_seconds": result["elapsed_seconds"],
+            "setup_seconds": None, "analysis_seconds": None, "model_seconds": spent["model_seconds"],
+            "code_seconds": sum(r.get("duration_seconds", 0) for r in executions.values())},
+        "tokens": spent, "code_runs": {"total": len(executions), "by_state": {
+            s: sum(r["state"] == s for r in executions.values())
+            for s in sorted({r["state"] for r in executions.values()})}},
+        "tree": None, "questions": [], "not_applicable": ["research tree", "OceanX checkpoints"],
+        "documents": documents_, "conversations": {"checkpoint_bytes": 0,
+            "written_after_last_model_call": None, "history_files": int(conversations.is_file()),
+            "history_bytes": conversations.stat().st_size if conversations.is_file() else 0},
+        "disk": disk(attempt), "complete": not missing, "missing": missing,
+        "limitations": "Conversation log completeness is not proven by presence. Killed/in-flight "
+            "requests and router-internal retries may have unavailable usage."}
 
 
 def millions(value) -> str:
@@ -700,13 +806,12 @@ def inventory(args) -> dict:
             "report": str(out / "inventory.md")}
 
 
-def lessons_check(args) -> dict:
-    """Every attempt of a lesson arm must report its lessons unchanged."""
-    problems = []
-    for record in sorted(args.runs.expanduser().rglob("arm_lessons.json")):
-        if not json.loads(record.read_text()).get("unchanged"):
-            problems.append(str(record))
-    return {"checked": len(list(args.runs.expanduser().rglob("arm_lessons.json"))), "changed_or_unfinished": problems}
+def library_check(args) -> dict:
+    """Every attempt that ran with a frozen library must report its lessons and tools unchanged."""
+    runs = args.runs.expanduser()
+    records = sorted([*runs.rglob("arm_library.json"), *runs.rglob("arm_lessons.json")])
+    problems = [str(record) for record in records if not json.loads(record.read_text()).get("unchanged")]
+    return {"checked": len(records), "changed_or_unfinished": problems}
 
 
 def main(argv=None):
@@ -732,11 +837,12 @@ def main(argv=None):
     i = sub.add_parser("inventory")
     i.add_argument("--runs", type=Path, nargs="+", required=True, help="Arm output folders (with arm.json)")
     i.add_argument("--out", type=Path, required=True)
-    lc = sub.add_parser("lessons-check")
+    lc = sub.add_parser("library-check", aliases=["lessons-check"])
     lc.add_argument("--runs", type=Path, required=True)
     args = parser.parse_args(argv)
     handler = {"blind": blind, "validate": validate, "freeze": freeze, "summarize": summarize,
-               "process": process, "inventory": inventory, "lessons-check": lessons_check}[args.command]
+               "process": process, "inventory": inventory, "library-check": library_check,
+               "lessons-check": library_check}[args.command]
     print(json.dumps(handler(args), ensure_ascii=False, indent=2))
     return 0
 

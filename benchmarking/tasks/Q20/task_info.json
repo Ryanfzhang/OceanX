@@ -6,7 +6,7 @@
   "topic": "boundary current and eddies",
   "title": "What starts the Great Whirl",
   "query": "The Great Whirl, the large anticyclone that forms off Somalia each summer, has been attributed both to the local southwest-monsoon winds and to planetary (Rossby) waves that reach the coast before the monsoon starts. Using the supplied GLORYS12 monthly sea surface height, velocity, temperature and salinity for 2011-2020 in the western and northern Arabian Sea (47-70 E, 4-26 N), determine when and where the Great Whirl forms, intensifies and decays in each year, how variable it is, and which proposed initiation mechanism the data support. Winds are not supplied.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "ARAB",

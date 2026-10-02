@@ -6,7 +6,7 @@
   "open_kind": "checkable",
   "title": "Spreading and dilution of the saline subtropical water",
   "query": "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer thickness for 2011-2020 in the western Tasman Sea off south-eastern Australia (46-26 S, 147-162 E), trace the saline subtropical water that the East Australian Current carries south: where its salinity maximum lies in depth, how its core salinity changes along the path, through the seasons and from year to year, and what dilutes it.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v6",
   "region": {
     "code": "TAS",

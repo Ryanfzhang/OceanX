@@ -5,7 +5,7 @@
   "topic": "water masses",
   "title": "Erosion of the salinity maximum inside the Loop Current eddy Poseidon",
   "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, test the following findings of Sosa-Gutierrez et al. (2020, Journal of Geophysical Research: Oceans, doi:10.1029/2019JC015397), who followed the Loop Current eddy Poseidon with gliders from August 2016 to July 2017: (1) during its westward journey the subsurface salinity maximum of Subtropical Underwater inside the eddy was eroded, forming Gulf Common Water; (2) most of the dilution occurred in late autumn and winter, with northerly winds and mixed-layer deepening; (3) above the 1026 kg/m3 isopycnal the salinity trend is explained mostly by vertical salt diffusion, as winter heat loss drives a turbulent salt flux into the eddy's thermostad and dilutes the high-salinity core below; (4) vertical diffusion keeps homogenising upper-ocean salinity until the vertical salinity gradient is negligible; (5) below the 1026 kg/m3 isopycnal, advection, presumably through eddy-eddy interaction, is the main cause of salt loss. Winds and surface fluxes are not supplied. Identify and track the eddy in the reanalysis and justify the match, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper, which used glider observations and a regional model.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "GULF",

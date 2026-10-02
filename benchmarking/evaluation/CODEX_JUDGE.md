@@ -78,7 +78,7 @@ One file per attempt: `$EVAL_ROOT/<experiment>/scores/<blind_id>.json`.
   "blind_id": "b1a2b3c4d5e6",
   "task_id": "Q12",
   "status": "completed",
-  "rubric_version": "3.0",
+  "rubric_version": "3.1",
   "rubric_status": "frozen",
   "references_sha256": "<frozen.references_sha256 of the rubric used>",
   "judge": {"name": "codex", "model": "<model>", "judged_utc": "2026-10-20T08:00:00Z"},

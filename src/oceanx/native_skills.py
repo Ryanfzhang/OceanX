@@ -13,6 +13,7 @@ from pathlib import Path
 from deepagents.backends import CompositeBackend, FilesystemBackend, StateBackend
 from deepagents.middleware.permissions import FilesystemPermission
 
+from oceanx.skill_regions import packaged_skill
 from oceanx.skills import (
     ocean_reference_root,
     ocean_skill_dirs,
@@ -26,9 +27,10 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
     Existing snapshots remain immutable for active readers. A changed bundle
     gets a new directory without deleting past research or altering its files.
     ``revisions`` maps a bundled skill's name to its SKILL.md with the project's
-    human-approved lessons written in (see research/lessons.py). The packaged file
-    is not modified; the revised text is part of the content hash, so a lesson
-    change selects a new snapshot.
+    lessons and tools written into the regions the skill reserves for them, and
+    ``<skill>/<path>`` to another file of that skill (see skill_regions.py and
+    research/review.py). The packaged files are not modified; the revised text is
+    part of the content hash, so a change selects a new snapshot.
     """
     revisions = revisions or {}
     allowed = {s.name for s in ocean_skill_metadata(role=role, capabilities=capabilities)}
@@ -45,9 +47,14 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
                  if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc")
 
     def content(source: Path, relative: Path) -> bytes:
-        revised = (revisions.get(relative.parts[1])
-                   if relative.parts[0] == "skills" and relative.parts[2:] == ("SKILL.md",) else None)
-        return revised.encode("utf-8") if revised is not None else source.read_bytes()
+        if relative.parts[0] != "skills":
+            return source.read_bytes()
+        document = relative.parts[2:] == ("SKILL.md",)
+        revised = revisions.get(relative.parts[1] if document else "/".join(relative.parts[1:]))
+        if revised is None and document:
+            # Nothing learned: the region markers still must not reach a reader.
+            revised = packaged_skill(source.parent, source.read_text(encoding="utf-8"))
+        return source.read_bytes() if revised is None else revised.encode("utf-8")
 
     digest = hashlib.sha256()
     for source, relative in files:

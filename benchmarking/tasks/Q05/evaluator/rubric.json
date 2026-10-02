@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.2",
+  "rubric_version": "3.3",
   "task_id": "Q05",
   "type": "paper_reproduction",
   "title": "Destruction and return of hypoxia off the Pearl River Estuary, July 2018",
@@ -91,7 +91,7 @@
       "claim": "Hypoxia returned about 6 days later, with bottom-water oxygen consumption averaging 14.6 umol/kg per day.",
       "paper_evidence": "Abstract: 'quickly restored ~6 d later, resulting primarily from high biochemical oxygen consumption in bottom waters that averaged 14.6 +/- 4.8 umol O2 kg-1 d-1.'",
       "testability": "partly testable",
-      "how_to_test": "Testable: the time for hypoxia to return and the rate of bottom-oxygen decline. Consumption can be separated from physical supply only with the evaluator-only oxygen budget (X_OXY) or stated assumptions.",
+      "how_to_test": "Test return time and bottom-oxygen decline using core fields. Decline is a net tendency, not measured biochemical consumption. Physical supply can be estimated only within stated grid, sampling and transport assumptions; the supplied fields cannot independently verify the biochemical consumption rate.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: return time +/-3 days; decline rate +/-50%)",
       "anchors": {
@@ -111,9 +111,9 @@
       "claim": "Shoreward intrusion of offshore subsurface water added about 8.6% to the oxygen loss.",
       "paper_evidence": "Abstract: 'The shoreward intrusion of offshore subsurface waters contributed to an additional 8.6 +/- 1.7 % of oxygen loss during the reinstatement of hypoxia.'",
       "testability": "partly testable",
-      "how_to_test": "Testable as the advective contribution estimated from velocity and oxygen gradients (or from X_OXY). The paper's mixing-model estimate cannot be reproduced exactly.",
+      "how_to_test": "Test intrusion pathways and the sign and magnitude of resolved horizontal advection estimated from collocated velocity and oxygen gradients, with grid and differencing sensitivity. Neither a closed oxygen-loss fraction nor the paper's mixing-model estimate is independently reproduced by these core fields.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: sign exact; share +/-10 percentage points)",
+      "tolerance": "to freeze before judging (suggested: transport direction and resolved-advection sign agree under matched definitions; no required exact total oxygen-loss share)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",
@@ -183,9 +183,7 @@
     "A paper value reported as the agent's own result scores 0 on that claim and caps R at 1.",
     "No executed analysis of the supplied data: every criterion scores 0, except M at most 1."
   ],
-  "evaluator_groups": [
-    "X_OXY"
-  ],
+  "evaluator_groups": [],
   "frozen": {
     "references_sha256": null,
     "tolerances_frozen_at": null,

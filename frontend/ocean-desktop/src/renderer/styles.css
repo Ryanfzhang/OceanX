@@ -729,8 +729,7 @@ button, input, textarea, select { transition: border-color 150ms ease, backgroun
 .map-category-legend i,.field-category-legend i {display:inline-block;flex:none;width:12px;height:12px;}
 .field-category-legend {display:flex;flex-wrap:wrap;gap:6px 14px;padding:7px 12px;}
 
-/* Research lessons review */
-.lessons-badge { min-width: 18px; padding: 0 5px; border-radius: 9px; color: white; background: var(--accent, #1d6fb8); font-size: 11px; line-height: 18px; text-align: center; }
+/* Review: the lessons and tools a project has learned */
 .lessons-dialog { width: min(720px, 100%); }
 .lessons-dialog > section { padding: 4px 18px 12px; }
 .lessons-dialog h3 { margin: 12px 0 8px; font-size: var(--font-body); }
@@ -738,24 +737,22 @@ button, input, textarea, select { transition: border-color 150ms ease, backgroun
 .lessons-intro, .lessons-notice, .lessons-empty { margin: 10px 18px; color: var(--muted, #556); font-size: 13px; }
 .lessons-notice { color: var(--ink); }
 .lessons-actions { display: flex; align-items: center; gap: 8px; padding: 0 18px 6px; }
-.lessons-actions button, .lesson-card footer button, .lesson-active button { display: inline-flex; align-items: center; gap: 6px; }
-.lesson-card { margin-bottom: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-m); }
-.lesson-card header { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 12px; }
-.lesson-role { padding: 2px 8px; border-radius: 10px; background: var(--soft-2); }
-.lesson-kind { color: var(--muted, #667); }
-.lesson-field { display: grid; gap: 4px; margin: 8px 0; font-size: 12px; }
-.lesson-field small { color: var(--muted, #667); }
-.lesson-field textarea, .lesson-field input { width: 100%; font: inherit; font-size: 13px; }
-.lesson-rationale, .lesson-text { margin: 6px 0; font-size: 13px; }
-.lesson-problem { margin: 6px 0; color: #b3261e; font-size: 12px; }
+.lessons-actions button, .lesson-active button { display: inline-flex; align-items: center; gap: 6px; }
+.lesson-kind { color: var(--muted, #667); font-size: 12px; }
 .lesson-evidence { margin: 4px 0; font-size: 12px; }
 .lesson-evidence ul { margin: 4px 0 0; padding-left: 18px; }
-.lesson-card footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .lesson-active-list { margin: 0; padding: 0; list-style: none; }
-.lesson-active { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.lesson-active { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.lesson-active > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .lesson-active small { color: var(--muted, #667); }
-.lesson-retire { display: flex; gap: 6px; }
+.lesson-active code { font-family: var(--mono); font-size: 12px; }
+.library-marks { display: flex; flex: 0 0 auto; gap: 6px; }
+.library-marks button { min-height: 28px; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: var(--r-m); background: white; }
+.library-marks button.primary { border-color: var(--teal); color: white; background: var(--teal); }
+.library-marks button.danger { border-color: var(--red); color: white; background: var(--red); }
+.library-marks button[aria-pressed="true"]:disabled { opacity: 1; cursor: default; }
+.library-code { max-height: 220px; overflow: auto; margin: 6px 0 0; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-s); white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: var(--font-small); }
+.library-changes li { margin: 2px 0; color: var(--muted, #556); }
+.lessons-dialog section > details > summary { margin: 8px 0; font-size: 13px; cursor: pointer; }
 .lessons-footer { padding: 10px 18px 14px; border-top: 1px solid var(--line); color: var(--muted, #667); }
 .review-tabs { display: flex; gap: 6px; padding: 10px 18px 0; }
-.branch-label { flex-direction: column; }
-.branch-label-actions { display: flex; flex-wrap: wrap; gap: 6px; }

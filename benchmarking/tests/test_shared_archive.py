@@ -56,6 +56,53 @@ class ArchiveTests(unittest.TestCase):
 
 
 class ServiceTests(unittest.TestCase):
+    def test_float32_tasman_grid_recovers_partial_without_network(self):
+        import netCDF4
+        import numpy as np
+
+        chunk = services.build_plan(
+            "cmems", ["thetao"], [2011], [1], [147, 162, -46, -26],
+            "test_phy_P1M", "test_version",
+        )[0]
+        chunk["expected_grid_step"] = 1 / 12
+        lon = np.linspace(147, 162, 181, dtype=np.float32)
+        lat = np.linspace(-46, -26, 241, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            final = root / chunk["relative_path"]
+            final.parent.mkdir(parents=True)
+            partial = final.with_suffix(".nc.part")
+            with netCDF4.Dataset(partial, "w") as ds:
+                for name, values in [("time", [15]), ("longitude", lon), ("latitude", lat)]:
+                    ds.createDimension(name, len(values))
+                    var = ds.createVariable(name, "f4", (name,))
+                    var.units = "days since 2011-01-01" if name == "time" else "degrees"
+                    var[:] = values
+                var = ds.createVariable("thetao", "f4", ("time", "latitude", "longitude"))
+                var.units = "degrees_C"
+                var[:] = 20
+            expected = {"thetao": len(lon) * len(lat)}
+            self.assertEqual(services.verify_service_file(partial, chunk), expected)
+
+            def no_network(*args, **kwargs):
+                self.fail("A fully verified partial must be promoted without fetching again")
+
+            result = down.transfer(chunk, root, runner=no_network, verifier=services.verify_service_file)
+            self.assertEqual(result["valid_counts"], expected)
+            self.assertTrue(final.is_file())
+            self.assertFalse(partial.exists())
+            self.assertEqual(down.transfer(chunk, root, runner=no_network)["state"], "verified_existing")
+            # Still reject a missing grid point and incorrect longitude extent.
+            with netCDF4.Dataset(final, "a") as ds:
+                ds.variables["longitude"][90] = ds.variables["longitude"][89]
+            with self.assertRaisesRegex(down.DownloadError, "native grid"):
+                services.verify_service_file(final, chunk)
+            with netCDF4.Dataset(final, "a") as ds:
+                ds.variables["longitude"][:] = lon
+                ds.variables["longitude"][0] = 146
+            with self.assertRaisesRegex(down.DownloadError, "spatial coverage"):
+                services.verify_service_file(final, chunk)
+
     def test_official_sdk_dispatch_uses_local_staging(self):
         for source in ["era5", "cmems"]:
             c = services.build_plan(source, ["ssr"] if source == "era5" else ["thetao"],

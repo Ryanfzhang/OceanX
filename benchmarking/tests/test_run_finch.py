@@ -1,0 +1,269 @@
+"""Offline Finch adapter/supervisor tests; no API requests or real Docker jobs."""
+import asyncio
+import json
+import sys
+import time
+import types
+from pathlib import Path
+
+import finch_worker as worker
+import pytest
+import run_finch as runner
+
+from oceanx.batch import QueryCase
+
+
+@pytest.fixture
+def setup(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner.os, "getuid", lambda: 1000)
+    config = tmp_path / "benchmark.yaml"
+    config.write_text("model: test-model\noceanx_api: openai\nopenai:\n"
+                      "  url: https://example.invalid/v1\n  api_key: secret-test-key\n")
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "input.nc").write_bytes(b"unchanged")
+    finch = tmp_path / "finch"
+    finch.mkdir()
+    fake = tmp_path / "worker.py"
+    fake.write_text('''
+import json, pathlib, subprocess, sys, time
+attempt = pathlib.Path(sys.argv[sys.argv.index('--attempt')+1])
+spec = json.loads((attempt / 'worker.json').read_text())
+prompt = (attempt / 'submitted_prompt.txt').read_text()
+work = pathlib.Path(spec['workspace'])
+(work / 'notebook.ipynb').write_text('{}')
+(work / 'outputs/map.png').write_bytes(b'png')
+(work / 'outputs/values.csv').write_text('value\\n42\\n')
+(attempt / 'model_calls.jsonl').write_text(json.dumps({'state':'completed', 'duration_seconds':1,
+    'usage':{'input_tokens':100,'output_tokens':20,'cached_input_tokens':80}})+'\\n')
+(attempt / 'transcript.jsonl').write_text('{}\\n')
+if 'TIMEOUT' in prompt:
+    subprocess.Popen([sys.executable,'-c',"import time; time.sleep(1); open('escaped.txt','w').write('bad')"])
+    time.sleep(30)
+if 'FAIL' in prompt:
+    (attempt / 'worker_result.json').write_text(json.dumps({'status':'failed','stop_reason':'step_limit'}))
+    sys.exit(1)
+(attempt / 'answer.md').write_text('Executed answer: 42')
+(attempt / 'worker_result.json').write_text(json.dumps({'status':'completed','steps':2}))
+''')
+    monkeypatch.setattr(runner, "WORKER", fake)
+    monkeypatch.setattr(runner, "preflight", lambda args, env: {
+        "image_id": "sha256:test", "dependencies": {"python": "3.12", "libraries": {}}})
+    removed = []
+    monkeypatch.setattr(runner, "cleanup_container", lambda docker, name: removed.append(name))
+    queries = tmp_path / "queries.jsonl"
+    output = tmp_path / "runs"
+    def invoke(items, extra=()):
+        queries.write_text("\n".join(json.dumps({"id": f"Q{i:02}", "query": q,
+            "datasets": [str(data)], "timeout_seconds": timeout, "literature_mode": "search_only"})
+            for i, (q, timeout) in enumerate(items, 1)))
+        return ["--config", str(config), "--queries", str(queries), "--output", str(output),
+                "--finch-root", str(finch), "--python", sys.executable,
+                "--docker", sys.executable, "--image", "test-image", *extra]
+    return tmp_path, output, invoke, removed
+
+
+def results(output):
+    return [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+
+
+def test_success_resume_and_artifacts(setup):
+    root, output, invoke, removed = setup
+    args = invoke([("Analyze data", 5)])
+    assert runner.main(args) == 0
+    [record] = results(output)
+    attempt = Path(record["attempt_dir"])
+    assert record["status"] == "completed" and record["steps"] == 2
+    assert record["external_usage"]["input_tokens"] == 100
+    assert (root / "data/input.nc").read_bytes() == b"unchanged"
+    assert not list(output.rglob("*.nc"))
+    assert (attempt / "workspace/outputs/map.png").exists()
+    evidence = json.loads((attempt / "evidence_manifest.json").read_text())["files"]
+    assert "workspace/notebook.ipynb" in evidence
+    assert "workspace/outputs/map.png" in evidence
+    assert "input.nc" not in str(evidence)
+    identity = (output / "manifest.json").read_text()
+    assert "secret-test-key" not in identity
+    assert runner.main([*args, "--resume"]) == 0
+    assert len(results(output)) == 1 and len(removed) == 1
+    with pytest.raises(ValueError, match="Resume"):
+        runner.main([*args, "--resume", "--max-steps", "30"])
+
+
+def test_timeout_partial_delivery_children_and_retry(setup):
+    _, output, invoke, removed = setup
+    args = invoke([("TIMEOUT", .3), ("Analyze", 5)])
+    assert runner.main(args) == 1
+    records = results(output)
+    assert [r["status"] for r in records] == ["timed_out", "completed"]
+    time.sleep(1.1)
+    assert not list(output.rglob("escaped.txt"))
+    assert len(list(output.rglob("map.png"))) == 2
+    assert len(removed) == 2
+    assert runner.main([*args, "--resume"]) == 1
+    assert len(results(output)) == 3  # Failed case gets a new attempt, completed case is skipped.
+
+
+def test_step_failure_continues_and_cleanup_failure_stops(setup, monkeypatch):
+    _, output, invoke, _ = setup
+    assert runner.main(invoke([("FAIL", 5), ("OK", 5)])) == 1
+    assert [r["status"] for r in results(output)] == ["failed", "completed"]
+    def fail_cleanup(*_):
+        raise OSError("daemon unavailable")
+    monkeypatch.setattr(runner, "cleanup_container", fail_cleanup)
+    assert runner.main(invoke([("OK", 5), ("OK", 5)], ["--output", str(output.parent / "runs2")])) == 1
+    [record] = results(output.parent / "runs2")
+    assert record["cleanup_error"] and record["status"] == "failed"
+
+
+def test_sources_and_manifests_reject_links_and_evaluator(tmp_path):
+    data = tmp_path / "data"
+    data.mkdir()
+    case = QueryCase(id="Q01", query="Analyze", datasets=[data])
+    (data / "evaluator").mkdir()
+    with pytest.raises(ValueError, match="evaluator"):
+        runner.validate_datasets([case])
+    (data / "evaluator").rmdir()
+    source = tmp_path / "source.nc"
+    source.write_bytes(b"original")
+    (data / "link.nc").symlink_to(source)
+    with pytest.raises(ValueError, match="symlink"):
+        runner.validate_datasets([case])
+    assert runner.input_mounts(case)[0] == {"source": str(data), "target": "/inputs/0/data", "read_only": True}
+    work = tmp_path / "work"
+    (work / "outputs").mkdir(parents=True)
+    (work / "outputs/linked.nc").symlink_to(source)
+    assert runner.evidence_manifest(work)["files"] == []
+
+
+def test_unknown_tokens_are_not_zero():
+    assert runner.token_accounting([])["input_tokens"] is None
+    known = {"state": "completed", "usage": {"input_tokens": 10, "output_tokens": 3}}
+    assert runner.token_accounting([known])["cached_input_tokens"] is None
+    assert runner.token_accounting([known, {"state": "failed"}])["input_tokens"] is None
+    assert worker.normalized_usage({"prompt_tokens": 10, "completion_tokens": 3,
+        "prompt_tokens_details": {"cached_tokens": 8}})["input_tokens"] == 10
+
+
+def test_container_boundary():
+    spec = {"workspace": "/runs/work", "mounts": [{"source": "/data/private.nc", "target": "/inputs/0/private.nc"}],
+            "image": "sha256:fixed", "uid": 1000, "gid": 1000, "memory_bytes": 1000, "cpus": 2}
+    config = worker.container_config(spec)
+    host = config["HostConfig"]
+    assert host["Binds"] == ["/runs/work:/workspace:rw", "/data/private.nc:/inputs/0/private.nc:ro"]
+    assert host["NetworkMode"] == "none" and host["ReadonlyRootfs"]
+    assert host["CapDrop"] == ["ALL"] and config["User"] == "1000:1000"
+    assert "docker.sock" not in str(config) and "API_KEY" not in str(config)
+    command = ["jupyter", "nbconvert", "--execute", "notebook.ipynb"]
+    assert worker.notebook_command(command, 300)[-1] == "--ExecutePreprocessor.timeout=300"
+    assert worker.notebook_command(["ls"], 300) == ["ls"]
+
+
+def test_host_notebook_io_rejects_container_created_links(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    secret = tmp_path / "credential.yaml"
+    secret.write_text("secret")
+    (workspace / "notebook.ipynb").symlink_to(secret)
+    with pytest.raises(ValueError, match="Notebook path"):
+        worker.workspace_file(workspace / "notebook.ipynb", workspace)
+    assert secret.read_text() == "secret"
+    assert worker.workspace_file(workspace / "safe.ipynb", workspace) == workspace / "safe.ipynb"
+
+
+def test_worker_environment_ignores_credentials(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "old")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "old")
+    monkeypatch.setenv("MY_PASSWORD", "old")
+    monkeypatch.setenv("PYTHONPATH", "/other/repo")
+    env = runner.worker_environment(tmp_path)
+    assert not any(k in env for k in ("OPENAI_API_KEY", "AWS_ACCESS_KEY_ID", "MY_PASSWORD"))
+    assert env["PYTHONPATH"] == str(tmp_path / "src")
+
+
+def test_meter_records_raw_request_once_and_redacts_failure(tmp_path, monkeypatch):
+    class Router:
+        async def acompletion(self, *args, **kwargs):
+            if kwargs.get("fail"):
+                raise ValueError("secret-test-key")
+            return types.SimpleNamespace(model="test", choices=[], usage={"prompt_tokens": 10, "completion_tokens": 2})
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(Router=Router))
+    restore = worker.install_meter(tmp_path, "secret-test-key")
+    async def run():
+        await Router().acompletion("test", [{"role": "user", "content": "query"}])
+        with pytest.raises(ValueError):
+            await Router().acompletion("test", [], fail=True)
+    try:
+        asyncio.run(run())
+    finally:
+        restore()
+    calls = runner.read_calls(tmp_path / "model_calls.jsonl")
+    assert len(calls) == 2 and calls[0]["usage"]["input_tokens"] == 10
+    assert calls[1]["error"] == "<REDACTED>"
+
+
+def test_external_blind_evidence_and_null_usage(setup, tmp_path):
+    import evaluate
+    _, output, invoke, _ = setup
+    assert runner.main(invoke([("Analyze", 5)])) == 0
+    attempt = Path(results(output)[0]["attempt_dir"])
+    result = json.loads((attempt / "result.json").read_text())
+    result["external_usage"]["input_tokens"] = None
+    (attempt / "result.json").write_text(json.dumps(result))
+    mapping, blind = tmp_path / "mapping.json", tmp_path / "blind"
+    assert evaluate.main(["blind", "--runs", str(output), "--out", str(blind), "--map", str(mapping)]) == 0
+    [record] = json.loads(mapping.read_text()).values()
+    assert record["tokens"] is None
+    assert list(blind.rglob("map.png")) and list(blind.rglob("notebook.ipynb"))
+    assert not list(blind.rglob("transcript.jsonl")) and not list(blind.rglob("worker.json"))
+    (attempt / "evidence_manifest.json").write_text(json.dumps({"files": ["../../private.nc"]}))
+    with pytest.raises(ValueError, match="Unsafe"):
+        list(evaluate.evidence_files(attempt))
+
+
+def test_external_inventory_does_not_require_oceanx_tree(setup):
+    import evaluate
+    _, output, invoke, _ = setup
+    assert runner.main(invoke([("Analyze", 5)])) == 0
+    attempt = Path(results(output)[0]["attempt_dir"])
+    record = evaluate.run_record(attempt, json.loads((output / "arm.json").read_text()))
+    assert record["complete"] and record["tree"] is None
+    assert "research tree" in record["not_applicable"]
+    assert record["tokens"]["input_tokens"] == 100
+    assert "agent conversations" not in record["missing"]
+
+
+def test_external_missing_usage_still_allows_score_summary(tmp_path):
+    import evaluate
+    from test_evaluate import make_arm, score_file
+    folder = make_arm(tmp_path / "runs", "F", None, {"Q01": 2})
+    attempt = folder / "Q01/attempt-1"
+    result = json.loads((attempt / "result.json").read_text())
+    result["external_usage"] = {"input_tokens": None, "output_tokens": None}
+    (attempt / "result.json").write_text(json.dumps(result))
+    mapping, blind = tmp_path / "mapping.json", tmp_path / "blind"
+    evaluate.main(["blind", "--runs", str(folder), "--out", str(blind), "--map", str(mapping)])
+    [(blind_id, _entry)] = json.loads(mapping.read_text()).items()
+    scores = tmp_path / "scores"
+    scores.mkdir()
+    (scores / f"{blind_id}.json").write_text(json.dumps(score_file(blind_id, "Q01", 2)))
+    prereg = tmp_path / "prereg.yaml"
+    prereg.write_text("experiment: external\ncomparisons: []\n")
+    evaluate.main(["freeze", "--prereg", str(prereg)])
+    evaluate.main(["summarize", "--prereg", str(prereg), "--map", str(mapping),
+                   "--scores", str(scores), "--out", str(tmp_path / "report")])
+    summary = json.loads((tmp_path / "report/summary.json").read_text())
+    assert summary["arms"]["F"]["tokens"] is None
+    assert "n/a" in (tmp_path / "report/report.md").read_text()
+
+
+def test_checkout_pin(tmp_path, monkeypatch):
+    (tmp_path / "src/fhda").mkdir(parents=True)
+    (tmp_path / "src/fhda/data_analysis_env.py").write_text("")
+    monkeypatch.setattr(runner, "_git", lambda root, *args: runner.FINCH_COMMIT if args[0] == "rev-parse" else "")
+    runner.validate_checkout(tmp_path, runner.FINCH_COMMIT)
+    with pytest.raises(ValueError, match="full commit"):
+        runner.validate_checkout(tmp_path, "main")
+    monkeypatch.setattr(runner, "_git", lambda *_: "modified")
+    with pytest.raises(ValueError, match="clean"):
+        runner.validate_checkout(tmp_path, runner.FINCH_COMMIT)

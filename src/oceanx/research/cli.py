@@ -1,4 +1,4 @@
-"""`ocean research ...`: labels, lessons, cleanup and paired policy experiments.
+"""`ocean research ...`: labels, the learned library, cleanup and paired policy experiments.
 
 Every command here is run by a human. Nothing in this module runs inside a research
 task, and none of it is available to research agents as a tool.
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import typer
 
-research_app = typer.Typer(help="Research-tree labels, lessons and policy experiments.",
+research_app = typer.Typer(help="Research-tree labels, lessons, tools and policy experiments.",
                            no_args_is_help=True)
 
 
@@ -116,47 +116,52 @@ def evaluate_paired_runs(
 def consolidate(
     project: Path = typer.Option(..., "--project", help="Project folder containing .oceanx/"),
     retention_days: int = typer.Option(30, "--retention-days", min=1),
-    propose: bool = typer.Option(False, "--propose", help="Also ask the meta model for lessons."),
+    review: bool = typer.Option(False, "--review",
+                                help="Also let the meta-agent review the lessons and learn tools."),
+    force: bool = typer.Option(False, "--force", help="Review even if no task finished since the last one."),
     model_role: str = typer.Option("meta", "--model-role"),
 ) -> None:
-    """Digest research trees, archive raw records past retention, optionally mine lessons."""
+    """Digest research trees, archive raw records past retention and count tool calls; with
+    --review the meta-agent updates the project's lessons and tools (model calls)."""
     from oceanx.research.memory import find_stores
-    book = _project(project).lessons
-    result = {"consolidation": book.memory.consolidate(
-        find_stores([project.expanduser()]), retention_days=retention_days,
-        protected_keys=book.protected_task_keys()),
-        "review_proposals": [p["id"] for p in book.review_stale()]}
-    if propose:
+    llm = None
+    if review:
         from oceanx.research.llm import default_llm
-        mined = book.mine(default_llm(model_role))
-        result["mining"] = {"created": [p["id"] for p in mined["created"]],
-                            "rejected": mined["rejected"],
-                            # A lesson needs support from at least three different questions.
-                            "questions": mined["questions"]}
-    _echo(result)
+        llm = default_llm(model_role)
+    _echo(_project(project).update(find_stores([project.expanduser()]), llm=llm, reviewer=llm,
+                                   force=force, retention_days=retention_days))
 
 
-@research_app.command("lessons")
-def lessons(project: Path = typer.Option(..., "--project")) -> None:
-    """Show pending lesson proposals and active lessons."""
-    _echo(_project(project).lessons.overview())
+@research_app.command("library")
+def library(project: Path = typer.Option(..., "--project")) -> None:
+    """Show the project's lessons and tools, with their evidence and call counts."""
+    _echo(_project(project).overview())
 
 
-@research_app.command("lesson-decide")
-def lesson_decide(
+@research_app.command("mark")
+def mark(
     project: Path = typer.Option(..., "--project"),
-    proposal: str = typer.Option(..., "--proposal"),
-    approve: bool = typer.Option(..., "--approve/--reject"),
+    kind: str = typer.Option(..., "--kind", help="lesson | tool"),
+    item: str = typer.Option(..., "--id", help="A lesson id such as L003, or a tool name."),
+    right: bool = typer.Option(..., "--right/--wrong"),
     reviewer: str = typer.Option(..., "--reviewer"),
-    text: str | None = typer.Option(None, "--text", help="Edited lesson wording."),
-    applies_when: str | None = typer.Option(None, "--applies-when"),
-    reason: str | None = typer.Option(None, "--reason"),
 ) -> None:
-    """Human decision on one lesson proposal (same rules as the desktop dialog)."""
+    """The owner's view of one lesson or tool: right keeps it, wrong removes it."""
     try:
-        _echo(_project(project).lessons.decide(
-            proposal, approve=approve, reviewer=reviewer, text=text,
-            applies_when=applies_when, reason=reason))
+        _project(project).mark(kind, item, "right" if right else "wrong", reviewer=reviewer)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"marked {kind} {item}: {'right' if right else 'wrong'}")
+
+
+@research_app.command("snapshot")
+def snapshot(
+    project: Path = typer.Option(..., "--project"),
+    output: Path = typer.Option(..., "--output", help="New folder for the frozen lessons and tools."),
+) -> None:
+    """Freeze the project's lessons and tools as a folder an experiment arm can run with."""
+    try:
+        _echo(_project(project).snapshot(output.expanduser()))
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
 

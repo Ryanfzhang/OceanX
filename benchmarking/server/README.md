@@ -3,10 +3,11 @@
 | Script | Purpose |
 |---|---|
 | `prepare_queries.py` | Write a suite's runner input (JSONL) from the data root. Folders come from `download/data_manifest.json`. `--set A` or `--set B` selects one evolution set. It refuses incomplete downloads and any evaluator material. |
-| `run_oceanx.py` | Run a JSONL as one arm: `--arm`, `--policy`, optional `--lessons <frozen snapshot>`. Writes `arm.json`; each attempt starts from empty OceanX state. |
-| `research_cli.py` | `ocean research ...` (show, label, judge-labels, judge-agreement, consolidate, lessons, lesson-decide) with the `benchmark.yaml` model. |
+| `run_oceanx.py` | Run a JSONL as one arm: `--arm`, optional `--library <frozen snapshot>` (lessons and tools). The policy is the default, `v2-nested`; `--policy` selects another for a paired run. Writes `arm.json`; each attempt starts from empty OceanX state and learns nothing. |
+| `research_cli.py` | `ocean research ...` (show, label, judge-labels, judge-agreement, consolidate, library, mark, snapshot) with the `benchmark.yaml` model. |
 | `collect_oceanx.py` | Collect finished attempts into `collected/` for reading (run automatically at the end of a run). |
 | `run_claude.py` | Optional: the same JSONL with Claude Code, for a cross-system comparison (not part of the main experiment). |
+| `run_finch.py`, `finch_worker.py` | Optional local Finch analysis-component baseline using the same JSONL/config, a separate Python 3.12 environment and a read-only-data Docker kernel. See [Finch setup](../finch/README.md). Not full Robin and not part of the three-arm experiment automatically. |
 | `check_setup.py`, `benchmark_config.py`, `benchmark_models.py` | Model configuration from `benchmark.yaml` and setup checks. |
 
 ## Prepare inputs
@@ -27,8 +28,8 @@ python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite e
 ## Run an arm
 
 ```bash
-python benchmarking/server/run_oceanx.py --queries <file.jsonl> --output <arm folder> --arm A --policy v0-coordinator-bfs
-python benchmarking/server/run_oceanx.py --queries <file.jsonl> --output <arm folder> --arm C1 --policy v2-nested --lessons <snapshot>
+python benchmarking/server/run_oceanx.py --queries <file.jsonl> --output <arm folder> --arm B
+python benchmarking/server/run_oceanx.py --queries <file.jsonl> --output <arm folder> --arm C1 --library <snapshot>
 ```
 
 Output per case: `<arm folder>/<task>/attempt-*/` containing:
@@ -36,9 +37,10 @@ Output per case: `<arm folder>/<task>/attempt-*/` containing:
 - `model_protocol.json`;
 - `workspace/` (the task's Agent folders, reports and outputs) and `state/` (that attempt's own OceanX
   state: the ledger of model calls, the code runs and the agents' conversations);
-- `arm_lessons.json`, for lesson arms only.
+- `arm_library.json`, for arms that run with a library snapshot: the SHA-256 of its lessons and tools
+  before and after the attempt.
 
-`<arm folder>/arm.json` records arm, policy, lesson version, git commit and OceanX version. `--resume`
+`<arm folder>/arm.json` records arm, policy, the library version, git commit and OceanX version. `--resume`
 continues unfinished cases and refuses an output folder that belongs to a different arm.
 
 Paper-selection prompts are answered automatically by selecting all offered papers. Other permissions are

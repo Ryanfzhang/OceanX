@@ -6,7 +6,7 @@
   "topic": "oxygen minimum zone",
   "title": "Structure and ventilation of the Arabian Sea oxygen minimum zone",
   "query": "Using the supplied CMEMS global biogeochemical reanalysis monthly oxygen and nitrate and GLORYS12 monthly temperature, salinity and velocity for 2011-2020 in the western and northern Arabian Sea (47-70 E, 4-26 N), characterize the oxygen minimum zone (its depth range, horizontal extent and intensity) and its seasonal and year-to-year variability, and determine what ventilates it and along which pathways. The two products come from different model systems; account for that.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "ARAB",

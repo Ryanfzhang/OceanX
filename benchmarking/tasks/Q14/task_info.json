@@ -6,7 +6,7 @@
   "topic": "chlorophyll and primary production",
   "title": "Winter chlorophyll, primary production and nitrate uptake northwest of Luzon",
   "query": "Using the supplied CMOMS daily chlorophyll, temperature, salinity and velocity, together with the interval-averaged primary-production (P_Production) and nitrate-uptake (NO3_uptake) diagnostics for 2011-2020, investigate the winter bloom northwest of Luzon (116-120 E, 16-20 N; upper 100 m). Do years with a larger chlorophyll bloom also have higher depth-integrated primary production, how does nitrate uptake relative to production vary, and which ocean-state changes are associated with their timing and magnitude? Quantify the seasonal cycle and winter-to-winter variability using the actual averaging intervals. Distinguish chlorophyll concentration from a production rate, biomass redistribution from growth, and measured process rates from causal inference. Winds, irradiance, nitrate concentration and complete ecosystem source-sink budgets are not supplied; state what this prevents you from concluding.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v4",
   "region": {
     "code": "SCS",

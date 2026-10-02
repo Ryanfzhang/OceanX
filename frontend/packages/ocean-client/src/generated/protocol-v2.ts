@@ -574,102 +574,41 @@ export interface RequestStatusGetRequest {
   "expected_task_revision"?: number | null;
 }
 
-export interface ResearchLabelSetPayload {
-  "task_id": string;
-  "node_id": string;
-  "label": "decision-changing" | "informative-but-not-decisive" | "misleading-or-wasteful";
-}
-
-export interface ResearchLabelSetRequest {
+export interface ResearchLibraryGetRequest {
   "protocol_version": 2;
   "request_id": string;
-  "type": "research.labels.set";
-  "payload": ResearchLabelSetPayload;
-  "context": RequestContext;
-  "expected_workspace_revision"?: number | null;
-  "expected_task_revision"?: number | null;
-}
-
-export interface ResearchLessonDecidePayload {
-  "proposal_id": string;
-  "decision": "approve" | "reject";
-  "text"?: string | null;
-  "applies_when"?: string | null;
-  "reason"?: string | null;
-}
-
-export interface ResearchLessonDecideRequest {
-  "protocol_version": 2;
-  "request_id": string;
-  "type": "research.lessons.decide";
-  "payload": ResearchLessonDecidePayload;
-  "context": RequestContext;
-  "expected_workspace_revision"?: number | null;
-  "expected_task_revision"?: number | null;
-}
-
-export interface ResearchLessonRetirePayload {
-  "lesson_id": string;
-  "reason": string;
-}
-
-export interface ResearchLessonRetireRequest {
-  "protocol_version": 2;
-  "request_id": string;
-  "type": "research.lessons.retire";
-  "payload": ResearchLessonRetirePayload;
-  "context": RequestContext;
-  "expected_workspace_revision"?: number | null;
-  "expected_task_revision"?: number | null;
-}
-
-export interface ResearchLessonsConsolidatePayload {
-  "propose"?: boolean;
-}
-
-export interface ResearchLessonsConsolidateRequest {
-  "protocol_version": 2;
-  "request_id": string;
-  "type": "research.lessons.consolidate";
-  "payload": ResearchLessonsConsolidatePayload;
-  "context": RequestContext;
-  "expected_workspace_revision"?: number | null;
-  "expected_task_revision"?: number | null;
-}
-
-export interface ResearchLessonsListRequest {
-  "protocol_version": 2;
-  "request_id": string;
-  "type": "research.lessons.list";
+  "type": "research.library.get";
   "payload": EmptyPayload;
   "context": RequestContext;
   "expected_workspace_revision"?: number | null;
   "expected_task_revision"?: number | null;
 }
 
-export interface ResearchPolicyActivatePayload {
-  "name": string;
+export interface ResearchLibraryMarkPayload {
+  "kind": "lesson" | "tool";
+  "id": string;
+  "verdict": "right" | "wrong";
 }
 
-export interface ResearchPolicyActivateRequest {
+export interface ResearchLibraryMarkRequest {
   "protocol_version": 2;
   "request_id": string;
-  "type": "research.policies.activate";
-  "payload": ResearchPolicyActivatePayload;
+  "type": "research.library.mark";
+  "payload": ResearchLibraryMarkPayload;
   "context": RequestContext;
   "expected_workspace_revision"?: number | null;
   "expected_task_revision"?: number | null;
 }
 
-export interface ResearchReviewGetPayload {
-  "task_id"?: string | null;
+export interface ResearchLibraryUpdatePayload {
+  "review"?: boolean;
 }
 
-export interface ResearchReviewGetRequest {
+export interface ResearchLibraryUpdateRequest {
   "protocol_version": 2;
   "request_id": string;
-  "type": "research.review.get";
-  "payload": ResearchReviewGetPayload;
+  "type": "research.library.update";
+  "payload": ResearchLibraryUpdatePayload;
   "context": RequestContext;
   "expected_workspace_revision"?: number | null;
   "expected_task_revision"?: number | null;
@@ -1274,6 +1213,6 @@ export interface WorkspaceSnapshotPayload {
   "disclosure_policy"?: DisclosurePolicySummary | null;
 }
 
-export type OceanRequest = SystemHandshakeRequest | SessionOpenRequest | SessionSubmitRequest | TaskCreateRequest | TaskListRequest | TaskGetRequest | TaskRenameRequest | TaskArchiveRequest | TaskDeleteRequest | TaskSnapshotGetRequest | TaskAgentTranscriptGetRequest | TaskReportReadRequest | TaskOutputListRequest | WorkspaceOpenRequest | WorkspaceSnapshotGetRequest | RequestStatusGetRequest | RequestCancelRequest | InteractionRespondRequest | SystemShutdownRequest | ArtifactListRequest | ArtifactGetRequest | ArtifactResourceGrantRequest | TaskResultResourceGrantRequest | TaskResultInteractiveViewGetRequest | ArtifactVersionsRequest | ArtifactCreateRequest | DatasetImportRequest | LocalSourceImportRequest | PaperImportRequest | PaperRegisterRequest | HypothesisActivateRequest | PortableExportCreateRequest | DisclosurePolicyGetRequest | DisclosurePolicySetRequest | ResearchLessonsListRequest | ResearchLessonDecideRequest | ResearchLessonRetireRequest | ResearchLessonsConsolidateRequest | ResearchReviewGetRequest | ResearchLabelSetRequest | ResearchPolicyActivateRequest;
+export type OceanRequest = SystemHandshakeRequest | SessionOpenRequest | SessionSubmitRequest | TaskCreateRequest | TaskListRequest | TaskGetRequest | TaskRenameRequest | TaskArchiveRequest | TaskDeleteRequest | TaskSnapshotGetRequest | TaskAgentTranscriptGetRequest | TaskReportReadRequest | TaskOutputListRequest | WorkspaceOpenRequest | WorkspaceSnapshotGetRequest | RequestStatusGetRequest | RequestCancelRequest | InteractionRespondRequest | SystemShutdownRequest | ArtifactListRequest | ArtifactGetRequest | ArtifactResourceGrantRequest | TaskResultResourceGrantRequest | TaskResultInteractiveViewGetRequest | ArtifactVersionsRequest | ArtifactCreateRequest | DatasetImportRequest | LocalSourceImportRequest | PaperImportRequest | PaperRegisterRequest | HypothesisActivateRequest | PortableExportCreateRequest | DisclosurePolicyGetRequest | DisclosurePolicySetRequest | ResearchLibraryGetRequest | ResearchLibraryUpdateRequest | ResearchLibraryMarkRequest;
 
 export type OceanEvent = SystemReadyEvent | RequestAcceptedEvent | RequestCompletedEvent | RequestFailedEvent | RequestCancelledEvent | InteractionRequestedEvent | TranscriptItemAppendedEvent | AssistantDeltaEvent | AssistantTurnCompletedEvent | ToolCallStartedEvent | ToolCallCompletedEvent | ContextCompactionProgressEvent | TaskSnapshotEvent | TaskResultsChangedEvent | TeamSnapshotEvent | WorkspaceSnapshotEvent | WorkspaceChangedEvent | DisclosurePolicyUpdatedEvent | SystemShutdownEvent | SystemErrorEvent | ArtifactCreatedEvent | ArtifactVersionCreatedEvent | ArtifactStatusChangedEvent;

@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.1",
   "task_id": "Q13",
   "type": "open_problem",
   "open_kind": "checkable",
@@ -64,11 +64,11 @@
         "depth_probes"
       ],
       "anchors": {
-        "0": "Description only, or a mechanism that the answer key contradicts.",
-        "1": "A mechanism asserted from the literature or intuition, without a test in the data.",
-        "2": "One mechanism tested (for example a correlation or composite); alternatives not examined, or the dominant process differs from the answer key.",
-        "3": "The dominant process agrees with the answer key and is supported by a process-based test (budget, dynamical balance, conditional or lagged analysis); at least one alternative is tested.",
-        "4": "Dominant and secondary processes agree with the answer key and are established with process-based quantitative tests; competing explanations are tested and ruled in or out; the depth probes are addressed."
+        "0": "Description only, or process evidence contradicted by independently computed reference diagnostics.",
+        "1": "A mechanism asserted from literature or intuition without a test in the supplied fields.",
+        "2": "One candidate explanation tested; alternatives or identifiability limits not examined.",
+        "3": "Quantitative process, conditional or lagged tests consistent with reference diagnostics; at least one alternative tested; unresolved causal attribution stated.",
+        "4": "Competing explanations tested with quantitative diagnostics and uncertainty, consistent with independent references; data-supported conclusions and unresolved alternatives clearly distinguished; depth probes addressed. A justified inability to identify a dominant cause can receive full credit."
       }
     },
     {
@@ -116,9 +116,7 @@
     }
   ],
   "answer_key": {
-    "oracle_groups": [
-      "X_OXY"
-    ],
+    "oracle_groups": [],
     "items": [
       {
         "id": "Q13-A1",
@@ -130,12 +128,12 @@
       },
       {
         "id": "Q13-A2",
-        "quantity": "Controls",
-        "procedure": "With X_OXY: yearly bottom-layer oxygen budget in hypoxic cells (rate, advection, diffusion; biological term as the residual) and the term explaining most of the interannual variance. Without X_OXY: ranking of yearly correlations and partial correlations with stratification, plume area, surface chlorophyll, bottom temperature and the along-shelf current.",
+        "quantity": "Evidence for candidate controls",
+        "procedure": "Using core oxygen, temp, salt, chlorophyll, u and v, compare yearly hypoxia with stratification, plume area, surface chlorophyll, bottom temperature and along-shelf currents. Rank associations using correlations, partial correlations and contrasting-year or within-season composites, with uncertainty appropriate for ten autocorrelated years. Chlorophyll is a supply proxy; oxygen decline or an unclosed budget residual is not measured biochemical consumption. Associations alone do not establish a dominant cause.",
         "used_by": "Q13-M",
-        "oracle": "X_OXY (optional)",
+        "oracle": "Independent reference diagnostics from C_CORE fields bound to this task",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: the agent's top control among the answer key's top two)"
+        "tolerance": "to freeze before judging (suggested: robust associations consistent with independent references under matched definitions; tied or unstable rankings accepted when justified by uncertainty)"
       },
       {
         "id": "Q13-A3",
@@ -148,10 +146,10 @@
     ]
   },
   "depth_probes": [
-    "Separates stratification (plume, temperature) from organic-matter supply (chlorophyll as a proxy) and from residence time or circulation.",
-    "Handles collinearity between controls (partial correlations, contrasting-year composites, or budget terms).",
-    "Considers within-season timing and episodic ventilation (storms and wind reversals inferred from the currents).",
-    "States how the missing discharge and nutrient data limit the attribution."
+    "Separates evidence for stratification, chlorophyll as an organic-matter-supply proxy, and circulation or residence-time proxies.",
+    "Handles collinearity with conditional analyses or contrasting-year composites and reports unstable rankings.",
+    "Tests within-season timing and episodic ventilation from oxygen, density and current changes; does not infer a specific storm or wind reversal from currents alone.",
+    "States how missing discharge, nutrients and native oxygen-budget terms limit attribution; net oxygen decline and budget residuals are not measured respiration."
   ],
   "breadth_probes": [
     "Links to the synoptic mechanisms reported for this shelf and to hypoxia on other river-dominated shelves.",
@@ -162,9 +160,7 @@
     "A different target (region, period or quantity) without justification: Q and M score at most 1.",
     "No executed analysis of the supplied data: every criterion scores 0, except F at most 1."
   ],
-  "evaluator_groups": [
-    "X_OXY"
-  ],
+  "evaluator_groups": [],
   "frozen": {
     "references_sha256": null,
     "tolerances_frozen_at": null,

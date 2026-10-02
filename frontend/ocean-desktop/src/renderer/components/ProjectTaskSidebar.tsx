@@ -43,8 +43,7 @@ export function ProjectTaskSidebar({
   onOpenTask,
   onDeleteTask,
   onOpenSettings,
-  onOpenLessons,
-  pendingLessons = 0,
+  onOpenLibrary,
 }: {
   projects: ProjectCatalogEntry[];
   activeProjectPath: string | null;
@@ -56,8 +55,7 @@ export function ProjectTaskSidebar({
   onOpenTask: (projectPath: string, taskId: string) => void;
   onDeleteTask: (projectPath: string, taskId: string) => void;
   onOpenSettings: () => void;
-  onOpenLessons?: () => void;
-  pendingLessons?: number;
+  onOpenLibrary?: () => void;
 }): React.JSX.Element {
   const {text} = useUiLanguage();
   const [seenRevisions, setSeenRevisions] = useState<Record<string, number>>(readSeenRevisions);
@@ -141,6 +139,6 @@ export function ProjectTaskSidebar({
         </div>
       </section>) : <div className="project-list-empty"><Folder size={20} /><p>{text('Add a local project to keep its research tasks here.', '添加一个本地项目后，研究任务会显示在这里。')}</p></div>}
     </nav>
-    <footer><button type="button" onClick={onOpenSettings}><Settings size={16} />{text('Settings', '设置')}</button>{onOpenLessons ? <button type="button" onClick={onOpenLessons} disabled={!activeProjectPath} title={text('Review lessons, branch labels and policies', '审核经验、分支标注与策略')}><BookOpenCheck size={16} />{text('Review', '审核')}{pendingLessons > 0 ? <span className="lessons-badge" aria-label={text(`${pendingLessons} pending`, `${pendingLessons} 条待审核`)}>{pendingLessons}</span> : null}</button> : null}</footer>
+    <footer><button type="button" onClick={onOpenSettings}><Settings size={16} />{text('Settings', '设置')}</button>{onOpenLibrary ? <button type="button" onClick={onOpenLibrary} disabled={!activeProjectPath} title={text('See the lessons and tools this project has learned, and mark them right or wrong', '查看本项目学到的经验和工具，并标记对或错')}><BookOpenCheck size={16} />{text('Review', '审核')}</button> : null}</footer>
   </aside>;
 }

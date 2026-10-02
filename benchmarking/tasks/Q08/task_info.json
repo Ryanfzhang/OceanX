@@ -5,7 +5,7 @@
   "topic": "mesoscale eddies",
   "title": "Vertical structure of a Loop Current eddy",
   "query": "Using the supplied GLORYS12 daily temperature, salinity and sea surface height for 2011-2017 in the Gulf of Mexico, test the following findings of Meunier et al. (2018, Journal of Geophysical Research: Oceans, doi:10.1029/2018JC013801) on the Loop Current eddy (Poseidon) observed by glider from August to November 2016: (1) the eddy is a large body of nearly homogeneous water between about 50 and 250 m, confined between the seasonal and main thermoclines; (2) its core is up to 9.7 C warmer than the surrounding Gulf water; (3) its salinity has a double-core structure, a subsurface fresh core (anomaly about -0.27) above a deeper saline core (anomaly up to 1.22); (4) the saline core of Caribbean origin is well conserved from the Yucatan Basin through the Loop Current and at least seven months after the eddy detached, while the fresh homogeneous core forms by surface heat loss and mixing in the winter before detachment; (5) the geostrophic velocity forms a subsurface-intensified vortex ring. Identify the corresponding eddy in the reanalysis and justify the match, give a verdict for each finding (reproduced, partly reproduced, not reproduced, or not testable with the supplied data) with quantitative evidence, and explain differences from the paper's observations.",
-  "catalog_version": "2026-10-01-v6",
+  "catalog_version": "2026-10-02-v7",
   "query_version": "2026-10-01-v5",
   "region": {
     "code": "GULF",
