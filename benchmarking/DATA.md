@@ -85,6 +85,12 @@ set has been downloaded yet, so the first transfer checks them.
 
 ## Staging CMOMS (owner)
 
+For the owner's existing flat annual archive at `/import/home4/share/PRE_wavyocean`,
+see [SERVER_DATA.md](SERVER_DATA.md#original-cmoms-do-not-copy-the-entire-2011-2022-archive).
+It describes no-copy hard-link staging, the shared-inode caveat, and missing grid metadata.
+Current completion reports are also summarized there; the acquisition notes below describe the plan,
+not a live download status. All public groups now report complete (2026-10-02).
+
 1. One folder per variable and year: `$DATA_ROOT/CMOMS/<variable>/<year>/*.nc`. The NetCDF variable must
    have the folder's name (`temp`, `salt`, `u`, `v`, `oxygen`, `chlorophyll`). Years 2011-2020.
 2. `$DATA_ROOT/CMOMS/grid/` holds the static files:

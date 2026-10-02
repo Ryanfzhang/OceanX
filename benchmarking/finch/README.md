@@ -20,26 +20,30 @@ git -C /home/mafzhang/code/finch-baseline checkout aea66fdf2dd2be827727de50a73ca
 conda create -n finch-bench python=3.12 pip -y
 /home/mafzhang/miniconda3/envs/finch-bench/bin/python -m pip install \
   -c /home/mafzhang/code/OceanX/benchmarking/finch/constraints.txt \
-  -e /home/mafzhang/code/finch-baseline pyyaml
+  -e /home/mafzhang/code/finch-baseline pyyaml 'python-dotenv>=1.0,<2'
+/home/mafzhang/miniconda3/envs/finch-bench/bin/python -m pip install \
+  -r /home/mafzhang/code/OceanX/benchmarking/finch/kernel-requirements.txt
 ```
 
-Docker must already be installed and available to this server account. If it is
-not, ask the administrator to provide Docker or an equivalent reviewed execution
-setup; this runner has **no unsandboxed fallback**. Docker access itself is a
-trusted-host privilege; only the trusted runner/Finch controller can access it.
-The model-controlled calculation container cannot access the socket.
+No Docker daemon, image, administrator access or Edison account is required.
+Linux must provide `bwrap` (Bubblewrap), `prlimit` and `taskset`, and permit user
+namespaces. These are already available on macyang10 (checked 2026-10-02).
+If namespaces are disabled elsewhere, the runner fails before making any model
+request; it never falls back to unrestricted host execution.
 
-Build the calculation image from the OceanX checkout:
+Check the server tools:
 
 ```bash
-cd /home/mafzhang/code/OceanX
-docker build -f benchmarking/finch/Dockerfile -t oceanx-finch-kernel:1 .
+command -v bwrap prlimit taskset
+bwrap --version
 ```
 
-The image contains only a Python notebook kernel and scientific packages, not
-OceanX, its skills, the Finch controller or credentials. The runner resolves the
-image tag to an image ID, records it and executes that ID. It never pulls an image
-automatically. Record an image digest when publishing a reproducible experiment.
+By default the notebook uses the same separate Finch interpreter as the agent.
+`--kernel-python` can select another dedicated scientific environment. Only its
+runtime directories are mounted read-only; neither the Finch checkout nor the
+OceanX checkout or user home is mounted. No model credentials are supplied to the
+notebook. Both interpreters' package versions and the sandbox adapter hash are
+recorded; preflight imports the runtime inside the actual sandbox before any run.
 
 ## Prepare the same task inputs
 
@@ -70,13 +74,13 @@ Run the supervisor in oceanx-bench; `--python` selects the separate Finch worker
   /home/mafzhang/code/OceanX/benchmarking/server/run_finch.py \
   --queries /home/mafzhang/benchmark-inputs/test.jsonl \
   --output /import/home4/share/mafzhang/benchmark-runs/finch/F-repeat1 \
-  --config /home/mafzhang/code/OceanX/benchmark.yaml \
+  --config /home/mafzhang/code/OceanX/benchmarking/.env \
   --finch-root /home/mafzhang/code/finch-baseline \
   --python /home/mafzhang/miniconda3/envs/finch-bench/bin/python \
-  --image oceanx-finch-kernel:1 --arm F --max-steps 60
+  --arm F --max-steps 60
 ```
 
-All model requests use the model, provider and endpoint in benchmark.yaml;
+All model requests use BENCH_MODEL (DeepSeek Flash), the shared key and endpoints in benchmarking/.env;
 credentials are not written to manifests or supplied to the calculation kernel.
 No Edison/FutureHouse account is required and no files are uploaded to its platform.
 **Notebook content, plots and tool observations are still sent to the configured
@@ -84,24 +88,29 @@ LLM provider.** Local execution is not a guarantee that private derived data nev
 leave the server. Use an endpoint approved for CMOMS confidentiality.
 
 Default limits are a 3-hour attempt, 60 agent steps, 300 seconds per notebook
-execution, 8 GiB memory and 2 CPUs. A case's `timeout_seconds` overrides the default
+execution, 8 GiB address space per calculation process and affinity to 2 available
+CPUs (fractional values round up). These are native process limits, not Docker
+aggregate-memory limits or CPU quotas. A case's `timeout_seconds` overrides the default
 attempt limit. ReAct may make multiple model calls per step; steps are not token or
 call counts. These are adapter defaults, **not** the Nature paper's settings.
+Calculation processes also inherit a 256-process user limit and disabled core dumps.
 The nbconvert cell timeout is explicitly set to the same execution budget instead
 of its implicit 30-second default; the outer deadline still bounds the entire notebook.
 Freeze the chosen settings before scored runs; budget changes require a new arm.
 
 Datasets appear at `/inputs/<index>/<name>` as read-only mounts, without copies.
 The notebook writes under `/workspace`; published figures/tables go in `outputs/`,
-temporary calculations in `scratch/`. The container has no network, extra Linux
-capabilities or writable root filesystem. Each attempt owns one named container.
-The supervisor removes it after success, failure, timeout or cancellation, and
-stops the batch if cleanup fails. SIGKILL/host failure cannot run cleanup: an
-administrator must inspect orphan `oceanx-finch-*` containers before restarting.
+temporary calculations in `scratch/`. Bubblewrap creates a private filesystem,
+PID namespace and network namespace, drops capabilities and clears the environment.
+The sandbox has only local loopback for Jupyter; it cannot reach external hosts.
+Only `/workspace` is host-writable; `/tmp` is disposable namespace-local storage.
+Every complete notebook replay starts a fresh sandbox and kernel. Its PID namespace
+and `--die-with-parent` tear down calculation descendants when the launcher or
+controller dies, including descendants that created another process group.
 
 Add `--resume` to the exact same command. Completed tasks are skipped; other tasks
 receive new attempt folders. A running writer owns an OS lock. Changes to the
-queries, model, limits, source commit, dependency versions, image ID or adapter
+queries, model, limits, source commit, dependency versions, runtime or adapter
 hash are rejected on resume. Run repeats into distinct output directories and
 interleave arm order using the same experimental plan as OceanX.
 
@@ -120,7 +129,7 @@ interleave arm order using the same experimental plan as OceanX.
 Usage is counted once per router response, not once per choice/trajectory object.
 Missing usage is `null`, never zero. Cache tokens are a subset of input tokens.
 Requests killed in flight and retries internal to LiteLLM without returned usage
-are not a complete billing audit. A container/notebook finishing is not evidence
+are not a complete billing audit. A sandbox/notebook finishing is not evidence
 that the scientific answer is correct; notebook errors and final submission are
 recorded independently.
 
@@ -161,6 +170,8 @@ python -m pytest benchmarking/tests/test_run_finch.py benchmarking/tests/test_ev
 The first tests use fake subprocesses/model responses and check recording, timeout,
 resume, mounts and evaluation contracts. The separate Finch-environment test exercises
 the real pinned ReAct, model-routing and notebook interfaces with a fake provider and
-container; it makes no model requests and executes no model-written code on the host.
-A real server smoke test with Docker and
+sandbox; it makes no model requests and executes no model-written code on the host.
+`test_finch_sandbox.py` additionally exercises real Linux notebook execution and
+isolation with fixed test code when Bubblewrap is available.
+A real server smoke test with Bubblewrap and
 an approved model endpoint is required before a scored benchmark.

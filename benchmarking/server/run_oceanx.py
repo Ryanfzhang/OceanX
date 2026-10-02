@@ -1,7 +1,7 @@
 """Run OceanX through its production Agent Server path, as one experimental arm.
 
 The scientific query is submitted unchanged, without a research-tree instruction. All model roles use the
-root benchmark.yaml API configuration in this process only. Every arm runs the default research policy
+benchmarking/.env API configuration in this process only. Every arm runs the default research policy
 unless --policy selects another; an arm fixes an optional frozen library (lessons and tools). Nothing is
 learned during the run, and every attempt checks that.
 """
@@ -183,7 +183,7 @@ def main():
     parser.add_argument("--timeout", type=float, default=None)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--config", type=Path, help="Root benchmark.yaml by default")
+    parser.add_argument("--config", type=Path, help="benchmarking/.env by default")
     parser.add_argument("--arm", default="default", help="Arm label recorded in arm.json, e.g. B or C1")
     parser.add_argument("--policy", help="Research policy for every case; the default (v2-nested) when omitted")
     parser.add_argument("--library", "--lessons", dest="library", type=Path,

@@ -39,6 +39,7 @@ Everything runs on the Linux server, never on macOS.
 | No evaluator material reaches the agent | Rubrics live in `tasks/<task>/evaluator/`. Answer-key data lives under `_evaluator_only/` on the server. Query preparation refuses both. |
 | No learning while benchmarking | Each attempt starts from empty OceanX state and its library is frozen. Every arm runs the default policy (`v2-nested`); an arm fixes an optional frozen library (lessons and tools), and every attempt verifies that library was unchanged. |
 | Evolution uses open problems on separate data | The evolution suite has 24 open problems and no paper verification. It uses two regions outside the test suite (the California Current System and the Tasman Sea) and the same kinds of public products. CMOMS never appears in evolution, so CMOMS questions measure transfer to data OceanX has never seen. |
+| Evolution asks other kinds of problems | No evolution question is about a kind of problem that a test question is about, and no kind of problem appears in more than two evolution questions. A lesson or a tool needs support from three different questions, so whatever is learned has to hold across kinds of problems, and the test suite measures transfer to problems OceanX did not practise. |
 | Two rounds of learning | Set A runs with nothing learned and yields the library L1. Set B runs with L1 and yields L2. The test suite runs with nothing learned, with L1 and with L2, so each round is measured separately. |
 | Learning is the meta-agent's, after each set | After a set has run, the meta-agent reviews its records once: it keeps, revises, retires and adds lessons inside the regions the skills reserve, and adds helper functions that pass a static check, their own test and an independent review. Call counts decide which tools stay listed. The owner can mark any item right or wrong; no approval is needed. |
 | The library is judged by the research process too | Lessons are about research-tree and analysis decisions and tools about code, so each run also reports process measures: tokens spent on questions that did not change the answer, failed code runs, helper calls and lessons named (see `EVALUATION.md`). One of them is a pre-registered endpoint. |
@@ -223,9 +224,22 @@ the same three public products, each cropped to its own region:
 - **CMEMS global biogeochemical reanalysis monthly** oxygen, chlorophyll and nitrate, 1993-2020, 0-1000 m
   (`P_CCS_BGC`, `P_TAS_BGC`).
 
-The variable set mirrors CMOMS, so lessons and tools about temperature, currents, oxygen and chlorophyll can
-transfer.
-The regions do not: neither appears in the test suite.
+The data resemble the test suite's: the same kinds of products and the CMOMS variables. The problems do not.
+No evolution question is about what a test question is about (the transport or path of a boundary current, a
+marine heatwave, upwelling, a temperature front, hypoxia or an oxygen minimum, a bloom, the spreading of a
+water mass, an eddy, carbon exchange, heat content). The evolution questions ask about dynamical balance and
+instability, planetary waves, double diffusion, sound propagation, the sunlit layer, statistical prediction,
+sampling in time and space, the homogeneity of a record, observing-system design, gap filling, objective
+provinces, the habitat of a species and ship routing. The regions differ as well: neither appears in the
+test suite.
+
+Why the problems differ: a lesson or a tool is admitted only with support from three different questions.
+An earlier version of this suite asked the test suite's own kinds of problems in other regions (six
+questions on heatwaves and warm anomalies, five on boundary currents, three on oxygen). A recipe for one
+kind of problem could then be learned and used again on the test questions of that kind, and a gain would
+not have shown that OceanX had learned anything general. Now no kind of problem appears in more than two
+evolution questions, so whatever passes the three-question rule holds across different kinds of problems.
+Each `task_info.json` names its kind of problem under `topic`, and a test checks both properties.
 
 | Set | Region | Runs with | Yields |
 |---|---|---|---|
@@ -234,46 +248,52 @@ The regions do not: neither appears in the test suite.
 
 Set B is on other waters and another kind of circulation, so L2 is not learned where L1 was. It shows
 three things the first round cannot: whether tasks run with L1 still make the mistakes L1 addresses, which
-lessons hold in a second region, and which tools are called when they are offered. The meta-agent retires an
-L1 lesson that set B contradicts, and a tool that no set B run called leaves the list.
+lessons hold on other problems and in a second region, and which tools are called when they are offered.
+The meta-agent retires an L1 lesson that set B contradicts, and a tool that no set B run called leaves the
+list.
 
 ### Set A: California Current System
 
-| ID | Kind | Title | Data |
-|---|---|---|---|
-| E01 | checkable | The equatorward California Current | P_CCS_PHY |
-| E02 | checkable | Temperature fronts of the upwelling zone | P_CCS_SURF |
-| E03 | checkable | Has subsurface oxygen declined since 1993 | P_CCS_BGC |
-| E04 | checkable | Two El Ninos compared: 1997-1998 and 2015-2016 | P_CCS_SURF, P_CCS_BGC |
-| E05 | checkable | Timing of the spring transition to upwelling | P_CCS_SURF |
-| E06 | checkable | The California Undercurrent | P_CCS_PHY |
-| E07 | checkable | Depth of the hypoxic boundary on the slope | P_CCS_BGC |
-| E08 | checkable | Timing and size of the upwelling-season chlorophyll maximum | P_CCS_BGC |
-| E09 | checkable | Local or advected: subsurface anomalies of 2014-2016 | P_CCS_PHY |
-| E10 | disagreement | Product mixed-layer thickness versus mixed layers computed from profiles | P_CCS_PHY |
-| E11 | checkable | Coastal versus offshore marine heatwaves | P_CCS_SURF |
-| E12 | disagreement | When temperature stops predicting nitrate | P_CCS_PHY, P_CCS_BGC |
+| ID | Kind | Kind of problem | Title | Data |
+|---|---|---|---|---|
+| E01 | checkable | geostrophic balance | How closely the currents follow geostrophic balance | P_CCS_PHY |
+| E02 | checkable | statistical prediction | How far ahead sea surface temperature anomalies can be predicted | P_CCS_SURF |
+| E03 | checkable | ocean provinces | Biogeochemical provinces and how stable they are | P_CCS_BGC |
+| E04 | checkable | habitat envelope | Where and when the water suits a fish with temperature and food limits | P_CCS_SURF, P_CCS_BGC |
+| E05 | checkable | temporal sampling | What monthly means hide | P_CCS_SURF |
+| E06 | checkable | ocean acoustics | Sound speed and the conditions for sound propagation | P_CCS_PHY |
+| E07 | checkable | observing-system design | How many profiling floats it takes to map subsurface oxygen and nitrate | P_CCS_BGC |
+| E08 | disagreement | euphotic depth | How deep light reaches, and why estimates from chlorophyll differ | P_CCS_BGC |
+| E09 | checkable | baroclinic instability | Where and when the flow is prone to baroclinic instability | P_CCS_PHY |
+| E10 | disagreement | mixed layer | Product mixed-layer thickness versus mixed layers computed from profiles | P_CCS_PHY |
+| E11 | checkable | record homogeneity | Is the 1993-2020 temperature record homogeneous in time | P_CCS_SURF |
+| E12 | checkable | space and time scales | Do biogeochemical anomalies have the same scales as physical ones | P_CCS_PHY, P_CCS_BGC |
 
 ### Set B: Tasman Sea and East Australian Current
 
-| ID | Kind | Title | Data |
-|---|---|---|---|
-| E13 | checkable | The East Australian Current and where it leaves the coast | P_TAS_PHY |
-| E14 | checkable | Southward or eastward: the two pathways of the separated current | P_TAS_PHY |
-| E15 | checkable | Local or advected: the upper-ocean warm anomaly of 2015-2016 | P_TAS_PHY |
-| E16 | checkable | Spreading and dilution of the saline subtropical water | P_TAS_PHY |
-| E17 | checkable | Deep winter mixed layers and the water they form | P_TAS_PHY |
-| E18 | disagreement | How much water the East Australian Current carries, and why estimates differ | P_TAS_PHY |
-| E19 | checkable | How fast the sea surface has warmed since 1993 | P_TAS_SURF |
-| E20 | checkable | Two marine heatwaves compared: 2015-2016 and 2017-2018 | P_TAS_SURF, P_TAS_BGC |
-| E21 | checkable | Cold water inshore of the East Australian Current | P_TAS_SURF |
-| E22 | checkable | Timing and size of the spring bloom | P_TAS_BGC |
-| E23 | checkable | Has oxygen in the thermocline changed since 1993 | P_TAS_BGC |
-| E24 | disagreement | Do warm-core eddies hold more or less chlorophyll than cold-core eddies | P_TAS_PHY, P_TAS_BGC |
+| ID | Kind | Kind of problem | Title | Data |
+|---|---|---|---|---|
+| E13 | disagreement | planetary waves | Westward-moving sea-level signals: waves, eddies or something else | P_TAS_PHY |
+| E14 | checkable | double diffusion | Where the water column favours salt fingers | P_TAS_PHY |
+| E15 | checkable | modes of variability | Leading patterns of sea-level variability and what they mean | P_TAS_PHY |
+| E16 | checkable | observing-system design | Where to put a few moorings to monitor the upper ocean | P_TAS_PHY |
+| E17 | checkable | mixed layer | Deep winter mixed layers and the water they form | P_TAS_PHY |
+| E18 | checkable | ship routing | Routing a ship with and against the currents | P_TAS_PHY |
+| E19 | checkable | gap filling | Filling the gaps a satellite would leave | P_TAS_SURF |
+| E20 | checkable | habitat envelope | Where a cool-water seaweed that needs nutrients could grow | P_TAS_SURF, P_TAS_BGC |
+| E21 | checkable | space and time scales | The smallest scales the temperature field resolves | P_TAS_SURF |
+| E22 | checkable | seasonal cycle | How deep the seasons reach | P_TAS_BGC |
+| E23 | checkable | record homogeneity | Drift or ocean change in the biogeochemical record | P_TAS_BGC |
+| E24 | disagreement | ocean provinces | Do physical and biogeochemical provinces coincide | P_TAS_PHY, P_TAS_BGC |
 
-Set B has the same mix as set A: ten checkable problems and two disagreement problems, across physics,
-surface temperature and biogeochemistry. Three problems state that surface fluxes or winds are not supplied
-(E15, E17, E21), and two combine products from different model systems (E20, E24).
+Each set has ten checkable problems and two disagreement problems, across the physical, surface-temperature
+and biogeochemical products. Six kinds of problem appear once in each set, on different waters: ocean
+provinces (E03, E24), the habitat of a species (E04, E20), observing-system design (E07, E16), the mixed
+layer (E10, E17), the homogeneity of a record (E11, E23) and scales of variability (E12, E21). Round 2 can
+therefore show whether L1 helps on a kind of problem it was learned from. The other twelve questions are
+each the only one of their kind. Four questions combine two products from different model systems (E04,
+E12, E20, E24). E13 touches one hypothesis named in Q20 (planetary waves); its subject is not the Great
+Whirl. E10 and E17 are unchanged from the earlier suite.
 
 ## What changed in v7
 
@@ -288,8 +308,11 @@ surface temperature and biogeochemistry. Three problems state that surface fluxe
   independent reference calculations on their core fields; missing terms remain unresolved.
 - Q11-Q13 mechanism scoring accepts justified unresolved attribution with quantitative tests of
   competing explanations, rather than requiring an exact dominant native-budget term.
-- Task queries and input groups are unchanged. The catalogue version changes to separate evaluations
+- Test queries and all input groups are unchanged. The catalogue version changes to separate evaluations
   under the revised rubric from earlier results.
+- **The evolution questions were replaced on 2026-10-02.** Twenty-two of the 24 now ask about kinds of
+  problems the test suite does not have; E10 and E17 are unchanged. Every question keeps the data groups it
+  had, so the data manifest, the downloads and the coverage report are the same as before.
 
 ## What changed in v6
 

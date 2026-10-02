@@ -6,7 +6,7 @@
 experiment: test-v7-2026-10            # unique name; also the folder under EVAL_ROOT and RUNS_ROOT
 suite: test                            # Q01-Q30
 code_commit: <git commit used by every arm>
-model: <model id from benchmark.yaml>  # same model for every arm, for the meta-agent and for node labels
+model: deepseek-flash                  # BENCH_MODEL in benchmarking/.env; all analysis/meta/label roles
 judge: {name: codex, model: <codex model>, single_judge: true}
 
 policy: v2-nested                      # the default research policy; every arm runs it

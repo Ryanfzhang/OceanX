@@ -6,17 +6,23 @@ Catalogue `2026-10-02-v7`:
   - Twenty open problems: 7 on CMOMS in the South China Sea, and 13 on public data in the Arabian Sea, the
     Gulf of Mexico and the East China Sea.
 - **Evolution suite (never scored):** 24 open problems on public reanalyses, in two sets of twelve: set A on
-  the California Current System and set B on the Tasman Sea and East Australian Current. OceanX learns
-  lessons and tools from these runs in two rounds: set A yields the library L1, and set B, run with L1,
-  yields L2.
+  the California Current System and set B on the Tasman Sea and East Australian Current. They ask about
+  kinds of problems the test suite does not have (for example sound propagation, statistical prediction and
+  observing-system design), so what is learned has to transfer across problems, not only across regions.
+  OceanX learns lessons and tools from these runs in two rounds: set A yields the library L1, and set B,
+  run with L1, yields L2.
 - **Requested inputs:** small-region CMOMS primary-production/nitrate-uptake diagnostics (Q14) and
   surface air-sea CO2 flux/pCO2 diagnostics (Q16), both for 2011-2020.
 
 Everything runs on the Linux server.
+All runner/meta models use DeepSeek Flash via `benchmarking/.env`. Copy `.env.example`
+to `.env` on the server and fill the single key; only the example is committed.
 
 | Read | For |
 |---|---|
 | [summary.md](summary.md) | All 54 questions, required data (type, time, space, variables), and brief assessment criteria |
+| [RUNNING.md](RUNNING.md) | Start here: partial-data selection and OceanX / Claude Code / Finch in three terminals |
+| [SERVER_DATA.md](SERVER_DATA.md) | Server data audit, unchanged archive layout and safe CMOMS staging |
 | [DESIGN.md](DESIGN.md) | What is tested: allocation, the 30 + 24 questions, verified papers, design rules |
 | [DATA.md](DATA.md) | Data groups, server layout, CMOMS staging, the extra CMOMS variables to request, download commands |
 | [EVALUATION.md](EVALUATION.md) | How runs are made, stored and judged; the research policy; labels, how lessons and tools are learned in two rounds, and the process measures |

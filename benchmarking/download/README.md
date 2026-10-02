@@ -76,27 +76,17 @@ so files downloaded then are verified and reused.
 
 ## Server checkout and existing archive
 
-The owner's checkout on `macyang9` is `/home/mafzhang/code/OceanX`. Update that checkout with
+The owner's checkout on `macyang10` is `/home/mafzhang/code/OceanX`. Update that checkout with
 `git pull --ff-only` before checking the catalogue; similarly named OceanMind directories may belong
 to the older repository. The benchmark Python is `/home/mafzhang/miniconda3/envs/oceanx-bench/bin/python`
 and the shared data root is `/import/home4/share/mafzhang`.
 
-The 2026-10-01 check against catalogue `2026-10-01-v6` found:
+The latest 2026-10-02 v7 completion reports cover **41/54** numerical-input sets:
+all public input groups are complete, including MODIS (216 files) and P_ECS (420 files).
+The remaining 13 questions need CMOMS staging; Q14/Q16 also need requested diagnostics.
+This is completion-report readiness, not new whole-archive hash verification or scientific grading.
 
-| Group | Existing files / required files | Compatibility |
-|---|---:|---|
-| P_GULF | 252 / 252 | Exact current request plan |
-| P_ECS | 420 / 420 | Exact current request plan |
-| P_ERA5 | 560 / 560 | Exact current request plan |
-| P_OISST | 30,680 / 30,680 | Exact current request plan |
-| P_MODIS | 180 / 216 | Existing 2003–2017 scope matches; 2018–2020 is missing |
-| P_ARAB_PHY / P_ARAB_BGC | 0 / 720 + 360 | Not staged |
-| P_CCS_PHY / P_CCS_SURF / P_CCS_BGC | 0 / 720 + 336 + 1,008 | Not staged |
-| P_TAS_PHY / P_TAS_SURF / P_TAS_BGC | 0 / 720 + 336 + 1,008 | Not staged |
-
-Every listed existing file had a receipt, the saved plan hashes matched, and one file per existing
-group passed the downloader's SHA-256 skip check. This was an inventory and sample check, not a new
-full-archive hash verification. No scientific data were downloaded or replaced. CMOMS, requested
-CMOMS_DIA fields and evaluator-only groups were absent from their prescribed folders in this data root;
-that does not establish that the owner has no copies elsewhere. Old NOAA wind files are not inputs to
-this catalogue and are left untouched.
+Keep the current layout and control files intact. For the directory inventory and original CMOMS
+staging options, see [SERVER_DATA.md](../SERVER_DATA.md). For partial-data selection and three-method
+runs, see [RUNNING.md](../RUNNING.md). Those are the single operational entry points; do not use older
+"missing public data" planning notes as the live download status.

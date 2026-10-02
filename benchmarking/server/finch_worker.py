@@ -1,7 +1,7 @@
 """One Finch episode. Imported/executed only in the separate Finch interpreter.
 
 Keep the upstream ReAct agent and notebook tools. Adapt only model routing,
-container mounts/limits, usage recording and delivery; never import OceanX skills.
+native sandbox execution, usage recording and delivery; never import OceanX skills.
 """
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
 from uuid import uuid4
+
+from finch_sandbox import execute_notebook, kernel_check
 
 
 def json_value(value):
@@ -63,21 +65,6 @@ def dependency_check():
     return {"python": sys.version.split()[0], "libraries": dict(sorted(versions.items()))}
 
 
-def container_config(spec):
-    """The only writable host mount is this attempt's work directory."""
-    binds = [f"{spec['workspace']}:/workspace:rw"]
-    binds += [f"{m['source']}:{m['target']}:ro" for m in spec["mounts"]]
-    return {"Image": spec["image"], "Cmd": ["sleep", "infinity"],
-            "WorkingDir": "/workspace", "User": f"{spec['uid']}:{spec['gid']}",
-            "Env": ["HOME=/tmp", "USER=finch", "LOGNAME=finch",
-                    "MPLCONFIGDIR=/tmp/matplotlib", "IPYTHONDIR=/tmp/ipython"],
-            "HostConfig": {"Binds": binds, "NetworkMode": "none", "ReadonlyRootfs": True,
-                "CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"],
-                "PidsLimit": 256, "Memory": spec["memory_bytes"],
-                "NanoCpus": int(spec["cpus"] * 1_000_000_000),
-                "Tmpfs": {"/tmp": "rw,nosuid,nodev,size=1g"}}, "Tty": True}
-
-
 def workspace_file(path, workspace):
     """Finch's host-side notebook IO must not follow model-created symlinks."""
     path, workspace = Path(path), Path(workspace)
@@ -85,14 +72,6 @@ def workspace_file(path, workspace):
             p.is_symlink() for p in (path, *path.parents) if p != workspace.parent):
         raise ValueError("Notebook path must remain inside the attempt workspace without symlinks")
     return path
-
-
-def notebook_command(command, timeout):
-    # nbconvert otherwise has a separate default 30-second cell limit, unrelated
-    # to Finch's outer notebook deadline. Use this arm's explicit execution budget.
-    if command[:2] == ["jupyter", "nbconvert"] and "--execute" in command:
-        return [*command, f"--ExecutePreprocessor.timeout={max(1, int(timeout))}"]
-    return command
 
 
 def install_meter(attempt, secret):
@@ -140,12 +119,14 @@ def install_model(config):
     endpoint = config.endpoint(config.oceanx_api)
     original = common.LLMModel
     def configured_model(config):
-        settings = {"name": config["name"], "model_list": [{
-            "model_name": config["name"], "litellm_params": {
+        # Finch's pinned LiteLLM predates Flash: qualify the alias as well as the
+        # routed model so provider discovery never relies on its stale model list.
+        settings = {"name": provider_model, "model_list": [{
+            "model_name": provider_model, "litellm_params": {
                 "model": provider_model, "api_base": endpoint.url,
                 "api_key": endpoint.api_key, "max_tokens": max_tokens}}],
             "router_kwargs": {"num_retries": 2}}
-        return LiteLLMModel(name=config["name"], config=settings)
+        return LiteLLMModel(name=provider_model, config=settings)
     provider_model = f"{config.oceanx_api}/{config.model}"
     max_tokens = config.max_tokens
     common.LLMModel = configured_model
@@ -153,7 +134,6 @@ def install_model(config):
 
 
 async def episode(attempt, config):
-    import aiodocker
     import fhda.config as cfg
     from fhda import prompts
     from fhda.data_analysis_env import DataAnalysisEnv
@@ -163,11 +143,11 @@ async def episode(attempt, config):
 
     spec = json.loads((attempt / "worker.json").read_text())
     workspace = Path(spec["workspace"])
-    cfg.USE_DOCKER = True
+    cfg.USE_DOCKER = False
     NBEnvironment.EXEC_TIMEOUT = spec["execution_timeout"]
-    original_start = NBEnvironmentState.start_container
+    original_start, original_close = NBEnvironmentState.start_kernel, NBEnvironmentState.close
     original_run = NBEnvironment.run_notebook
-    original_exec = NBEnvironment._exec_cmd
+    original_local = NBEnvironment._run_notebook_local
     original_save, original_reload = NBEnvironmentState.save_nb, NBEnvironmentState.reload_nb
     original_list = NBEnvironment._list_dir
 
@@ -181,7 +161,7 @@ async def episode(attempt, config):
 
     def list_directory(environment, path):
         workspace_file(path, workspace)
-        # Upstream recursively lists on the host; links created inside Docker must
+        # Upstream recursively lists on the host; links created inside the sandbox must
         # not expose host directories or cause a recursion cycle.
         index = {}
         for p in sorted(Path(path).iterdir()):
@@ -194,20 +174,25 @@ async def episode(attempt, config):
                 index.setdefault("files", []).append(p.name)
         return index
 
-    async def execute_command(environment, command):
-        return await original_exec(environment, notebook_command(command, spec["execution_timeout"]))
-
     NBEnvironmentState.save_nb, NBEnvironmentState.reload_nb = save_notebook, reload_notebook
     NBEnvironment._list_dir = list_directory
-    NBEnvironment._exec_cmd = execute_command
 
-    async def start_container(state):
-        state.docker_client = aiodocker.Docker()
-        state.container = await state.docker_client.containers.run(
-            config=container_config(spec), name=spec["container_name"])
-        append_json(attempt / "transcript.jsonl", {"type": "container.started",
-                                                  "name": spec["container_name"]})
-    NBEnvironmentState.start_container = start_container
+    async def no_host_kernel(state):
+        # Kernels exist only inside a namespace for each complete notebook replay.
+        # Never start upstream's unsandboxed local kernel.
+        pass
+
+    async def run_local(environment):
+        workspace_file(environment.state.nb_path, workspace)
+        log = attempt / f"notebook-execution-{uuid4().hex}.log"
+        code, tail = await execute_notebook(spec, log)
+        if code:
+            raise ValueError(f"Sandboxed notebook failed (exit code {code}): {tail}")
+        environment.state.reload_nb()
+        return "Executed all cells."
+
+    NBEnvironmentState.start_kernel, NBEnvironmentState.close = no_host_kernel, no_host_kernel
+    NBEnvironment._run_notebook_local = run_local
     async def measured_execution(environment):
         execution_id, started = uuid4().hex, time.monotonic()
         append_json(attempt / "code_runs.jsonl", {"execution_id": execution_id,
@@ -272,9 +257,9 @@ async def episode(attempt, config):
             await environment.close()
         restore_meter()
         restore_model()
-        NBEnvironmentState.start_container = original_start
+        NBEnvironmentState.start_kernel, NBEnvironmentState.close = original_start, original_close
         NBEnvironment.run_notebook = original_run
-        NBEnvironment._exec_cmd = original_exec
+        NBEnvironment._run_notebook_local = original_local
         NBEnvironmentState.save_nb, NBEnvironmentState.reload_nb = original_save, original_reload
         NBEnvironment._list_dir = original_list
     return {"status": status, "stop_reason": reason, "steps": steps}
@@ -283,9 +268,13 @@ async def episode(attempt, config):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--kernel-check", action="store_true")
     parser.add_argument("--attempt", type=Path)
     parser.add_argument("--config", type=Path)
     args = parser.parse_args(argv)
+    if args.kernel_check:
+        print(json.dumps(kernel_check()))
+        return 0
     if args.check:
         print(json.dumps(dependency_check()))
         return 0

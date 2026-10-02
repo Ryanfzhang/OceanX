@@ -1,7 +1,7 @@
 """Sequential, local Finch baseline. No Edison jobs, uploads, grading or data copies.
 
 The host runs Finch's LDP ReAct agent; its notebook runs in a network-disabled
-Docker container with exactly the case's datasets mounted read-only. Finch is an
+Bubblewrap sandbox with exactly the case's datasets mounted read-only. Finch is an
 external checkout/environment, not a dependency of the OceanX application.
 """
 from __future__ import annotations
@@ -16,12 +16,14 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from benchmark_config import load_config
+from finch_sandbox import BACKEND, cpu_ids, sandbox_command
 from run_claude import inventory, supervise, write_json
 
 from oceanx.batch import load_queries
@@ -29,6 +31,7 @@ from oceanx.batch import load_queries
 FINCH_COMMIT = "aea66fdf2dd2be827727de50a73cae60dff59972"
 REPO = Path(__file__).resolve().parents[2]
 WORKER = Path(__file__).with_name("finch_worker.py")
+SANDBOX = Path(__file__).with_name("finch_sandbox.py")
 FORBIDDEN = {"evaluator", "_evaluator_only", ".git", ".oceanx", ".oceanmind"}
 
 
@@ -47,7 +50,7 @@ def validate_datasets(cases):
                 if not (item.is_file() or item.is_dir()):
                     raise ValueError(f"Dataset contains a special file: {item}")
             if any(c in str(path) for c in (":", "\n", "\r")):
-                raise ValueError("Docker bind source paths cannot contain colons or newlines")
+                raise ValueError("Dataset paths cannot contain colons or newlines")
 
 
 def input_mounts(case):
@@ -88,15 +91,15 @@ def validate_checkout(root, commit):
 
 
 def worker_environment(root):
-    # The worker loads only benchmark.yaml credentials explicitly. The calculation
-    # container receives none of this environment and has no network or Docker socket.
+    # The worker loads only benchmarking/.env credentials explicitly. The calculation
+    # sandbox receives none of this environment and has no external network.
     env = {k: v for k, v in os.environ.items()
            if not any(word in k.upper() for word in ("KEY", "TOKEN", "SECRET", "PASSWORD"))
            and not k.startswith(("AWS_", "GOOGLE_", "AZURE_", "ANTHROPIC_", "OPENAI_", "LITELLM_"))}
     env["PYTHONPATH"] = str(root / "src")
     env["PYTHONNOUSERSITE"] = "1"
     env["LITELLM_TELEMETRY"] = "False"
-    env["USE_DOCKER"], env["USE_R"], env["STAGE"] = "true", "false", "local"
+    env["USE_DOCKER"], env["USE_R"], env["STAGE"] = "false", "false", "local"
     return env
 
 
@@ -107,10 +110,26 @@ def preflight(args, env):
     if probe.returncode:
         raise ValueError("Finch interpreter/import check failed: " + probe.stderr[-2000:])
     dependencies = json.loads(probe.stdout)
-    image = json.loads(subprocess.check_output(
-        [args.docker, "image", "inspect", args.image], text=True, timeout=30))[0]
-    # Never silently pull a mutable image during an experiment.
-    return {"dependencies": dependencies, "image_id": image["Id"]}
+    probe = subprocess.run([args.kernel_python, str(WORKER), "--kernel-check"], env=env,
+                           cwd=args.finch_root, capture_output=True, text=True, timeout=60, check=False)
+    if probe.returncode:
+        raise ValueError("Finch notebook environment check failed: " + probe.stderr[-2000:])
+    kernel = json.loads(probe.stdout)
+    runtime = {"backend": BACKEND, "dependencies": dependencies, "kernel": kernel,
+               "bwrap": args.bwrap, "prlimit": args.prlimit, "taskset": args.taskset,
+               "cpu_ids": cpu_ids(), "bwrap_version": subprocess.check_output(
+                   [args.bwrap, "--version"], text=True, timeout=10).strip()}
+    # Fail before any model request if user namespaces/Jupyter loopback sockets are unavailable.
+    with tempfile.TemporaryDirectory(prefix="finch-preflight-") as directory:
+        spec = {**runtime, "workspace": directory, "mounts": [], "cpus": args.cpus,
+                "memory_bytes": args.memory_mb * 1024**2}
+        checked = subprocess.run(sandbox_command(spec, [kernel["executable"], "-c",
+            ("import ipykernel, nbconvert, numpy, xarray, socket; "
+             "s=socket.socket(); s.bind(('127.0.0.1', 0)); s.close()")]),
+            capture_output=True, text=True, timeout=60, check=False)
+        if checked.returncode:
+            raise ValueError("Bubblewrap notebook preflight failed: " + checked.stderr[-2000:])
+    return runtime
 
 
 def read_calls(path):
@@ -142,19 +161,6 @@ def token_accounting(calls):
                 "cached tokens, when reported, are part of input tokens."}
 
 
-def cleanup_container(docker, name):
-    if not re.fullmatch(r"oceanx-finch-[0-9a-f]{32}", name):
-        raise ValueError("Refusing to remove an unexpected container name")
-    probe = subprocess.run([docker, "container", "inspect", name], capture_output=True,
-                           text=True, timeout=15, check=False)
-    if probe.returncode:
-        # A stopped worker normally removes its own container. Check daemon health
-        # before interpreting an inspect error as 'already removed'.
-        subprocess.run([docker, "info"], capture_output=True, check=True, timeout=15)
-        return
-    subprocess.run([docker, "rm", "-f", name], capture_output=True, check=True, timeout=20)
-
-
 def evidence_manifest(workspace):
     """Explicit allowlist for the external evidence collector; never export inputs/logs."""
     files = []
@@ -180,28 +186,20 @@ def run_case(case, directory, args, env, cancelled):
     write_json(directory / "query.json", case.model_dump(mode="json"))
     prompt = directory / "submitted_prompt.txt"
     prompt.write_text(prompt_for(case), encoding="utf-8")
-    name = "oceanx-finch-" + uuid4().hex
-    spec = {"workspace": str(workspace), "mounts": input_mounts(case),
-            "container_name": name, "image": args.image_id,
+    spec = {**args.runtime, "workspace": str(workspace), "mounts": input_mounts(case),
             "max_steps": args.max_steps, "temperature": args.temperature,
             "memory_bytes": args.memory_mb * 1024**2, "cpus": args.cpus,
-            "execution_timeout": args.execution_timeout,
-            "uid": os.getuid(), "gid": os.getgid()}
+            "execution_timeout": args.execution_timeout}
     write_json(directory / "worker.json", spec)
     command = [args.python, str(WORKER), "--attempt", str(directory),
                "--config", str(args.config)]
     started, at = time.monotonic(), datetime.now(UTC).isoformat()
-    code, reason, error, cleanup_error = None, None, None, None
+    code, reason, error = None, None, None
     try:
         code, reason = supervise(command, workspace, prompt, directory,
                                  case.timeout_seconds or args.timeout, cancelled, env=env)
     except OSError as exc:
         error = str(exc)
-    finally:
-        try:
-            cleanup_container(args.docker, name)
-        except (OSError, subprocess.SubprocessError) as exc:
-            cleanup_error = str(exc)
     terminal_path = directory / "worker_result.json"
     try:
         terminal = json.loads(terminal_path.read_text()) if terminal_path.exists() else {}
@@ -212,7 +210,7 @@ def run_case(case, directory, args, env, cancelled):
         error = "Worker terminal record is incomplete"
     status = reason if reason in {"cancelled", "timed_out"} else terminal.get("status", "failed")
     answer = directory / "answer.md"
-    if status == "completed" and (code != 0 or reason or error or cleanup_error
+    if status == "completed" and (code != 0 or reason or error
                                    or not answer.is_file() or not answer.read_text().strip()):
         status = "failed"
     accounting = token_accounting(read_calls(directory / "model_calls.jsonl"))
@@ -222,7 +220,7 @@ def run_case(case, directory, args, env, cancelled):
     result = {"id": case.id, "agent": "finch-local", "status": status,
               "started_at": at, "elapsed_seconds": time.monotonic() - started,
               "exit_code": code, "stop_reason": reason or terminal.get("stop_reason"),
-              "runner_error": error, "cleanup_error": cleanup_error,
+              "runner_error": error,
               "steps": terminal.get("steps"), "attempt_dir": str(directory),
               "external_usage": accounting,
               "limitations": "Local Finch analysis component, not full Robin. No search tool, "
@@ -239,8 +237,8 @@ def main(argv=None):
     parser.add_argument("--finch-root", type=Path, required=True)
     parser.add_argument("--finch-commit", default=FINCH_COMMIT)
     parser.add_argument("--python", default=sys.executable, help="Finch Python 3.12+ interpreter")
-    parser.add_argument("--docker", default="docker")
-    parser.add_argument("--image", required=True, help="Already-built scientific kernel image")
+    parser.add_argument("--kernel-python", help="Notebook interpreter; defaults to --python")
+    parser.add_argument("--bwrap", default="bwrap", help="Linux Bubblewrap executable")
     parser.add_argument("--arm", default="F", help="External arm label; not an OceanX policy")
     parser.add_argument("--max-steps", type=int, default=60)
     parser.add_argument("--temperature", type=float, default=1.0)
@@ -250,8 +248,8 @@ def main(argv=None):
     parser.add_argument("--cpus", type=float, default=2)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args(argv)
-    if os.name != "posix":
-        raise ValueError("Finch runner requires POSIX process supervision")
+    if sys.platform != "linux":
+        raise ValueError("Finch runner requires Linux Bubblewrap; no Docker or unsandboxed fallback")
     if os.getuid() == 0:
         raise ValueError("Run Finch as an ordinary user, not root")
     for value in (args.max_steps, args.timeout, args.execution_timeout, args.memory_mb, args.cpus):
@@ -264,21 +262,23 @@ def main(argv=None):
     from benchmark_config import DEFAULT_CONFIG
     args.config = Path(args.config or os.environ.get("OCEAN_BENCH_CONFIG", DEFAULT_CONFIG)).resolve()
     args.finch_root = args.finch_root.expanduser().resolve()
-    args.python, args.docker = shutil.which(args.python), shutil.which(args.docker)
-    if not args.python or not args.docker:
-        raise ValueError("Finch Python interpreter and Docker executable must exist")
+    args.kernel_python = shutil.which(args.kernel_python or args.python)
+    args.python, args.bwrap = shutil.which(args.python), shutil.which(args.bwrap)
+    args.prlimit, args.taskset = shutil.which("prlimit"), shutil.which("taskset")
+    if not all((args.python, args.kernel_python, args.bwrap, args.prlimit, args.taskset)):
+        raise ValueError("Finch/kernel Python, bwrap, prlimit and taskset must exist")
     cases = load_queries(args.queries)
     validate_datasets(cases)
     output = args.output.expanduser().resolve()
     if any(c in str(output) for c in (":", "\n", "\r")):
-        raise ValueError("Docker workspace paths cannot contain colons or newlines")
+        raise ValueError("Workspace paths cannot contain colons or newlines")
     for protected in (REPO, args.finch_root, args.queries.resolve(), args.config,
                       *(p for case in cases for p in case.datasets)):
         if output.is_relative_to(protected) or protected.is_relative_to(output):
             raise ValueError("Output must be separate from repositories, config, queries and data")
     env = worker_environment(args.finch_root)
     runtime = preflight(args, env)
-    args.image_id = runtime["image_id"]
+    args.runtime = runtime
     identity = {"agent": "finch-local", "arm": args.arm, "finch_commit": args.finch_commit,
                 "finch_root": str(args.finch_root), "python": args.python,
                 "runtime": runtime, "model_protocol": config.public(),
@@ -287,10 +287,11 @@ def main(argv=None):
                 "memory_mb": args.memory_mb, "cpus": args.cpus,
                 "cases": [c.model_dump(mode="json") for c in cases],
                 "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                "worker_sha256": hashlib.sha256(WORKER.read_bytes()).hexdigest()}
+                "worker_sha256": hashlib.sha256(WORKER.read_bytes()).hexdigest(),
+                "sandbox_sha256": hashlib.sha256(SANDBOX.read_bytes()).hexdigest()}
     if args.resume:
         if json.loads((output / "manifest.json").read_text())["identity"] != identity:
-            raise ValueError("Resume inputs, model, Finch version, image or runner changed")
+            raise ValueError("Resume inputs, model, Finch version, runtime or runner changed")
     else:
         output.mkdir(parents=True, exist_ok=False, mode=0o700)
     import fcntl
@@ -320,8 +321,6 @@ def main(argv=None):
                     stream.write(json.dumps(result, ensure_ascii=False) + "\n")
                 print(f"[{case.id}] {result['status']}", flush=True)
                 failed |= result["status"] != "completed"
-                if result["cleanup_error"]:
-                    break  # Do not start another analysis while cleanup is uncertain.
         finally:
             for sig, handler in previous.items():
                 signal.signal(sig, handler)

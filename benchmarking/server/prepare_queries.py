@@ -33,13 +33,18 @@ def suite_tasks(suite: str, evolution_set: str | None = None) -> list[str]:
     return [t for t in tasks if json.loads(task_file(t).read_text()).get("evolution_set") == evolution_set]
 
 
-def manifest_bindings(task_ids, root):
-    """Agent data folders from the one canonical manifest, after the downloader's completion reports."""
+def read_coverage(root):
     manifest = json.loads(MANIFEST.read_text())
-    control = Path(root) / "_download_all"
-    coverage = json.loads((control / "coverage.json").read_text())
+    coverage = json.loads((Path(root) / "_download_all" / "coverage.json").read_text())
     if coverage.get("catalogue") != manifest["version"]:
         raise ValueError("Download catalogue differs from the current benchmark; rerun download_all.py")
+    return manifest, coverage
+
+
+def manifest_bindings(task_ids, root):
+    """Agent data folders from the one canonical manifest, after the downloader's completion reports."""
+    manifest, coverage = read_coverage(root)
+    control = Path(root) / "_download_all"
     result = {}
     for task_id in task_ids:
         state = coverage.get("tasks", {}).get(task_id, {})
@@ -123,6 +128,8 @@ def main(argv=None):
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--suite", choices=sorted(SUITE_DIRS), required=True)
     parser.add_argument("--tasks", nargs="+", help="Subset of the suite; default: all of it")
+    parser.add_argument("--available", action="store_true",
+                        help="Select only tasks whose numerical inputs are complete; print every excluded task")
     parser.add_argument("--set", dest="evolution_set", choices=["A", "B"],
                         help="Evolution suite only: set A (E01-E12, learns L1) or set B (E13-E24, learns L2)")
     parser.add_argument("--bindings", type=Path, help="Optional JSON overriding the manifest folders per task")
@@ -139,6 +146,20 @@ def main(argv=None):
     if set(tasks) - set(available):
         raise ValueError(f"Not in the {args.suite} suite: {sorted(set(tasks) - set(available))}")
     root = args.data_root.expanduser().resolve(strict=True)
+    if args.available:
+        if args.bindings:
+            raise ValueError("--available uses verified manifest coverage, not --bindings overrides")
+        _, coverage = read_coverage(root)
+        selected = []
+        for task in tasks:
+            state = coverage.get("tasks", {}).get(task, {})
+            if state.get("numerical_inputs_complete") is True:
+                selected.append(task)
+            else:
+                print(f"{task}: excluded; missing groups: {state.get('missing_groups', 'no completion record')}")
+        tasks = selected
+        if not tasks:
+            raise ValueError("No tasks with complete numerical inputs; no query file written")
     bindings = (json.loads(args.bindings.read_text()) if args.bindings
                 else manifest_bindings(tasks, root))
     cases = build_cases(tasks, root, bindings, args.timeout, args.literature_mode)

@@ -18,7 +18,10 @@ to execute, in order, with commands, pass criteria and what to report. Backgroun
    in a folder bound to an agent. `prepare_queries.py` refuses them; do not work around it.
 4. **Keep private data on the server.** CMOMS data and anything computed from them never leave it: no
    commits, no uploads, no pasting numbers into outside services.
-5. **Stop and ask the owner** when a step's pass criterion fails, when data are missing or differ from
+5. **Partial runs are permitted.** Use `prepare_queries.py --available` to freeze a data-complete subset
+   before running any method. List excluded tasks and missing groups. Do not call this a full-suite run
+   or add newly ready tasks halfway through a comparison. Stop and ask the owner when a step's pass
+   criterion fails within the selected subset, when its data are missing or differ from
    `DATA.md` (for example CMOMS not daily), or when costs exceed the estimates by more than 50%.
 6. **Report every test** in `$EVAL_ROOT/<experiment>/codex_reports/T<n>.md`. Give the commands run,
    key outputs, pass/fail per criterion, problems and decisions needed. Send the owner a short summary.
@@ -81,9 +84,9 @@ Report the commit. Every arm of the experiment must use this commit.
    present, because the paper questions Q06 and Q05 depend on them.
 
 Pass:
-- `coverage.json` shows `numerical_inputs_complete: true` for all 54 tasks. Q14 and Q16 stay incomplete
-  until their requested diagnostics are staged; report this, and run the other tasks only if the owner
-  agrees;
+- `coverage.json` shows `numerical_inputs_complete: true` for every selected task. Record exclusions;
+  all 54 are required only for a full-catalogue experiment. Q14 and Q16 stay excluded until their
+  requested diagnostics are staged;
 - Q05 and Q11-Q13 need no extra native-budget groups; their independent core-field references and tolerances are frozen before judging (coverage alone does not establish reference readiness);
 - `verify` passes;
 - CMOMS sampling is daily, or the owner has been told.
@@ -267,7 +270,8 @@ Otherwise, tighten your reading of the anchors, write down how, and repeat.
 ## T7. Learning pilot (gate before the evolution rounds)
 
 Three questions of set A, one run each, with nothing learned. They use three different data groups and are
-three different questions, the least the meta-agent needs to add a lesson or a tool.
+three different kinds of problems (geostrophic balance, temporal sampling, the sunlit layer), the least the
+meta-agent needs to add a lesson or a tool.
 
 ```bash
 python benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" --suite evolution --tasks E01 E05 E08 \

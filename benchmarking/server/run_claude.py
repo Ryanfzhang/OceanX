@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sequential Claude Code baseline recorder; no grading, uploads or data copies.
 
-Uses the OceanX JSONL schema, installed Claude CLI and root benchmark.yaml.
+Uses the OceanX JSONL schema, installed Claude CLI and benchmarking/.env.
 This is a process supervisor, NOT a filesystem/network security sandbox.
 """
 from __future__ import annotations
@@ -254,6 +254,16 @@ def inventory(workspace):
     return {"files": files, "excluded": excluded, "truncated": False}
 
 
+def evaluation_usage(accounting):
+    """Normalize CLI totals: Anthropic cache reads/writes are additional input tokens."""
+    totals = accounting['whole_call_totals']
+    inputs = [totals[k] for k in ('input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')]
+    return {'source': accounting['source'], 'calls': None, 'failed_calls': None,
+            'input_tokens': sum(inputs) if all(v is not None for v in inputs) else None,
+            'cached_input_tokens': totals['cache_read_input_tokens'],
+            'output_tokens': totals['output_tokens'], 'model_seconds': None, 'by_role': {}}
+
+
 def run_case(case, directory, command, cancelled, env=None):
     directory.mkdir(parents=True)
     workspace = directory / "workspace"
@@ -289,6 +299,7 @@ def run_case(case, directory, command, cancelled, env=None):
         "usage": terminal.get("usage") if terminal else None,
         "model_usage": terminal.get("modelUsage") if terminal else None,
         "whole_call_tokens": accounting["whole_call_totals"],
+        "external_usage": evaluation_usage(accounting),
         "reported_cost_usd": terminal.get("total_cost_usd") if terminal else None,
         "permission_denials": terminal.get("permission_denials", []) if terminal else [],
         "limitations": "Runtime outcome only; no scientific grading or artifact completeness verification.",
@@ -308,6 +319,7 @@ def export_delivery(workspace, directory):
     Never follow links to mounted inputs. Preserve subdirectories so notebook and
     script relative references continue to work. Raw execution logs stay untouched.
     """
+    evidence = []
     for name in ("figures", "code", "outputs"):
         source = workspace / name
         if not source.is_dir() or source.is_symlink():
@@ -321,9 +333,13 @@ def export_delivery(workspace, directory):
                 target = directory / item.relative_to(workspace)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(item, target)
+                evidence.append(str(target.relative_to(directory)))
     notebook = workspace / "analysis.ipynb"
     if notebook.is_file() and not notebook.is_symlink():
         shutil.copyfile(notebook, directory / "analysis.ipynb")
+        # The blind exporter accepts workspace notebooks, not arbitrary root files.
+        evidence.append('workspace/analysis.ipynb')
+    write_json(directory / 'evidence_manifest.json', {'files': sorted(evidence)})
 
 
 def main(argv=None):
@@ -331,9 +347,10 @@ def main(argv=None):
     parser.add_argument("--queries", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--claude", default="claude", help="Executable path/name, not a shell command")
-    parser.add_argument("--config", type=Path, help="Root benchmark.yaml by default")
-    parser.add_argument("--model", help="Compatibility option; must match benchmark.yaml")
+    parser.add_argument("--config", type=Path, help="benchmarking/.env by default")
+    parser.add_argument("--model", help="Compatibility option; must match BENCH_MODEL in benchmarking/.env")
     parser.add_argument("--model-label", default="configured", help="Experiment label, not an API override")
+    parser.add_argument("--arm", default="Claude", help="External comparison label recorded in arm.json")
     parser.add_argument("--allow-tools", nargs="+", default=[],
                         help="Explicit tool approvals, e.g. Read Glob Grep Bash Write Edit NotebookEdit")
     parser.add_argument("--resume", action="store_true", help="Skip completed; new attempts for other tasks")
@@ -341,7 +358,7 @@ def main(argv=None):
     from benchmark_config import load_config, preflight, claude_environment
     config = load_config(args.config)
     if args.model and args.model != config.model:
-        raise ValueError("Model differs from benchmark.yaml; change the YAML for both agents")
+        raise ValueError("Model differs from benchmarking/.env; change BENCH_MODEL there for all agents")
     args.model = config.model
     preflight()
     environment = claude_environment(config)
@@ -362,6 +379,7 @@ def main(argv=None):
         "schema_version": 1, "agent": "claude-code", "claude": executable,
         "cases": [c.model_dump(mode="json") for c in cases],
         "model": args.model, "model_label": args.model_label, "allow_tools": args.allow_tools,
+        "arm": args.arm,
         "model_protocol": config.public(),
         "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     }
@@ -378,8 +396,10 @@ def main(argv=None):
             version = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=15)
             write_json(output / "manifest.json", {
                 "identity": identity, "cli_version": version.stdout.strip()[:1000],
-                "note": "API routing and model come from benchmark.yaml; credentials are omitted. No OS sandbox is added.",
+                "note": "API routing and model come from benchmarking/.env; credentials are omitted. No OS sandbox is added.",
             })
+            write_json(output / 'arm.json', {'arm': args.arm, 'agent': 'claude-code',
+                'model_protocol': config.public(), 'policy': None, 'library': None})
         stopped = [False]
         previous = {sig: signal.signal(sig, lambda *_: stopped.__setitem__(0, True))
                     for sig in (signal.SIGINT, signal.SIGTERM)}

@@ -1,4 +1,4 @@
-"""Use the root YAML for every benchmark role; leave production settings untouched."""
+"""One benchmark model for Coordinator, Experts and offline meta/labels; do not save settings."""
 from benchmark_config import load_config
 
 
@@ -6,7 +6,7 @@ def install_oceanx_models(config=None):
     from oceanx import model_config
     config = config or load_config()
     endpoint = config.endpoint(config.oceanx_api)
-    slot = 'benchmark-yaml'
+    slot = 'benchmark-env'
     original_key = model_config._stored_api_key
 
     def profile(settings, *, role='coordinator'):
@@ -14,12 +14,13 @@ def install_oceanx_models(config=None):
                       'base_url': endpoint.url, 'credential_slot': slot}
 
     def key(*, provider, slot):
-        if slot == 'benchmark-yaml':
+        if slot == 'benchmark-env':
             return endpoint.api_key
         return original_key(provider=provider, slot=slot)
 
     model_config._profile_payload = profile
     model_config._stored_api_key = key
-    model_config._load_settings_payload = lambda: {'max_tokens': config.max_tokens}
-    return {**config.public(), 'roles': ['coordinator', 'expert'],
-            'api_profile': 'benchmark.yaml', 'scope': 'benchmark_process_only'}
+    model_config._load_settings_payload = lambda: {
+        'max_tokens': config.max_tokens, 'role_profiles': {'meta': slot}}
+    return {**config.public(), 'roles': ['coordinator', 'expert', 'meta'],
+            'api_profile': 'benchmarking/.env', 'scope': 'benchmark_process_only'}

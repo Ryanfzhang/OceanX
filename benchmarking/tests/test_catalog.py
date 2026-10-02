@@ -1,6 +1,7 @@
 """The catalogue: allocation, rubric integrity, verified papers, answer keys and suite isolation."""
 import hashlib
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -153,6 +154,33 @@ def test_evolution_has_two_sets_on_different_waters():
         kinds = [info(e)["open_kind"] for e in tasks]
         assert (kinds.count("checkable"), kinds.count("disagreement")) == (10, 2)
         assert len({info(e)["query"] for e in tasks}) == 12
+
+
+def test_evolution_asks_other_kinds_of_problems_than_the_test_suite():
+    kinds = {e: info(e)["topic"] for e in EVOLUTION}
+    # A lesson or a tool needs support from three different questions. With at most two evolution
+    # questions on one kind of problem, what is admitted has to hold across kinds of problems.
+    assert max(Counter(kinds.values()).values()) <= 2
+    # And none of those kinds is what a test question is about, so a recipe cannot be practised here.
+    assert not set(kinds.values()) & {info(t)["topic"] for t in TEST}
+    subjects = ("heatwave", "upwelling", "hypox", "oxygen minimum", "bloom", "front", "boundary current",
+                "kuroshio", "loop current", "intrusion", "salinification", "plume", "heat content", "carbon",
+                "ventilation", "typhoon")
+    for task in EVOLUTION:
+        title = info(task)["title"].lower()
+        assert not any(subject in title for subject in subjects), task
+
+
+def test_evolution_questions_keep_their_data_groups():
+    # The evolution data are downloaded and verified; a question may change, its inputs may not.
+    assert {e: info(e)["data_groups"] for e in EVOLUTION} == {
+        "E01": ["P_CCS_PHY"], "E02": ["P_CCS_SURF"], "E03": ["P_CCS_BGC"], "E04": ["P_CCS_SURF", "P_CCS_BGC"],
+        "E05": ["P_CCS_SURF"], "E06": ["P_CCS_PHY"], "E07": ["P_CCS_BGC"], "E08": ["P_CCS_BGC"],
+        "E09": ["P_CCS_PHY"], "E10": ["P_CCS_PHY"], "E11": ["P_CCS_SURF"], "E12": ["P_CCS_PHY", "P_CCS_BGC"],
+        "E13": ["P_TAS_PHY"], "E14": ["P_TAS_PHY"], "E15": ["P_TAS_PHY"], "E16": ["P_TAS_PHY"],
+        "E17": ["P_TAS_PHY"], "E18": ["P_TAS_PHY"], "E19": ["P_TAS_SURF"], "E20": ["P_TAS_SURF", "P_TAS_BGC"],
+        "E21": ["P_TAS_SURF"], "E22": ["P_TAS_BGC"], "E23": ["P_TAS_BGC"], "E24": ["P_TAS_PHY", "P_TAS_BGC"]}
+    assert all(MANIFEST["tasks"][e] == info(e)["data_groups"] for e in EVOLUTION)
 
 
 def test_design_document_lists_every_task():

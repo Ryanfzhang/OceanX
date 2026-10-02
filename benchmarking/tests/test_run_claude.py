@@ -15,8 +15,9 @@ import run_claude as runner
 def setup(tmp_path, monkeypatch):
     import benchmark_config
     monkeypatch.setattr(benchmark_config, "preflight", lambda **kw: None)
-    config_file = tmp_path / "benchmark.yaml"
-    config_file.write_text("model: test-deepseek\noceanx_api: anthropic\nanthropic:\n  url: https://example.invalid\n  api_key: test-key\n")
+    config_file = tmp_path / ".env"
+    config_file.write_text("BENCH_MODEL=test-deepseek\nBENCH_OCEANX_API=anthropic\n"
+                           "BENCH_ANTHROPIC_BASE_URL=https://example.invalid\nDEEPSEEK_API_KEY=test-key\n")
     executable = tmp_path / "fake-claude"
     executable.write_text(f"#!{sys.executable}\n" + '''
 import json, os, pathlib, subprocess, sys, time
@@ -26,6 +27,9 @@ if "--version" in sys.argv:
 prompt = sys.stdin.read()
 pathlib.Path("code.py").write_text("print('analysis')")
 pathlib.Path("figure.png").write_bytes(b"test-image")
+pathlib.Path("figures").mkdir()
+pathlib.Path("figures/view.png").write_bytes(b"png")
+pathlib.Path("analysis.ipynb").write_text("{}")
 pathlib.Path("argv.json").write_text(json.dumps(sys.argv))
 print(json.dumps({"type":"assistant", "message":{"model":"test-deepseek", "content":[{"type":"text", "text":"partial work"}]}}), flush=True)
 if "TIMEOUT" in prompt or "CANCEL" in prompt:
@@ -80,6 +84,8 @@ def test_success_files_model_config_and_resume(setup):
     assert "--no-session-persistence" in command
     assert runner.main([*args, "--resume"]) == 0
     assert len(results(output)) == 1
+    assert json.loads((output / 'arm.json').read_text())['arm'] == 'Claude'
+    assert result['external_usage']['input_tokens'] is None  # incomplete CLI usage is not zero
     with pytest.raises(ValueError, match="Model differs"):
         runner.main([*args, "--resume", "--model", "changed-model"])
 
@@ -170,6 +176,8 @@ def test_whole_call_tokens_no_double_counting(tmp_path):
     assert report["whole_call_totals"]["input_tokens"] == 35
     assert len(report["observed_unique_steps"]) == 1
     assert "output_tokens" not in report["observed_unique_steps"][0]
+    assert runner.evaluation_usage(report)['input_tokens'] == 155
+    assert runner.evaluation_usage(report)['cached_input_tokens'] == 120
 
 
 def test_missing_final_tokens_are_unknown(tmp_path):
@@ -192,3 +200,22 @@ def test_export_delivery_preserves_paths_and_skips_source_links(tmp_path):
     assert (destination / "figures/view.png").read_bytes() == b"png"
     assert not (destination / "figures/source.nc").exists()
     assert (destination / "analysis.ipynb").is_file()
+    manifest = json.loads((destination / 'evidence_manifest.json').read_text())
+    assert manifest['files'] == ['figures/view.png', 'workspace/analysis.ipynb']
+
+
+def test_claude_blinding_and_inventory_use_external_evidence(setup):
+    import evaluate
+    _, output, invoke = setup
+    assert runner.main(invoke([('OK', 5)], ['--arm', 'C'])) == 0
+    attempt = Path(results(output)[0]['attempt_dir'])
+    mapping, blind = output.parent / 'map.json', output.parent / 'blind'
+    assert evaluate.main(['blind', '--runs', str(output), '--map', str(mapping), '--out', str(blind)]) == 0
+    assert len(list(blind.rglob('view.png'))) == 1
+    assert len(list(blind.rglob('analysis.ipynb'))) == 1
+    assert not list(blind.rglob('events.jsonl'))
+    assert evaluate.main(['inventory', '--runs', str(output), '--out', str(output.parent / 'inventory')]) == 0
+    record = json.loads((attempt / 'run_record.json').read_text())
+    assert record['tree'] is None and record['code_runs']['total'] is None
+    assert record['missing'] == ['whole-call token totals']
+    assert 'research tree' not in record['missing']

@@ -85,3 +85,5 @@ uv.lock
 
 # Private benchmark API configuration
 /benchmark.yaml
+/benchmarking/.env
+!/benchmarking/.env.example

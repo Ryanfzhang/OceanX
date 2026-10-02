@@ -1,4 +1,4 @@
-"""Real pinned Finch/LDP interfaces, fake model and Docker; run in finch-bench.
+"""Real pinned Finch/LDP interfaces, fake model and sandbox; run in finch-bench.
 
 The ordinary OceanX environment skips this module (Finch is intentionally separate).
 No notebook code is executed on the host and no provider request is made.
@@ -10,11 +10,10 @@ import pytest
 
 pytest.importorskip("fhda")
 
-import aiodocker
 import finch_worker as worker
 import litellm
 import nbformat
-from benchmark_config import Config, Endpoint
+from benchmark_config import load_config
 from fhda.notebook_env import NBEnvironment
 
 
@@ -22,44 +21,26 @@ def test_pinned_agent_notebook_delivery_and_usage(tmp_path, monkeypatch):
     assert worker.dependency_check()["libraries"]["ldp"] == "0.26.0"
     workspace = tmp_path / "workspace"
     (workspace / "outputs").mkdir(parents=True)
-    spec = {"workspace": str(workspace), "mounts": [], "image": "test-image",
-            "uid": 1000, "gid": 1000, "memory_bytes": 1000000, "cpus": 1,
-            "container_name": "oceanx-finch-test", "max_steps": 3,
+    spec = {"workspace": str(workspace), "mounts": [], "max_steps": 3,
             "temperature": 1, "execution_timeout": 10}
     (tmp_path / "worker.json").write_text(json.dumps(spec))
     (tmp_path / "submitted_prompt.txt").write_text("Compute 2 + 3 and submit the answer.")
-    containers, requests = [], []
+    requests, executions_seen = [], []
 
-    class FakeDocker:
-        @property
-        def containers(self):
-            return self
-
-        async def run(self, config, name):
-            containers.append(config)
-            return self
-
-        async def stop(self):
-            pass
-
-        async def delete(self):
-            pass
-
-        async def close(self):
-            pass
-
-    async def notebook_execution(environment):
+    async def notebook_execution(spec, log_path):
         # Exercise real edit/save/reload/render interfaces, not a host Python kernel.
-        cell = environment.state.cells[-1]
+        assert spec["workspace"] == str(workspace)
+        executions_seen.append(spec)
+        notebook = nbformat.read(workspace / "notebook.ipynb", as_version=4)
+        cell = notebook.cells[-1]
         cell.execution_count = 1
         cell.outputs = [nbformat.v4.new_output("stream", name="stdout", text="5\n")]
-        environment.state.save_nb()
-        environment.state.reload_nb()
-        return "Executed all cells."
+        nbformat.write(notebook, workspace / "notebook.ipynb")
+        return 0, "Executed all cells."
 
     async def acompletion(router, *args, **kwargs):
         params = router.model_list[0]["litellm_params"]
-        assert params["model"] == "openai/gpt-4o"
+        assert params["model"] == "openai/deepseek-flash"
         assert params["api_base"] == "https://example.invalid/v1"
         assert params["api_key"] == "test-secret"
         requests.append(kwargs)
@@ -72,21 +53,26 @@ def test_pinned_agent_notebook_delivery_and_usage(tmp_path, monkeypatch):
                 "function": {"name": name, "arguments": json.dumps(arguments)}}]}
         else:
             message = {"role": "assistant", "content": "Thought: use the notebook, then submit."}
-        return litellm.ModelResponse(model="gpt-4o", choices=[{
+        return litellm.ModelResponse(model="deepseek-flash", choices=[{
             "index": 0, "finish_reason": "tool_calls" if message.get("tool_calls") else "stop",
             "message": message}], usage={"prompt_tokens": 10, "completion_tokens": 5,
                 "prompt_tokens_details": {"cached_tokens": 2}})
 
-    monkeypatch.setattr(aiodocker, "Docker", FakeDocker)
-    monkeypatch.setattr(NBEnvironment, "_run_notebook_docker", notebook_execution)
+    monkeypatch.setattr(worker, "execute_notebook", notebook_execution)
+    async def never_start_unisolated_kernel(state):
+        raise AssertionError("Upstream host kernel must never start")
+    monkeypatch.setattr(NBEnvironment, "_run_notebook_docker", never_start_unisolated_kernel)
     monkeypatch.setattr(litellm.Router, "acompletion", acompletion)
-    config = Config("gpt-4o", "openai", {"openai": Endpoint("https://example.invalid/v1", "test-secret")}, 100)
+    env_file = tmp_path / '.env'
+    env_file.write_text('DEEPSEEK_API_KEY=test-secret\nBENCH_MAX_TOKENS=100\n'
+                        'BENCH_OPENAI_BASE_URL=https://example.invalid/v1\n')
+    config = load_config(env_file)
     result = asyncio.run(worker.episode(tmp_path, config))
     assert result == {"status": "completed", "stop_reason": None, "steps": 2}
     assert (tmp_path / "answer.md").read_text() == "The sum is 5."
     notebook = nbformat.read(workspace / "notebook.ipynb", as_version=4)
     assert notebook.cells[0].outputs[0].text == "5\n"
-    assert containers[0]["HostConfig"]["NetworkMode"] == "none"
+    assert len(executions_seen) == 1
     calls = [json.loads(line) for line in (tmp_path / "model_calls.jsonl").read_text().splitlines()]
     assert len(calls) == len(requests) == 4  # Two ReAct calls per step.
     assert sum(call["usage"]["input_tokens"] for call in calls) == 40

@@ -1,4 +1,4 @@
-"""Offline Finch adapter/supervisor tests; no API requests or real Docker jobs."""
+"""Offline Finch adapter/supervisor tests; no API requests or model-written jobs."""
 import asyncio
 import json
 import sys
@@ -9,6 +9,7 @@ from pathlib import Path
 import finch_worker as worker
 import pytest
 import run_finch as runner
+from finch_sandbox import BACKEND, notebook_command, sandbox_command
 
 from oceanx.batch import QueryCase
 
@@ -16,9 +17,11 @@ from oceanx.batch import QueryCase
 @pytest.fixture
 def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(runner.os, "getuid", lambda: 1000)
-    config = tmp_path / "benchmark.yaml"
-    config.write_text("model: test-model\noceanx_api: openai\nopenai:\n"
-                      "  url: https://example.invalid/v1\n  api_key: secret-test-key\n")
+    monkeypatch.setattr(runner.sys, "platform", "linux")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: sys.executable)
+    config = tmp_path / ".env"
+    config.write_text("BENCH_MODEL=test-model\nBENCH_OCEANX_API=openai\n"
+                      "BENCH_OPENAI_BASE_URL=https://example.invalid/v1\nDEEPSEEK_API_KEY=secret-test-key\n")
     data = tmp_path / "data"
     data.mkdir()
     (data / "input.nc").write_bytes(b"unchanged")
@@ -48,9 +51,8 @@ if 'FAIL' in prompt:
 ''')
     monkeypatch.setattr(runner, "WORKER", fake)
     monkeypatch.setattr(runner, "preflight", lambda args, env: {
-        "image_id": "sha256:test", "dependencies": {"python": "3.12", "libraries": {}}})
+        "backend": BACKEND, "dependencies": {"python": "3.12", "libraries": {}}})
     removed = []
-    monkeypatch.setattr(runner, "cleanup_container", lambda docker, name: removed.append(name))
     queries = tmp_path / "queries.jsonl"
     output = tmp_path / "runs"
     def invoke(items, extra=()):
@@ -59,7 +61,7 @@ if 'FAIL' in prompt:
             for i, (q, timeout) in enumerate(items, 1)))
         return ["--config", str(config), "--queries", str(queries), "--output", str(output),
                 "--finch-root", str(finch), "--python", sys.executable,
-                "--docker", sys.executable, "--image", "test-image", *extra]
+                *extra]
     return tmp_path, output, invoke, removed
 
 
@@ -85,7 +87,7 @@ def test_success_resume_and_artifacts(setup):
     identity = (output / "manifest.json").read_text()
     assert "secret-test-key" not in identity
     assert runner.main([*args, "--resume"]) == 0
-    assert len(results(output)) == 1 and len(removed) == 1
+    assert len(results(output)) == 1 and removed == []
     with pytest.raises(ValueError, match="Resume"):
         runner.main([*args, "--resume", "--max-steps", "30"])
 
@@ -99,21 +101,32 @@ def test_timeout_partial_delivery_children_and_retry(setup):
     time.sleep(1.1)
     assert not list(output.rglob("escaped.txt"))
     assert len(list(output.rglob("map.png"))) == 2
-    assert len(removed) == 2
+    assert removed == []
     assert runner.main([*args, "--resume"]) == 1
     assert len(results(output)) == 3  # Failed case gets a new attempt, completed case is skipped.
 
 
-def test_step_failure_continues_and_cleanup_failure_stops(setup, monkeypatch):
+def test_step_failure_continues_without_docker(setup):
     _, output, invoke, _ = setup
     assert runner.main(invoke([("FAIL", 5), ("OK", 5)])) == 1
     assert [r["status"] for r in results(output)] == ["failed", "completed"]
-    def fail_cleanup(*_):
-        raise OSError("daemon unavailable")
-    monkeypatch.setattr(runner, "cleanup_container", fail_cleanup)
-    assert runner.main(invoke([("OK", 5), ("OK", 5)], ["--output", str(output.parent / "runs2")])) == 1
-    [record] = results(output.parent / "runs2")
-    assert record["cleanup_error"] and record["status"] == "failed"
+
+
+def test_unavailable_native_sandbox_fails_before_creating_attempt(setup, monkeypatch):
+    _, output, invoke, _ = setup
+    def unavailable(*_):
+        raise ValueError("Bubblewrap notebook preflight failed")
+    monkeypatch.setattr(runner, "preflight", unavailable)
+    with pytest.raises(ValueError, match="preflight failed"):
+        runner.main(invoke([("Analyze", 5)]))
+    assert not output.exists()
+
+
+def test_docker_arguments_are_no_longer_accepted(setup):
+    _, output, invoke, _ = setup
+    with pytest.raises(SystemExit):
+        runner.main(invoke([("Analyze", 5)], ["--docker", "docker", "--image", "old-image"]))
+    assert not output.exists()
 
 
 def test_sources_and_manifests_reject_links_and_evaluator(tmp_path):
@@ -145,18 +158,24 @@ def test_unknown_tokens_are_not_zero():
         "prompt_tokens_details": {"cached_tokens": 8}})["input_tokens"] == 10
 
 
-def test_container_boundary():
+def test_namespace_boundary():
     spec = {"workspace": "/runs/work", "mounts": [{"source": "/data/private.nc", "target": "/inputs/0/private.nc"}],
-            "image": "sha256:fixed", "uid": 1000, "gid": 1000, "memory_bytes": 1000, "cpus": 2}
-    config = worker.container_config(spec)
-    host = config["HostConfig"]
-    assert host["Binds"] == ["/runs/work:/workspace:rw", "/data/private.nc:/inputs/0/private.nc:ro"]
-    assert host["NetworkMode"] == "none" and host["ReadonlyRootfs"]
-    assert host["CapDrop"] == ["ALL"] and config["User"] == "1000:1000"
-    assert "docker.sock" not in str(config) and "API_KEY" not in str(config)
-    command = ["jupyter", "nbconvert", "--execute", "notebook.ipynb"]
-    assert worker.notebook_command(command, 300)[-1] == "--ExecutePreprocessor.timeout=300"
-    assert worker.notebook_command(["ls"], 300) == ["ls"]
+            "memory_bytes": 1000, "cpus": 2, "cpu_ids": [2, 3, 4],
+            "bwrap": "/usr/bin/bwrap", "prlimit": "/usr/bin/prlimit", "taskset": "/usr/bin/taskset",
+            "kernel": {"executable": "/env/bin/python", "runtime_roots": ["/env"]},
+            "execution_timeout": 300}
+    command = notebook_command(spec)
+    assert "--unshare-all" in command and "--share-net" not in command
+    assert "--die-with-parent" in command and "--clearenv" in command
+    binds = [command[i + 1:i + 3] for i, part in enumerate(command) if part == "--ro-bind"]
+    assert ["/data/private.nc", "/inputs/0/private.nc"] in binds
+    assert ["/env", "/env"] in binds and ["/", "/"] not in binds
+    assert command[command.index("--bind") + 1:command.index("--bind") + 3] == ["/runs/work", "/workspace"]
+    assert "--ExecutePreprocessor.timeout=300" in command
+    assert "--as=1000:1000" in command and "2,3" in command
+    assert not any("docker" in arg or "API_KEY" in arg for arg in command)
+    with pytest.raises(ValueError, match="Unsafe kernel"):
+        sandbox_command({**spec, "kernel": {"runtime_roots": ["/"]}}, ["true"])
 
 
 def test_host_notebook_io_rejects_container_created_links(tmp_path):

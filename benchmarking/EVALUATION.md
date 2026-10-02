@@ -134,7 +134,7 @@ No `--policy` is passed: every arm runs the default, `v2-nested`, and `arm.json`
 - Every arm uses the same per-attempt time limit, set when the JSONL is prepared (`--timeout`, three hours
   by default) and recorded in the pre-registration. A timed-out attempt scores 0, so a limit that is too
   short penalises the arm that explores more.
-- Use the same commit, policy, `benchmark.yaml` model and literature mode (`search_only`) for every arm. No merges
+- Use the same commit, policy, `benchmarking/.env` model and literature mode (`search_only`) for every arm. No merges
   or setting changes until the test phase ends.
 - A failed, timed-out or empty attempt scores 0 and is reported separately. Do not re-run a failed
   attempt for a better score. `--resume` only completes attempts that never finished.
@@ -237,7 +237,8 @@ How to read them:
 - **Against the noise.** The report gives, next to each comparison, the mean spread of the metric between
   repeats of the control arm. A difference smaller than that spread is noise.
 - **As a proxy.** "Decisive" is the model judge's label for each question (would the conclusion change
-  without it), made without knowing the arm. It is the same model as the runs, not a human.
+  without it), made without knowing the arm. It uses the offline meta model (DeepSeek Flash by
+  default), not a human or the independent rubric judge.
 - **Before a null result.** If the skills were rarely opened, the lessons were not tested. If no helper was
   called, the tools were not tested.
 
@@ -382,14 +383,19 @@ first round's records, lessons and tools. The meta-agent reviews once per round,
 If round 2 changes nothing, the two `snapshot.json` files show the same version. Report that, and leave arm
 C2 out of the pre-registration.
 
-The meta model is the `benchmark.yaml` model (through `research_cli.py`), the same as the runs.
+The offline meta-agent and node-label judge use the same `BENCH_MODEL` and `DEEPSEEK_API_KEY`
+from `benchmarking/.env` as all analysis methods (DeepSeek Flash by default). `research_cli.py`
+installs this configuration only in its process. Freeze the model across evolution rounds;
+there is no separate meta-model setting. The independent scientific rubric judge is unchanged.
 
 ## Why this design
 
 - **Fair comparison:** all arms share the same period, data, model, commit, policy, time limit and judge,
   so the differences come from the library.
 - **The library answers are about generalisation:** lessons and tools come only from the evolution suite
-  (two other regions, open problems only, no CMOMS data), and each snapshot is frozen before any test run.
+  (two other regions, other kinds of problems, no CMOMS data), and each snapshot is frozen before any test
+  run. No kind of problem appears in more than two evolution questions, so the three-question rule can only
+  be met by something that holds across kinds of problems (`DESIGN.md`, "Evolution suite").
 - **Each round is measured on its own:** C1 against B shows what one round of learning gives, and C2
   against C1 shows what the second round adds. A single library arm could not separate the two.
 - **The library is judged where it acts:** lessons are written into skills and tools are called from code,

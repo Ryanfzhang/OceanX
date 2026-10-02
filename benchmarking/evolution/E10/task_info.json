@@ -4,6 +4,7 @@
   "evolution_set": "A",
   "type": "open_problem",
   "open_kind": "disagreement",
+  "topic": "mixed layer",
   "title": "Product mixed-layer thickness versus mixed layers computed from profiles",
   "query": "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and mixed-layer thickness for 2011-2020 off California and Oregon (30-48 N, 130-116 W), compare the product's mixed-layer thickness with mixed-layer depths you compute from the temperature and salinity profiles. Quantify the differences by season and region, and determine how much comes from definitions and averaging and how much from the ocean state.",
   "catalog_version": "2026-10-02-v7",

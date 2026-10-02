@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Run `ocean research ...` (labels, the meta-agent's review, marks, snapshots) with the benchmark.yaml model.
+"""Run `ocean research ...` (labels, the meta-agent's review, marks, snapshots) with benchmarking/.env.
 
-The meta model used for judge labels and for reviewing lessons and tools is then the same model as the
-benchmark runs, and the server's everyday OceanX model settings are neither read nor changed.
+The offline meta-agent and node labels use the same model and credentials as the analysis roles
+(DeepSeek Flash by default). The server's everyday OceanX settings are neither read nor changed.
 Example: python benchmarking/server/research_cli.py library --project <evolution-runs-folder>
 """
 import sys

@@ -4,10 +4,13 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import yaml
+from dotenv.parser import parse_stream
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG = ROOT / 'benchmark.yaml'
+DEFAULT_CONFIG = ROOT / 'benchmarking' / '.env'
+DEFAULT_MODEL = 'deepseek-flash'
+DEFAULT_ENDPOINTS = {'openai': 'https://api.deepseek.com',
+                     'anthropic': 'https://api.deepseek.com/anthropic'}
 
 
 @dataclass(frozen=True)
@@ -26,10 +29,10 @@ class Config:
     def endpoint(self, protocol):
         e = self.endpoints.get(protocol)
         if not e or not e.url or not e.api_key or e.api_key.startswith('REPLACE_'):
-            raise ValueError(f'benchmark.yaml: fill {protocol}.url and {protocol}.api_key')
+            raise ValueError('benchmarking/.env: fill DEEPSEEK_API_KEY')
         u = urlsplit(e.url)
         if u.scheme not in ('https', 'http') or not u.hostname or u.username or u.password or u.query or u.fragment:
-            raise ValueError(f'benchmark.yaml: invalid {protocol}.url')
+            raise ValueError(f'benchmarking/.env: invalid BENCH_{protocol.upper()}_BASE_URL')
         return e
 
     def public(self):
@@ -40,34 +43,37 @@ class Config:
 def load_config(path=None):
     path = Path(path or os.environ.get('OCEAN_BENCH_CONFIG', DEFAULT_CONFIG)).expanduser().resolve()
     if not path.is_file():
-        raise ValueError(f'Missing {path}; copy benchmark.example.yaml to benchmark.yaml and fill it')
-    try:
-        raw = yaml.safe_load(path.read_text())
-    except yaml.YAMLError as exc:
-        mark = getattr(exc, 'problem_mark', None)
-        location = f' at line {mark.line + 1}, column {mark.column + 1}' if mark else ''
-        raise ValueError('Invalid benchmark.yaml syntax' + location) from None
-    if not isinstance(raw, dict):
-        raise ValueError('benchmark.yaml must contain a mapping of configuration fields')
-    model = raw.get('model')
-    if not isinstance(model, str) or not model.strip() or model.strip().startswith('REPLACE_'):
-        raise ValueError('benchmark.yaml: replace model placeholder with the actual provider model ID')
-    protocol = raw.get('oceanx_api')
+        raise ValueError(f'Missing {path}; copy benchmarking/.env.example to benchmarking/.env and fill it')
+    # Parse this file only: no shell credential fallback, global load_dotenv or ${ENV} interpolation.
+    raw = {}
+    with path.open(encoding='utf-8') as stream:
+        for binding in parse_stream(stream):
+            if binding.error:
+                raise ValueError(f'Invalid benchmark .env syntax at line {binding.original.line}')
+            if binding.key:
+                if binding.key in raw:
+                    raise ValueError(f'Duplicate benchmark .env field at line {binding.original.line}')
+                raw[binding.key] = binding.value or ''
+    allowed = {'DEEPSEEK_API_KEY', 'BENCH_MODEL', 'BENCH_OCEANX_API', 'BENCH_MAX_TOKENS',
+               'BENCH_OPENAI_BASE_URL', 'BENCH_ANTHROPIC_BASE_URL'}
+    if set(raw) - allowed:
+        raise ValueError('benchmark .env has unsupported fields; use the fields in benchmarking/.env.example')
+    model = raw.get('BENCH_MODEL', DEFAULT_MODEL).strip()
+    if not model or model.startswith('REPLACE_'):
+        raise ValueError('benchmarking/.env: fill BENCH_MODEL (default deepseek-flash)')
+    protocol = raw.get('BENCH_OCEANX_API', 'openai').strip()
     if protocol not in ('openai', 'anthropic'):
-        raise ValueError('benchmark.yaml: oceanx_api must be openai or anthropic')
-    tokens = raw.get('max_tokens', 32768)
-    if type(tokens) is not int or tokens < 1:
-        raise ValueError('benchmark.yaml: max_tokens must be a positive integer')
-    endpoints = {}
-    for name in ('openai', 'anthropic'):
-        item = raw.get(name, {})
-        if not isinstance(item, dict):
-            raise ValueError(f'benchmark.yaml: {name} must contain url and api_key fields')
-        url, key = item.get('url', ''), item.get('api_key', '')
-        if not isinstance(url, str) or not isinstance(key, str):
-            raise ValueError(f'benchmark.yaml: {name}.url and {name}.api_key must be strings')
-        endpoints[name] = Endpoint(url.strip(), key.strip())
-    return Config(model.strip(), protocol, endpoints, tokens)
+        raise ValueError('benchmarking/.env: BENCH_OCEANX_API must be openai or anthropic')
+    try:
+        tokens = int(raw.get('BENCH_MAX_TOKENS', '32768'))
+    except ValueError:
+        raise ValueError('benchmarking/.env: BENCH_MAX_TOKENS must be a positive integer') from None
+    if tokens < 1:
+        raise ValueError('benchmarking/.env: BENCH_MAX_TOKENS must be a positive integer')
+    key = raw.get('DEEPSEEK_API_KEY', '').strip()
+    endpoints = {name: Endpoint(raw.get(f'BENCH_{name.upper()}_BASE_URL', url).strip(), key)
+                 for name, url in DEFAULT_ENDPOINTS.items()}
+    return Config(model, protocol, endpoints, tokens)
 
 
 def configure_runtime():

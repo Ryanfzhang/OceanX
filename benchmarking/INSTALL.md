@@ -14,24 +14,34 @@ The host must allow user namespaces (see the OceanX installation guide, "Linux s
 
 ## Models: one file
 
-Copy the template and fill it in. The file is ignored by git; keep it out of data and result folders.
+Copy the template and fill its one `DEEPSEEK_API_KEY` on the server. The real `.env` is ignored by git;
+keep it out of data and result folders. No local key needs to be uploaded.
 
 ```bash
-cp -n benchmark.example.yaml benchmark.yaml && chmod 600 benchmark.yaml
+cp -n benchmarking/.env.example benchmarking/.env
+chmod 600 benchmarking/.env
 ```
 
-```yaml
-model: <provider model id>
-oceanx_api: openai          # or anthropic
-max_tokens: 32768
-openai:
-  url: "https://<provider>/v1"
-  api_key: "<key>"
+```dotenv
+DEEPSEEK_API_KEY=<your DeepSeek key>
+BENCH_MODEL=deepseek-flash
+BENCH_MAX_TOKENS=32768
+BENCH_OCEANX_API=openai
+BENCH_OPENAI_BASE_URL=https://api.deepseek.com
+BENCH_ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 ```
 
-- **Runs:** every OceanX role in benchmark runs uses this model.
-- **Learning and labels:** `server/research_cli.py` uses the same model for the meta-agent (lessons and
-  tools) and for model labels.
+- **One model/key:** OceanX Coordinator/Experts, the meta-agent/node labels, Claude Code (including
+  subagents) and Finch all use `BENCH_MODEL` and the same `DEEPSEEK_API_KEY`. There is no per-role model
+  override. Model metadata omits the key. `--config <path>` can select another explicit `.env` for a
+  separate experiment; it cannot override one role inside a run.
+- **Two wire formats, one service:** OceanX/Finch/meta default to DeepSeek's OpenAI-compatible endpoint;
+  Claude Code uses its Anthropic-compatible endpoint. See the
+  [official DeepSeek integration](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/).
+- **No inherited credentials:** the loader reads only the selected file and does not source it,
+  interpolate shell variables, or inherit other API keys. No real `.env` is created by repository setup.
+- **Evaluation:** the independent Codex rubric scoring is a separate manual judging step, not a model
+  API invoked by these runners. Changing this `.env` does not reconfigure that judge.
 - **Your everyday settings:** OceanX settings in `~/.oceanmind` are neither read nor changed.
 
 ## Checks

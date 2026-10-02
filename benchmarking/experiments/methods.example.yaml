@@ -1,0 +1,35 @@
+# Separate external-method comparison; NOT the B/C1/C2 library experiment.
+# Copy outside the repo, fill actual values and task IDs, then freeze BEFORE scored runs:
+# python benchmarking/evaluation/evaluate.py freeze --prereg <path>/preregistration.yaml
+experiment: methods-public-r1
+suite: test
+tasks: [Q07, Q08, Q09, Q10, Q15, Q18, Q19, Q20, Q21, Q23, Q24, Q25, Q26, Q27, Q28, Q29, Q30]
+# The task list above is a dated example. Replace it with the generated JSONL's exact IDs.
+queries_sha256: <SHA-256 of the one JSONL used by all three methods>
+code_commit: <same clean commit for all methods>
+model: deepseek-flash  # BENCH_MODEL in benchmarking/.env; no separate per-method or meta model
+judge: {name: codex, model: <independent judge model>, single_judge: true}
+arms:
+  OceanX: {policy: v2-nested, library: null}
+  Claude: {agent: claude-code, cli_version: <installed version>, host_sandbox: false}
+  Finch: {agent: finch-local, commit: aea66fdf2dd2be827727de50a73cae60dff59972,
+          backend: linux-bubblewrap-notebook-v1, max_steps: 60,
+          execution_timeout: 300, memory_mb_per_process: 8192, cpus_affinity: 2}
+repeats: 2
+timeout_seconds: 10800
+order: <prespecified schedule; simultaneous pilot or rotated/interleaved scored repeats>
+retry_rule: no selective retries of failed scored attempts
+primary_metric: total_score
+failed_attempt_score: 0
+comparisons:
+  - name: OceanX-vs-Claude
+    treatment: OceanX
+    control: Claude
+    rule: {type: superior, margin: 0}
+  - name: OceanX-vs-Finch
+    treatment: OceanX
+    control: Finch
+    rule: {type: superior, margin: 0}
+# No cross-system research-tree process comparison. Report capability/isolation differences.
+bootstrap: {resamples: 10000, unit: task, seed: 7}
+frozen_by: <owner>

@@ -132,3 +132,31 @@ def test_output_must_stay_outside_the_data_root(archive):
     with pytest.raises(ValueError, match="outside"):
         prepare.main(["--data-root", str(archive), "--suite", "test", "--tasks", "Q01",
                       "--output", str(archive / "inputs.jsonl")])
+
+
+def test_available_selects_same_verified_subset_and_reports_exclusions(archive, tmp_path, capsys):
+    control = archive / '_download_all'
+    doc = json.loads((control / 'coverage.json').read_text())
+    doc['tasks']['Q01'] = {'numerical_inputs_complete': False, 'missing_groups': ['C_CORE']}
+    download.write_json(control / 'coverage.json', doc)
+    output = tmp_path / 'partial.jsonl'
+    prepare.main(['--data-root', str(archive), '--suite', 'test', '--tasks', 'Q01', 'Q07',
+                  '--available', '--output', str(output)])
+    assert [c.id for c in load_queries(output)] == ['Q07']
+    assert 'Q01: excluded; missing groups:' in capsys.readouterr().out
+    with pytest.raises(ValueError, match='No tasks'):
+        prepare.main(['--data-root', str(archive), '--suite', 'test', '--tasks', 'Q01',
+                      '--available', '--output', str(tmp_path / 'empty.jsonl')])
+    assert not (tmp_path / 'empty.jsonl').exists()
+
+
+def test_available_does_not_ignore_stale_reports_or_overrides(archive, tmp_path):
+    (archive / '_download_all/P_GULF.report.json').unlink()
+    output = tmp_path / 'blocked.jsonl'
+    args = ['--data-root', str(archive), '--suite', 'test', '--tasks', 'Q07',
+            '--available', '--output', str(output)]
+    with pytest.raises(OSError):
+        prepare.main(args)
+    assert not output.exists()
+    with pytest.raises(ValueError, match='overrides'):
+        prepare.main([*args, '--bindings', str(tmp_path / 'arbitrary.json')])

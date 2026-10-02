@@ -614,6 +614,8 @@ def run_record(attempt: Path, arm: dict) -> dict:
     result = json.loads((attempt / "result.json").read_text())
     if result.get("agent") == "finch-local":
         return external_run_record(attempt, arm, result)
+    if result.get("agent") == "claude-code":
+        return claude_run_record(attempt, arm, result)
     completed = result.get("status") == "completed"
     calls = ledger(attempt)
     spent = usage(attempt, result, calls)
@@ -727,6 +729,36 @@ def external_run_record(attempt: Path, arm: dict, result: dict) -> dict:
             "requests and router-internal retries may have unavailable usage."}
 
 
+def claude_run_record(attempt: Path, arm: dict, result: dict) -> dict:
+    """CLI evidence and whole-call usage, without inventing a tree or per-call/code ledger."""
+    missing = []
+    answer, events = attempt / 'answer.md', attempt / 'events.jsonl'
+    if result.get('status') == 'completed' and (not answer.is_file() or not answer.read_text().strip()):
+        missing.append('answer.md')
+    if not events.is_file() or not events.stat().st_size:
+        missing.append('CLI conversation events')
+    spent = usage(attempt, result)
+    if spent['input_tokens'] is None or spent['output_tokens'] is None:
+        missing.append('whole-call token totals')
+    if not (attempt / 'evidence_manifest.json').is_file():
+        missing.append('evidence manifest')
+    documents_ = [{'path': str(p.relative_to(attempt)), 'bytes': p.stat().st_size,
+                   'kind': 'final report' if p.name == 'answer.md' else 'output'}
+                  for p in evidence_files(attempt) if p.is_file()]
+    return {'task_id': attempt.parent.name, 'attempt': attempt.name, 'arm': arm['arm'],
+        'policy': None, 'library_version': None, 'commit': arm.get('commit'),
+        'status': result['status'], 'time': {'elapsed_seconds': result.get('elapsed_seconds'),
+            'setup_seconds': None, 'analysis_seconds': None, 'model_seconds': None, 'code_seconds': None},
+        'tokens': spent, 'code_runs': {'total': None, 'by_state': {}}, 'tree': None, 'questions': [],
+        'documents': documents_, 'conversations': {'checkpoint_bytes': 0,
+            'written_after_last_model_call': None, 'history_files': int(events.is_file()),
+            'history_bytes': events.stat().st_size if events.is_file() else 0},
+        'disk': disk(attempt), 'complete': not missing, 'missing': missing,
+        'not_applicable': ['research tree', 'OceanX checkpoints'],
+        'limitations': 'CLI-reported whole-call tokens; model-call counts, failed-call counts and code '
+            'execution times are unavailable, not zero. Event presence does not prove a complete transcript.'}
+
+
 def millions(value) -> str:
     return "n/a" if value is None else f"{value / 1e6:.1f}M"
 
@@ -739,6 +771,7 @@ def record_page(record: dict) -> str:
     """The run record as a page: totals, then the research tree with what each question cost."""
     time, tokens, runs, size = record["time"], record["tokens"], record["code_runs"], record["disk"]
     kinds = [item["kind"] for item in record["documents"]]
+    failed_runs = runs['total'] - runs['by_state'].get('succeeded', 0) if runs['total'] is not None else 'n/a'
 
     def minutes(seconds):
         return "n/a" if seconds is None else f"{seconds / 60:.0f} min"
@@ -757,7 +790,7 @@ def record_page(record: dict) -> str:
               "Input tokens | Output tokens | Skills opened | Report |")
     lines = [f"# {record['task_id']}, arm {record['arm']}, {record['attempt']}: {record['status']}", "",
              spent_time, spent_tokens,
-             f"- Code runs: {runs['total']} ({runs['total'] - runs['by_state'].get('succeeded', 0)} did not succeed)",
+             f"- Code runs: {runs['total'] if runs['total'] is not None else 'n/a'} ({failed_runs} did not succeed)",
              kept, f"- Missing: {'; '.join(record['missing']) or 'nothing'}", "",
              header, "|---|---|---|---|---|---|---|---|---|---|---|"]
     for q in record["questions"]:
@@ -791,7 +824,7 @@ def inventory(args) -> dict:
              "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in records:
         tokens, runs, tree = r["tokens"], r["code_runs"], r["tree"] or {}
-        failed_runs = runs["total"] - runs["by_state"].get("succeeded", 0)
+        failed_runs = runs["total"] - runs["by_state"].get("succeeded", 0) if runs['total'] is not None else 'n/a'
         lines.append(
             f"| {r['arm']} | {r['task_id']} | {r['status']} | {(r['time']['elapsed_seconds'] or 0) / 60:.0f} | "
             f"{millions(tokens['input_tokens'])} ({millions(tokens['cached_input_tokens'])}) | "
