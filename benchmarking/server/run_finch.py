@@ -222,6 +222,8 @@ def run_case(case, directory, args, env, cancelled):
               "started_at": at, "elapsed_seconds": time.monotonic() - started,
               "exit_code": code, "stop_reason": reason or terminal.get("stop_reason"),
               "runner_error": error,
+              "worker_error": terminal.get("error"),
+              "execution_log": terminal.get("execution_log"),
               "steps": terminal.get("steps"), "attempt_dir": str(directory),
               "external_usage": accounting,
               "limitations": "Local Finch analysis component, not full Robin. No search tool, "

@@ -125,6 +125,16 @@ The nbconvert cell timeout is explicitly set to the same execution budget instea
 of its implicit 30-second default; the outer deadline still bounds the entire notebook.
 Freeze the chosen settings before scored runs; budget changes require a new arm.
 
+A notebook execution deadline ends that attempt with `status=timed_out` and
+`stop_reason=notebook_execution_timeout`, matching upstream's Docker-path termination
+on timeout. It does not spend the remaining agent steps replaying the same blocking
+cell. The batch proceeds to the next query. `result.json` includes `worker_error` and
+`execution_log`; code-run records and the transcript retain the explicit timeout.
+The execution log keeps available process output, not guaranteed cell-level progress.
+Existing notebook code, previously saved outputs and workspace files remain intact;
+outputs still buffered in a killed kernel are not guaranteed to survive. This neither
+raises the 300-second budget nor changes Finch to incremental cell execution.
+
 Datasets appear at `/inputs/<index>/<name>` as read-only mounts, without copies.
 The notebook writes under `/workspace`; published figures/tables go in `outputs/`,
 temporary calculations in `scratch/`. Bubblewrap creates a private filesystem,

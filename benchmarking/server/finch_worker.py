@@ -168,6 +168,7 @@ async def episode(attempt, config):
     original_local = NBEnvironment._run_notebook_local
     original_save, original_reload = NBEnvironmentState.save_nb, NBEnvironmentState.reload_nb
     original_list = NBEnvironment._list_dir
+    notebook_timeout = None
 
     def save_notebook(state):
         workspace_file(state.nb_path, workspace)
@@ -201,9 +202,22 @@ async def episode(attempt, config):
         pass
 
     async def run_local(environment):
+        nonlocal notebook_timeout
         workspace_file(environment.state.nb_path, workspace)
         log = attempt / f"notebook-execution-{uuid4().hex}.log"
-        code, tail = await execute_notebook(spec, log)
+        try:
+            code, tail = await execute_notebook(spec, log)
+        except TimeoutError as exc:
+            # Match upstream's Docker timeout termination, not an incremental retry policy.
+            # edit_cell replays every cell; another edit could hit the same blocking cell.
+            environment.state.done = True
+            message = (f"Finch full notebook execution timed out after "
+                       f"{spec['execution_timeout']} seconds; this attempt has stopped. "
+                       f"Saved notebook and workspace files are retained. Execution log: {log.name}.")
+            if str(exc):
+                message += "\n" + str(exc)
+            notebook_timeout = {"error": message[:2000], "execution_log": log.name}
+            raise TimeoutError(notebook_timeout["error"]) from exc
         if code:
             raise ValueError(f"Sandboxed notebook failed (exit code {code}): {tail}")
         environment.state.reload_nb()
@@ -212,6 +226,9 @@ async def episode(attempt, config):
     NBEnvironmentState.start_kernel, NBEnvironmentState.close = no_host_kernel, no_host_kernel
     NBEnvironment._run_notebook_local = run_local
     async def measured_execution(environment):
+        if notebook_timeout:
+            # A response may contain more than one tool call; never launch a second replay.
+            raise TimeoutError(notebook_timeout["error"])
         execution_id, started = uuid4().hex, time.monotonic()
         append_json(attempt / "code_runs.jsonl", {"execution_id": execution_id,
             "state": "running", "started_at": datetime.now(UTC).isoformat()})
@@ -223,8 +240,11 @@ async def episode(attempt, config):
                       for output in cell.get("outputs", []) if output.get("output_type") == "error"]
             record.update(state="failed" if errors else "succeeded", errors=errors)
             return result
-        except TimeoutError:
+        except TimeoutError as exc:
             record["state"] = "timed_out"
+            record["error"] = str(exc)[:2000]
+            if notebook_timeout:
+                record["execution_log"] = notebook_timeout["execution_log"]
             raise
         finally:
             record["duration_seconds"] = time.monotonic() - started
@@ -255,7 +275,13 @@ async def episode(attempt, config):
             append_json(attempt / "transcript.jsonl", {"type": "action", "step": steps,
                                                       "message": action.value})
             observations, _, done, truncated = await environment.step(action.value)
-            save_json(attempt / "progress.json", {"steps": steps, "done": done})
+            save_json(attempt / "progress.json", {"steps": steps, "done": done,
+                **({"stop_reason": "notebook_execution_timeout"} if notebook_timeout else {})})
+            if notebook_timeout:
+                status, reason = "timed_out", "notebook_execution_timeout"
+                append_json(attempt / "transcript.jsonl", {"type": "episode.stopped",
+                    "step": steps, "status": status, "stop_reason": reason, **notebook_timeout})
+                break
             if done:
                 answer = environment.state.answer
                 text = answer if isinstance(answer, str) else (
@@ -280,7 +306,7 @@ async def episode(attempt, config):
         NBEnvironment._run_notebook_local = original_local
         NBEnvironmentState.save_nb, NBEnvironmentState.reload_nb = original_save, original_reload
         NBEnvironment._list_dir = original_list
-    return {"status": status, "stop_reason": reason, "steps": steps}
+    return {"status": status, "stop_reason": reason, "steps": steps, **(notebook_timeout or {})}
 
 
 def main(argv=None):

@@ -135,3 +135,58 @@ def test_pinned_agent_notebook_delivery_and_usage(tmp_path, monkeypatch):
     assert "test-secret" not in (tmp_path / "transcript.jsonl").read_text()
     executions = [json.loads(line) for line in (tmp_path / "code_runs.jsonl").read_text().splitlines()]
     assert [e["state"] for e in executions] == ["running", "succeeded"]
+
+
+@pytest.mark.parametrize("tool_calls", [1, 2])
+def test_notebook_timeout_ends_episode_and_preserves_partial_work(tmp_path, monkeypatch, tool_calls):
+    workspace = tmp_path / "workspace"
+    (workspace / "outputs").mkdir(parents=True)
+    partial = workspace / "outputs/partial.csv"
+    partial.write_text("value\n42\n")
+    (tmp_path / "worker.json").write_text(json.dumps({
+        "workspace": str(workspace), "mounts": [], "max_steps": 60,
+        "temperature": 1, "execution_timeout": 300}))
+    (tmp_path / "submitted_prompt.txt").write_text("Compute a result.")
+    executions, requests = [], []
+    original_run = NBEnvironment._run_notebook_local
+
+    async def timeout(spec, log):
+        executions.append(log)
+        log.write_text("Starting full notebook replay\n")
+        raise TimeoutError()  # asyncio.wait_for originally supplied an empty message.
+
+    async def acompletion(router, *args, **kwargs):
+        requests.append(kwargs)
+        if kwargs.get("tools") and kwargs.get("tool_choice") != "none":
+            message = {"role": "assistant", "content": None, "tool_calls": [{
+                "id": f"timeout_call_{i}", "type": "function", "function": {
+                    "name": "edit_cell", "arguments": json.dumps({"contents": "slow_work()"})}}
+                for i in range(tool_calls)]}
+        else:
+            message = {"role": "assistant", "content": "Thought: compute in the notebook."}
+        return litellm.ModelResponse(model="deepseek-flash", choices=[{
+            "index": 0, "finish_reason": "tool_calls" if message.get("tool_calls") else "stop",
+            "message": message}], usage={"prompt_tokens": 10, "completion_tokens": 5})
+
+    monkeypatch.setattr(worker, "execute_notebook", timeout)
+    monkeypatch.setattr(litellm.Router, "acompletion", acompletion)
+    path = tmp_path / ".env"
+    path.write_text("DEEPSEEK_API_KEY=test-secret\n"
+                    "BENCH_OPENAI_BASE_URL=https://example.invalid/v1\n")
+    result = asyncio.run(worker.episode(tmp_path, load_config(path)))
+    assert result["status"] == "timed_out"
+    assert result["stop_reason"] == "notebook_execution_timeout"
+    assert result["steps"] == 1
+    assert "300 seconds" in result["error"] and "full notebook" in result["error"]
+    assert result["execution_log"] == executions[0].name
+    assert len(executions) == 1 and len(requests) == 2
+    assert NBEnvironment._run_notebook_local is original_run
+    assert not (tmp_path / "answer.md").exists()
+    assert partial.read_text() == "value\n42\n"
+    notebook = nbformat.read(workspace / "notebook.ipynb", as_version=4)
+    assert notebook.cells[0].source == "slow_work()"
+    progress = json.loads((tmp_path / "progress.json").read_text())
+    assert progress["done"] and progress["stop_reason"] == "notebook_execution_timeout"
+    code = [json.loads(line) for line in (tmp_path / "code_runs.jsonl").read_text().splitlines()]
+    assert [row["state"] for row in code] == ["running", "timed_out"]
+    assert "300 seconds" in code[-1]["error"]

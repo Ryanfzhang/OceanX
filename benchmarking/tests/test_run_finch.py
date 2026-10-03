@@ -42,6 +42,11 @@ work = pathlib.Path(spec['workspace'])
 (attempt / 'model_calls.jsonl').write_text(json.dumps({'state':'completed', 'duration_seconds':1,
     'usage':{'input_tokens':100,'output_tokens':20,'cached_input_tokens':80}})+'\\n')
 (attempt / 'transcript.jsonl').write_text('{}\\n')
+if 'NOTEBOOK_LIMIT' in prompt:
+    (attempt / 'worker_result.json').write_text(json.dumps({'status':'timed_out', 'steps':1,
+        'stop_reason':'notebook_execution_timeout', 'error':'Full notebook timed out after 300 seconds',
+        'execution_log':'notebook-execution-test.log'}))
+    sys.exit(1)
 if 'TIMEOUT' in prompt:
     subprocess.Popen([sys.executable,'-c',"import time; time.sleep(1); open('escaped.txt','w').write('bad')"])
     time.sleep(30)
@@ -131,6 +136,22 @@ def test_step_failure_continues_without_docker(setup):
     _, output, invoke, _ = setup
     assert runner.main(invoke([("FAIL", 5), ("OK", 5)])) == 1
     assert [r["status"] for r in results(output)] == ["failed", "completed"]
+
+
+def test_notebook_execution_timeout_is_recorded_and_batch_continues(setup):
+    _, output, invoke, _ = setup
+    assert runner.main(invoke([("NOTEBOOK_LIMIT", 5), ("OK", 5)])) == 1
+    timed_out, completed = results(output)
+    assert timed_out["status"] == "timed_out"
+    assert timed_out["stop_reason"] == "notebook_execution_timeout"
+    assert timed_out["steps"] == 1
+    assert "300 seconds" in timed_out["worker_error"]
+    assert timed_out["execution_log"] == "notebook-execution-test.log"
+    assert timed_out["runner_error"] is None
+    attempt = Path(timed_out["attempt_dir"])
+    assert (attempt / "workspace/notebook.ipynb").is_file()
+    assert (attempt / "workspace/outputs/map.png").is_file()
+    assert completed["status"] == "completed"
 
 
 def test_unavailable_native_sandbox_fails_before_creating_attempt(setup, monkeypatch):

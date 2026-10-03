@@ -76,9 +76,11 @@ async def execute_notebook(spec, log_path):
     """
     process = await asyncio.create_subprocess_exec(*notebook_command(spec),
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    tail = b""
 
     async def consume():
-        size, tail = 0, b""
+        nonlocal tail
+        size = 0
         with log_path.open("wb") as stream:
             while chunk := await process.stdout.read(65536):
                 size += len(chunk)
@@ -90,6 +92,12 @@ async def execute_notebook(spec, log_path):
 
     try:
         return await asyncio.wait_for(consume(), timeout=spec["execution_timeout"])
+    except TimeoutError as exc:
+        message = (f"Finch full notebook replay timed out after {spec['execution_timeout']} seconds. "
+                   f"Execution log: {log_path.name}.")
+        if tail:
+            message += "\nLog tail:\n" + tail.decode("utf-8", errors="replace")
+        raise TimeoutError(message) from exc
     finally:
         if process.returncode is None:
             process.kill()
