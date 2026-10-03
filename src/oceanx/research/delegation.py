@@ -15,7 +15,9 @@ binding is logged as ``inferred`` so its reliability can be measured.
 """
 from __future__ import annotations
 
+import asyncio
 import re
+import time
 import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -25,6 +27,10 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 
 NODE_ID_PATTERN = re.compile(r"(?<![A-Za-z0-9])(B\d+(?:\.\d+)*)(?![A-Za-z0-9])")
+# Tool calls of one Coordinator turn run together and a tree update writes in a worker thread,
+# so a task can start before the same turn's update has written the node it names. Once that
+# update holds the tree lock, has_node waits for it; this covers the moment before it does.
+NODE_WAIT_SECONDS = 2.0
 NODE_ID_ARG_DESCRIPTION = (
     "Research-tree node ID this question answers, for example B1.2. "
     "Omit only for questions that are not research-tree nodes."
@@ -95,9 +101,10 @@ def _extended_task_tool(native):
 class StructuredDelegationMiddleware(AgentMiddleware):
     """Coordinator middleware: advertise ``node_id`` and bind each ``task`` call to it."""
 
-    def __init__(self, tree=None):
+    def __init__(self, tree=None, node_wait_seconds: float = NODE_WAIT_SECONDS):
         super().__init__()
         self.tree = tree
+        self.node_wait_seconds = node_wait_seconds
         self._display_tool = None
 
     # --- model side: advertise node_id ------------------------------------
@@ -129,7 +136,20 @@ class StructuredDelegationMiddleware(AgentMiddleware):
             self.tree.record_delegation(delegation)
         return request.override(tool_call={**call, "args": args}), delegation
 
+    def _awaited_node(self, request, deadline: float) -> bool:
+        """Whether a task call names a node the tree does not hold yet and may still receive."""
+        call = request.tool_call
+        if self.tree is None or call.get("name") != "task" or time.monotonic() >= deadline:
+            return False
+        args = call.get("args") or {}
+        node_id = (str(args.get("node_id") or "").strip()
+                   or infer_node_id(str(args.get("description") or "")))
+        return bool(node_id) and not self.tree.has_node(node_id)
+
     def wrap_tool_call(self, request, handler):
+        deadline = time.monotonic() + self.node_wait_seconds
+        while self._awaited_node(request, deadline):
+            time.sleep(0.05)
         request, delegation = self._prepare(request)
         token = _CURRENT.set(delegation)
         try:
@@ -138,6 +158,9 @@ class StructuredDelegationMiddleware(AgentMiddleware):
             _CURRENT.reset(token)
 
     async def awrap_tool_call(self, request, handler):
+        deadline = time.monotonic() + self.node_wait_seconds
+        while self._awaited_node(request, deadline):
+            await asyncio.sleep(0.05)
         request, delegation = self._prepare(request)
         token = _CURRENT.set(delegation)
         try:

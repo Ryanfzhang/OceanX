@@ -337,6 +337,43 @@ def test_middleware_logs_delegation_strips_arg_and_exposes_binding(tmp_path):
     assert middleware.wrap_tool_call(_Request(other), lambda r: r.tool_call) == other
 
 
+@pytest.mark.asyncio
+async def test_a_node_added_in_the_same_turn_is_bound_when_its_task_starts(tmp_path):
+    # r2, 2026-10-03: the Coordinator added B1.3.1.1.1 and delegated it in one turn. Tool calls
+    # of a turn run together and the tree update writes in a worker thread, so the task was
+    # bound before its node existed: the Expert's report was never attached to the tree.
+    tree = mechanism_tree(tmp_path)
+    middleware = StructuredDelegationMiddleware(tree)
+    seen = {}
+
+    async def handler(request):
+        seen["delegation"] = current_delegation()
+        return "receipt"
+
+    call = {"name": "task", "id": "c1", "args": {
+        "description": "Continue B1.3: does the budget close in each season?",
+        "subagent_type": "ocean_process_expert", "node_id": "B1.3.1"}}
+    add = research_tree_tool(tree).ainvoke({"changes": [
+        {"action": "add", "target": "B1.3", "question": "Does the budget close in each season?"}]})
+    await asyncio.gather(middleware.awrap_tool_call(_Request(call), handler), add)
+    assert (seen["delegation"].node_id, seen["delegation"].binding) == ("B1.3.1", "explicit")
+    assert tree.events("B1.3.1")[-1]["type"] == "delegated"
+
+
+def test_a_node_that_never_appears_is_unbound_after_a_short_wait(tmp_path):
+    tree = mechanism_tree(tmp_path)
+    middleware = StructuredDelegationMiddleware(tree, node_wait_seconds=0.2)
+    seen = {}
+
+    def handler(request):
+        seen["delegation"] = current_delegation()
+        return "receipt"
+
+    call = {"name": "task", "id": "c1", "args": {"description": "x", "node_id": "B9"}}
+    assert middleware.wrap_tool_call(_Request(call), handler) == "receipt"
+    assert (seen["delegation"].node_id, seen["delegation"].binding) == (None, "unbound")
+
+
 # --- outcomes ----------------------------------------------------------------
 
 def test_outcomes_ignore_tree_section_and_attribute_tokens(tmp_path):
