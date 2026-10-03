@@ -106,10 +106,13 @@ def preflight(require_sandbox=False):
     current_python_runtime()
     if require_sandbox:
         import asyncio
-        from oceanx.sandbox_self_check import run_sandbox_self_check
+        from oceanx.sandbox_self_check import run_kernel_self_check, run_sandbox_self_check
         report = asyncio.run(run_sandbox_self_check())
         if not report.get('passed'):
             raise ValueError('Benchmark sandbox check failed before model calls: ' + str(report))
+        report = asyncio.run(run_kernel_self_check())
+        if not report.get('passed'):
+            raise ValueError('Benchmark kernel check failed before model calls: ' + str(report))
 
 
 def claude_environment(config):

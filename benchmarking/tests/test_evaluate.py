@@ -273,7 +273,8 @@ def test_inventory_records_what_each_attempt_cost_and_kept(tmp_path):
     assert full["time"] == {"elapsed_seconds": 3600, "setup_seconds": None, "analysis_seconds": None,
                             "model_seconds": 6.5, "code_seconds": 5.5}
     assert (full["tokens"]["input_tokens"], full["tokens"]["output_tokens"]) == (10000, 550)
-    assert full["code_runs"] == {"total": 2, "by_state": {"failed": 1, "succeeded": 1}}
+    assert full["code_runs"] == {"total": 2, "by_state": {"failed": 1, "succeeded": 1}, "failures": {
+        "kernel_start": 0, "time_limit": 0, "read_only": 0, "cancelled": 0, "code": 1}}
     assert full["tree"]["finished"] and full["tree"]["questions_answered"] == 2
     # Every Markdown file of the run is listed by kind; the agents' copies of skills are not.
     kinds = sorted((d["kind"], d["node"]) for d in full["documents"])
@@ -309,3 +310,27 @@ def test_inventory_records_what_each_attempt_cost_and_kept(tmp_path):
     assert evaluate.run_record(attempt, {"arm": "C1"})["missing"] == ["end of agent conversations"]
     checkpoint.write_bytes(b"\x80\x02}q\x00.")
     assert evaluate.run_record(attempt, {"arm": "C1"})["missing"] == ["agent conversations"]
+
+
+def test_code_failures_name_the_environment_apart_from_the_code():
+    # What the server run of 2026-10-03 needed counting by hand.
+    code = [
+        ("succeeded", {}),
+        ("failed", {"error": "Kernel died before replying to kernel_info. Kernel output:\nbwrap: execvp"}),
+        ("timed_out", {"limit_trigger": "wall_time"}),
+        ("failed", {"stderr": "OSError: [Errno 30] Read-only file system: '/task/agents/x/outputs/a.nc'"}),
+        ("cancelled", {}),
+        ("failed", {"stderr": "ValueError: operands could not be broadcast together"}),
+        ("running", {}),
+    ]
+    assert evaluate.code_failures(code) == {
+        "kernel_start": 1, "time_limit": 1, "read_only": 1, "cancelled": 1, "code": 1}
+    page = evaluate.record_page({
+        "task_id": "Q01", "arm": "B", "attempt": "attempt-1", "status": "completed",
+        "time": {"elapsed_seconds": 60, "model_seconds": 30, "code_seconds": 10},
+        "tokens": {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "calls": 0,
+                   "failed_calls": 0},
+        "code_runs": {"total": 7, "by_state": {"succeeded": 1}, "failures": evaluate.code_failures(code)},
+        "disk": {"total": 0, "scratch": 0}, "documents": [], "missing": [], "questions": []})
+    assert ("Code runs: 7 (6 did not succeed: 1 kernel start, 1 time limit, 1 read only, "
+            "1 cancelled, 1 code)") in page

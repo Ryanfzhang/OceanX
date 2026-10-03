@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import NotRequired
 
@@ -19,9 +21,10 @@ from deepagents.graph import DeepAgentState
 from deepagents.middleware.filesystem import FilesystemState
 from deepagents.middleware.skills import SkillsState
 from deepagents.middleware.summarization import SummarizationState
-from langchain.agents.middleware import ModelCallLimitMiddleware
+from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command
 
 from oceanx.agent_tools import ToolRegistry
 from oceanx.deep_runtime import build_deep_agent_graph
@@ -112,9 +115,11 @@ def _wind_down_request(request):
         tools = []
         instruction = (
             "# Final delivery call\n"
-            "No tools are available on this final model call. Do not begin or claim new work. "
-            "Return a concise, honest final answer from the report and evidence already saved. "
-            "State any incompleteness explicitly."
+            "No tools are available on this final model call, and none can be called. Do not begin or "
+            "claim new work. If report.md is complete and current, return a concise, honest final answer "
+            "from it. Otherwise write the complete report as this reply, in plain Markdown beginning with "
+            "## Summary (Result, Evidence and limitations, Further analysis), from the evidence already "
+            "saved; the backend saves it as report.md. State any incompleteness explicitly."
         )
     else:
         tools = [tool for tool in request.tools if _tool_name(tool) in _WIND_DOWN_TOOLS]
@@ -153,6 +158,105 @@ def _refused_tool_call(request):
                        name=call.get("name"), status="error")
 
 
+# Tool-call markup a model can print as text when no tool is bound (DeepSeek's starts with "<｜").
+_TOOL_MARKUP = ("<｜", "<|tool", "<tool_call", "<function_call")
+PLAIN_TEXT_RETRY = ("No tool can be called on this final call, so your reply must be plain Markdown: "
+                    "write the report text now, beginning with ## Summary.")
+
+
+def _prose(message) -> str:
+    """A reply's text up to any tool-call markup; empty for a tool call or markup alone."""
+    if not isinstance(message, AIMessage) or message.tool_calls:
+        return ""
+    text = message.text
+    cut = min((index for index in map(text.find, _TOOL_MARKUP) if index >= 0), default=len(text))
+    return text[:cut].strip()
+
+
+def _undelivered(request, response) -> bool:
+    """The tool-free final call answered with markup instead of a report or answer."""
+    if int(request.state.get("run_model_call_count", 0)) < EXPERT_FINAL_CALL:
+        return False
+    messages = getattr(response, "result", None)
+    reply = messages[-1] if messages else response
+    return isinstance(reply, AIMessage) and not _prose(reply)
+
+
+def _plain_text_request(request):
+    return request.override(messages=[*request.messages, HumanMessage(content=PLAIN_TEXT_RETRY)])
+
+
+RESEARCH_BUDGET_ENV = "OCEANX_RESEARCH_BUDGET_MINUTES"
+RESEARCH_BUDGET_STOP = 0.75  # share of the budget after which no new Expert assignment starts
+BUDGET_REFUSAL = ("Not started: most of the research time budget is used. Start no new Expert "
+                  "assignment; write the final report from the results you have.")
+
+
+def research_budget_minutes() -> float | None:
+    """An optional limit on research time; the benchmark sets it from its own time limit."""
+    try:
+        minutes = float(os.environ.get(RESEARCH_BUDGET_ENV) or 0)
+    except ValueError:
+        return None
+    return minutes if minutes > 0 else None
+
+
+class ResearchBudgetMiddleware(AgentMiddleware):
+    """Each Expert receipt tells the Coordinator how long the research has run and how many
+    assignments it made. With a budget, no new assignment starts after RESEARCH_BUDGET_STOP of
+    it, so the run ends with a synthesis instead of a timeout. The status rides on the receipt,
+    so the cached prompt prefix never changes."""
+
+    def __init__(self, budget_minutes: float | None = None, clock=time.monotonic) -> None:
+        super().__init__()
+        self.budget, self.clock = budget_minutes, clock
+        self.started, self.assignments = clock(), 0
+
+    def _closed(self) -> bool:
+        minutes = (self.clock() - self.started) / 60
+        return self.budget is not None and minutes >= RESEARCH_BUDGET_STOP * self.budget
+
+    def _status(self) -> str:
+        status = f"Research status: {(self.clock() - self.started) / 60:.0f} min elapsed"
+        if self.budget is not None:
+            status += f" of a {self.budget:.0f}-minute budget"
+        status += f"; {self.assignments} Expert assignments so far."
+        return status + (" Start no new assignment; write the final report." if self._closed() else "")
+
+    def _start(self, request):
+        """The refusal when the budget is used, otherwise None after counting the assignment."""
+        call = request.tool_call
+        if call.get("name") != "task":
+            return None
+        if self._closed():
+            return ToolMessage(content=BUDGET_REFUSAL, tool_call_id=call["id"], name="task",
+                               status="error")
+        self.assignments += 1
+        return None
+
+    def _with_status(self, request, result):
+        if request.tool_call.get("name") != "task":
+            return result
+        status = self._status()
+
+        def stamped(message):
+            if not isinstance(message, ToolMessage):
+                return message
+            return message.model_copy(update={"content": f"{message.text}\n\n{status}"})
+
+        update = getattr(result, "update", None)
+        if isinstance(result, Command) and isinstance(update, dict) and update.get("messages"):
+            return dataclasses.replace(result, update={**update, "messages": [
+                stamped(message) for message in update["messages"]]})
+        return stamped(result)
+
+    def wrap_tool_call(self, request, handler):
+        return self._start(request) or self._with_status(request, handler(request))
+
+    async def awrap_tool_call(self, request, handler):
+        return self._start(request) or self._with_status(request, await handler(request))
+
+
 class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
     """Own the native call count and report wind-down in one middleware instance.
 
@@ -166,10 +270,14 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
         super().__init__(run_limit=EXPERT_MODEL_CALL_LIMIT, exit_behavior="end")
 
     def wrap_model_call(self, request, handler):
-        return handler(_wind_down_request(request))
+        request = _wind_down_request(request)
+        response = handler(request)
+        return handler(_plain_text_request(request)) if _undelivered(request, response) else response
 
     async def awrap_model_call(self, request, handler):
-        return await handler(_wind_down_request(request))
+        request = _wind_down_request(request)
+        response = await handler(request)
+        return await handler(_plain_text_request(request)) if _undelivered(request, response) else response
 
     def wrap_tool_call(self, request, handler):
         return _refused_tool_call(request) or handler(request)
@@ -335,6 +443,20 @@ def _earlier_work(run: AgentRun) -> list[str]:
     return lines
 
 
+def _earlier_attempt(run: AgentRun) -> str:
+    """Another attempt at a question continues from what the earlier ones left in its folder."""
+    report = host().research.report_path(run)
+    folder = report.parents[2]
+    if report.is_file():
+        return (f"An earlier attempt at this question left its report at {report} and its files in "
+                f"{folder}. Continue from them: check, correct or extend that work rather than "
+                "starting over.\n")
+    if any(path.is_dir() and any(path.iterdir()) for path in (folder / "scratch", folder / "outputs")):
+        return (f"An earlier attempt at this question left files in {folder / 'scratch'} and "
+                f"{folder / 'outputs'} but no report. Reuse them rather than starting over.\n")
+    return ""
+
+
 async def build(config, role: str, *, run: AgentRun | None = None, middleware=None,
                 subagents=None, suffix=""):
     svc = services(config, role, run)
@@ -418,6 +540,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
             prompt += ("Earlier steps saved their files (scratch, outputs, reports) in these folders, "
                        "read-only for you; reuse them rather than recomputing: "
                        + "; ".join(earlier) + ".\n")
+        if not discussion:
+            prompt += _earlier_attempt(run)
         prompt += ("Return the report as final text; the backend saves it at this path.\n" if discussion else
                    "Create report.md at this exact path as soon as you have a defensible partial answer, "
                    "and keep it current as evidence changes. Begin with a short ## Summary. Do not defer "
@@ -461,16 +585,15 @@ def _question(state) -> str:
 
 
 def _missing_report(messages, report_path: Path) -> str:
-    """The handoff when no report was written.
+    """The handoff when there is no report and no closing prose to save as one.
 
-    An Expert that finished on its own keeps its closing answer. After the limit-forced,
-    tool-free final call the text can be raw tool-call markup, so it is never forwarded.
+    An Expert that finished on its own keeps its closing answer. Tool-call markup a model
+    prints as text, as after the limit-forced tool-free call, is never forwarded.
     """
     calls = sum(isinstance(message, AIMessage) for message in messages)
     last = messages[-1] if messages else None
-    if (calls < EXPERT_MODEL_CALL_LIMIT and isinstance(last, AIMessage) and not last.tool_calls
-            and last.text.strip()):
-        return last.text.strip()
+    if calls < EXPERT_MODEL_CALL_LIMIT and _prose(last):
+        return _prose(last)
     reason = (f"it reached its {EXPERT_MODEL_CALL_LIMIT}-call limit" if calls >= EXPERT_MODEL_CALL_LIMIT
               else f"it stopped after {calls} model calls")
     root = report_path.parents[2]
@@ -526,13 +649,14 @@ async def expert(config, role: str):
 
     async def receipt(state, config):
         run = AgentRun.from_config(config, role, question=state.get("question", ""))
-        last = state["messages"][-1]
-        materialize = last.text if role == "scientific_discussion_partner" else None
-        text, path = host().research.collect_report(
-            run,
-            materialize_text=materialize,
-            previous_revision=state.get("previous_report_revision"),
-        )
+        previous = state.get("previous_report_revision")
+        text, path = host().research.collect_report(run, previous_revision=previous)
+        closing = _prose(state["messages"][-1]) if state["messages"] else ""
+        if not text and closing:
+            # No report.md from this attempt (the Discussion Partner never writes one): the
+            # closing reply is the report, so every attempt that says something delivers it.
+            text, path = host().research.collect_report(
+                run, materialize_text=closing, previous_revision=previous)
         handoff = report_summary(text) or text.strip() or _missing_report(
             state["messages"], host().research.report_path(run))
         published_results: list[tuple[str, str]] = []
@@ -609,9 +733,15 @@ async def _coordinator_agent(config):
     from oceanx.research.delegation import StructuredDelegationMiddleware
     tree = research_tree(config["configurable"]["task_id"])
     guidance = tree.policy.guidance  # lessons are not prompt text; see build()
+    budget = research_budget_minutes()
+    # The budget check comes first, so a refused assignment is never bound to a tree node.
     return await build(config, "coordinator", subagents=specs,
-                       middleware=[StructuredDelegationMiddleware(tree)], suffix=(
+                       middleware=[ResearchBudgetMiddleware(budget), StructuredDelegationMiddleware(tree)],
+                       suffix=(
         (f"\n{guidance}\n" if guidance else "")
+        + (f"\nResearch time budget: {budget:.0f} minutes. After {RESEARCH_BUDGET_STOP * budget:.0f} "
+           "minutes no new Expert assignment starts, so answer the main question before then; each "
+           "receipt shows the time used.\n" if budget else "")
         + f"\nBackend-assigned final report file: {report}\n"
         "Native task receipts contain Result, Evidence and limitations, Further analysis, and Report. "
         "Use those compact fields for tree decisions and read report.md only when synthesis needs more detail. "

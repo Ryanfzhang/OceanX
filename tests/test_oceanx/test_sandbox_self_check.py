@@ -28,3 +28,17 @@ async def test_sandbox_self_check_proves_the_local_read_write_contract():
             "gsw": True,
         },
     }
+
+
+@pytest.mark.asyncio
+async def test_kernel_self_check_starts_a_kernel_and_saves_twice(monkeypatch):
+    import sys
+
+    from oceanx.sandbox_self_check import run_kernel_self_check
+
+    if not get_sandbox_execution_capabilities().available:
+        pytest.skip("sandbox backend is unavailable")
+    monkeypatch.setenv("OCEAN_SANDBOX_PYTHON", sys.executable)
+    report = await run_kernel_self_check()
+    assert report["passed"] is True, report
+    assert report["checks"] == {"kernel_started": True, "outputs_written_twice": True}

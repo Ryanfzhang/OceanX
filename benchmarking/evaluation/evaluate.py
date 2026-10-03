@@ -609,6 +609,27 @@ def disk(attempt: Path) -> dict:
     return {"total": total, "scratch": scratch}
 
 
+def code_failures(code: list[tuple[str, dict]]) -> dict:
+    """Why code runs did not succeed. The first three are the environment's fault, not the code's:
+    the kernel never started, the time limit stopped the run, or the sandbox refused a write."""
+    found = {"kernel_start": 0, "time_limit": 0, "read_only": 0, "cancelled": 0, "code": 0}
+    for state, body in code:
+        if state in ("succeeded", "running"):
+            continue
+        text = f"{body.get('error') or ''} {body.get('stderr') or ''}"
+        if "kernel_info" in text or "Kernel died" in text:
+            found["kernel_start"] += 1
+        elif state == "timed_out" or body.get("limit_trigger") == "wall_time":
+            found["time_limit"] += 1
+        elif "Read-only file system" in text:
+            found["read_only"] += 1
+        elif state == "cancelled":
+            found["cancelled"] += 1
+        else:
+            found["code"] += 1
+    return found
+
+
 def run_record(attempt: Path, arm: dict) -> dict:
     """What one attempt cost and kept, and what a later evaluation would find missing."""
     result = json.loads((attempt / "result.json").read_text())
@@ -664,7 +685,8 @@ def run_record(attempt: Path, arm: dict) -> dict:
            "code_seconds": round(sum(float(body.get("duration_seconds") or 0) for _, body in code), 1)},
         "tokens": spent,
         "code_runs": {"total": len(code),
-                      "by_state": {state: sum(s == state for s, _ in code) for state in sorted({s for s, _ in code})}},
+                      "by_state": {state: sum(s == state for s, _ in code) for state in sorted({s for s, _ in code})},
+                      "failures": code_failures(code)},
         "tree": None if digest is None else {
             "finished": bool(digest.get("finished")), "nodes": len(outline), "questions_answered": len(answered),
             "decisions": sum(digest.get("event_counts", {}).values()), "minutes": digest.get("wall_minutes")},
@@ -788,9 +810,12 @@ def record_page(record: dict) -> str:
             "folders)")
     header = ("| Node | Question | Answered by | Status | Label | Attempts (without a report) | Minutes | "
               "Input tokens | Output tokens | Skills opened | Report |")
+    causes = runs.get("failures") or {}
+    why = ", ".join(f"{count} {name.replace('_', ' ')}" for name, count in causes.items() if count)
     lines = [f"# {record['task_id']}, arm {record['arm']}, {record['attempt']}: {record['status']}", "",
              spent_time, spent_tokens,
-             f"- Code runs: {runs['total'] if runs['total'] is not None else 'n/a'} ({failed_runs} did not succeed)",
+             f"- Code runs: {runs['total'] if runs['total'] is not None else 'n/a'} ({failed_runs} did not succeed"
+             + (f": {why}" if why else "") + ")",
              kept, f"- Missing: {'; '.join(record['missing']) or 'nothing'}", "",
              header, "|---|---|---|---|---|---|---|---|---|---|---|"]
     for q in record["questions"]:

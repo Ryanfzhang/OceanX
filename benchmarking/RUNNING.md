@@ -36,6 +36,10 @@ BENCH_RESUME=false
   All 24 evolution questions are selected when that field is empty and tasks are `all`/`available`.
 - Optional OceanX library: `BENCH_OCEANX_LIBRARY=/absolute/path/to/frozen/L1` or L2.
   Other methods do not receive it. Learning/review remains an explicit offline step.
+- `BENCH_TIMEOUT_SECONDS` is also OceanX's research budget: after 75% of it the Coordinator
+  starts no new Expert assignment and finishes with the results it has (135 of 180 minutes).
+- Before any model call, `run_oceanx.py` and `check_setup.py` start one sandboxed Python kernel
+  and save to its output folder twice; the run stops if that fails.
 - Claude executable and approved tools, and Finch checkout, worker/kernel interpreters, steps,
   temperature, execution timeout, memory and CPUs are also configured in this file.
 

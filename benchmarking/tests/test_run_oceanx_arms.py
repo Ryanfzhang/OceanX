@@ -115,3 +115,11 @@ def test_arm_record_names_the_policy_and_the_library(snapshot, monkeypatch):
     # --policy sets the environment for every backend subprocess; the record follows it.
     monkeypatch.setenv("OCEANX_RESEARCH_POLICY", "v0-coordinator-bfs")
     assert run_oceanx.arm_record(SimpleNamespace(arm="paired", queries=None))["policy"] == "v0-coordinator-bfs"
+
+
+def test_the_case_time_limit_becomes_the_research_budget(monkeypatch):
+    from oceanx.research.graphs import RESEARCH_BUDGET_ENV
+    monkeypatch.delenv(RESEARCH_BUDGET_ENV, raising=False)
+    env = run_oceanx.backend_environment(SimpleNamespace(timeout_seconds=10800))
+    assert env[RESEARCH_BUDGET_ENV] == "180.0"
+    assert RESEARCH_BUDGET_ENV not in run_oceanx.backend_environment(SimpleNamespace(timeout_seconds=None))

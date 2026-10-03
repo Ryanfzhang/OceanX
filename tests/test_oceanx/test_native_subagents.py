@@ -754,3 +754,158 @@ def test_long_assignment_does_not_break_team_event_validation_or_change_identity
     assert snapshot.agents[1].agent_id == expert_agent_key("task", "ocean_process_expert", question)
     assert len(snapshot.agents[1].task_goal) == 8000
     assert len(snapshot.interactions[0].summary) == 512
+
+
+def test_a_final_call_that_prints_tool_markup_is_asked_once_more_for_plain_text():
+    from oceanx.research.graphs import PLAIN_TEXT_RETRY
+
+    @tool
+    def read_file(value: int) -> str:
+        """Perform one probe report-file read."""
+        return str(value)
+
+    responses = [AIMessage(content="", tool_calls=[{
+        "name": "read_file", "args": {"value": index}, "id": f"read-{index}", "type": "tool_call"}])
+        for index in range(59)]
+    # Task 1: the tool-free call 60 printed DeepSeek tool markup instead of the report.
+    responses += [AIMessage(content='<｜DSML｜function_calls><｜DSML｜invoke name="write_file">'),
+                  AIMessage(content="## Summary\nResult: the anomaly persists.")]
+    model = _BudgetProbeModel(responses=responses)
+    graph = create_agent(model=model, tools=[read_file], system_prompt="base",
+                         middleware=[ExpertCallBudgetMiddleware()])
+
+    result = asyncio.run(graph.ainvoke({"messages": [HumanMessage(content="research")]}))
+
+    assert result["messages"][-1].text == "## Summary\nResult: the anomaly persists."
+    assert len(model.seen_messages) == 61  # the second request belongs to call 60
+    final, retry = model.seen_messages[-2:]
+    system = next(message.text for message in final if isinstance(message, SystemMessage))
+    assert "write the complete report as this reply" in system
+    assert retry[-1].text == PLAIN_TEXT_RETRY
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("closing,saved", [
+    ("## Summary\nResult: transport is weak.", "## Summary\nResult: transport is weak."),
+    ('Transport is weak.<｜DSML｜function_calls>', "Transport is weak."),
+    ("<｜DSML｜function_calls>", None),
+])
+async def test_an_expert_without_report_md_delivers_its_closing_reply(monkeypatch, tmp_path, closing, saved):
+    from oceanx.research import graphs
+
+    def root(_task_id, agent_key):
+        path = tmp_path / "agents" / agent_key
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    projector = SimpleNamespace(expert_session_root=root)
+    fake_host = SimpleNamespace(
+        research=ResearchServices(SimpleNamespace(task_workspace_projector=projector,
+                                                  expert_code_execution=None)),
+        task_workspace_projector=projector, expert_code_execution=None)
+
+    class Author:
+        async def ainvoke(self, state, config):
+            return {"messages": [*state["messages"], AIMessage(content=closing)]}
+
+    async def fake_build(*_args, **_kwargs):
+        return Author()
+
+    monkeypatch.setattr(graphs, "host", lambda: fake_host)
+    monkeypatch.setattr(graphs, "build", fake_build)
+    graph = await graphs.expert(_config(), "ocean_process_expert")
+    result = await graph.ainvoke({"messages": [HumanMessage(content="B1.2: test transport")]}, _config())
+
+    key = expert_agent_key("task", "ocean_process_expert", "B1.2: test transport")
+    report = tmp_path / "agents" / key / "reports" / "B1.2" / "report.md"
+    summary, path = parse_expert_receipt(result["messages"][-1].text)
+    if saved is None:  # markup alone is never a report and never forwarded
+        assert not report.exists() and path is None
+        assert summary.startswith("Result: No report") and "DSML" not in summary
+    else:
+        assert report.read_text() == saved and path == str(report)
+
+
+def test_another_attempt_at_a_question_is_told_to_continue_its_earlier_work(monkeypatch, tmp_path):
+    from oceanx.research import graphs
+
+    folder = tmp_path / "agents" / "ocean-process-x"
+    report = folder / "reports" / "B1.2" / "report.md"
+    monkeypatch.setattr(graphs, "host", lambda: SimpleNamespace(
+        research=SimpleNamespace(report_path=lambda _run: report)))
+    run = AgentRun("ws", "task", "request", "ocean-process-x", "server", "ocean_process_expert",
+                   question="B1.2: test transport", node_id="B1.2")
+    for name in ("scratch", "outputs"):
+        (folder / name).mkdir(parents=True)
+    assert graphs._earlier_attempt(run) == ""  # a first attempt starts with empty folders
+    (folder / "scratch" / "monthly.nc").write_bytes(b"")
+    assert "left files in" in graphs._earlier_attempt(run) and "no report" in graphs._earlier_attempt(run)
+    report.parent.mkdir(parents=True)
+    report.write_text("## Summary\nPartial.")
+    assert f"left its report at {report}" in graphs._earlier_attempt(run)
+
+
+def test_research_budget_stamps_receipts_and_stops_new_assignments():
+    from langgraph.types import Command
+
+    from oceanx.research.graphs import BUDGET_REFUSAL, ResearchBudgetMiddleware
+
+    now = [0.0]
+    budget = ResearchBudgetMiddleware(100, clock=lambda: now[0])
+
+    def request(name="task", call_id="call-1"):
+        return SimpleNamespace(tool_call={"name": name, "id": call_id, "args": {}})
+
+    receipt = ToolMessage(content="Result: done.\nReport: /r.md", tool_call_id="call-1", name="task")
+    stamped = budget.wrap_tool_call(request(), lambda _request: receipt)
+    assert stamped.text.endswith(
+        "Research status: 0 min elapsed of a 100-minute budget; 1 Expert assignments so far.")
+    assert parse_expert_receipt(stamped.text) == ("Result: done.", "/r.md")
+    # A native task returns a Command; its receipt is stamped the same way.
+    now[0] = 30 * 60
+    command = budget.wrap_tool_call(request(call_id="call-2"),
+                                    lambda _request: Command(update={"messages": [receipt], "files": {}}))
+    assert command.update["messages"][0].text.endswith("30 min elapsed of a 100-minute budget; "
+                                                       "2 Expert assignments so far.")
+    assert command.update["files"] == {}
+    other = ToolMessage(content="tree", tool_call_id="call-3", name="update_research_tree")
+    now[0] = 75 * 60
+    assert budget.wrap_tool_call(request("update_research_tree", "call-3"), lambda _request: other) is other
+    refused = budget.wrap_tool_call(request(call_id="call-4"),
+                                    lambda _request: pytest.fail("no new assignment after 75%"))
+    assert (refused.status, refused.text) == ("error", BUDGET_REFUSAL)
+    # Without a budget the receipt shows the time used and nothing is refused.
+    unlimited = ResearchBudgetMiddleware(None, clock=lambda: 10 ** 6)
+    assert unlimited.wrap_tool_call(request(), lambda _request: receipt).text.endswith(
+        "min elapsed; 1 Expert assignments so far.")
+
+
+@pytest.mark.asyncio
+async def test_research_coordinator_checks_the_budget_before_binding_a_node(monkeypatch, tmp_path):
+    from oceanx.research import graphs
+    from oceanx.research.delegation import StructuredDelegationMiddleware
+
+    captured: dict[str, Any] = {}
+
+    async def fake_expert(_config, profile_id):
+        return f"runnable:{profile_id}"
+
+    async def fake_build(_config, role, *, subagents=None, suffix="", middleware=None, **_kwargs):
+        captured.update(middleware=middleware, suffix=suffix)
+        return "graph"
+
+    monkeypatch.setattr(graphs, "expert", fake_expert)
+    monkeypatch.setattr(graphs, "build", fake_build)
+    monkeypatch.setattr(graphs, "coordinator_report_path", lambda _config: tmp_path / "report.md")
+    monkeypatch.setattr(graphs, "research_tree",
+                        lambda _task_id: SimpleNamespace(policy=SimpleNamespace(guidance="")))
+    monkeypatch.setenv(graphs.RESEARCH_BUDGET_ENV, "180")
+    assert await _coordinator_agent(_config()) == "graph"
+    budget, binding = captured["middleware"]
+    assert isinstance(budget, graphs.ResearchBudgetMiddleware) and budget.budget == 180
+    assert isinstance(binding, StructuredDelegationMiddleware)
+    assert "Research time budget: 180 minutes. After 135 minutes" in captured["suffix"]
+    monkeypatch.delenv(graphs.RESEARCH_BUDGET_ENV)
+    await _coordinator_agent(_config())
+    assert captured["middleware"][0].budget is None
+    assert "Research time budget" not in captured["suffix"]

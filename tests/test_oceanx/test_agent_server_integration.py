@@ -89,19 +89,21 @@ async def test_native_task_returns_receipt_to_the_same_coordinator_run(tmp_path,
                 return
 
             if mode == "missing_report":
+                # The Expert ended without saving report.md, so its closing reply was saved as one.
                 assert finished["status"] == "success", logpath.read_text()[-24000:]
                 task_receipts = [
                     parse_expert_receipt(message["content"])
                     for message in values["messages"]
                     if message.get("type") == "tool"
                     and isinstance(message.get("content"), str)
-                    and "Report: None" in message["content"]
+                    and "Research status:" in message["content"]
                 ]
                 assert len(task_receipts) == 1
                 # The receipt summary also carries the server-verified Published results list.
                 assert task_receipts[0][0].startswith("Done without saving.\n\nPublished results")
-                assert task_receipts[0][1] is None
-                assert len(list((tmp_path / "state").rglob("report.md"))) == 1
+                assert Path(task_receipts[0][1]).read_text() == "Done without saving."
+                # The Expert's report and the Coordinator's final report.
+                assert len(list((tmp_path / "state").rglob("report.md"))) == 2
                 return
 
             assert finished["status"] == "success", logpath.read_text()[-24000:]

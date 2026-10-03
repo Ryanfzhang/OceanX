@@ -154,4 +154,53 @@ async def run_sandbox_self_check() -> dict[str, Any]:
     return report
 
 
-__all__ = ["run_sandbox_probe", "run_sandbox_self_check"]
+async def run_kernel_self_check() -> dict[str, Any]:
+    """Start the sandboxed Python kernel an Expert's code tool uses and save to its output folder,
+    then do it again in a fresh kernel that is offered the earlier output read-only, as later
+    runs are. Both failed silently on a Linux server before: the kernel never started, and the
+    output folder was locked after the first saved result."""
+
+    from oceanx.expert_execution import _install_result_runtime
+    from oceanx.kernels import KernelPool
+    from oceanx.sandbox.execution import current_python_runtime
+
+    report: dict[str, Any] = {
+        "schema_version": "ocean-kernel-self-check/v1", "passed": False,
+        "checks": {"kernel_started": False, "outputs_written_twice": False},
+    }
+    pool = KernelPool()
+    with tempfile.TemporaryDirectory(prefix="ocean-kernel-self-check-") as temporary_directory:
+        root = Path(temporary_directory).resolve()
+        outputs, scratch, support = root / "outputs", root / "scratch", root / "code"
+        for directory in (outputs, scratch, support):
+            directory.mkdir()
+        try:
+            runtime = current_python_runtime()
+            _install_result_runtime(support)
+            for run, read_only in ((1, ()), (2, (outputs,))):
+                saved = outputs / f"saved-{run}.txt"
+                result = await pool.execute(
+                    key=str(root), executable=runtime.executable, cwd=scratch, environment={},
+                    support_path=support, code=f"open({str(saved)!r}, 'w').write('ok')",
+                    policy=SandboxExecutionPolicy(
+                        read_only_roots=read_only, runtime_read_roots=runtime.read_roots,
+                        writable_roots=(root,), output_root=outputs, temporary_root=root,
+                        limits=ResourceLimits(wall_time_seconds=60, cpu_time_seconds=0,
+                                              memory_bytes=0, disk_bytes=0, process_count=0,
+                                              open_files=0),
+                        allow_network=True))
+                report["checks"]["kernel_started"] = True
+                if result.status is not SandboxExecutionStatus.SUCCEEDED or not saved.is_file():
+                    report["reason"] = (result.stderr.decode("utf-8", errors="replace").strip()[-2_000:]
+                                        or f"Run {run} did not save {saved.name}")
+                    return report
+                await pool.close(str(root))  # the second run gets a fresh kernel and sandbox
+            report["checks"]["outputs_written_twice"] = report["passed"] = True
+        except Exception as exc:  # noqa: BLE001 - every failure is the check's answer
+            report["reason"] = str(exc)[-2_000:]
+        finally:
+            await pool.close()
+    return report
+
+
+__all__ = ["run_kernel_self_check", "run_sandbox_probe", "run_sandbox_self_check"]

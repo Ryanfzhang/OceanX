@@ -71,7 +71,11 @@ question needs it. The backend also supplies the original user request. Native t
 contexts are isolated; each tree node has its own working/output directory and reads the folders
 of the nodes it continues read-only. Experts choose their methods and
 write the canonical `report.md`, beginning with a short `## Summary`; no second result summary is
-generated. Scheduling, cancellation and child completion remain native DeepAgents/Agent Server
+generated. An Expert that ends without saving it delivers its closing reply, which the backend
+saves as `report.md`; on its last allowed model call it writes the report as that reply. Another
+attempt at the same question is pointed to what the earlier one left. In research mode each
+receipt tells the Coordinator the time used; with `OCEANX_RESEARCH_BUDGET_MINUTES` set, no new
+Expert assignment starts after 75% of it. Scheduling, cancellation and child completion remain native DeepAgents/Agent Server
 state. OceanX does not mirror them into a second database lifecycle. There is no automatic
 author/reviewer loop. The Coordinator may explicitly ask another Expert or the read-only Discussion
 Partner when a scientific disagreement warrants it. A native task returns its report Summary,

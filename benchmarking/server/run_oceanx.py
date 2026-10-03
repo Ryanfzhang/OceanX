@@ -71,6 +71,16 @@ def benchmark_interaction_answer(case, payload):
     return _original_interaction_answer(case, payload)
 
 
+def backend_environment(case) -> dict:
+    """The case's time limit is also the research budget, so the Coordinator stops starting new
+    questions in time to deliver an answer before the attempt is cut off."""
+    from oceanx.research.graphs import RESEARCH_BUDGET_ENV
+    env = dict(os.environ)
+    if case.timeout_seconds:
+        env[RESEARCH_BUDGET_ENV] = str(round(case.timeout_seconds / 60, 1))
+    return env
+
+
 class BenchmarkClient(batch.BatchClient):
     # A benchmark attempt must keep its agents' conversations, so let the server finish writing them.
     shutdown_seconds = 120
@@ -90,7 +100,7 @@ class BenchmarkClient(batch.BatchClient):
             str(self.directory.resolve()),
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, limit=batch._LOG_LIMIT,
-            start_new_session=os.name == "posix",
+            start_new_session=os.name == "posix", env=backend_environment(self.case),
         )
         self.stderr_task = asyncio.create_task(self._drain_stderr())
         await self.request("system.handshake", {
