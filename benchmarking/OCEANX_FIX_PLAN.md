@@ -1,7 +1,7 @@
 # OceanX 修复方案（带版本控制）
 
-**方案版本：v1.1（2026-10-03）**
-**状态：Owner 已确认 v1，包括第 4 节的细节决定，可以交给 Codex 执行。v1.1 没有改任何包，只并入了原交接文档，并把 R3 出现异常时的做法改为只报告。**
+**方案版本：v1.2（2026-10-03）**
+**状态：Owner 已确认 v1，包括第 4 节的细节决定，可以交给 Codex 执行。v1.1 没有改任何包，只并入了原交接文档，并把 R3 出现异常时的做法改为只报告。v1.2 给 A1 补了一种情况，见第 3 节。**
 基于提交 `88cab8b`。问题记录见 `OCEANX_E10_DIAGNOSIS_2026-10-03.md`。
 分工：Claude 负责方案和审核，Codex 负责执行，Owner 负责提交每个版本。
 
@@ -30,7 +30,7 @@
 
 | 包 | 内容 | 状态 | 提交 | Claude 审核 |
 |---|---|---|---|---|
-| A1 | 报告不被没改报告的尝试覆盖 | 待做 | | |
+| A1 | 报告不被没改报告的尝试覆盖 | v1.2 已审核，纳入本次 A1 提交；服务器同步等待运行结束 | 本提交（A1） | 通过，v1.2 已复核，可以提交。见 Log。 |
 | A2 | 节点绑定不再悄悄失败 | 等待部分纳入本次完整基线；拒绝部分待做 | | |
 | A3 | 草稿图不算正式结果（交互模式） | 待做 | | |
 | A4 | 只有用户明确要图才补图 | 待做 | | |
@@ -49,6 +49,7 @@
 |---|---|---|
 | v1 | 2026-10-03 | 第一版。依据 Owner 的四个决定，见第 4 节。Owner 已确认全文，包括五项细节决定。 |
 | v1.1 | 2026-10-03 | 并入 `CODEX_HANDOFF.md` 里仍然有用的部分（规则、基准、运行步骤、检查表、Log），并删除该文件。R3 出现异常时改为只报告，不再有预先批准的修复。各个包的内容不变。 |
+| v1.2 | 2026-10-03 | A1 补充一种情况：沿用原报告、又没有结束语时，回执也要写明这次尝试没有新产出，并给出原因。v1 的文字漏了这种情况。另外明确：额外情况只写进本文件的 Log，不再另建 `CODEX_HANDOFF.md`。 |
 
 ## 4. Owner 的决定
 
@@ -107,8 +108,9 @@ Owner 同时确认了五项细节（2026-10-03），执行时不用再问：
   - 回执带上它的路径和它自己的 Summary；
   - 挂到研究树时用这份 Summary；
   - 回执末尾加一行 `This attempt left the report unchanged and ended with: <closing>`。这一行只给 Coordinator 看，不传给 `attach_result`。
+  - （v1.2）没有结束语时，回执末尾改为加 `This attempt left the report unchanged and gave no closing answer: <原因>.`。原因和 `_missing_report` 用同一套说法：`it reached its 60-call limit` 或 `it stopped after N model calls`，由同一个辅助函数给出。不这样做的话，一次用满调用却没有产出的重复尝试，回执会和成功交付一模一样。
 - `_earlier_attempt` 的提示补一句：原报告仍然是这个问题的报告，只改这次工作改变的部分，不要重写。
-- 测试：以上三种情况，写在 `tests/test_oceanx/test_native_subagents.py`。
+- 测试：以上三种情况，写在 `tests/test_oceanx/test_native_subagents.py`。（v1.2）再加两种：沿用原报告且没有结束语；沿用原报告且第 60 次调用只输出了工具乱码。
 
 **A2. 节点绑定不再悄悄失败。** 位置：`research/delegation.py`。
 
@@ -368,6 +370,128 @@ R3 只在 A 到 F 全部提交、通过 Claude 审核，并且 Owner 通知之�
 ## 8. Log
 
 Codex 在这里追加记录，最新的放在最上面。每条写：日期、做了哪个包或遇到什么情况、证据、改动、测试结果。
+
+### 2026-10-03 — Owner 授权提交 A1；服务器运行中，暂不拉取
+
+- Owner 要求以 `A1` 为提交名推送 origin 并在服务器拉取。
+- 提交范围仅为审核确认的 A1：`graphs.py`、`test_native_subagents.py`、`README.md`、
+  本方案，以及 `RUNNING.md` 的报告交付段落。工作区其余 reset、Finch 等变动不纳入。
+- 提交前复跑 A1 的针对性测试：**53 passed**（2.33 秒）；Claude 已完成当前工作区的
+  独立全量复核，见下一条记录。本轮不新增运行时修改、不开始 A2、不启动 benchmark。
+- 服务器只读检查：`/home/mafzhang/code/OceanX` 在 `main`，工作区干净，当前为
+  `60a5ea5`；但存在 PID `810101` 的 `python benchmarking/server/run_claude.py`。
+  按第 1 节“运行进行中不改代码”的规则，不能在它运行时 pull，且没有中断该运行的授权。
+  先提交推送，再复查；若仍在运行，服务器同步留待 Owner 处理，不自行中断或重启。
+
+### 2026-10-03 — Claude 复核 A1（含 v1.2）：通过，可以提交
+
+- **v1.2 的补充符合方案。** `_attempt_stop_reason` 由 `_missing_report` 和沿用原报告的回执共用。沿用原报告且没有结束语时，回执末尾写明没有结束答复和停止原因。工具乱码不会被转发。
+- **我用上次暴露缺口的场景重新跑了真实代码，三种情况的回执都正确，原报告都没有变化：**
+  - 用满 60 次调用、最后输出乱码：`gave no closing answer: it reached its 60-call limit.`
+  - 调用 3 次后停在工具调用上：`gave no closing answer: it stopped after 3 model calls.`
+  - 只说一句结束语：`ended with: <结束语>`
+- **`README.md` 的说法已改准确，`RUNNING.md` 同步。**
+- **全量测试：888 个通过、8 个跳过。** 测试前后工作区一致，这个数字对应当前整个工作区，包括下面的并行改动。
+- **A1 的文件：** `src/oceanx/research/graphs.py`、`tests/test_oceanx/test_native_subagents.py`、`README.md`、本文件，以及 `RUNNING.md` 里 “OceanX review delivery” 一节开头的那一段。
+- **并行改动不属于 A1，也不在本方案内，建议单独提交。** 涉及 `benchmark_run.py`、三个 `run_*.py`、`finch_worker.py`、对应的测试，以及 `RUNNING.md` 里的 `--reset` 段落。内容是实验的 `--reset` 归档、运行期间持有实验锁、Finch 的交付检查和请求参数记录。我只粗看过：与本方案没有冲突，测试一起通过。没有做完整审核。
+- 下一个包是 A2 的“拒绝”部分。
+
+### 2026-10-03 — A1 v1.2 收尾检查：额外的并行改动
+
+- 最终工作区检查发现本轮开始时还没有的 5 份额外变动：
+  `server/benchmark_run.py`、`server/run_claude.py`、`server/run_oceanx.py`、
+  `tests/test_benchmark_run.py`、`tests/test_run_claude.py`（均在 `benchmarking/` 下）。
+  它们不是本轮 A1 修改，未编辑、回退或修复。
+- 三份源码的修改时间为 18:58:29 JST；全量测试日志结束于 18:59:20 JST；
+  两份测试文件分别修改于 19:00:03 和 18:59:37 JST。因此测试期间和结束后工作区
+  仍在变化，**882 passed、8 skipped 是本次执行的结果，不是对最终整个工作区的
+  一致快照验证**，尤其不覆盖结束后新增的测试修改。
+- 按 Owner 要求仅记录，不扩大 A1。上述改动应由 Owner 另行审核处理；本轮停下等待提交。
+
+### 2026-10-03 — Codex 补齐 A1 v1.2（待 Owner 提交）
+
+- 按 Claude 的 A1 审核，仅补“提交前要补的两处”，不开始其他包。
+- 先更新无结束语的回归断言，并加入第 60 次仅输出工具乱码的场景；补运行时逻辑前，
+  两种情况均因缺少回执末尾的说明而失败：**2 failed、6 passed**。
+- `graphs.py` 提取 `_attempt_stop_reason`，供 `_missing_report` 和沿用原报告的回执共同
+  使用。沿用原报告且无可用结束语时，回执末尾注明没有结束答复及停止原因，
+  工具乱码不转发；原报告内容、文件 revision、研究树 Summary 和报告路径均不受影响。
+- 修正 `README.md` 原来“结束语一律保存为报告”的表述；`RUNNING.md` 同步注明
+  没有结束语时的回执说明。三种已批准的报告保存例外保持不变。
+- 针对性测试：**53 passed**。按第 1 节的全量命令执行：**882 passed、8 skipped**
+  （136.81 秒）。沿用本机临时 Python 3.12.0 测试环境，获准在 Codex 执行限制外执行
+  假模型及系统沙箱测试，未修改项目依赖或 OceanX 沙箱规则。
+  完整输出：`/private/tmp/oceanx-a1-v12-full-tests-20261003.log`。
+- `git diff --check` 通过；Ruff 仍是初版审核中确认的 4 条原有提示，无新增，不处理。
+  本轮开始时已有的 Finch 源码和测试改动原样保留，未追加 Finch 修复。
+- 仅在本节记录情况，没有重新创建 `CODEX_HANDOFF.md`。没有提交、推送、服务器同步，
+  没有启动 benchmark、科学分析或付费模型运行。**停在 A1，等待 Owner 提交。**
+
+### 2026-10-03 — Claude 审核 A1：通过，提交前补两处
+
+**核对结果**
+
+- 实现与方案一致：没改报告时沿用原报告；三种例外才把结束语存为报告；研究树拿到的是原报告的 Summary；结束语只出现在回执末尾。
+- 我独立复现了 Codex 的数字：去掉 `graphs.py` 的改动后是 3 个失败、5 个通过；全量测试 879 个通过、8 个跳过（多出的 1 个跳过来自后来出现的 Finch 测试文件，与 A1 无关）。
+- 结束语放在 `Report:` 一行之后，比我原先设想的位置更好：界面上的摘要不会混进这句话。
+- 每次尝试都在 `report-history` 里留一份它交付的报告，沿用原报告时也留。可以接受。注意：`run_record` 里的“报告版本数”因此表示“交付过报告的尝试数”，内容可能相同。
+
+**提交前要补的两处**
+
+1. **没有产出的重复尝试要在回执里写明（v1.2，方案原文漏了）。**
+   - 现状：节点已有报告，重复尝试用满 60 次调用、最后只输出工具乱码时，回执只有原报告的摘要和路径，和成功交付一模一样。我用真实代码确认了这一点。
+   - 修改前这种情况的回执是 `Result: No report — it reached its 60-call limit ...`，所以这是一处退步。
+   - 做法见第 6 节 A1 里标了“v1.2”的两条。现有测试里 `("report", "ocean_process_expert", "", False, "report")` 这一例要改成期望新的那一行。
+2. **`README.md` 的一句话现在不准确。** “An Expert that ends without saving it delivers its closing reply, which the backend saves as `report.md`” 要改成和 `RUNNING.md` 新增段落一致的说法：问题已有报告时，沿用原报告，结束语只进回执。
+
+**不用改的**
+
+- 4 条 Ruff 提示在 `HEAD` 上就有，A1 没有新增，不处理。
+- `test_finch_failure_replay.py` 不属于 A1，提交时分开处理。
+
+**关于 `CODEX_HANDOFF.md`**
+
+它被重新建出来，是因为转给 Codex 的那段话里还写着这个文件名，那是我的疏漏。它的两条记录已经原文搬到下面，文件已删除。以后的额外情况只写进本节。
+
+### 2026-10-03 — Unrelated file appeared after A1's full test run（Codex，原文，自 `CODEX_HANDOFF.md` 搬入）
+
+- The full-suite log finished at 18:44:33 JST with 879 passed and 7 skipped.
+- The final working-tree check then found a new untracked file,
+  `benchmarking/tests/test_finch_failure_replay.py`, modified at 18:45:33 JST.
+  This file was not created or edited by the A1 work and was not in that test collection.
+- It is outside A1; left untouched and not included in A1's verified changes. The
+  Owner should keep it separate when committing this package. No Finch fix was attempted.
+
+### 2026-10-03 — A1 validation: existing lint findings（Codex，原文，自 `CODEX_HANDOFF.md` 搬入）
+
+- Ruff reports four findings in the two Python files touched by A1: import ordering
+  in both files, an unused `ToolRegistry` import, and an unused `BLE001` suppression
+  in `research/graphs.py`.
+- Checking the exact `HEAD` contents with the same Ruff interpreter reproduces all
+  four findings. A1 adds no finding; none of these pre-existing issues was modified.
+- Decision deferred to the Owner/Claude; do not broaden A1 to include lint cleanup.
+
+### 2026-10-03 — A1：保留未更新的报告（待 Owner 提交）
+
+- 先写回归测试，未改运行时代码时结果为 **3 failed、5 passed**：完整报告被
+  `The figure is saved.` 覆盖；无结束语时原报告未交付；续做提示缺少保留报告的规则。
+- 最小运行时改动仅在 `src/oceanx/research/graphs.py`：未更新报告时读取已有报告；
+  仅在 A1 批准的三种情况把结束语存为报告。其他情况下保持原文件和文件 revision 不变，
+  回执与研究树使用原报告 Summary，结束语仅追加在 Coordinator 回执末尾。
+  `_earlier_attempt` 明确只更新本次改变的部分，不重写原报告。
+- `tests/test_oceanx/test_native_subagents.py` 新增 7 个参数化场景，覆盖三种例外、
+  无结束语、实际更新报告、原文件不变、研究树摘要不混入结束语及 attempt 报告副本。
+  同步更新 `RUNNING.md` 的交付说明。
+- 针对性测试：**52 passed**。全量测试按第 1 节指定命令执行：**879 passed、7 skipped**
+  （136.20 秒）。使用本机临时原生 Python 3.12.0 环境，未改项目依赖配置。
+  首次受 Codex 执行限制导致端口及系统沙箱相关失败；获准在该限制外重跑后全量通过，
+  未修改 OceanX 沙箱规则。完整输出：`/private/tmp/oceanx-a1-full-tests-permitted-20261003.log`。
+- `git diff --check` 通过。额外发现的 4 条原有 Ruff 报错已与 `HEAD` 对照确认，
+  按 Owner 本次要求记入 `CODEX_HANDOFF.md` 的 Log，未自行修复。
+  全量测试结束后另出现未跟踪的 `test_finch_failure_replay.py`，不属于本次 A1，
+  未修改且未纳入本次已验证范围，已在同一 Log 记录，提交时需单独处理。
+- 没有提交、推送或服务器同步，没有启动 benchmark、科学分析或付费模型运行。
+  **停在 A1，等待 Owner 提交和 Claude 审核，不开始 A2。**
 
 ### 2026-10-03 — 纳入全部本地改动，建立统一优化基线
 

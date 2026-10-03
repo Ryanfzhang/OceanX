@@ -132,6 +132,12 @@ This smoke repeat diagnoses the corrected model routing; it is not a new formal 
 
 ## OceanX review delivery
 
+If a follow-up attempt leaves its question's nonempty `report.md` unchanged, OceanX
+delivers that report and its original Summary; a short closing reply is added only to
+the Coordinator receipt. The closing reply becomes the report only when no nonempty
+report exists, for the Discussion Partner, or when it contains a nonempty `## Summary`.
+Without closing prose, the receipt explicitly says so and gives the model-call stop reason.
+
 The OceanX runner automatically creates a new `runs/OceanX/collected/collection-*`
 folder after the batch. Open its `index.md`, then each attempt's `review.md` for the
 answer, figure gallery, registered result data and links to saved reports/code.

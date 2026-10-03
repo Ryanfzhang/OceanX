@@ -450,7 +450,8 @@ def _earlier_attempt(run: AgentRun) -> str:
     if report.is_file():
         return (f"An earlier attempt at this question left its report at {report} and its files in "
                 f"{folder}. Continue from them: check, correct or extend that work rather than "
-                "starting over.\n")
+                "starting over. This is still the report for this question. Do not rewrite it; "
+                "update only the parts changed by this attempt.\n")
     if any(path.is_dir() and any(path.iterdir()) for path in (folder / "scratch", folder / "outputs")):
         return (f"An earlier attempt at this question left files in {folder / 'scratch'} and "
                 f"{folder / 'outputs'} but no report. Reuse them rather than starting over.\n")
@@ -584,6 +585,13 @@ def _question(state) -> str:
                  if isinstance(message, HumanMessage)), "")
 
 
+def _attempt_stop_reason(messages) -> str:
+    """The same call-count reason for missing reports and unchanged-report receipts."""
+    calls = sum(isinstance(message, AIMessage) for message in messages)
+    return (f"it reached its {EXPERT_MODEL_CALL_LIMIT}-call limit" if calls >= EXPERT_MODEL_CALL_LIMIT
+            else f"it stopped after {calls} model calls")
+
+
 def _missing_report(messages, report_path: Path) -> str:
     """The handoff when there is no report and no closing prose to save as one.
 
@@ -594,8 +602,7 @@ def _missing_report(messages, report_path: Path) -> str:
     last = messages[-1] if messages else None
     if calls < EXPERT_MODEL_CALL_LIMIT and _prose(last):
         return _prose(last)
-    reason = (f"it reached its {EXPERT_MODEL_CALL_LIMIT}-call limit" if calls >= EXPERT_MODEL_CALL_LIMIT
-              else f"it stopped after {calls} model calls")
+    reason = _attempt_stop_reason(messages)
     root = report_path.parents[2]
     return (f"Result: No report — {reason} without writing {report_path}. Its saved files are in "
             f"{root / 'scratch'} and {root / 'outputs'}. To recover, delegate the same node to the "
@@ -652,11 +659,16 @@ async def expert(config, role: str):
         previous = state.get("previous_report_revision")
         text, path = host().research.collect_report(run, previous_revision=previous)
         closing = _prose(state["messages"][-1]) if state["messages"] else ""
-        if not text and closing:
-            # No report.md from this attempt (the Discussion Partner never writes one): the
-            # closing reply is the report, so every attempt that says something delivers it.
-            text, path = host().research.collect_report(
-                run, materialize_text=closing, previous_revision=previous)
+        unchanged_report = False
+        if not text:
+            # An unchanged report still answers this question. A short follow-up's closing
+            # reply belongs in the receipt, not over the scientific report or its tree Summary.
+            text, path = host().research.collect_report(run)
+            if closing and (not text or role == "scientific_discussion_partner"
+                            or report_summary(closing)):
+                text, path = host().research.collect_report(run, materialize_text=closing)
+            elif text:
+                unchanged_report = True
         handoff = report_summary(text) or text.strip() or _missing_report(
             state["messages"], host().research.report_path(run))
         published_results: list[tuple[str, str]] = []
@@ -693,11 +705,19 @@ async def expert(config, role: str):
                         f"{run.node_id}#{i}" for i in range(1, len(proposals) + 1))
             except ValueError:
                 pass  # a simple task or non-tree consultation
-        return {"messages": [AIMessage(content=format_expert_receipt(
+        receipt_text = format_expert_receipt(
             handoff,
             path,
             tuple(dict.fromkeys(published_results)),
-        ))]}
+        )
+        if unchanged_report:
+            if closing:
+                receipt_text += ("\n\nThis attempt left the report unchanged and ended with: "
+                                 + closing)
+            else:
+                receipt_text += ("\n\nThis attempt left the report unchanged and gave no closing "
+                                 "answer: " + _attempt_stop_reason(state["messages"]) + ".")
+        return {"messages": [AIMessage(content=receipt_text)]}
 
     graph.add_node("author", analyze)
     graph.add_node("receipt", receipt)

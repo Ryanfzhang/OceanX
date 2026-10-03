@@ -826,6 +826,92 @@ async def test_an_expert_without_report_md_delivers_its_closing_reply(monkeypatc
         assert report.read_text() == saved and path == str(report)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("initial,role,closing,updated,expected,calls", [
+    ("report", "ocean_process_expert", "The figure is saved.", False, "report", 1),
+    ("report", "ocean_process_expert", "", False, "report", 1),
+    ("report", "ocean_process_expert", "<｜DSML｜function_calls>", False, "report", 60),
+    ("empty", "ocean_process_expert", "The figure is saved.", False, "closing", 1),
+    ("missing", "ocean_process_expert", "The figure is saved.", False, "closing", 1),
+    ("report", "scientific_discussion_partner", "The discussion is complete.", False, "closing", 1),
+    ("report", "ocean_process_expert", "## Summary\nResult: revised finding.", False, "closing", 1),
+    ("report", "ocean_process_expert", "The figure is saved.", True, "updated", 1),
+])
+async def test_expert_receipt_preserves_an_unchanged_report(
+    monkeypatch, tmp_path, initial, role, closing, updated, expected, calls,
+):
+    from oceanx.research import graphs, services
+
+    question = "B1.2: test transport"
+    key = expert_agent_key("task", role, question, node_id="B1.2")
+    root = tmp_path / "agents" / key
+    report = root / "reports" / "B1.2" / "report.md"
+    report.parent.mkdir(parents=True)
+    original = ("## Summary\nResult: transport is weak.\n\n"
+                "## Evidence and limitations\nThe full scientific evidence remains here.\n")
+    revised = "## Summary\nResult: transport is stronger after the new analysis.\n"
+    if initial != "missing":
+        report.write_text(original if initial == "report" else " \n", encoding="utf-8")
+    original_revision = services.file_revision(report)
+
+    projector = SimpleNamespace(expert_session_root=lambda _task, _agent: root)
+    fake_host = SimpleNamespace(
+        research=ResearchServices(SimpleNamespace(task_workspace_projector=projector,
+                                                  expert_code_execution=None)),
+        task_workspace_projector=projector, expert_code_execution=None)
+    monkeypatch.setattr(services, "current_delegation", lambda: SimpleNamespace(
+        node_id="B1.2", delegation_id="delegation", attempt_id="attempt", started_at=None))
+    attached = []
+
+    def attach_result(node_id, **kwargs):
+        attached.append((node_id, kwargs))
+        return {"projection": {"nodes": [{"id": node_id, "result": {}}]}}
+
+    class Author:
+        async def ainvoke(self, state, config):
+            if updated:
+                report.write_text(revised, encoding="utf-8")
+            return {"messages": [*state["messages"],
+                                 *[AIMessage(content="") for _ in range(calls - 1)],
+                                 AIMessage(content=closing)]}
+
+    async def fake_build(*_args, **_kwargs):
+        return Author()
+
+    monkeypatch.setattr(graphs, "host", lambda: fake_host)
+    monkeypatch.setattr(graphs, "build", fake_build)
+    monkeypatch.setattr(graphs, "research_tree", lambda _task: SimpleNamespace(
+        attach_result=attach_result))
+    graph = await graphs.expert(_config(), role)
+    result = await graph.ainvoke({"messages": [HumanMessage(content=question)]}, _config())
+
+    saved = {"report": original, "closing": closing, "updated": revised}[expected]
+    assert report.read_text(encoding="utf-8") == saved
+    if expected == "report":
+        assert services.file_revision(report) == original_revision
+    receipt = result["messages"][-1].text
+    summary, path = parse_expert_receipt(receipt)
+    expected_summary = services.report_summary(saved) or saved.strip()
+    assert summary.startswith(expected_summary) and path == str(report)
+    assert len(attached) == 1
+    assert attached[0][0] == "B1.2"
+    assert attached[0][1]["summary"] == expected_summary
+    assert attached[0][1]["report_path"] == str(report)
+    if expected == "report":
+        prose = graphs._prose(AIMessage(content=closing))
+        if prose:
+            assert receipt.endswith("This attempt left the report unchanged and ended with: " + prose)
+        else:
+            reason = "it reached its 60-call limit" if calls == 60 else "it stopped after 1 model calls"
+            assert receipt.endswith(
+                "This attempt left the report unchanged and gave no closing answer: " + reason + ".")
+    else:
+        assert "This attempt left the report unchanged" not in receipt
+    assert "DSML" not in receipt
+    version = root / ".runtime" / "report-history" / "B1.2" / "attempt.md"
+    assert version.read_text(encoding="utf-8") == saved
+
+
 def test_another_attempt_at_a_question_is_told_to_continue_its_earlier_work(monkeypatch, tmp_path):
     from oceanx.research import graphs
 
@@ -843,6 +929,8 @@ def test_another_attempt_at_a_question_is_told_to_continue_its_earlier_work(monk
     report.parent.mkdir(parents=True)
     report.write_text("## Summary\nPartial.")
     assert f"left its report at {report}" in graphs._earlier_attempt(run)
+    assert "still the report for this question" in graphs._earlier_attempt(run)
+    assert "Do not rewrite it" in graphs._earlier_attempt(run)
 
 
 def test_research_budget_stamps_receipts_and_stops_new_assignments():

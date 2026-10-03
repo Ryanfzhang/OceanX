@@ -71,8 +71,12 @@ question needs it. The backend also supplies the original user request. Native t
 contexts are isolated; each tree node has its own working/output directory and reads the folders
 of the nodes it continues read-only. Experts choose their methods and
 write the canonical `report.md`, beginning with a short `## Summary`; no second result summary is
-generated. An Expert that ends without saving it delivers its closing reply, which the backend
-saves as `report.md`; on its last allowed model call it writes the report as that reply. Another
+generated. If an attempt leaves an existing nonempty report unchanged, it delivers that report
+and its original Summary; a short closing reply goes only into the Coordinator receipt. Without
+closing prose, the receipt states that fact and the model-call stop reason. The backend saves
+the closing reply as `report.md` only when no nonempty report exists, for the Discussion Partner,
+or when that reply contains a nonempty `## Summary`. On its last allowed model call an Expert
+writes the report as that reply. Another
 attempt at the same question is pointed to what the earlier one left. In research mode each
 receipt tells the Coordinator the time used; with `OCEANX_RESEARCH_BUDGET_MINUTES` set, no new
 Expert assignment starts after 75% of it. Scheduling, cancellation and child completion remain native DeepAgents/Agent Server
