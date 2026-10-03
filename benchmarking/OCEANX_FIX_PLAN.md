@@ -1,7 +1,7 @@
 # OceanX 修复方案（带版本控制）
 
-**方案版本：v1.5（2026-10-03）**
-**状态：Owner 已确认 v1，包括第 4 节的细节决定，可以交给 Codex 执行。v1.1 没有改任何包，只并入了原交接文档，并把 R3 出现异常时的做法改为只报告。v1.2 给 A1 补了一种情况。v1.3 把审核时留下的三条要求写进了 B 和 C，各包范围不变。v1.4 是审核 E、D、C、F 之后的修订：C 补三处，新增 G 包，D 加两条加固，R3 的测试和检查表补上 B、D。原待确认的两项已获 Owner 批准并完成，Claude 已复核通过。v1.5 是复核之后的一处补充：D 的数据清单要遵守工作区的披露策略。R3 仍未授权。详见第 3 节和最新 Log。**
+**方案版本：v1.6（2026-10-03）**
+**状态：Owner 已确认 v1，包括第 4 节的细节决定，可以交给 Codex 执行。v1.1 没有改任何包，只并入了原交接文档，并把 R3 出现异常时的做法改为只报告。v1.2 给 A1 补了一种情况。v1.3 把审核时留下的三条要求写进了 B 和 C，各包范围不变。v1.4 是审核 E、D、C、F 之后的修订：C 补三处，新增 G 包，D 加两条加固，R3 的测试和检查表补上 B、D。原待确认的两项已获 Owner 批准并完成，Claude 已复核通过。v1.5 是复核之后的一处补充：D 的数据清单要遵守工作区的披露策略。v1.6 只改了 R3 的一条判断标准：服务器上有两个旧的沙箱测试失败，属于已知情况，不挡 R3。详见第 3 节和最新 Log。**
 基于提交 `88cab8b`。问题记录见 `OCEANX_E10_DIAGNOSIS_2026-10-03.md`。
 分工：Claude 负责方案和审核，Codex 负责执行，Owner 负责提交每个版本。
 
@@ -54,6 +54,7 @@
 | v1.3 | 2026-10-03 | 把审核时留下的要求写进对应的包，各包范围不变。B：开始之前先提交并行工作的改动；补图规则的措辞（来自 A4 审核）。C：草稿规则的措辞（来自 A3 审核）。 |
 | v1.4 | 2026-10-03 | 审核 E、D、C、F 之后的修订。C：说明要读到结尾、`fig.panel` 的关键字参数、提示里留一行调用骨架（这一条等 Owner 确认）。新增 G 包：大文件编辑路径缺少导入（等 Owner 确认）。D：CSV 行数统计的两条加固。R3：Linux 上加跑 D 和 B 的测试文件，检查表加数据清单一行、图一行写细。 |
 | v1.5 | 2026-10-03 | 复核 v1.4 的补充之后新增一处。D：工作区不允许向模型服务商披露元数据时，不生成也不放入数据清单。R3 的 Linux 测试加上大文件编辑的测试文件。其余各包不变。 |
+| v1.6 | 2026-10-03 | 服务器上第一次完整跑 Linux 测试，`tests/test_sandbox` 里有两个旧测试失败。原因已查明，不是 A 到 G 引入的。R3 的第 1 项检查改为“除这两个已知失败外全部通过”。各包不变，沙箱不改。 |
 
 ## 4. Owner 的决定
 
@@ -357,6 +358,8 @@ R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之�
 
 3. 跑只在 Linux 上执行的测试，macOS 会跳过它们，所以必须在这里通过。后三个文件（数据清单、静态交付、大文件编辑）在 macOS 上跑过，但它们用到沙箱，Linux 上还没跑过：
 
+   **已知会失败的两个旧测试（v1.6），不挡 R3：**`tests/test_sandbox/test_execution.py::test_cancelling_sandboxed_command_terminates_its_process_group` 和 `tests/test_sandbox/test_linux.py::test_native_linux_readonly_network_fork_and_secret_isolation`。原因见 Log。除这两个之外有任何失败，都不要开跑。
+
    ```bash
    PYTHONPATH=src python -m pytest tests/test_sandbox tests/test_oceanx/test_persistent_kernels.py tests/test_oceanx/test_sandbox_self_check.py tests/test_oceanx/test_saved_data_index.py tests/test_oceanx/test_static_figure_delivery.py tests/test_oceanx/test_native_large_edit.py -q -p no:cacheprovider
    ```
@@ -398,7 +401,7 @@ R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之�
 
 | # | 检查项 | 合格线 |
 |---|---|---|
-| 1 | 开跑前检查和 Linux 测试 | 全部通过 |
+| 1 | 开跑前检查和 Linux 测试 | 除两个已知的旧测试外全部通过（见第 7.2 节第 3 步的说明） |
 | 2 | kernel 启动失败 | 0 |
 | 3 | 指向自己目录的只读失败 | 0 |
 | 4 | 没有报告的尝试（所有节点合计） | 0 |
@@ -446,6 +449,57 @@ R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之�
 ## 8. Log
 
 Codex 在这里追加记录，最新的放在最上面。每条写：日期、做了哪个包或遇到什么情况、证据、改动、测试结果。
+
+### 2026-10-03 — 服务器上的 Linux 测试：新加的部分全部通过，两个旧的沙箱测试失败（Claude 分析，不挡 R3）
+
+Owner 在服务器上拉到 `2e88acc`，跑了第 7.2 节第 3 步的命令，结果是 **2 failed, 152 passed, 1 skipped，38.65 秒**，并把截图发给我。本轮只改了本文件。
+
+**结论：这两个失败不是 A 到 G 引入的，也不挡 R3。沙箱不改。**
+
+**通过的部分**
+
+- 数据清单（`test_saved_data_index.py`）、静态图片交付（`test_static_figure_delivery.py`）、大文件编辑（`test_native_large_edit.py`）、kernel 和自检，在 Linux 的真实沙箱里全部通过，没有被跳过。
+- Linux 专有的 `test_native_linux_scientific_netcdf_zarr_and_plot` 也通过了：在沙箱里写 NetCDF、zarr，并用 matplotlib 把图存成 PNG。这正是静态交付要用的路径。
+- 跳过的 1 个是需要手动开启的联网测试，和平台无关。
+
+**依据**
+
+- `git diff cef4736 2e88acc -- src/oceanx/sandbox tests/test_sandbox` 是空的。最后一次提交没有碰沙箱代码和沙箱测试。
+- 最近一次改沙箱的是 `8df7791`，它只让“可写目录里的只读路径不再生效”，和这两个测试查的东西无关。
+
+**失败 1：`test_cancelling_sandboxed_command_terminates_its_process_group`，`PermissionError: Operation not permitted`**
+
+- 测试让沙箱里的进程把自己的进程号写进文件，取消之后在宿主机上用 `os.kill(pid, 0)` 看它还在不在。
+- Linux 的沙箱有独立的进程号空间，沙箱里拿到的是内部编号（通常是 2）。宿主机上的 2 号进程是内核线程，普通用户无权探测，所以得到“没有权限”，而不是测试期待的“进程不存在”。
+- 这是测试写法在 Linux 上不成立，不说明取消功能有问题。生产代码取消时杀的是宿主机上 bubblewrap 的进程组，再加上 `--die-with-parent`。
+- 测试是 `427ac68`（9 月 4 日）加的，在 macOS 上能通过，因为那里没有独立的进程号空间。
+
+**失败 2：`test_native_linux_readonly_network_fork_and_secret_isolation`，沙箱里报 `outside write allowed`**
+
+- 测试让沙箱里的脚本去写两个地方：只读目录里的文件，和所有声明目录之外的 `secret.txt`，并要求两次都报错。
+- Linux 沙箱的根目录是 bubblewrap 自建的一块内存文件系统，只有声明过的目录被挂进来，而且根目录本身可写（命令里没有 `--remount-ro /`，历史上也从来没有过）。所以往没声明的路径写文件不会报错：文件落在沙箱自己的内存里，沙箱结束就消失。宿主机上的 `secret.txt` 既读不到也改不了。
+- 所以这不是数据泄漏，也不是只读数据被改，而是“写到没声明的地方不报错、文件悄悄丢掉”。它和测试的预期不一致。
+- 我的判断里有一步是推断：截图分不出是哪一次写入成功。我认为是 `secret.txt` 那次，依据是只读挂载在这台服务器上确实生效，r1 的扫描里有 32 条 `Read-only file system` 报错。
+- 测试是 `80cb82c`（9 月 6 日）加的。
+
+**为什么以前没发现**
+
+- 这两个测试在 macOS 上一个通过、一个跳过。GitHub 的 CI 在 9 月 30 日被移除。之前在服务器上只单独跑过 kernel 的 5 个测试。就我所知，这是 `tests/test_sandbox` 第一次在真实的 Linux 沙箱上完整跑。
+- r1 和 r2 就是在同样的沙箱行为下跑的。
+
+**现在不改沙箱的理由**
+
+- 方案第 1 节规定不碰沙箱的严格程度。
+- 把根目录设成只读（`--remount-ro /`）能让这类写入明确报错，但它可能影响 kernel 启动和各种库写缓存目录的行为，而且只能在 Linux 上验证。R3 之前不值得冒这个险。
+
+**留到 R3 之后再定的两件事（等 Owner 决定）**
+
+1. 改测试 1：不要用沙箱内部的进程号去宿主机上探测。
+2. 测试 2 二选一：把沙箱根目录设成只读，让没声明的写入明确报错；或者把测试改成断言实际保证的内容，也就是宿主机文件不变、沙箱里读不到。前者对模型更友好（会看到报错，而不是文件悄悄消失），但要在 Linux 上充分验证。
+
+**下一步**
+
+- 继续第 7.2 节第 2 步（`check_setup.py`）和第 4 步（跑 R3）。
 
 ### 2026-10-03 — Owner 授权将全部当前改动一起提交
 
