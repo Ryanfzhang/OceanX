@@ -41,7 +41,7 @@
 | F | 记录与披露（不改行为） | 说明与披露已完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。见 Log。 |
 | G | 大文件编辑路径缺少 `EditResult` 导入（方案外缺口，v1.4 新增） | Owner 已批准并完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。见 Log。 |
 | R3 | 服务器开跑前检查，然后重跑 E10（`methods-oceanx-flash-r3`） | 已完成并分析，见 Log | | |
-| R3 follow-up | R3 的六项耗时、token 与存储优化 | `f404221` 已提交推送；Claude 复核后的 v1.8 修改在工作区，待 Linux 验证与提交 | | |
+| R3 follow-up | R3 的六项耗时、token 与存储优化 | v1.8 已提交（`b0a2618`）；服务器全量 1020 passed、4 failed：两个已知旧沙箱测试，加两个此前从未在服务器上跑过的 Finch 沙箱测试（已改，待复跑） | | |
 
 执行顺序：A1 → A2 → A3 → A4 → B → E → D → C → F → G → R3。A1 没合入之前不要启动任何运行。
 
@@ -452,6 +452,33 @@ R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之�
 ## 8. Log
 
 Codex 在这里追加记录，最新的放在最上面。每条写：日期、做了哪个包或遇到什么情况、证据、改动、测试结果。
+
+### 2026-10-04 — 服务器全量测试：4 项失败，其中两项 Finch 沙箱测试已查明并修改（Claude，待 Linux 复跑）
+
+Owner 在服务器上拉到 `b0a2618`（v1.8 的修改已提交），跑了第 1 节的全量命令：**4 failed、1020 passed、4 skipped，172.78 秒**。
+总数 1028，与本机一致（1020 passed + 8 skipped），所以服务器上跑的是同一批测试。
+
+- **失败的 4 项：** `tests/test_sandbox/test_execution.py::test_cancelling_sandboxed_command_terminates_its_process_group` 和
+  `tests/test_sandbox/test_linux.py::test_native_linux_readonly_network_fork_and_secret_isolation`，就是上面记录的两个已知旧测试，没有变化；
+  另外两项是 `benchmarking/tests/test_finch_sandbox.py` 的 `test_native_filesystem_and_network_boundary`
+  （`taskset: failed to execute .../oceanx-bench/bin/python: No such file or directory`）和
+  `test_native_timeout_removes_detached_descendants`（`DID NOT RAISE TimeoutError`）。
+- **v1.8 的新测试在 Linux 上通过。** 它们不在失败列表里，也没有跳过标记，包括走真沙箱的
+  `test_the_real_sandbox_makes_the_preview_and_reports_unreadable_images`，所以 bubblewrap 里的 Pillow 预览路径已经在服务器上验证过。
+- **Finch 两项不是本轮修改引起的。** 这是它们第一次在服务器上运行：此前 Linux 命令是第 7.2 节第 3 步的定向命令，不含 `benchmarking/tests`；
+  macOS 上它们因为没有 bubblewrap 被跳过。`finch_sandbox.py` 和这个测试文件自 `2e88acc` 起没有改动。
+- **原因：** 服务器上 `/home/mafzhang` 是 `/import/home2/mafzhang` 的别名。R3 的执行记录里 Python 的路径是
+  `/import/home2/mafzhang/miniconda3/envs/oceanx-bench/...`，pytest 的警告里却是 `/home/mafzhang/miniconda3/envs/oceanx-bench/...`。
+  `sandbox_command` 只把解析后的真实路径挂进沙箱，却用别名路径（`sys.executable`）启动解释器；沙箱里没有 `/home/mafzhang/...`，
+  `taskset` 找不到解释器。计时测试因为进程立刻失败，没有抛出 `TimeoutError`。OceanX 的沙箱用解析后的路径，不受影响（R3 已证明可用）。
+- **修改：** `benchmarking/server/finch_sandbox.py` 的 `sandbox_command` 在真实路径和启动用的路径不同时，把同一个真实目录（只读）
+  同时挂在启动用的路径上；命令本身不变，路径相同时参数也不变。新增 `benchmarking/tests/test_finch_sandbox_command.py` 3 项，只检查生成的参数，
+  不需要 bubblewrap，在 Mac 上也能跑；别名那一项在修改前失败。
+- **影响范围：** Finch 臂。这个问题也会让 `run_finch.py` 启动时的内核自检失败，只要内核 Python 是经由 `/home/mafzhang/...` 这个别名给出的。OceanX 的 R4 不受影响。
+- **没有验证：** 那两项在 Linux 上是否转为通过。服务器 pull 后复跑：
+  `PYTHONPATH=src python -m pytest benchmarking/tests/test_finch_sandbox.py benchmarking/tests/test_finch_sandbox_command.py -q -p no:cacheprovider`。
+  之后第 1 节全量命令预期只剩上面两个已知旧测试失败。
+
 
 ### 2026-10-04 — Claude 复核 f404221 并按 Owner 授权修改（待 Linux 验证与提交）
 

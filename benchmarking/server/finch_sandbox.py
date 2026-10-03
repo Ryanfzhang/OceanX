@@ -31,17 +31,24 @@ def sandbox_command(spec, command):
     """Empty host view: system/runtime RO, declared datasets RO, workspace RW."""
     workspace = Path(spec["workspace"]).resolve()
     roots = [Path(p) for p in SYSTEM_ROOTS if Path(p).exists()]
+    aliases = []  # (real folder, the path the interpreter is launched by) when the two differ
     for name in spec["kernel"]["runtime_roots"]:
         root = Path(name).resolve()
         if root in {Path("/"), Path("/home"), Path("/tmp"), Path.home()}:
             raise ValueError(f"Unsafe kernel runtime root: {root}")
         if not any(root == mounted or root.is_relative_to(mounted) for mounted in roots):
             roots.append(root)
+        if Path(name) != root and (root, Path(name)) not in aliases:
+            aliases.append((root, Path(name)))
     args = [spec["bwrap"], "--unshare-all", "--die-with-parent", "--new-session",
             "--cap-drop", "ALL", "--clearenv", "--proc", "/proc", "--dev", "/dev",
             "--tmpfs", "/tmp", "--dir", "/inputs"]
     for root in roots:
         args += ["--ro-bind", str(root), str(root)]
+    # sys.executable and sys.prefix keep the path they were reached by, which can go through an alias
+    # such as /home/<user> -> /import/home2/<user>; the same folder must exist under that path too.
+    for root, alias in aliases:
+        args += ["--ro-bind", str(root), str(alias)]
     args += ["--bind", str(workspace), "/workspace"]
     for mount in spec["mounts"]:
         args += ["--ro-bind", mount["source"], mount["target"]]
