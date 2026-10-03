@@ -319,18 +319,34 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
         super().__init__(run_limit=EXPERT_MODEL_CALL_LIMIT, exit_behavior="end")
         self.report_path = report_path
 
-    def _checkpoint_pending(self, request) -> bool:
-        call_count = int(request.state.get("run_model_call_count", 0))
+    def _report_missing(self) -> bool:
+        if self.report_path is None:
+            return False
         try:
-            saved = self.report_path is not None and self.report_path.is_file() \
-                and self.report_path.stat().st_size > 0
+            return not (self.report_path.is_file() and self.report_path.stat().st_size > 0)
         except OSError:
-            saved = False
-        return (
-            self.report_path is not None
-            and EXPERT_REPORT_CHECKPOINT_START <= call_count < EXPERT_WIND_DOWN_START
-            and not saved
-        )
+            return True
+
+    def _checkpoint_pending(self, request) -> bool:
+        """Whether this model call must first save the report: from the 31st call until call 48."""
+        call_count = int(request.state.get("run_model_call_count", 0))
+        return (EXPERT_REPORT_CHECKPOINT_START <= call_count < EXPERT_WIND_DOWN_START
+                and self._report_missing())
+
+    def _refused_checkpoint_tool_call(self, request):
+        """Refuse a non-file tool that a checkpoint call (31-48) still requested.
+
+        As in the wind-down, the count already includes the call that asked for the tool, so a tool
+        from call 30, made before the checkpoint began and with every tool offered, still runs.
+        """
+        state = request.state if isinstance(request.state, dict) else {}
+        call = request.tool_call
+        count = int(state.get("run_model_call_count", 0))
+        if not (EXPERT_REPORT_CHECKPOINT_START < count <= EXPERT_WIND_DOWN_START
+                and self._report_missing()) or call.get("name") in _WIND_DOWN_TOOLS:
+            return None
+        return ToolMessage(content=REPORT_CHECKPOINT_REFUSAL, tool_call_id=call["id"],
+                           name=call.get("name"), status="error")
 
     def _prepare_request(self, request):
         request = _wind_down_request(request)
@@ -360,16 +376,12 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
         return await handler(_plain_text_request(request)) if _undelivered(request, response) else response
 
     def wrap_tool_call(self, request, handler):
-        if self._checkpoint_pending(request) and request.tool_call.get("name") not in _WIND_DOWN_TOOLS:
-            return ToolMessage(content=REPORT_CHECKPOINT_REFUSAL, tool_call_id=request.tool_call["id"],
-                               name=request.tool_call.get("name"), status="error")
-        return _refused_tool_call(request) or handler(request)
+        return (self._refused_checkpoint_tool_call(request) or _refused_tool_call(request)
+                or handler(request))
 
     async def awrap_tool_call(self, request, handler):
-        if self._checkpoint_pending(request) and request.tool_call.get("name") not in _WIND_DOWN_TOOLS:
-            return ToolMessage(content=REPORT_CHECKPOINT_REFUSAL, tool_call_id=request.tool_call["id"],
-                               name=request.tool_call.get("name"), status="error")
-        return _refused_tool_call(request) or await handler(request)
+        return (self._refused_checkpoint_tool_call(request) or _refused_tool_call(request)
+                or await handler(request))
 
 
 class ResearchState(FilesystemState, SummarizationState, SkillsState, DeepAgentState):

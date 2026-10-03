@@ -31,6 +31,7 @@ from oceanx.research.graphs import (
     EXPERT_WIND_DOWN_START,
     MAX_PARALLEL_EXPERTS,
     MAX_PARALLEL_SEARCH_EXPERTS,
+    REPORT_CHECKPOINT_REFUSAL,
     WIND_DOWN_REFUSAL,
     ExpertCallBudgetMiddleware,
     _coordinator_agent,
@@ -434,6 +435,49 @@ def test_report_checkpoint_blocks_more_analysis_until_the_first_report_is_saved(
     report.write_text("## Summary\nResult: partial\n")
     resumed = middleware._prepare_request(request(EXPERT_REPORT_CHECKPOINT_START + 1))
     assert resumed.tools == tools
+
+
+def test_report_checkpoint_refuses_only_calls_made_under_it(tmp_path):
+    report = tmp_path / "reports" / "B1" / "report.md"
+    ran = []
+
+    @tool
+    def execute(value: int) -> str:
+        """Perform one probe research operation."""
+        ran.append(value)
+        return "ok"
+
+    @tool
+    def write_file(value: int) -> str:
+        """Save the probe report."""
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text("## Summary\npartial\n")
+        return "saved"
+
+    def call(name, index):
+        return AIMessage(content="", tool_calls=[{
+            "name": name, "args": {"value": index}, "id": f"{name}-{index}", "type": "tool_call"}])
+
+    # Calls 1-30 analyse. Call 31 is the first made under the checkpoint and ignores it (a model can
+    # still print a tool the filter removed), call 32 saves the report, call 33 analyses again.
+    responses = [call("execute", index) for index in range(1, 32)]
+    responses += [call("write_file", 32), call("execute", 33), AIMessage(content="done")]
+    model = _BudgetProbeModel(responses=responses)
+    graph = create_agent(model=model, tools=[execute, write_file], system_prompt="base",
+                         middleware=[ExpertCallBudgetMiddleware(report_path=report)])
+
+    result = asyncio.run(graph.ainvoke({"messages": [HumanMessage(content="research")]}))
+
+    answers = {m.tool_call_id: m for m in result["messages"] if isinstance(m, ToolMessage)}
+    assert answers["execute-30"].status == "success"  # asked while every tool was still offered
+    assert (answers["execute-31"].status, answers["execute-31"].text) == (
+        "error", REPORT_CHECKPOINT_REFUSAL)
+    assert answers["write_file-32"].status == "success"
+    assert answers["execute-33"].status == "success"  # the tools are back once the report exists
+    assert len(ran) == 31
+    assert model.bound_tool_names[29] == ("execute", "write_file")  # call 30
+    assert model.bound_tool_names[30] == ("write_file",)  # call 31: file tools only
+    assert model.bound_tool_names[32] == ("execute", "write_file")  # call 33
 
 
 class _BudgetProbeModel(FakeMessagesListChatModel):

@@ -10,9 +10,11 @@ import pytest
 import yaml
 from langchain_core.messages import ToolMessage
 
+from oceanx.figure_delivery import FIGURE_DELIVERY_ENV
 from oceanx.research import acceptance
 from oceanx.research.delegation import (
-    StructuredDelegationMiddleware, current_delegation, resolve_delegation)
+    StructuredDelegationMiddleware, current_delegation, explicitly_requests_visual, resolve_delegation,
+    visual_only_followup)
 from oceanx.research.outcomes import record_task_outcomes
 from oceanx.research.paired_runs import evaluate_pairs
 from oceanx.research.policy import (
@@ -338,55 +340,127 @@ def test_middleware_logs_delegation_strips_arg_and_exposes_binding(tmp_path):
     assert middleware.wrap_tool_call(_Request(other), lambda r: r.tool_call) == other
 
 
-def test_visual_only_retry_is_refused_when_the_researcher_did_not_request_a_visual(tmp_path):
-    tree = mechanism_tree(tmp_path)
-    tree.update([{"action": "set_status", "target": "B1.3", "status": "selected"}])
-    tree.attach_result(
-        "B1.3", summary=SUMMARY, agent_key="ocean-a", report_path="/report.md",
-    )
-    middleware = StructuredDelegationMiddleware(
-        tree, original_question="How much do definitions and averaging affect mixed-layer depth?",
-    )
-    call = {"name": "task", "id": "visual", "args": {
-        "description": "B1.3: publish the missing comparison figure from saved evidence",
-        "subagent_type": "ocean_process_expert", "node_id": "B1.3",
-    }}
-    result = middleware.wrap_tool_call(_Request(call), lambda _request: "started")
-    assert isinstance(result, ToolMessage)
-    assert result.status == "error"
-    assert "researcher did not request a visual" in result.text
+E10_QUESTION = (
+    "Using the supplied GLORYS12 monthly temperature, salinity, velocity, sea surface height and "
+    "mixed-layer thickness for 2011-2020 off California and Oregon (30-48 N, 130-116 W), compare the "
+    "product's mixed-layer thickness with mixed-layer depths you compute from the temperature and "
+    "salinity profiles. Quantify the differences by season and region, and determine how much comes "
+    "from definitions and averaging and how much from the ocean state.")
+# What the Coordinator wrote in r3 to ask for the figure the question never wanted (shortened).
+VISUAL_COMPLETION = (
+    "Question (research-tree node B1.3, visual completion only): In your B1.3 answer you reported the "
+    "comparison under both criteria, but no figure was rendered before the analysis window closed. "
+    "Please save the figure that presents that already-saved evidence, without new analysis.\n\n"
+    "Parent question: (none - this is a visual-completion follow-up to your own completed node B1.3.)\n\n"
+    "Parent answer: The calibrated criterion gives -0.03 m (RMSD 4.27 m).\n\n"
+    "Note: only the figure is requested here. Report the figure path in your Saved figures list.")
+# An ordinary retry: earlier results quoted below the question mention a figure and use "make"/"save".
+ANALYSIS_RETRY = (
+    "Question (research-tree node B1.3): Recompute the mixed-layer depth with the 0.03 kg m-3 criterion "
+    "and report the seasonal difference.\n\n"
+    "Parent answer: The matched criterion gives -7.6 m. A saved figure of the difference exists at "
+    "/data/run/outputs/diff.png; make a note of the threshold when you save the new tables.")
 
 
-def test_visual_retry_is_allowed_when_the_researcher_explicitly_requested_it(tmp_path):
+def selected_node_with_a_result(tmp_path):
     tree = mechanism_tree(tmp_path)
     tree.update([{"action": "set_status", "target": "B1.3", "status": "selected"}])
-    tree.attach_result(
-        "B1.3", summary=SUMMARY, agent_key="ocean-a", report_path="/report.md",
-    )
+    tree.attach_result("B1.3", summary=SUMMARY, agent_key="ocean-a", report_path="/report.md")
+    return tree
+
+
+def task_call(description, call_id="visual"):
+    return {"name": "task", "id": call_id, "args": {
+        "description": description, "subagent_type": "ocean_process_expert", "node_id": "B1.3"}}
+
+
+def test_visual_only_retry_is_refused_when_the_researcher_did_not_request_a_visual(tmp_path, monkeypatch):
+    monkeypatch.setenv(FIGURE_DELIVERY_ENV, "static")
     middleware = StructuredDelegationMiddleware(
-        tree, original_question="Plot a comparison figure of both mixed-layer definitions.",
-    )
-    call = {"name": "task", "id": "visual", "args": {
-        "description": "B1.3: publish the missing comparison figure from saved evidence",
-        "subagent_type": "ocean_process_expert", "node_id": "B1.3",
-    }}
+        selected_node_with_a_result(tmp_path), original_question=E10_QUESTION)
+    for description in ("B1.3: publish the missing comparison figure from saved evidence",
+                        VISUAL_COMPLETION):
+        result = middleware.wrap_tool_call(_Request(task_call(description)), lambda _request: "started")
+        assert isinstance(result, ToolMessage)
+        assert result.status == "error"
+        assert "researcher did not request a visual" in result.text
+
+
+def test_visual_retry_is_allowed_when_the_researcher_explicitly_requested_it(tmp_path, monkeypatch):
+    monkeypatch.setenv(FIGURE_DELIVERY_ENV, "static")
+    middleware = StructuredDelegationMiddleware(
+        selected_node_with_a_result(tmp_path),
+        original_question="Plot a comparison figure of both mixed-layer definitions.")
+    call = task_call("B1.3: publish the missing comparison figure from saved evidence")
     assert middleware.wrap_tool_call(_Request(call), lambda _request: "started") == "started"
 
 
-@pytest.mark.asyncio
-async def test_async_visual_only_retry_has_the_same_request_gate(tmp_path):
-    tree = mechanism_tree(tmp_path)
-    tree.update([{"action": "set_status", "target": "B1.3", "status": "selected"}])
-    tree.attach_result(
-        "B1.3", summary=SUMMARY, agent_key="ocean-a", report_path="/report.md",
-    )
+def test_the_refusal_is_for_benchmark_runs_only(tmp_path, monkeypatch):
+    # Desktop users ask for figures in many phrasings and across turns, and the gate sees only the
+    # last message; the desktop keeps the prompt rule alone.
+    monkeypatch.delenv(FIGURE_DELIVERY_ENV, raising=False)
     middleware = StructuredDelegationMiddleware(
-        tree, original_question="Assess mixed-layer-depth sensitivity.",
-    )
-    call = {"name": "task", "id": "visual-async", "args": {
-        "description": "B1.3: render the omitted comparison plot from saved evidence",
-        "subagent_type": "ocean_process_expert", "node_id": "B1.3",
-    }}
+        selected_node_with_a_result(tmp_path), original_question=E10_QUESTION)
+    call = task_call(VISUAL_COMPLETION)
+    assert middleware.wrap_tool_call(_Request(call), lambda _request: "started") == "started"
+
+
+def test_an_analysis_retry_is_not_taken_for_a_visual_follow_up(tmp_path, monkeypatch):
+    # r3: 1 of the 10 genuine delegations quoted a figure and the word "make" below its question.
+    monkeypatch.setenv(FIGURE_DELIVERY_ENV, "static")
+    middleware = StructuredDelegationMiddleware(
+        selected_node_with_a_result(tmp_path), original_question=E10_QUESTION)
+    call = task_call(ANALYSIS_RETRY)
+    assert middleware.wrap_tool_call(_Request(call), lambda _request: "started") == "started"
+
+
+def test_the_task_paragraph_decides_whether_a_task_is_visual_only():
+    assert visual_only_followup(VISUAL_COMPLETION)
+    assert not visual_only_followup(ANALYSIS_RETRY)
+    assert not visual_only_followup("")
+
+
+@pytest.mark.parametrize("request_text", [
+    "Provide figures of the seasonal MLD differences.",
+    "Produce maps of the mean state and the anomalies.",
+    "Plot the time series of SST at the three stations.",
+    "Visualize the eddy kinetic energy field.",
+    "Visualise the transport across 36N.",
+    "Create charts for each region.",
+    "Draw the T-S diagram for the three water masses.",
+    "Display the results as a heatmap.",
+    "Include at least two figures.",
+    "Illustrate the vertical structure.",
+    "Provide graphs of the trends.",
+    "请画出海表温度的空间分布。",
+    "请画一张图展示季节变化。",
+    "请绘制剖面图",
+    "给出示意图",
+    "作图说明差异",
+    "出图",
+    "做一个可视化",
+])
+def test_a_researcher_who_asks_for_a_visual_is_recognised_in_common_phrasings(request_text):
+    assert explicitly_requests_visual(request_text)
+
+
+@pytest.mark.parametrize("question", [
+    E10_QUESTION,
+    "Quantify the differences by season and region.",
+    "How much do definitions and averaging affect mixed-layer depth?",
+    "State the conclusions drawn from the budget with their uncertainty.",
+    "",
+])
+def test_questions_that_ask_for_no_visual_are_not_taken_for_one(question):
+    assert not explicitly_requests_visual(question)
+
+
+@pytest.mark.asyncio
+async def test_async_visual_only_retry_has_the_same_request_gate(tmp_path, monkeypatch):
+    monkeypatch.setenv(FIGURE_DELIVERY_ENV, "static")
+    middleware = StructuredDelegationMiddleware(
+        selected_node_with_a_result(tmp_path), original_question="Assess mixed-layer-depth sensitivity.")
+    call = task_call("B1.3: render the omitted comparison plot from saved evidence", "visual-async")
 
     async def should_not_start(_request):
         raise AssertionError("visual-only retry started")

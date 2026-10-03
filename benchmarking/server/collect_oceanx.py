@@ -203,13 +203,19 @@ def collect_analysis_records(attempt: Path, target: Path, task_id: str | None,
     return documents, 'missing'
 
 
-def _scratch_cleanup(attempt: Path, target: Path, task_id: str | None, *, ready: bool) -> dict:
-    """Remove disposable task scratch only after a complete, validated collection.
+SCRATCH_PRUNE_MIN_BYTES = 10_000_000
 
-    Final reports and the answer must not depend on scratch. If they do, retain it and make the
-    contract violation visible instead of silently breaking the evidence trail.
+
+def _scratch_cleanup(attempt: Path, target: Path, task_id: str | None, *, ready: bool) -> dict:
+    """Delete the large intermediate arrays of a complete, validated collection; keep everything else.
+
+    A file over 10 MB is an array its script can rebuild from the frozen inputs; in the E10 run those
+    files were 99.6% of the 5.4 GB. The scripts, tables and notes beside them stay, because reports cite
+    them and a recorded command only calls a script by name. The record lists every file removed.
+    If the final answer or a report cites a scratch folder by its absolute path, nothing is removed.
     """
     prior = attempt / 'scratch_cleanup.json'
+    carried = []
     if prior.is_file() and not prior.is_symlink():
         try:
             existing = json.loads(prior.read_text(encoding='utf-8'))
@@ -217,9 +223,12 @@ def _scratch_cleanup(attempt: Path, target: Path, task_id: str | None, *, ready:
                 (target / 'scratch_cleanup.json').write_text(
                     json.dumps(existing, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
                 return existing
+            if existing.get('status') == 'partial':
+                carried = list(existing.get('files') or [])  # this collection finishes the job
         except (OSError, ValueError, TypeError):
             pass
-    record = {'schema_version': 1, 'status': 'retained', 'file_count': 0, 'bytes_released': 0}
+    record = {'schema_version': 2, 'status': 'retained', 'min_bytes': SCRATCH_PRUNE_MIN_BYTES,
+              'file_count': 0, 'bytes_released': 0}
     if not ready:
         record['reason'] = 'collection is incomplete'
     elif task_id is None:
@@ -240,18 +249,29 @@ def _scratch_cleanup(attempt: Path, target: Path, task_id: str | None, *, ready:
             if references:
                 record['reason'] = 'final text references scratch: ' + ', '.join(references)
             else:
-                files = total = 0
-                for scratch in scratches:
-                    for directory, _, names in os.walk(scratch, followlinks=False):
-                        for name in names:
-                            path = Path(directory) / name
-                            files += 1
-                            if path.is_file() and not path.is_symlink():
-                                total += path.stat().st_size
-                    shutil.rmtree(scratch)
-                record.update(status='cleaned', file_count=files, bytes_released=total)
+                deleted, kept = list(carried), 0
+                try:
+                    for scratch in scratches:
+                        for directory, subfolders, names in os.walk(scratch, followlinks=False):
+                            subfolders.sort()
+                            for name in sorted(names):
+                                path = Path(directory) / name
+                                if path.is_symlink() or not path.is_file():
+                                    continue
+                                size = path.stat().st_size
+                                if size <= SCRATCH_PRUNE_MIN_BYTES:
+                                    kept += 1
+                                    continue
+                                path.unlink()
+                                deleted.append({'path': path.relative_to(root).as_posix(), 'bytes': size})
+                    record['status'] = 'cleaned'
+                finally:  # what was removed is recorded even when a later removal fails
+                    record.update(file_count=len(deleted), bytes_released=sum(i['bytes'] for i in deleted),
+                                  kept_file_count=kept, files=deleted)
         except (OSError, ValueError, TypeError) as exc:
-            record['reason'] = f'cleanup could not be verified: {exc}'
+            record['reason'] = f'cleanup could not be completed: {exc}'
+            if record['file_count']:
+                record['status'] = 'partial'
     content = json.dumps(record, ensure_ascii=False, indent=2) + '\n'
     (target / 'scratch_cleanup.json').write_text(content, encoding='utf-8')
     (attempt / 'scratch_cleanup.json').write_text(content, encoding='utf-8')

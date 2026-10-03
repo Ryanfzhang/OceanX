@@ -1,7 +1,7 @@
 # OceanX 修复方案（带版本控制）
 
-**方案版本：v1.7（2026-10-04）**
-**状态：v1.7 记录 Owner 根据 R3 实测批准的统一优化：阻止未请求的单独补图、限制送入模型的图片大小、优先复用持久 kernel、文献与数据分析分槽、成功收集后清理全部 scratch、以及第 30 次调用的报告检查点。图片仍可进入模型以判断空间 pattern，但使用有界预览。实现和本机回归见最新 Log；正式 benchmark 尚未启动。**
+**方案版本：v1.8（2026-10-04）**
+**状态：v1.7 记录 Owner 根据 R3 实测批准的统一优化：阻止未请求的单独补图、限制送入模型的图片大小、优先复用持久 kernel、文献与数据分析分槽、成功收集后清理全部 scratch、以及第 30 次调用的报告检查点。图片仍可进入模型以判断空间 pattern，但使用有界预览。实现和本机回归见最新 Log；正式 benchmark 尚未启动。v1.8 记录 Claude 复核已推送的 `f404221` 后，经 Owner 授权做的四处修改：预览失败不再让 Expert 崩溃；scratch 只删大于 10 MB 的文件并列出清单；补图拒绝只在 benchmark 生效且识别更宽；检查点不再拒绝第 30 次已发出的调用。**
 基于提交 `88cab8b`。问题记录见 `OCEANX_E10_DIAGNOSIS_2026-10-03.md`。
 分工：Claude 负责方案和审核，Codex 负责执行，Owner 负责提交每个版本。
 
@@ -41,7 +41,7 @@
 | F | 记录与披露（不改行为） | 说明与披露已完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。见 Log。 |
 | G | 大文件编辑路径缺少 `EditResult` 导入（方案外缺口，v1.4 新增） | Owner 已批准并完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。见 Log。 |
 | R3 | 服务器开跑前检查，然后重跑 E10（`methods-oceanx-flash-r3`） | 已完成并分析，见 Log | | |
-| R3 follow-up | R3 的六项耗时、token 与存储优化 | 已实现，本机回归通过；待 Linux 验证与提交 | | |
+| R3 follow-up | R3 的六项耗时、token 与存储优化 | `f404221` 已提交推送；Claude 复核后的 v1.8 修改在工作区，待 Linux 验证与提交 | | |
 
 执行顺序：A1 → A2 → A3 → A4 → B → E → D → C → F → G → R3。A1 没合入之前不要启动任何运行。
 
@@ -57,6 +57,7 @@
 | v1.5 | 2026-10-03 | 复核 v1.4 的补充之后新增一处。D：工作区不允许向模型服务商披露元数据时，不生成也不放入数据清单。R3 的 Linux 测试加上大文件编辑的测试文件。其余各包不变。 |
 | v1.6 | 2026-10-03 | 服务器上第一次完整跑 Linux 测试，`tests/test_sandbox` 里有两个旧测试失败。原因已查明，不是 A 到 G 引入的。R3 的第 1 项检查改为“除这两个已知失败外全部通过”。各包不变，沙箱不改。 |
 | v1.7 | 2026-10-04 | Owner 批准 R3 后续六项优化。图片不是禁止送入模型，而是转换为最长边 1024 px、最多约 450 KiB 的 JPEG 预览；成功且无收集错误的 attempt 删除全部 scratch，并留下清单和释放字节数。另加最终综合必须核对所有返回节点的约束。 |
+| v1.8 | 2026-10-04 | Claude 复核 `f404221`，Owner 授权按复核意见修改。（1）静态模式读图预览失败返回 `ReadResult` 错误，不再抛异常；（2）scratch 清理由“删整个目录”改为“只删大于 10 MB 的文件，记录列出每个被删文件”，因为 R3 的报告用相对路径引用 scratch 里的小文件，脚本也在其中；（3）补图拒绝只在 static（benchmark）运行生效，“研究者要了图”的识别放宽，补图句式只看任务段；（4）检查点只拒绝第 31 至 48 次调用发出的非文件工具。其余各项不变。 |
 
 ## 4. Owner 的决定
 
@@ -452,6 +453,58 @@ R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之�
 
 Codex 在这里追加记录，最新的放在最上面。每条写：日期、做了哪个包或遇到什么情况、证据、改动、测试结果。
 
+### 2026-10-04 — Claude 复核 f404221 并按 Owner 授权修改（待 Linux 验证与提交）
+
+Owner 把 Codex 的复核请求转给我，随后说“你觉得需要修改的就修改”。`f404221` 已在 origin，服务器还没有拉取，没有启动任何模型调用。
+我没有碰 `f404221` 之外的东西；下面是工作区里相对 `f404221` 的改动，未提交。
+
+**复核发现（都在 `f404221` 上复现或用 R3 真实数据测量）**
+
+1. **预览失败会让 Expert 崩溃。** `OceanSandbox.aread` 在预览失败时返回字符串，deepagents 的 `read_file` 读 `read_result.error`，
+   抛 `AttributeError`，LangChain 的 ToolNode 不处理它，这个 Expert 的委派失败。静态模式下读一个不存在或损坏的 `.png` 就会触发；
+   桌面模式同样的输入只是一条普通错误。
+2. **scratch 整目录删除保护不到真实的引用方式。** R3 的 11 份报告里 5 份引用了 scratch 文件，共 18 处、13 个文件，**全部是相对路径**
+   （如 `scratch/stats_out.txt`），绝对路径 0 处，所以“只查绝对路径”的保护一次也不会触发。scratch 里有 Expert 的 46 个脚本和 34 张 CSV，
+   `command.sh` 只按名字调用脚本（`python figure.py`），删了以后脚本只剩在对话存档的 `write_file` 记录里。大于 10 MB 的 29 个文件占 99.56%
+   （5.44 GB），其余 126 个文件共 24 MB；报告引用的 13 个文件里 8 个是小文件（0.08 MB）。
+3. **补图拒绝识别太窄，只看最后一条消息。** “研究者要了图”的判断对 23 种常见说法只认出 6 种（“Provide figures”“Produce maps”“请画一张图”
+   “请绘制剖面图”“出图”都认不出）；桌面端每轮只带最后一条消息。54 道 benchmark 题（30 道 test、24 道 evolution）里只有 Q30、E19 含视觉词，
+   对 benchmark 影响很小，对桌面有风险：误拒用户真要的图，比多花 5 分钟补图糟。R3 的 11 次真实委派里，补图句式命中 2 次：1 次真补图，
+   1 次是正常分析 B1.1.1.1（因为任务下面引用的上一节点结果里有 figure 和 make）。
+4. **检查点多拒绝一次。** 第 30 次调用发出时所有工具都还开放，但它的工具在执行时被检查点拒绝，浪费一步。收尾阶段已经按“工具执行时的计数包含发出它的那次调用”处理，检查点没有。
+
+**修改**
+
+1. `native_backend.py`：预览失败返回 `ReadResult(error=...)`。文件不存在的措辞与普通缺失文件相同（`file_not_found`），其他失败给出异常那一行，不贴整段堆栈。
+2. `collect_oceanx.py`：只删除大于 10 MB（10,000,000 字节，恰好等于不删）的 scratch 文件；符号链接不跟随、不计；`scratch_cleanup.json`（`schema_version` 2）
+   增加 `min_bytes`、`kept_file_count` 和 `files`（每个被删文件的相对路径和字节数）；删除中途失败记为 `partial` 并列出已删的文件，重新收集时接着做；
+   绝对路径引用保护和“重新收集保留第一次记录”不变。`evaluate.disk()` 对 `partial` 也计释放字节。
+3. `delegation.py`：补图拒绝只在 static 运行生效（桌面保留提示词规则）；`explicitly_requests_visual` 改用更宽的规则（复数、`visuali[sz]*`、`draw`、diagram、
+   heatmap、illustrate、中文 图/画/绘/可视化）；`visual_only_followup` 只看任务段（第一个空行之前），不看后面引用的上一节点结果。
+4. `graphs.py`：检查点对工具的拒绝只覆盖第 31 至 48 次调用发出的非文件工具。
+
+没有改：预览的大小规则和缓存（读图很少，不加缓存）、检查点的触发条件和提示、讨论伙伴角色仍挂检查点（它只有读文件工具，到不了第 30 次是常态，已知边角）。
+
+**验证（都在 Mac 上）**
+
+- 先写测试并确认失败，再改：预览失败 4 项、补图拒绝 19 项、检查点边界 1 项、scratch 清理 3 项。每处修改还单独还原做了变异检查，12 个变异全部被新测试抓到。
+- 完整本机套件：**1019 passed、8 skipped、0 failed**（`f404221` 的完整导出上是 983 passed、8 skipped、0 failed；Codex 报的 58 个失败来自它宿主的沙箱限制）。
+  `git diff --check` 通过，改动文件的 Ruff 结果与 `f404221` 相同（9 条，都是旧的）。
+- R3 真实数据演练（`cp -c` 复制 5.2 GB 的下载目录，原件没动）：收集 `complete`，4 个登记输出、4 张图；删除 29 个文件、5,442,466,840 字节；
+  attempt 由 5.57 GB 变成 0.132 GB；46 个脚本、34 张 CSV 和报告引用的 8 个小文件都在；清单求和等于释放字节。
+- R3 的 11 次真实委派上，补图句式现在只命中 1 次（那次真补图），原先 2 次。
+
+**没有验证**
+
+- Linux 沙箱里的预览（Pillow、bubblewrap 路径和权限；上面那个真沙箱测试在 Mac 上通过，Linux 上还没跑）。从代码看预览写在 agent 自己的 `.runtime/temporary` 里，沙箱本来就可写，Pillow 随 matplotlib 一起装，但这是推断。
+- 真实模型下的行为：补图拒绝后 Coordinator 怎么做、检查点对各节点用时的影响、Expert 少存文件后子节点是否更多重算。
+- 并发由 2 变成最多 3 后的内存和 CPU。
+
+**开跑前在 Linux 要做的**：完整套件 `PYTHONPATH=src python -m pytest tests benchmarking/tests -q -p no:cacheprovider`，预期只有本文记录的两个旧沙箱测试失败；
+真沙箱那组（第 3 步那条，含 `test_native_large_edit.py`），再加上 `tests/test_oceanx/test_static_image_read.py`：其中 `test_the_real_sandbox_makes_the_preview_and_reports_unreadable_images` 走真沙箱读正常、缺失、损坏三种 png，正是验证 Linux 上 Pillow 和 bubblewrap 路径的那一项。
+收集命令现在会删除文件：不要在还想保留 scratch 的 R1 至 R3 旧目录上重跑。
+
+
 ### 2026-10-04 — Codex 实现 R3 follow-up（待 Linux 验证与提交）
 
 Owner 批准 R3 分析提出的六项优化，并进一步确认图片仍应进入 LLM 以判断空间 pattern；
@@ -470,7 +523,7 @@ Owner 批准 R3 分析提出的六项优化，并进一步确认图片仍应进�
 - **并发：** Search Expert 使用独立的单槽，两个数据分析槽不再被文献咨询占用；新配置
   `BENCH_OCEANX_MAX_PARALLEL_SEARCH_EXPERTS=1` 写入 `.env.example` 和 `arm.json`。
 - **scratch：** completed、有最终答案且收集无错误后，删除每个 node 的整个 `scratch/`，不是只删
-  大文件；写 `scratch_cleanup.json` 记录文件数和释放字节。最终答案或任何嵌套 Expert report 仍引用
+  大文件（v1.8 改为只删大于 10 MB 的文件，见上一条）；写 `scratch_cleanup.json` 记录文件数和释放字节。最终答案或任何嵌套 Expert report 仍引用
   绝对 scratch 路径时拒绝清理。inventory 同时记录当前 scratch 和已释放字节。
 
 验证：最终核心运行、策略、配置、收集和评估回归 **166 passed**，图片预览的实际转换命令另测

@@ -28,6 +28,8 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
+from oceanx.figure_delivery import static_figures
+
 NODE_ID_PATTERN = re.compile(r"(?<![A-Za-z0-9])(B\d+(?:\.\d+)*)(?![A-Za-z0-9])")
 # Tool calls of one Coordinator turn run together and a tree update writes in a worker thread,
 # so a task can start before the same turn's update has written the node it names. Once that
@@ -45,6 +47,12 @@ _VISUAL_DELIVERY_VERB = re.compile(
     r"(?i)\b(?:publish|save|render|create|make|produce|deliver|missing|omitted|redraw)\b|"
     r"(?:补图|出图|保存|生成|绘制|重画|缺少)"
 )
+# The researcher's own words. Wide on purpose (plurals, verbs, Chinese): matching too much only makes
+# the refusal below more permissive, matching too little would refuse a figure that was asked for.
+_VISUAL_REQUEST = re.compile(
+    r"(?i)\b(?:figures?|plots?|plotting|maps?|charts?|graphs?|images?|diagrams?|heat-?maps?|"
+    r"visuali[sz]\w*|draw(?:s|ing)?|illustrat\w*)\b|[图画绘]|可视化"
+)
 VISUAL_FOLLOWUP_REFUSAL = (
     "Not started: this is a visual-only follow-up, but the researcher did not request a visual. "
     "Use the existing scientific report in the final synthesis instead."
@@ -52,13 +60,18 @@ VISUAL_FOLLOWUP_REFUSAL = (
 
 
 def explicitly_requests_visual(text: str) -> bool:
-    """A narrow, auditable check for an explicit visual deliverable in the user's own words."""
-    return bool(_VISUAL_NOUN.search(text or ""))
+    """Whether the researcher's own words ask for a figure, map, plot or other visual."""
+    return bool(_VISUAL_REQUEST.search(text or ""))
 
 
 def visual_only_followup(text: str) -> bool:
-    """Recognize a delivery retry, not an analysis that happens to discuss a mapped field."""
-    return bool(_VISUAL_NOUN.search(text or "") and _VISUAL_DELIVERY_VERB.search(text or ""))
+    """Recognize a delivery retry, not an analysis that happens to discuss a mapped field.
+
+    Only the paragraph that states the task counts: what follows it quotes earlier results, and those
+    often mention a saved figure.
+    """
+    task = (text or "").strip().split("\n\n", 1)[0]
+    return bool(_VISUAL_NOUN.search(task) and _VISUAL_DELIVERY_VERB.search(task))
 
 
 @dataclass(frozen=True)
@@ -187,8 +200,9 @@ class StructuredDelegationMiddleware(AgentMiddleware):
             tool_call_id=call["id"], name="task", status="error")
 
     def _refused_unrequested_visual_followup(self, request):
+        """Benchmark runs only: a desktop researcher may ask for a figure in any words, in any turn."""
         call = request.tool_call
-        if self.tree is None or call.get("name") != "task":
+        if self.tree is None or call.get("name") != "task" or not static_figures():
             return None
         args = call.get("args") or {}
         description = str(args.get("description") or "")

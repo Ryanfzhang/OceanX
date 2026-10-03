@@ -131,21 +131,40 @@ def test_current_results_use_immutable_store_and_collect_reports_and_tables(tmp_
     assert 'delivery/table_1/v0001/table.csv' in (target / 'review.md').read_text()
 
 
-def test_successful_collection_clears_all_scratch_and_records_what_was_removed(tmp_path):
+LARGE = 10_000_001  # one byte over the 10 MB limit
+
+
+def sparse(path, size):
+    """A file of the given size that takes no disk space: only its length is written."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('wb') as stream:
+        stream.truncate(size)
+    return path
+
+
+def test_collection_deletes_large_scratch_files_and_lists_what_it_removed(tmp_path):
     attempt, root = current_attempt(tmp_path)
     write_current_index(attempt, [result_record(root)])
     scratch = root / 'agents/expert/scratch'
     (scratch / 'nested').mkdir(parents=True)
-    (scratch / 'small.txt').write_bytes(b'small')
-    (scratch / 'nested/large.nc').write_bytes(b'x' * 1024)
+    (scratch / 'analysis.py').write_text('print(1)\n')  # the script a command.sh calls by name
+    (scratch / 'stats_out.txt').write_text('a table a report cites\n')
+    sparse(scratch / 'nested/large.nc', LARGE)
+    sparse(scratch / 'at_the_limit.nc', 10_000_000)  # only a file over the limit goes
+    outside = sparse(tmp_path / 'source-data.nc', 20_000_000)
+    (scratch / 'link.nc').symlink_to(outside)  # never followed, never counted
 
     target, summary = collected_attempt(attempt)
 
-    assert not scratch.exists()
+    assert not (scratch / 'nested/large.nc').exists()
+    assert (scratch / 'analysis.py').read_text() == 'print(1)\n'
+    assert (scratch / 'stats_out.txt').exists() and (scratch / 'at_the_limit.nc').exists()
+    assert outside.stat().st_size == 20_000_000 and (scratch / 'link.nc').is_symlink()
     cleanup = json.loads((attempt / 'scratch_cleanup.json').read_text())
-    assert cleanup['file_count'] == 2
-    assert cleanup['bytes_released'] == 1029
     assert cleanup['status'] == 'cleaned'
+    assert (cleanup['file_count'], cleanup['bytes_released'], cleanup['kept_file_count']) == (1, LARGE, 3)
+    assert cleanup['min_bytes'] == 10_000_000
+    assert cleanup['files'] == [{'path': 'agents/expert/scratch/nested/large.nc', 'bytes': LARGE}]
     assert json.loads((target / 'scratch_cleanup.json').read_text()) == cleanup
     assert summary['scratch_cleanup']['status'] == 'cleaned'
     recollection = collect_run(attempt.parents[1])
@@ -153,13 +172,49 @@ def test_successful_collection_clears_all_scratch_and_records_what_was_removed(t
     assert repeated == cleanup  # recollection must not erase the original released-byte count
 
 
-def test_collection_keeps_scratch_when_a_final_report_still_references_it(tmp_path):
+def test_collection_with_nothing_over_the_limit_removes_nothing(tmp_path):
     attempt, root = current_attempt(tmp_path)
     write_current_index(attempt, [result_record(root)])
     scratch = root / 'agents/expert/scratch'
     scratch.mkdir(parents=True)
-    evidence = scratch / 'only-evidence.nc'
-    evidence.write_bytes(b'evidence')
+    (scratch / 'notes.txt').write_text('small')
+
+    _target, summary = collected_attempt(attempt)
+
+    assert (scratch / 'notes.txt').exists()
+    cleanup = summary['scratch_cleanup']
+    assert (cleanup['status'], cleanup['file_count'], cleanup['bytes_released']) == ('cleaned', 0, 0)
+    assert cleanup['files'] == [] and cleanup['kept_file_count'] == 1
+
+
+def test_collection_says_so_when_it_could_only_remove_some_of_the_large_files(tmp_path, monkeypatch):
+    attempt, root = current_attempt(tmp_path)
+    write_current_index(attempt, [result_record(root)])
+    scratch = root / 'agents/expert/scratch'
+    first, second = sparse(scratch / 'a.nc', LARGE), sparse(scratch / 'b.nc', LARGE)
+    real_unlink = type(first).unlink
+
+    def unlink_refusing_b(path, *args, **kwargs):
+        if path.name == 'b.nc':
+            raise OSError('Device or resource busy')
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(first), 'unlink', unlink_refusing_b)
+
+    _target, summary = collected_attempt(attempt)
+
+    cleanup = summary['scratch_cleanup']
+    assert not first.exists() and second.exists()
+    assert cleanup['status'] == 'partial' and 'busy' in cleanup['reason']
+    assert [item['path'] for item in cleanup['files']] == ['agents/expert/scratch/a.nc']
+    assert (cleanup['file_count'], cleanup['bytes_released']) == (1, LARGE)
+
+
+def test_collection_keeps_scratch_when_a_final_report_still_references_it(tmp_path):
+    attempt, root = current_attempt(tmp_path)
+    write_current_index(attempt, [result_record(root)])
+    scratch = root / 'agents/expert/scratch'
+    evidence = sparse(scratch / 'only-evidence.nc', LARGE)
     report = root / 'agents/expert/reports/B1/report.md'
     report.parent.mkdir(parents=True)
     report.write_text(f'Result depends on {evidence}.')

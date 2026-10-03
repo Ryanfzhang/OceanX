@@ -162,7 +162,10 @@ This smoke repeat diagnoses the corrected model routing; it is not a new formal 
   visual, or a figure is necessary scientific evidence, Experts save it as an ordinary PNG image.
   OceanX's interactive plotting interface is not exposed to the models; the desktop's interactive
   mode is unchanged. Reading one of these images gives the model a JPEG preview bounded to 1024 px
-  on its longest edge, while the full-resolution result remains on disk.
+  on its longest edge, while the full-resolution result remains on disk. A preview that cannot be
+  made (a missing or corrupt file) is an ordinary error message, as for any other file. In these runs
+  the Coordinator also cannot re-delegate a node that already has a result just to publish a figure
+  the researcher's question did not ask for; the desktop keeps the prompt rule alone.
 - The Expert's last, tool-free delivery call may issue an extra provider request if its first
   reply contains tool markers rather than a report. Context compaction requests are counted
   separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
@@ -206,11 +209,15 @@ answer, figure gallery, registered result data and links to saved reports/code.
 The collector reads `outputs.json.task_results`; it does not discover results by
 scanning ordinary NetCDF files, run models, rerun analysis, or modify the original answer.
 After a completed attempt has a final answer and collection finishes without errors, the collector
-deletes every node's disposable `scratch/` directory and records file count and released bytes in
-`scratch_cleanup.json`. Reports, code, registered outputs and runtime records remain. If a final
-answer or any nested Expert report still cites an absolute scratch path, cleanup is refused and the
-reason is recorded instead of silently breaking the evidence trail. Later inventory still reports
-the released byte count from this manifest.
+deletes the files over 10 MB in every node's `scratch/` folder: the intermediate arrays, which were
+99.6% of the 5.4 GB of one E10 run. Scripts, tables and notes under 10 MB stay, because reports cite
+them and a recorded command only calls a script by name. `scratch_cleanup.json` lists every file
+removed with its size, and the counts and bytes released and kept. Reports, code, registered outputs
+and runtime records are never touched. If a final answer or any nested Expert report cites a scratch
+folder by its absolute path, nothing is removed and the reason is recorded. If a removal fails part
+way, the status is `partial` and the list shows what went. The collector now deletes files:
+do not run it on an older run folder whose scratch you still want to inspect. Later inventory still
+reports the released byte count from this record.
 
 `summary.json` and each `collection_manifest.json` distinguish runtime status from
 collection status. `collection_status=complete` means the available answer and

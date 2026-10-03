@@ -22,6 +22,7 @@ from deepagents.backends.protocol import (
     FileDownloadResponse,
     FileUploadResponse,
     GrepResult,
+    ReadResult,
 )
 from deepagents.backends.sandbox import (
     BaseSandbox,
@@ -39,6 +40,15 @@ _RASTER_IMAGE_SUFFIXES = frozenset(
     {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp", ".gif"}
 )
 STATIC_IMAGE_PREVIEW_MAX_EDGE = 1024
+
+
+def _preview_error(file_path, output: str) -> str:
+    """What the model is told when no preview could be made: the exception, not its stack frames."""
+    lines = [line for line in output.strip().splitlines() if line.strip()]
+    detail = lines[-1] if lines else "no output"
+    if detail.startswith("FileNotFoundError"):
+        return f"File '{file_path}': file_not_found"  # the wording a missing text file gets
+    return f"File '{file_path}': could not create the image preview ({detail[:300]})"
 
 
 class OceanSandbox(BaseSandbox):
@@ -135,7 +145,7 @@ class OceanSandbox(BaseSandbox):
             )
             result = await self.aexecute("python3 -c " + shlex.quote(code))
             if result.exit_code != 0:
-                return f"Could not create bounded image preview: {result.output[:1000]}"
+                return ReadResult(error=_preview_error(file_path, result.output))
             return await super().aread(str(preview), offset, limit)
         # Keep native PDF/media handling, not a blanket text truncation.
         if _get_backend_read_file_type(file_path) != "text":

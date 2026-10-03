@@ -611,7 +611,7 @@ def disk(attempt: Path) -> dict:
     if cleanup.is_file() and not cleanup.is_symlink():
         try:
             record = json.loads(cleanup.read_text(encoding="utf-8"))
-            if record.get("status") == "cleaned":
+            if record.get("status") in ("cleaned", "partial"):
                 released = max(0, int(record.get("bytes_released") or 0))
         except (OSError, ValueError, TypeError):
             pass

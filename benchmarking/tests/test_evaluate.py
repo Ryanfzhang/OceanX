@@ -359,16 +359,18 @@ def test_code_failures_classify_observed_failures_without_assigning_fault():
             "1 cancelled, 1 code)") in page
 
 
-def test_inventory_accounts_for_scratch_released_by_collection(tmp_path):
+@pytest.mark.parametrize("status, released", [("cleaned", 5_400_000_000), ("partial", 5_400_000_000),
+                                              ("retained", 0)])
+def test_inventory_accounts_for_scratch_released_by_collection(tmp_path, status, released):
     attempt = tmp_path / "Q01/attempt-1"
     attempt.mkdir(parents=True)
     (attempt / "kept.txt").write_bytes(b"kept")
     (attempt / "scratch_cleanup.json").write_text(json.dumps({
-        "status": "cleaned", "bytes_released": 5_400_000_000,
+        "status": status, "bytes_released": 5_400_000_000,
     }))
 
     size = evaluate.disk(attempt)
 
     assert size["scratch"] == 0
-    assert size["scratch_released"] == 5_400_000_000
-    assert size["total"] < size["scratch_released"]
+    assert size["scratch_released"] == released
+    assert size["total"] < 5_400_000_000

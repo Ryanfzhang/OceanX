@@ -21,7 +21,8 @@ helped can only be read from the process measures (lessons named, helper calls, 
   visual, or a figure is necessary scientific evidence, Experts save it as an ordinary PNG image.
   OceanX's interactive plotting interface is not exposed to the models; the desktop's interactive
   mode is unchanged. Image reads give the model a JPEG preview bounded to 1024 px on its longest
-  edge while preserving the full-resolution result on disk.
+  edge while preserving the full-resolution result on disk. In these runs the Coordinator cannot
+  re-delegate a node that already has a result only to publish a figure the question did not ask for.
 - The Expert's last, tool-free delivery call may issue an extra provider request if its first
   reply contains tool markers rather than a report. Context compaction requests are counted
   separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
@@ -135,12 +136,14 @@ Four rules follow:
   checkpoint files hold almost nothing, and "end of agent conversations" when they were last written
   before the last model call ended. The checkpoints stay in the framework's format; no portable export is
   made.
-- **Scratch arrays are disposable after validated collection.** In one E10 run they were 5.398 of
-  5.4 GB. `inventory` reports each attempt's disk use and its scratch share. Once a completed attempt
-  has a final answer and collection has no errors, the collector removes all node `scratch/` folders
-  and writes `scratch_cleanup.json`. It retains scratch if the final answer or a nested Expert report
-  still cites an absolute scratch path. Reports, saved code, registered outputs and runtime records are
-  not removed. Later inventory records both current scratch and the bytes already released.
+- **Large scratch arrays are disposable after validated collection.** In one E10 run the 29 files
+  over 10 MB were 5.44 of the 5.4 GB in scratch, and the other 126 files, which include every script
+  and the tables the reports cite, were 24 MB. `inventory` reports each attempt's disk use and its
+  scratch share. Once a completed attempt has a final answer and collection has no errors, the collector
+  deletes the files over 10 MB and writes `scratch_cleanup.json`, which lists each file removed. It
+  removes nothing if the final answer or a nested Expert report cites a scratch folder by its absolute
+  path. Reports, saved code, registered outputs, small scratch files and runtime records are not
+  removed. Later inventory records both current scratch and the bytes already released.
 
 ## Running arms
 
