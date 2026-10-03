@@ -7,7 +7,8 @@ and execution path); this middleware only
 * shows the model one extra optional ``node_id`` argument, and
 * around each ``task`` execution, issues ``delegation_id``/``attempt_id``, records a
   ``delegated`` event in the tree log and exposes the binding to the child graph
-  through a context variable.
+  through a context variable, and
+* refuses an explicit unknown node after the short wait, without starting a child.
 
 The child graph reads :func:`current_delegation` instead of parsing node IDs from
 free text. When the model omits ``node_id`` the legacy text match is used and the
@@ -25,6 +26,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
+from langchain_core.messages import ToolMessage
 
 NODE_ID_PATTERN = re.compile(r"(?<![A-Za-z0-9])(B\d+(?:\.\d+)*)(?![A-Za-z0-9])")
 # Tool calls of one Coordinator turn run together and a tree update writes in a worker thread,
@@ -146,10 +148,25 @@ class StructuredDelegationMiddleware(AgentMiddleware):
                    or infer_node_id(str(args.get("description") or "")))
         return bool(node_id) and not self.tree.has_node(node_id)
 
+    def _refused_explicit_node(self, request):
+        call = request.tool_call
+        if self.tree is None or call.get("name") != "task":
+            return None
+        node_id = str((call.get("args") or {}).get("node_id") or "").strip()
+        if not node_id or self.tree.has_node(node_id):
+            return None
+        return ToolMessage(
+            content=(f"Not started: research-tree node {node_id} does not exist. "
+                     "Add or select it with update_research_tree, then delegate again."),
+            tool_call_id=call["id"], name="task", status="error")
+
     def wrap_tool_call(self, request, handler):
         deadline = time.monotonic() + self.node_wait_seconds
         while self._awaited_node(request, deadline):
             time.sleep(0.05)
+        refused = self._refused_explicit_node(request)
+        if refused is not None:
+            return refused
         request, delegation = self._prepare(request)
         token = _CURRENT.set(delegation)
         try:
@@ -161,6 +178,9 @@ class StructuredDelegationMiddleware(AgentMiddleware):
         deadline = time.monotonic() + self.node_wait_seconds
         while self._awaited_node(request, deadline):
             await asyncio.sleep(0.05)
+        refused = self._refused_explicit_node(request)
+        if refused is not None:
+            return refused
         request, delegation = self._prepare(request)
         token = _CURRENT.set(delegation)
         try:

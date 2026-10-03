@@ -8,6 +8,7 @@ import shutil
 
 import pytest
 import yaml
+from langchain_core.messages import ToolMessage
 
 from oceanx.research import acceptance
 from oceanx.research.delegation import (
@@ -360,18 +361,60 @@ async def test_a_node_added_in_the_same_turn_is_bound_when_its_task_starts(tmp_p
     assert tree.events("B1.3.1")[-1]["type"] == "delegated"
 
 
-def test_a_node_that_never_appears_is_unbound_after_a_short_wait(tmp_path):
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["sync", "async"])
+async def test_an_explicit_unknown_node_is_refused_without_starting_an_expert(tmp_path, mode):
+    tree = mechanism_tree(tmp_path)
+    middleware = StructuredDelegationMiddleware(tree, node_wait_seconds=0.1)
+    events = tree.events()
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return "receipt"
+
+    async def async_handler(request):
+        return handler(request)
+
+    call = {"name": "task", "id": "c1", "args": {
+        "description": "Question B1.3: budget?", "node_id": "B9",
+        "subagent_type": "ocean_process_expert"}}
+    request = _Request(call)
+    result = (await middleware.awrap_tool_call(request, async_handler) if mode == "async"
+              else middleware.wrap_tool_call(request, handler))
+    assert seen == []
+    assert isinstance(result, ToolMessage)
+    assert (result.status, result.name, result.tool_call_id) == ("error", "task", "c1")
+    assert result.text == (
+        "Not started: research-tree node B9 does not exist. "
+        "Add or select it with update_research_tree, then delegate again.")
+    assert tree.events() == events  # refused calls create no delegation or attempt
+    assert current_delegation() is None
+    assert request.tool_call == call
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["sync", "async"])
+async def test_an_inferred_node_that_never_appears_is_unbound_after_a_short_wait(tmp_path, mode):
     tree = mechanism_tree(tmp_path)
     middleware = StructuredDelegationMiddleware(tree, node_wait_seconds=0.2)
     seen = {}
 
     def handler(request):
         seen["delegation"] = current_delegation()
+        seen["args"] = request.tool_call["args"]
         return "receipt"
 
-    call = {"name": "task", "id": "c1", "args": {"description": "x", "node_id": "B9"}}
-    assert middleware.wrap_tool_call(_Request(call), handler) == "receipt"
+    async def async_handler(request):
+        return handler(request)
+
+    call = {"name": "task", "id": "c1", "args": {"description": "Question B9: budget?"}}
+    result = (await middleware.awrap_tool_call(_Request(call), async_handler) if mode == "async"
+              else middleware.wrap_tool_call(_Request(call), handler))
+    assert result == "receipt"
     assert (seen["delegation"].node_id, seen["delegation"].binding) == (None, "unbound")
+    assert seen["args"] == call["args"]
+    assert current_delegation() is None
 
 
 # --- outcomes ----------------------------------------------------------------

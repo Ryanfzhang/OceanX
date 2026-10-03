@@ -85,6 +85,9 @@ author/reviewer loop. The Coordinator may explicitly ask another Expert or the r
 Partner when a scientific disagreement warrants it. A native task returns its report Summary,
 report path and saved `.nc` outputs to the same Coordinator run.
 Dependencies determine question order, not an instruction to merge the whole project into one task.
+An explicit `task.node_id` must exist after the short node-write wait; otherwise the task returns
+an error without starting the Expert. A node ID inferred only from description text may still
+run unbound if it does not exist.
 Scale reasoning is part of the physics method guide; there is no separate scale-framing Skill.
 
 Scientific code execution persists valid outputs as they are produced. The canonical child
