@@ -5,7 +5,8 @@
 
 本文记录本次对话中已经检查的代码和服务器运行证据，供下一轮设计讨论与修复使用。
 它不是执行指令，不授权修改服务器、终止任务、重跑付费实验或调整研究策略。
-本次只新增这份诊断文档，没有修改运行逻辑。
+初次诊断只新增文档，没有修改运行逻辑；本轮补充更新当前代码状态，并在第15–17节
+加入 OpenScience 的源码审计和提交给 Claude 的审核问题。本轮仍只修改文档。
 
 ## 1. 结论与范围
 
@@ -56,12 +57,13 @@
 确认产品 MLD 定义与时间平均方式具有科学价值；不能由此推出需要完整的初始文献综述，
 也不能推出图必须通过 OceanX 交互图协议交付。
 
-### 2.3 本地未提交的 Claude 补丁
+### 2.3 初次诊断时的本地 Claude 补丁（历史状态）
 
-本地 working tree 在检查时已有报告交付、研究时间预算、kernel preflight、运行 inventory
-以及文档和测试的改动。详情见 `CODEX_HANDOFF.md`。
+初次诊断时本地 working tree 已有报告交付、研究时间预算、kernel preflight、运行 inventory
+以及文档和测试的改动。当时记录在 `CODEX_HANDOFF.md`，现已并入 `OCEANX_FIX_PLAN.md`。
 
-这些工作树改动不属于 r2 启动时的 `6cbd4f0`。不能把本地已有实现当作 r2 已经应用，
+这些改动后来已随 `88cab8b` 提交，当前状态见第15节；它们不属于 r2 启动时的 `6cbd4f0`。
+不能把本地已有实现当作 r2 已经应用，
 不能期待运行中的进程自动加载之后的源码修改。本文对新补丁的评价是代码审查意见，
 不是部署后的效果验证。
 
@@ -326,7 +328,7 @@ Coordinator 的原话包含 “placeholder probe entries”；这不是报告全
 
 ## 8. 历史基础设施缺陷：与现存问题分开
 
-`CODEX_HANDOFF.md` 记录的 r1 故障包括：自己 outputs 的只读错误、kernel 启动失败、
+原交接文档（现并入 `OCEANX_FIX_PLAN.md` 第7节）记录的 r1 故障包括：自己 outputs 的只读错误、kernel 启动失败、
 同一根分支同角色共用工作区/kernel、交付失败导致重派。
 
 已经提交的主要修复：
@@ -346,9 +348,10 @@ Coordinator 的原话包含 “placeholder probe entries”；这不是报告全
 r2 已检查的代码错误包括数组形状/索引、缺少参数/键、路径与shell语法、NPZ对象读取、
 绘图类型限制等。成功状态里可能还含捕获后的错误，应查看日志内容而非只数状态。
 
-## 9. 最新未部署补丁的审查意见
+## 9. 初次诊断时尚未部署补丁的审查意见
 
-以下内容来自本地 working tree，不是 r2 效果。
+以下内容是初次诊断时对本地 working tree 的审查，不是 r2 效果。
+这些补丁现已提交；本节保留审查风险，不表示它们当前仍未提交。部署后的行为需要新 attempt 验证。
 
 ### 9.1 报告兜底：改善文件交付，但有覆盖风险
 
@@ -463,7 +466,7 @@ OceanX 被生产图协议约束；Claude/Finch 保存普通图。
 | `src/oceanx/research/graphs.py` | `COORDINATOR_VISUAL_DELIVERY_POLICY` | 单次补图及Published results要求 |
 | `src/oceanx/research/graphs.py` | `build`、`_earlier_work`、`_earlier_attempt` | API prompt、祖先文件与重复尝试提示 |
 | `src/oceanx/research/graphs.py` | `expert`、`_close_kernel`、`receipt` | 新尝试、kernel结束、报告与树交付 |
-| `src/oceanx/research/graphs.py` | `_prose`、`ExpertCallBudgetMiddleware`、`ResearchBudgetMiddleware` | 新的未部署补丁及边界风险 |
+| `src/oceanx/research/graphs.py` | `_prose`、`ExpertCallBudgetMiddleware`、`ResearchBudgetMiddleware` | `88cab8b` 的报告/预算补丁及边界风险 |
 | `src/oceanx/research/delegation.py` | `resolve_delegation`、`StructuredDelegationMiddleware._prepare` | 不存在节点降为unbound、委派绑定 |
 | `src/oceanx/research/services.py` | `expert_agent_key`、`report_path`、`collect_report` | 身份、报告路径与本次更新判据 |
 | `src/oceanx/expert_execution.py` | `FIGURE_API_CONTRACT` | 绘图参考实际内容 |
@@ -500,3 +503,144 @@ OceanX 被生产图协议约束；Claude/Finch 保存普通图。
 - [ ] 修复后同题对照的质量和效率；不提前承诺节省百分比。
 
 上述事项仅为待核实/待讨论项，不表示已经执行或获得修改授权。
+
+## 15. 当前状态更新：交付耦合，而不是“交互一定很慢”
+
+### 15.1 版本与验证边界
+
+本轮文档更新时本地 HEAD 为 `88cab8b746565fc7693d77dd35c29531e5dff709`。
+报告交付、预算、kernel preflight 和 inventory 的修改已在该提交中；此前已同步 origin
+和服务器 checkout。本轮没有重新连接服务器，不声称服务器进程已经使用这些修改，
+也没有新增 r3 或其他运行的效果证据。
+
+本地另有 Claude 的未提交改动：`research/delegation.py` 为指定但尚未出现的节点等待
+最多2秒，并新增同轮建节点/委派的回归测试；该部分现记录在 `OCEANX_FIX_PLAN.md` 的 A2 中。
+本轮不改动这些源码和测试，也不重新执行它们。测试中的竞态复现与真实 r2 根因是
+不同证据层级：真实委派参数、工具顺序仍需按第6节核实。短等待结束后仍可成为 unbound，
+是否足以解决生命周期问题也需要 Claude 审核，不能仅因加入等待就标记 P08 已解决。
+
+### 15.2 P02 / P04 / P10 的共同问题
+
+当前流程把以下两种成功条件耦合：
+
+1. 科学分析已完成，报告、数组或普通图已保存。
+2. 图满足 `ScientificFigure` 的协议，生成自描述 NetCDF 和预览，注册后获得可绑定的结果键。
+
+`ScientificFigure.save` 在保存 NetCDF 后生成 preview，再登记结果；Coordinator 的
+交付规则不接受独立 PNG 作为 desktop 图结果。benchmark 同样经过这条路径。
+因此，一张科学上有效的普通图，仍可能被视为没有完成可视化交付，触发补图委派。
+
+这是应交给 Claude 审核的架构问题，不只是“绘图 API 少写几个参数”。
+P03 的文档缺口仍要修，但仅补文档并不会消除强制交互发布带来的额外工作。
+
+代价包括接口学习/探测、数据到图的重新映射、预览和注册、引用绑定、补图重派，以及
+同节点报告的增量交付语义。E10 的54次请求是这些工作混合的案例，不能全部算成
+注册成本，也不能从一个案例推算所有任务的节省比例。
+
+### 15.3 不能混淆的两个判断
+
+- **NetCDF 不是问题本身。** 它适合海洋数据的维度、坐标和单位；当前保存接口将所提供的
+  绘图数据与配置写入文件，不会自动把整个原始四维数据集塞进每张图。是否保存过多要检查
+  实际传入的数组。把扩展名换成 NPZ/JSON 不会自动减少模型工作流或解决大文件问题。
+- **交互不是全部耗时的原因。** 文献委派扩展、研究链条、报告语义、树绑定、模型生成
+  与历史基础设施故障应独立解释。目标是避免为展示重复研究，不是削减合理的科学检查。
+
+OceanX 现有能力也应保留评价：统一的数据/坐标/展示配置有助于地图、剖面、悬停查询
+和重新渲染。能否为普通静态图建立更轻的交付路径，不等于这些能力应该被删除。
+
+## 16. Additional information：OpenScience 的保存与交互做法
+
+### 16.1 审计范围
+
+- 仓库：[synthetic-sciences/openscience](https://github.com/synthetic-sciences/openscience)。
+- 已检查版本：`539bff49900b302e3e96df8c50e1668fbd02228e`；以下链接固定到该提交。
+- 依据：公开源码和仓库文档；没有运行其应用、安装依赖或执行其 Python worker。
+- 用户提到的具体 demo 尚未提供链接，不能把源码能力当作该 demo 的逐帧验证。
+
+这里是补充参考，不是指定必须迁移的框架或已经批准的改造方案。
+
+### 16.2 已核实的保存链路
+
+| 层 | 实现 | 边界 |
+|---|---|---|
+| 计算工作内存 | 每个 conversation / environment 一个长驻 Python 进程；后续调用可复用变量 | child conversation 隔离；进程内存不是持久结果，也不能直接等同 OceanX 研究节点 |
+| 执行预览 | 自动收集打开的 Matplotlib figures，转换为 PNG，作为执行输出显示 | 不自动捕获图背后的数值数组、绘图脚本或所有依赖；预览也不等于正式 Saved Result |
+| 工作文件 | Session scratch 用于中间工作；Project 文件用于可编辑、持久工作 | 最终脚本、参数和必要数组仍需显式保存 |
+| 正式 Saved Result | `artifact.save_file` 保存选定文件；保留原格式，记录 hash、大小、来源和版本元信息 | 保存一个文件不是打包整次研究；修改工作文件不会改变已保存副本 |
+| 存储 | 流式复制并计算 SHA-256；按内容 hash 保存 blob，SQLite 记录元信息 | 内容寻址可减少相同字节的重复副本，不会缩小一个本来就很大的唯一数组 |
+
+源码入口：
+
+- [Python 生命周期与输出说明](https://github.com/synthetic-sciences/openscience/blob/539bff49900b302e3e96df8c50e1668fbd02228e/backend/cli/src/tool/notebook.ts#L935-L944)。
+- [Matplotlib PNG 捕获](https://github.com/synthetic-sciences/openscience/blob/539bff49900b302e3e96df8c50e1668fbd02228e/backend/cli/src/tool/notebook.ts#L183-L198)。
+- [Result 保存工具](https://github.com/synthetic-sciences/openscience/blob/539bff49900b302e3e96df8c50e1668fbd02228e/backend/cli/src/tool/artifact.ts)。
+- [内容寻址保存实现](https://github.com/synthetic-sciences/openscience/blob/539bff49900b302e3e96df8c50e1668fbd02228e/backend/cli/src/artifact/store.ts#L446-L610)。
+- [Saved Results 文档与复现边界](https://github.com/synthetic-sciences/openscience/blob/539bff49900b302e3e96df8c50e1668fbd02228e/frontend/docs/src/content/openscience/results.mdx)。
+
+### 16.3 已核实的交互链路
+
+| 交互 | 机制 | 是否重跑科学计算 |
+|---|---|---|
+| 表格筛选、排序、数值列分布、导出 | 按文件类型使用通用表格查看器，在前端操作解析的表格 | 不需要新的 Agent 调用；大文件预览可能截断，不能当作全文件统计 |
+| 分子结构等专用查看器 | 按数据类型使用已实现的科学查看器 | 属于专用能力，不代表任意海洋空间场已有支持 |
+| Notebook 单元格运行 | 从已保存 notebook 读取代码，再通过 `/kernels/execute` 执行 | 是重新执行，会使用计算资源；与静态结果上的缩放/筛选不同 |
+| 普通图片 | 显示保存的位图 | 不包含原数组，不能仅凭 PNG 恢复科学数值悬停、切层或重算 |
+
+前端通过格式选择查看器，而不是要求每份结果都先变成统一绘图数据协议。
+Saved Result 的文本预览也会使用 `TextContentView`，支持的表格格式可进入同一个表格组件。
+
+源码入口：
+
+- [查看器选择](https://github.com/synthetic-sciences/openscience/blob/539bff49900b302e3e96df8c50e1668fbd02228e/frontend/workspace/src/atlas/files/viewer-registry.ts)。
+- [表格交互实现](https://github.com/synthetic-sciences/openscience/blob/539bff49900b302e3e96df8c50e1668fbd02228e/frontend/workspace/src/data/DataTableView.tsx)。
+- [Saved Result 预览](https://github.com/synthetic-sciences/openscience/blob/539bff49900b302e3e96df8c50e1668fbd02228e/frontend/workspace/src/artifacts/StoredArtifactView.tsx)。
+- [Notebook 重新执行与 HTML 安全边界](https://github.com/synthetic-sciences/openscience/blob/539bff49900b302e3e96df8c50e1668fbd02228e/frontend/workspace/src/atlas/FilePreview.tsx#L1018-L1063)。
+
+**未发现/不可推断：**在已检查的 workspace/UI 生产源码中未找到原生 Plotly/Vega/Bokeh
+渲染链路；HTML 预览的 iframe 使用空 sandbox，禁止脚本。不能把“支持 HTML”解释为
+“任意 Plotly HTML 都可交互”。也不能据此声称它会自动保存所有计算数组、支持 OceanX
+同等的 NetCDF 地图/剖面交互，或比 OceanX 更快；没有对照运行测量。
+
+### 16.4 对 OceanX 的参考价值
+
+可讨论的原则是“先保存科学产物，再按格式提供展示”，而不是“完成交互发布才算有结果”。
+
+- 普通 PNG/PDF 可否直接成为已登记、可引用的正式图结果，而不是仅作交互结果的 preview？
+- CSV 表格可否使用通用前端交互，不让 Expert 为每个表格编写专门配置？
+- 真正需要地图/剖面数值交互的结果，是否继续保留必要数组和现有配置？
+- 可复现性所需的数据/脚本如何保留，临时计算缓存如何与展示产物分开？
+
+这些是待审核方向。不是引入新的通用中间格式、增加 visualization Expert、科学模板、
+多层自动修复或跨节点共享 kernel 的理由。也不建议为了任意 HTML 交互放宽脚本安全边界。
+
+## 17. 交给 Claude：先审核，再制定最小修改计划
+
+本轮交付是文档，不授权实施新的运行时修改、提交、部署、重跑或启动付费模型任务。
+Claude 请结合当前代码核对本文，再制定计划；不能把本文的候选方向当作已批准需求。
+
+### 17.1 请审核的重点
+
+1. **当前问题是否还成立。** 按 P01–P10 标注仍存在、已修复但未验证、待证实；特别区分
+   `88cab8b` 的补丁、本地树绑定改动和 r2 的历史证据，不把测试复现当作服务器根因证明。
+2. **交付成功的最小定义。** 科学报告、普通图、可交互视图应如何分别保存、引用和收集？
+   是否能保留同一结果登记入口，而让交互成为能力而不是所有图的前置条件？
+3. **改动范围。** 比较仅放宽 benchmark 静态图交付，与让通用结果契约接受普通文件两种
+   方向；明确哪个最小、哪个解决根因，不预先要求重做整个前端或结果存储。
+4. **是否减少重复工作。** 同节点补图如何直接使用已有报告和派生数据，不重新理解全部
+   数据、不覆盖完整报告、不再扩展成一次完整研究？不能只加一句 prompt 或另一层兜底。
+5. **保留什么能力。** 确认 OceanX 的坐标/单位、地图/剖面交互、复现、权限隔离和来源关联
+   不会因为简化而丢失；PNG 不应被误当作包含科学数值的数据包。
+6. **怎样验证。** 三方法共同的最低交付要求应一致；区分保存失败、绑定失败、缺少必要图
+   和交互不受支持。用同题新实验检查质量、重复委派和模型工作流成本，不能只比较图数量。
+
+### 17.2 期望 Claude 输出
+
+- 对 P01–P10 与本轮补充信息的审核表：事实、风险、需要的证据、当前状态。
+- 推荐方案及被舍弃方案的理由；列出具体文件/函数、修改边界和不做的事项。
+- 最小验收用例：普通图可保存并引用；确有交互需求时仍正确工作；补图不覆盖报告；
+  同轮树绑定失败不再静默引发完整重派；临时文件不被误收集为正式结果。
+- 实施顺序和需要用户决定的选择；不提前承诺节省多少时间，也不擅自开始正式 benchmark。
+
+本节保留最初交给 Claude 的审核要求。Claude 随后已给出 `OCEANX_FIX_PLAN.md`，
+并将旧交接文档并入该文件；审核结论、分包计划和运行检查见其第5–7节。
+计划已保存不表示其中所有源码修改已经实现。本次没有自动向 Claude 服务发送材料。
