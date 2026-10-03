@@ -1,15 +1,17 @@
 """.env-only launch, immutable shared inputs and concurrent starts; no API calls."""
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
+import errno
 import fcntl
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from benchmark_config import load_config, ROOT
-from benchmark_run import configure_run, shared_queries, reset_experiment
+from benchmark_run import configure_run, experiment_guard, shared_queries, reset_experiment
 from oceanx.batch import load_queries
 from test_prepare_queries import archive as archive
 
@@ -193,6 +195,27 @@ def test_reset_reuses_name_after_errors_without_mixing_old_results(configured, d
 def test_reset_does_not_create_an_absent_experiment(configured):
     assert reset_experiment(load_config(configured)) is None
     assert not (configured.parent / 'results/pilot-r1').exists()
+
+
+@pytest.mark.parametrize('reset', [False, True])
+def test_experiment_guard_uses_nfs_compatible_file_access(configured, monkeypatch, reset):
+    """NFS emulates flock with locks requiring readable/shared, writable/exclusive FDs."""
+    original = fcntl.flock
+    operations = []
+
+    def nfs_flock(file, operation):
+        access = fcntl.fcntl(file.fileno(), fcntl.F_GETFL) & os.O_ACCMODE
+        if ((operation & fcntl.LOCK_SH and access == os.O_WRONLY)
+                or (operation & fcntl.LOCK_EX and access == os.O_RDONLY)):
+            raise OSError(errno.EBADF, 'Bad file descriptor')
+        operations.append(operation)
+        return original(file, operation)
+
+    monkeypatch.setattr(fcntl, 'flock', nfs_flock)
+    with experiment_guard(load_config(configured), reset=reset) as experiment:
+        assert experiment == configured.parent / 'results/pilot-r1'
+    expected = (fcntl.LOCK_EX if reset else fcntl.LOCK_SH) | fcntl.LOCK_NB
+    assert operations == [expected]
 
 
 def test_concurrent_launch_leases_block_reset_until_every_runner_exits(configured):

@@ -87,7 +87,8 @@ def experiment_guard(config, *, reset=False):
     _, experiment = experiment_paths(config)
     locks = experiment.parent / '.experiment-locks'
     locks.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with (locks / (experiment.name + '.lock')).open('a') as lock:
+    # NFS shared locks require a readable FD; reset's exclusive lock needs writing.
+    with (locks / (experiment.name + '.lock')).open('a+') as lock:
         try:
             fcntl.flock(lock, (fcntl.LOCK_EX if reset else fcntl.LOCK_SH) | fcntl.LOCK_NB)
         except BlockingIOError:

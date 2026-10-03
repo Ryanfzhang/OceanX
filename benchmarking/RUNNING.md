@@ -86,7 +86,8 @@ to 1200; changes take effect on newly launched attempts.
 No `--queries`, `--output`, model flags or exported path variables are needed.
 
 The first command freezes the selection; the others reuse exactly the same JSONL.
-An OS lock protects simultaneous starts. Later downloads do not expand that selection.
+An OS lock protects simultaneous starts. Its lock file is opened read/write so shared
+locks also work on Linux NFS output directories. Later downloads do not expand that selection.
 Changed settings or a damaged selection require an explicit reset or a new
 `BENCH_EXPERIMENT`; the runner stops instead of silently overwriting the experiment. API key rotation and
 changing `BENCH_RESUME` do not change the selection.
