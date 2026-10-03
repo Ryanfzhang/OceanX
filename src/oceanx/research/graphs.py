@@ -499,6 +499,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         prompt += ("\nFigure API (complete; do not read OceanX source code to learn it): "
                    + FIGURE_API_CONTRACT["constructor"] + ". Examples:\n"
                    + "\n".join(FIGURE_API_CONTRACT["examples"])
+                   + "\n" + FIGURE_API_CONTRACT["draft_rule"]
                    + "\nPalettes: ocean_teal (sequential, default), blue_red (diverging), grouped (categories).")
         if not research:
             prompt += "\n" + STANDARD_EXPERT_POLICY

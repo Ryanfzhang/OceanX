@@ -19,6 +19,8 @@ checkpoints are not imported.
 
 Interactive figures use self-describing NetCDF files saved through
 `oceanx.scientific_view.ScientificFigure`. Ordinary NetCDF files are not user-facing figures.
+Saved interactive figures whose filenames start with `_` or `.` are drafts, including inside
+output subdirectories: their files and previews remain on disk but are not listed as results.
 Their previews and interactive views are generated deterministically; there is no Visualization
 Expert or model-authored figure specification. Old
 JSON/column payloads and previous scientific figure schemas are not converted. The former

@@ -57,6 +57,12 @@ FIGURE_API_CONTRACT = {
         "Omit style arguments to use the Workbench defaults; specify them only when the scientific "
         "figure needs a deliberate override."
     ),
+    "draft_rule": (
+        "In interactive mode, saved figures whose filenames start with '_' or '.' are drafts "
+        "and are excluded from the user-facing result list, even after ScientificFigure.save(). "
+        "This also applies to filenames inside output subdirectories. Their data and previews "
+        "remain on disk; use a filename without either prefix for a final figure."
+    ),
     "examples": [
         (
             "fig = ScientificFigure(plot_kind='time_series', title='Regional temperature'); "

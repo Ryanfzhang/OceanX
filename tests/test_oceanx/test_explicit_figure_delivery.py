@@ -3,6 +3,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 import xarray as xr
 
 from oceanx.scientific_view import ScientificFigure
@@ -113,6 +114,47 @@ def test_self_describing_file_without_save_event_is_not_exposed(tmp_path: Path) 
     ).list(task_id="task")
 
     assert records == ()
+
+
+@pytest.mark.parametrize("draft_name", ["_draft.nc", ".draft.nc", "panels/_draft.nc", "panels/.draft.nc"])
+def test_declared_draft_figures_are_not_exposed(tmp_path: Path, draft_name: str) -> None:
+    task_root = tmp_path / "task"
+    agent_key = "ocean-process-drafts"
+    work_root = task_root / "agents" / agent_key
+    outputs = work_root / "outputs"
+    outputs.mkdir(parents=True)
+    events = []
+    for name in (draft_name, "final.nc"):
+        path = outputs / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        figure = ScientificFigure(plot_kind="scatter", title="_Title is not a filename")
+        figure.panel(x=[1, 2], y=[2, 3]).scatter()
+        figure.save(path)
+        events.append({
+            "schema_version": "ocean-result-event/v1",
+            "kind": "interactive_view",
+            "data_output": name,
+            "preview_output": str(Path(name).with_suffix(".preview.png")),
+            "title": "_Title is not a filename",
+        })
+
+    execution = SimpleNamespace(
+        state="succeeded",
+        result={"work_root": str(work_root), "discovered_results": events},
+        request={},
+        agent_thread_id=agent_key,
+        execution_id="execution-drafts",
+        ended_at="2026-09-19T00:00:00+00:00",
+    )
+    store = TaskResultStore(task_workspaces=_Projector(task_root, execution))
+    records = store.list(task_id="task")
+
+    assert len(records) == 1
+    assert records[0].content["output_path"].endswith("/final.nc")
+    assert records[0].content["render_status"] == "interactive"
+    assert store.list(task_id="task") == records  # cached results obey the same rule
+    assert (outputs / draft_name).is_file()  # omission does not delete the draft
+    assert (outputs / Path(draft_name).with_suffix(".preview.png")).is_file()
 
 
 def test_saved_figure_survives_a_later_execution_failure(tmp_path: Path) -> None:

@@ -311,6 +311,8 @@ class TaskResultStore:
                     continue
                 try:
                     safe_output = self._safe_relative_path(output_name)
+                    if safe_output.name.startswith(("_", ".")):
+                        continue  # Explicitly saved drafts are not user-facing results.
                     path = (output_root / safe_output).resolve(strict=True)
                     path.relative_to(output_root)
                     if path.is_symlink() or not path.is_file() or path.suffix.lower() != ".nc":
