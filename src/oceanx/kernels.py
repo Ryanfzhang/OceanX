@@ -29,6 +29,17 @@ from oceanx.sandbox.execution import (
 )
 
 
+def _tail(log: Path, offset: int, lines: int = 20) -> str:
+    """The last lines this launch wrote, so a failed start says why."""
+    try:
+        with log.open("rb") as stream:
+            stream.seek(offset)
+            text = stream.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+    return "\n".join(text.strip().splitlines()[-lines:])[-4000:]
+
+
 class SandboxedKernelManager(AsyncKernelManager):
     def __init__(self, *, executable: Path, policy: SandboxExecutionPolicy, cwd: Path, **kwargs):
         super().__init__(**kwargs)
@@ -37,12 +48,17 @@ class SandboxedKernelManager(AsyncKernelManager):
         self.policy, self.workdir = policy, cwd
         self.resources = ExitStack()
         self.descriptors = ()
+        self.independent = False
 
     def format_kernel_cmd(self, extra_arguments=None):
         command = super().format_kernel_cmd(extra_arguments)
         capabilities = require_sandbox_execution_capabilities()
         if capabilities.backend == "linux-bubblewrap-seccomp-v1":
             from oceanx.sandbox.linux import build_bubblewrap_command, seccomp_filter
+            # In bubblewrap's PID namespace the kernel's parent is PID 1, which ipykernel's
+            # parent poller takes for a dead parent and exits at once. --die-with-parent
+            # already ends the sandbox with this process, so the kernel gets no parent PID.
+            self.independent = True
             if not self.descriptors:
                 handle = self.resources.enter_context(seccomp_filter(
                     allow_child_processes=False, allow_network=self.policy.allow_network))
@@ -108,16 +124,24 @@ class KernelPool:
                            JUPYTER_RUNTIME_DIR=str(runtime_dir), PYDEVD_DISABLE_FILE_VALIDATION="1")
                 # Linux seccomp fd is allocated while formatting argv, before launch.
                 manager.format_kernel_cmd()
+                log = runtime_dir / "kernel.log"  # the launcher's own output, never the server's stdout
+                offset = log.stat().st_size if log.exists() else 0
                 try:
-                    await manager.start_kernel(cwd=str(cwd), env=env,
-                                               pass_fds=manager.descriptors,
-                                               preexec_fn=_build_limit_preexec(policy.limits))
+                    with log.open("ab") as output:
+                        await manager.start_kernel(cwd=str(cwd), env=env,
+                                                   pass_fds=manager.descriptors,
+                                                   preexec_fn=_build_limit_preexec(policy.limits),
+                                                   independent=getattr(manager, "independent", False),
+                                                   stdout=output, stderr=output)
                     client = manager.client()
                     client.start_channels()
                     await client.wait_for_ready(timeout=60)
-                except BaseException:
+                except BaseException as exc:
                     await manager.shutdown_kernel(now=True)
                     manager.resources.close()
+                    tail = _tail(log, offset)
+                    if tail and isinstance(exc, Exception):
+                        raise RuntimeError(f"{exc}. Kernel output:\n{tail}") from exc
                     raise
                 kernel = self.kernels[key] = Kernel(manager, client, executable, authority)
             notice = ""

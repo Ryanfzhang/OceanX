@@ -46,6 +46,21 @@ def test_linux_mounts_are_explicit_readonly_and_network_unshared(tmp_path, monke
     assert not any(source in {"/", "/home", "/tmp", "/etc"} for _, source, _ in mounts)
 
 
+def test_linux_never_mounts_read_only_inside_a_writable_root(tmp_path, monkeypatch):
+    # bubblewrap mounts deeper paths last, so a read-only mount inside the work root wins.
+    monkeypatch.setattr("oceanx.sandbox.linux.shutil.which", lambda *a, **kw: "/usr/bin/prlimit")
+    policy = policy_for(tmp_path)
+    earlier = tmp_path / "out" / "earlier-result"
+    earlier.mkdir()
+    policy = replace(policy, read_only_roots=(tmp_path / "input", earlier, tmp_path / "out"))
+    args = build_bubblewrap_command("/usr/bin/bwrap", [sys.executable, "-c", "pass"],
+                                    policy=policy, cwd=tmp_path / "input", seccomp_fd=8)
+    mounts = [(arg, args[i + 1]) for i, arg in enumerate(args) if arg in {"--ro-bind", "--bind"}]
+    assert ("--bind", str(tmp_path / "out")) in mounts
+    assert not any(kind == "--ro-bind" and Path(source).is_relative_to(tmp_path / "out")
+                   for kind, source in mounts)
+
+
 def test_linux_missing_bwrap_fails_closed(monkeypatch):
     monkeypatch.setattr("oceanx.sandbox.execution.get_platform", lambda: "linux")
     monkeypatch.setattr("oceanx.sandbox.execution.shutil.which", lambda _: None)

@@ -176,6 +176,11 @@ class SandboxExecutionPolicy:
             raise ValueError("output_root must be inside a writable root")
         if not _is_within_any(temporary_root, writable_roots):
             raise ValueError("temporary_root must be inside a writable root")
+        # A writable root is writable throughout, on every platform. bubblewrap would let a
+        # deeper read-only mount win and lock the caller out of its own files; seatbelt never did.
+        read_only_roots = tuple(
+            path for path in read_only_roots if not _is_within_any(path, writable_roots)
+        )
 
         object.__setattr__(self, "read_only_roots", read_only_roots)
         object.__setattr__(self, "runtime_read_roots", runtime_read_roots)

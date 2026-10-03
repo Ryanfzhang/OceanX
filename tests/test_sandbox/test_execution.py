@@ -110,6 +110,26 @@ def test_policy_requires_output_and_temporary_roots_to_be_writable(tmp_path: Pat
         )
 
 
+def test_policy_keeps_a_writable_root_writable_throughout(tmp_path: Path):
+    # An Expert's earlier outputs and logs sit inside its own writable work root.
+    data = tmp_path / "data"
+    work = tmp_path / "agent"
+    outputs, logs, temporary = work / "outputs", work / ".runtime" / "logs", work / "temporary"
+    for directory in (data, outputs, logs, temporary):
+        directory.mkdir(parents=True)
+
+    policy = SandboxExecutionPolicy(
+        read_only_roots=(data, outputs, logs, work),
+        runtime_read_roots=(),
+        writable_roots=(work,),
+        output_root=outputs,
+        temporary_root=temporary,
+    )
+
+    assert policy.read_only_roots == (data.resolve(),)
+    assert work.resolve() in policy.readable_roots
+
+
 def test_policy_rejects_a_linked_declared_root(tmp_path: Path):
     work = tmp_path / "work"
     output = tmp_path / "output"

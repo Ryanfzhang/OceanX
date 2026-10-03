@@ -136,3 +136,67 @@ async def test_kernel_has_the_helper_functions_and_logs_their_calls_per_executio
         assert read_tool_log(root / "third.log") == {"rate_per_day": 2}
     finally:
         await pool.close()
+
+
+def _policy(root: Path, runtime) -> SandboxExecutionPolicy:
+    for directory in (root / "outputs", root / "code"):
+        directory.mkdir(parents=True, exist_ok=True)
+    return SandboxExecutionPolicy(read_only_roots=(), runtime_read_roots=runtime.read_roots,
+        writable_roots=(root,), output_root=root / "outputs", temporary_root=root,
+        limits=ResourceLimits(wall_time_seconds=0, cpu_time_seconds=0, memory_bytes=0,
+                              disk_bytes=0, process_count=0, open_files=0), allow_network=True)
+
+
+@pytest.mark.asyncio
+async def test_a_kernel_that_dies_at_start_says_why(tmp_path, monkeypatch):
+    monkeypatch.setenv("OCEAN_SANDBOX_PYTHON", sys.executable)
+    runtime = current_python_runtime()
+    root = tmp_path / "one"
+    policy = _policy(root, runtime)
+    # `python -m` looks in the working directory first, so this stands in for ipykernel.
+    (root / "outputs" / "ipykernel_launcher.py").write_text(
+        "import sys\nsys.stderr.write('boom before kernel_info\\n')\nsys.exit(3)\n")
+    pool = KernelPool()
+    try:
+        with pytest.raises(RuntimeError, match="boom before kernel_info"):
+            await pool.execute(key="one", executable=Path(sys.executable), policy=policy,
+                               cwd=root / "outputs", environment={}, support_path=root / "code",
+                               code="print(1)")
+        assert "one" not in pool.kernels
+    finally:
+        await pool.close()
+
+
+@pytest.mark.asyncio
+async def test_a_bubblewrap_kernel_is_not_given_a_parent_to_watch(tmp_path, monkeypatch):
+    # Inside bubblewrap's PID namespace the kernel's parent is PID 1; ipykernel would
+    # take that for a dead parent and exit before replying to kernel_info.
+    import contextlib
+    from types import SimpleNamespace
+
+    from oceanx import kernels
+    from oceanx.sandbox import linux
+    monkeypatch.setenv("OCEAN_SANDBOX_PYTHON", sys.executable)
+    monkeypatch.setattr(kernels, "require_sandbox_execution_capabilities",
+                        lambda: SimpleNamespace(backend="linux-bubblewrap-seccomp-v1", command="bwrap"))
+    monkeypatch.setattr(linux, "seccomp_filter",
+                        lambda **_: contextlib.nullcontext(SimpleNamespace(fileno=lambda: 9)))
+    monkeypatch.setattr(linux, "build_bubblewrap_command", lambda _, command, **__: tuple(command))
+    launched = {}
+
+    class Manager(kernels.SandboxedKernelManager):
+        async def start_kernel(self, **kw):
+            launched.update(kw)
+            raise RuntimeError("not launched in this test")
+
+        async def shutdown_kernel(self, now=False, restart=False):
+            pass
+
+    root = tmp_path / "one"
+    pool = KernelPool(manager_type=Manager)
+    with pytest.raises(RuntimeError, match="not launched"):
+        await pool.execute(key="one", executable=Path(sys.executable),
+                           policy=_policy(root, current_python_runtime()), cwd=root / "outputs",
+                           environment={}, support_path=root / "code", code="print(1)")
+    assert launched["independent"] is True
+    assert launched["stdout"] is launched["stderr"] and launched["stdout"] is not None
