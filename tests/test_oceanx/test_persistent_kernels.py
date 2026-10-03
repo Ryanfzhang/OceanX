@@ -23,7 +23,8 @@ async def test_kernel_memory_isolated_and_survives_calls(tmp_path, monkeypatch):
         support = root / "code"
         support.mkdir(exist_ok=True)
         _install_result_runtime(support)
-        return await pool.execute(key=key, executable=Path(sys.executable),
+        # The launcher as production resolves it; only the resolved runtime is mounted on Linux.
+        return await pool.execute(key=key, executable=runtime.executable,
             policy=SandboxExecutionPolicy(read_only_roots=(), runtime_read_roots=runtime.read_roots,
                 writable_roots=(root,), output_root=output, temporary_root=root,
                 limits=ResourceLimits(wall_time_seconds=timeout, cpu_time_seconds=0, memory_bytes=0,
@@ -113,7 +114,7 @@ async def test_kernel_has_the_helper_functions_and_logs_their_calls_per_executio
     _install_result_runtime(support, ToolBook(ResearchMemory(tmp_path / "research")).module_source())
 
     async def run(code, log):
-        return await pool.execute(key="one", executable=Path(sys.executable),
+        return await pool.execute(key="one", executable=runtime.executable,
             policy=SandboxExecutionPolicy(read_only_roots=(), runtime_read_roots=runtime.read_roots,
                 writable_roots=(root,), output_root=output, temporary_root=root,
                 limits=ResourceLimits(wall_time_seconds=0, cpu_time_seconds=0, memory_bytes=0,
@@ -159,7 +160,7 @@ async def test_a_kernel_that_dies_at_start_says_why(tmp_path, monkeypatch):
     pool = KernelPool()
     try:
         with pytest.raises(RuntimeError, match="boom before kernel_info"):
-            await pool.execute(key="one", executable=Path(sys.executable), policy=policy,
+            await pool.execute(key="one", executable=runtime.executable, policy=policy,
                                cwd=root / "outputs", environment={}, support_path=root / "code",
                                code="print(1)")
         assert "one" not in pool.kernels
@@ -193,10 +194,11 @@ async def test_a_bubblewrap_kernel_is_not_given_a_parent_to_watch(tmp_path, monk
             pass
 
     root = tmp_path / "one"
+    runtime = current_python_runtime()
     pool = KernelPool(manager_type=Manager)
     with pytest.raises(RuntimeError, match="not launched"):
-        await pool.execute(key="one", executable=Path(sys.executable),
-                           policy=_policy(root, current_python_runtime()), cwd=root / "outputs",
+        await pool.execute(key="one", executable=runtime.executable,
+                           policy=_policy(root, runtime), cwd=root / "outputs",
                            environment={}, support_path=root / "code", code="print(1)")
     assert launched["independent"] is True
     assert launched["stdout"] is launched["stderr"] and launched["stdout"] is not None
