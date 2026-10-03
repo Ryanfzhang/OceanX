@@ -32,6 +32,7 @@ from oceanx.expert_execution import (
     ExpertCodeExecutionError,
     ExpertCodeExecutionService,
 )
+from oceanx.figure_delivery import static_figures
 from oceanx.jina_reader import JinaReaderTool
 from oceanx.protocol.v2.models import (
     EventEnvelope,
@@ -358,6 +359,18 @@ class OceanExpertRunCodeTool(_OceanTool):
         "Do not upload local data or download replacement datasets without user authorization."
     )
     input_model = OceanExpertRunCodeInput
+
+    def __init__(self, services: OceanToolServices) -> None:
+        super().__init__(services)
+        if static_figures():
+            # A static-delivery run names no plotting interface anywhere a model reads.
+            self.description = (
+                "Run Python on the source paths in your assignment. The current directory and "
+                "OCEAN_WORK_DIR are persistent task scratch for reusable intermediate files; "
+                "scratch may be cleaned after the task becomes idle. Save deliverable files under "
+                "os.environ['OCEAN_OUTPUT_DIR']; a final figure saved there as a PNG is delivered. "
+                "Do not upload local data or download replacement datasets without user authorization."
+            )
 
     def effect_for(self, arguments: OceanExpertRunCodeInput) -> ToolEffect:
         del arguments

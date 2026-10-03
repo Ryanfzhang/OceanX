@@ -78,12 +78,17 @@ python benchmarking/server/run_finch.py
 
 Finch's controller starts in `oceanx-bench`; `BENCH_FINCH_PYTHON` points to its separate
 Python 3.12 environment. Each method runs its selected questions sequentially.
+`BENCH_FINCH_EXECUTION_TIMEOUT` defaults to 1200 seconds (20 minutes), matching
+upstream Finch. It limits each full notebook replay; `edit_cell` re-executes all
+cells. The separate case timeout remains `BENCH_TIMEOUT_SECONDS` (10800 seconds
+by default). Existing `.env` files with an explicit value of 300 must be updated
+to 1200; changes take effect on newly launched attempts.
 No `--queries`, `--output`, model flags or exported path variables are needed.
 
 The first command freezes the selection; the others reuse exactly the same JSONL.
 An OS lock protects simultaneous starts. Later downloads do not expand that selection.
-Changed settings or a damaged selection require a new `BENCH_EXPERIMENT`; the
-runner stops instead of silently overwriting the experiment. API key rotation and
+Changed settings or a damaged selection require an explicit reset or a new
+`BENCH_EXPERIMENT`; the runner stops instead of silently overwriting the experiment. API key rotation and
 changing `BENCH_RESUME` do not change the selection.
 
 ```text
@@ -104,6 +109,26 @@ same command. It skips completed cases and creates new attempts for unfinished o
 methods without an output folder start fresh. It does not resume an in-flight conversation.
 Prespecify retries; do not selectively
 retry scored failures. Run under `tmux` to survive SSH disconnection.
+
+During debugging, reuse the same `BENCH_EXPERIMENT` after a clean reset:
+
+```bash
+python benchmarking/server/benchmark_run.py --reset
+python benchmarking/server/run_finch.py
+```
+
+Reset uses the current `.env` and moves the **entire experiment**, including shared
+inputs and every method's runs, to
+`BENCH_OUTPUT_ROOT/.archive/BENCH_EXPERIMENT-<timestamp>-<id>/`. Then the ordinary
+commands create fresh inputs and outputs under the same name, including after code
+or configuration fixes. Existing archive folders may be deleted manually when no
+longer needed. No model runs or input datasets are changed by reset.
+
+The three runners can run together, but reset refuses while any is active. Older
+OceanX runs may leave a PID lock after a crash; stop the old runner and clear that
+stale lock before reset. If you manually remove the entire experiment directory
+instead, its name can also be reused. `BENCH_RESUME=true` starts fresh when the method
+output no longer exists.
 
 Advanced CLI flags still override individual launch defaults. Explicit `--queries`
 or `--query` requires explicit `--output` and bypasses automatic selection; do not
@@ -130,6 +155,26 @@ experiment selection, so a new arm name alone is not sufficient. The new query b
 must match the old query text and datasets before using the earlier baselines as comparators.
 This smoke repeat diagnoses the corrected model routing; it is not a new formal A/B claim.
 
+## Run settings and comparison limits
+
+- OceanX benchmark runs use `OCEANX_FIGURE_DELIVERY=static`: Experts normally save final figures
+  as ordinary PNG images. OceanX's interactive plotting interface is not exposed to the models;
+  the desktop's interactive mode is unchanged.
+- The Expert's last, tool-free delivery call may issue an extra provider request if its first
+  reply contains tool markers rather than a report. Context compaction requests are counted
+  separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
+  the 60-call loop limit is not an exact count of all provider requests.
+- `BENCH_TIMEOUT_SECONDS` supplies OceanX's research budget: after 75% no new Expert assignment
+  starts. This is a run setting that changes Coordinator behavior, not merely an external timeout;
+  disclose it alongside the commit, model, delivery mode and other run settings.
+- Finch-local has no literature-search agent; it is not the full Robin system.
+  Claude Code's search depends on its configured tools. OceanX consults Search Expert on demand
+  for definitions, methods or published mechanisms the data context does not settle. These search
+  capabilities are not identical; report them when comparing methods.
+- Failure categories describe observed messages, not blame. A read-only refusal may correctly
+  protect another node's evidence, and a timeout may reflect slow computation. Inspect logs before
+  assigning a cause; collection completeness and a successful run do not establish scientific correctness.
+
 ## OceanX review delivery
 
 If a follow-up attempt leaves its question's nonempty `report.md` unchanged, OceanX
@@ -137,6 +182,16 @@ delivers that report and its original Summary; a short closing reply is added on
 the Coordinator receipt. The closing reply becomes the report only when no nonempty
 report exists, for the Discussion Partner, or when it contains a nonempty `## Summary`.
 Without closing prose, the receipt explicitly says so and gives the model-call stop reason.
+
+Every OceanX attempt delivers ordinary images, as the Claude Code and Finch arms do:
+`run_oceanx.py` starts the backend with `OCEANX_FIGURE_DELIVERY=static` and records
+`figure_delivery` in `arm.json`. No prompt, tool description or skill the OceanX models read
+names OceanX's plotting interface. A final figure is an image file (`.png`, `.jpg`, `.jpeg`,
+`.svg`, `.pdf`) that an Expert saves under its node's `outputs/` folder; exploratory plots stay
+in `scratch/`, and a file name starting with `_` or `.` is a draft. The result store lists
+each delivered image as a `file` result (`render_status: "static"`), the Expert receipt lists
+them under `Saved figures (cite these paths):`, and the collector copies them into the
+figure gallery and rewrites the cited absolute paths to links.
 
 The OceanX runner automatically creates a new `runs/OceanX/collected/collection-*`
 folder after the batch. Open its `index.md`, then each attempt's `review.md` for the

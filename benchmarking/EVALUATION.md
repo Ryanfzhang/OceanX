@@ -15,6 +15,26 @@ fails or is written again, so an unchanged run with a better-worded answer would
 The arms differ in lessons and tools together. The experiment says whether the library helps. Which half
 helped can only be read from the process measures (lessons named, helper calls, failed code runs).
 
+## Run settings and comparison limits
+
+- OceanX benchmark runs use `OCEANX_FIGURE_DELIVERY=static`: Experts normally save final figures
+  as ordinary PNG images. OceanX's interactive plotting interface is not exposed to the models;
+  the desktop's interactive mode is unchanged.
+- The Expert's last, tool-free delivery call may issue an extra provider request if its first
+  reply contains tool markers rather than a report. Context compaction requests are counted
+  separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
+  the 60-call loop limit is not an exact count of all provider requests.
+- `BENCH_TIMEOUT_SECONDS` supplies OceanX's research budget: after 75% no new Expert assignment
+  starts. This is a run setting that changes Coordinator behavior, not merely an external timeout;
+  disclose it alongside the commit, model, delivery mode and other run settings.
+- Finch-local has no literature-search agent; it is not the full Robin system.
+  Claude Code's search depends on its configured tools. OceanX consults Search Expert on demand
+  for definitions, methods or published mechanisms the data context does not settle. These search
+  capabilities are not identical; report them when comparing methods.
+- Failure categories describe observed messages, not blame. A read-only refusal may correctly
+  protect another node's evidence, and a timeout may reflect slow computation. Inspect logs before
+  assigning a cause; collection completeness and a successful run do not establish scientific correctness.
+
 ## The process
 
 | Phase | What happens | Who |

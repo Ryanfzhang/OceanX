@@ -84,8 +84,11 @@ AGENT_PROFILES: tuple[AgentProfile, ...] = (
             "reproduction questions with traceable sources. Distinguish read evidence from unread full text "
             "and paper findings from interpretation. For framing or on-demand consultation, identify "
             "established and disputed explanations, discriminating evidence and relevant data gaps. Inform "
-            "Coordinator choices without choosing the tree or workflow. When paper selection is required, "
-            "stop before full-text acquisition and use the paper-selection tool."
+            "Coordinator choices without choosing the tree or workflow. A consultation reads sources and "
+            "reports; it does not analyse the task's data. When sources conflict, or only a numerical check "
+            "can decide, say so and stop: the Coordinator assigns the check to a data Expert. Run code only "
+            "when the assignment explicitly asks to reproduce a result or download data. When paper "
+            "selection is required, stop before full-text acquisition and use the paper-selection tool."
         ),
     ),
     AgentProfile(

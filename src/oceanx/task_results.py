@@ -3,7 +3,8 @@
 Reports and supplementary files may use durable manifests. Interactive views
 are only the self-describing NetCDF files explicitly declared by
 ``ScientificFigure.save()``. Ordinary NetCDF outputs remain data files and
-never become UI results by directory scan.
+never become UI results by directory scan. A static-delivery run (see
+``figure_delivery``) instead lists the image files under an Expert's outputs folder.
 """
 
 from __future__ import annotations
@@ -15,11 +16,13 @@ import os
 import shutil
 import tempfile
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from oceanx.figure_delivery import static_figure_files, static_figures
 
 if TYPE_CHECKING:
     from oceanx.task_workspace import TaskWorkspaceProjector
@@ -244,7 +247,14 @@ class TaskResultStore:
 
     def get(self, ref: TaskResultRef) -> TaskResultRecord:
         discovered = next(
-            (item for item in self._agent_views(task_id=ref.task_id) if item.ref == ref),
+            (
+                item
+                for item in (
+                    *self._agent_views(task_id=ref.task_id),
+                    *self._static_figures(task_id=ref.task_id),
+                )
+                if item.ref == ref
+            ),
             None,
         )
         if discovered is not None:
@@ -269,8 +279,86 @@ class TaskResultStore:
                 if record.ref.task_id == task_id and record.kind != "interactive_view":
                     records.append(record)
         records.extend(self._agent_views(task_id=task_id))
+        records.extend(self._static_figures(task_id=task_id))
         records.sort(key=lambda item: (item.created_at, item.ref.result_id))
         return tuple(records)
+
+    def _static_figures(self, *, task_id: str) -> tuple[TaskResultRecord, ...]:
+        """The images an Expert saved under its outputs folder, in a static-delivery run only."""
+        if not static_figures():
+            return ()
+        task = self.task_workspaces.store.get_research_task(task_id)
+        if task is None:
+            return ()
+        task_root = self.task_workspaces.ensure_task_root(task_id).resolve(strict=True)
+        records: list[TaskResultRecord] = []
+        for agent_key, path in static_figure_files(task_root):
+            try:
+                stat = path.stat()
+                key = (str(path), stat.st_mtime_ns, stat.st_size, "static")
+                record = self._view_cache.get(key)
+                if record is None:
+                    record = self._static_figure_record(
+                        task_id=task_id,
+                        workspace_id=task.workspace_id,
+                        task_root=task_root,
+                        agent_key=agent_key,
+                        path=path,
+                        modified=stat.st_mtime,
+                    )
+                    self._view_cache[key] = record
+                records.append(record)
+            except (OSError, ValueError):
+                continue
+        return tuple(records)
+
+    @staticmethod
+    def _static_figure_record(
+        *,
+        task_id: str,
+        workspace_id: str,
+        task_root: Path,
+        agent_key: str,
+        path: Path,
+        modified: float,
+    ) -> TaskResultRecord:
+        relative = path.relative_to(task_root).as_posix()
+        output_relative = path.relative_to(task_root / "agents" / agent_key / "outputs")
+        # The suffix stays in the key, so fig.png and fig.pdf are two results.
+        local_key = output_relative.as_posix()
+        result_key = f"{agent_key}/{local_key}"
+        digest = hashlib.sha256()
+        size = 0
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+                size += len(chunk)
+        identity = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:32]
+        return TaskResultRecord(
+            ref=TaskResultRef(task_id=task_id, result_id=f"figure_{identity}"),
+            workspace_id=workspace_id,
+            kind="file",
+            title=output_relative.stem.replace("_", " "),
+            created_at=datetime.fromtimestamp(modified, UTC).isoformat(),
+            agent_run_id=agent_key,
+            execution_output_names=(result_key, local_key, path.name, relative),
+            content={
+                "agent_key": agent_key,
+                "result_key": result_key,
+                "output_path": relative,
+                "render_status": "static",
+                "preview_file": path.name,
+                "workspace_files": {path.name: relative},
+            },
+            files=(
+                TaskResultFile(
+                    path=path.name,
+                    mime_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+                    size=size,
+                    sha256=digest.hexdigest(),
+                ),
+            ),
+        )
 
     def _agent_views(self, *, task_id: str) -> tuple[TaskResultRecord, ...]:
         task_root = self.task_workspaces.ensure_task_root(task_id).resolve(strict=True)

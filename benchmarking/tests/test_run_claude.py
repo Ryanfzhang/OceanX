@@ -104,6 +104,14 @@ def test_no_argument_launch_from_env(setup, archive, monkeypatch):
     identity = json.loads((output / 'manifest.json').read_text())['identity']
     assert identity['allow_tools'] == ['Read', 'Bash', 'Write']
     assert 'test-key' not in json.dumps(identity)
+    # The real entrypoint releases its experiment lease after the batch. Reset
+    # archives both selection and method output, then the same .env launches fresh.
+    from benchmark_run import reset_experiment
+    from benchmark_config import load_config
+    old = reset_experiment(load_config(file))
+    assert (old / 'runs/Claude/results.jsonl').is_file()
+    assert runner.main([]) == 0
+    assert len(results(output)) == 1
 
 
 @pytest.mark.parametrize("query,status", [("API_ERROR", "failed"), ("MALFORMED", "failed"),

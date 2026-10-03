@@ -16,6 +16,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from deepagents.backends.protocol import (
+    EditResult,
     ExecuteResponse,
     FileDownloadResponse,
     FileUploadResponse,
@@ -248,19 +249,20 @@ def task_backend(host, config, *, run, library):
     task_root = host.task_workspace_projector.ensure_task_root(c["task_id"])
     work_root = (host.task_workspace_projector.expert_session_root(c["task_id"], run.thread_id)
                  if run else task_root / "agents" / "coordinator")
-    from oceanx.expert_execution import FIGURE_API_CONTRACT
+    from oceanx.figure_delivery import static_figures
     work_root.mkdir(parents=True, exist_ok=True)
     runtime_root = work_root / ".runtime"
     runtime_root.mkdir(exist_ok=True)
-    (runtime_root / "result-api.md").write_text(
-        "# Scientific figure API\n\nImport `ScientificFigure` from "
-        "`oceanx.scientific_view`. Supply the computed arrays and the complete scientific "
-        "panel/layer structure. Calling `Figure.save()` writes one self-describing NetCDF and "
-        "explicitly declares it as a user-facing figure. Ordinary NetCDF files remain data files. "
-        "Omit visual style arguments to use the Workbench defaults.\n\n```json\n"
-        + json.dumps(FIGURE_API_CONTRACT, ensure_ascii=False, indent=2) + "\n```\n",
-        encoding="utf-8",
-    )
+    if static_figures():
+        # A static-delivery run describes no plotting interface, not even in a file.
+        (runtime_root / "result-api.md").unlink(missing_ok=True)
+    else:
+        from oceanx.figure_reference import figure_api_reference
+
+        (runtime_root / "result-api.md").write_text(
+            figure_api_reference(),
+            encoding="utf-8",
+        )
     def read_roots():
         roots = [library, service.task_results_root(c["task_id"])]
         roots.extend(service.shared_result_directories(workspace_id=c["workspace_id"],

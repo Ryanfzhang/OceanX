@@ -92,6 +92,48 @@ async def test_standard_workflow_keeps_native_experts_without_a_research_tree(
     assert "execute" not in COORDINATOR_FILESYSTEM_TOOLS
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("workflow_mode", ["standard", "research"])
+@pytest.mark.parametrize("figure_delivery", ["interactive", "static"])
+async def test_visual_follow_up_is_only_for_a_visual_the_user_asked_for(
+    monkeypatch, tmp_path, workflow_mode, figure_delivery
+):
+    from oceanx.research import graphs
+
+    config = _config()
+    config["configurable"]["request_options"] = {"workflow_mode": workflow_mode}
+    captured = {}
+
+    async def fake_expert(_config, profile_id):
+        return f"runnable:{profile_id}"
+
+    async def fake_build(_config, role, *, suffix="", **_kwargs):
+        captured["suffix"] = suffix
+        return "graph"
+
+    monkeypatch.setattr(graphs, "expert", fake_expert)
+    monkeypatch.setattr(graphs, "build", fake_build)
+    monkeypatch.setattr(graphs, "coordinator_report_path", lambda _config: tmp_path / "report.md")
+    monkeypatch.setattr(graphs, "research_tree",
+                        lambda _task_id: SimpleNamespace(policy=SimpleNamespace(guidance="")))
+    monkeypatch.delenv(graphs.RESEARCH_BUDGET_ENV, raising=False)
+    monkeypatch.setenv("OCEANX_FIGURE_DELIVERY", figure_delivery)
+
+    assert await _coordinator_agent(config) == "graph"
+    prompt = " ".join(captured["suffix"].split())
+    # The qualifying visual is part of the rule itself, and "the user explicitly asked for" covers a
+    # request made in a later message of a desktop conversation as well as the first one.
+    assert ("omitted a visual that the user explicitly asked for, you may make one and only one "
+            "follow-up task call") in prompt
+    assert "A visual that you added yourself in an Expert assignment does not qualify." in prompt
+    assert "Never make a second visual-delivery follow-up" in prompt
+    assert "original user question" not in prompt
+    # Each delivery mode names its own kind of figure, never the other's.
+    static = figure_delivery == "static"
+    assert ("Saved figures" in prompt) is static
+    assert ("Published results" in prompt) is not static
+
+
 def test_each_tree_node_has_its_own_workspace_and_another_attempt_reuses_it():
     parent = AgentRun.from_config(_config(), "ocean_process_expert", question="B1: establish anomaly")
     child = AgentRun.from_config(_config(), "ocean_process_expert", question="B1.2: test transport")

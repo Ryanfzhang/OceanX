@@ -1,7 +1,7 @@
 # OceanX 修复方案（带版本控制）
 
-**方案版本：v1.2（2026-10-03）**
-**状态：Owner 已确认 v1，包括第 4 节的细节决定，可以交给 Codex 执行。v1.1 没有改任何包，只并入了原交接文档，并把 R3 出现异常时的做法改为只报告。v1.2 给 A1 补了一种情况，见第 3 节。**
+**方案版本：v1.5（2026-10-03）**
+**状态：Owner 已确认 v1，包括第 4 节的细节决定，可以交给 Codex 执行。v1.1 没有改任何包，只并入了原交接文档，并把 R3 出现异常时的做法改为只报告。v1.2 给 A1 补了一种情况。v1.3 把审核时留下的三条要求写进了 B 和 C，各包范围不变。v1.4 是审核 E、D、C、F 之后的修订：C 补三处，新增 G 包，D 加两条加固，R3 的测试和检查表补上 B、D。原待确认的两项已获 Owner 批准并完成，Claude 已复核通过。v1.5 是复核之后的一处补充：D 的数据清单要遵守工作区的披露策略。R3 仍未授权。详见第 3 节和最新 Log。**
 基于提交 `88cab8b`。问题记录见 `OCEANX_E10_DIAGNOSIS_2026-10-03.md`。
 分工：Claude 负责方案和审核，Codex 负责执行，Owner 负责提交每个版本。
 
@@ -32,16 +32,17 @@
 |---|---|---|---|---|
 | A1 | 报告不被没改报告的尝试覆盖 | v1.2 已提交 origin；服务器同步见 Log | 991466e（A1） | 通过，v1.2 已复核。见 Log。 |
 | A2 | 节点绑定不再悄悄失败 | 已本地提交；未推送 | a3b9a4d（A2） | 通过，可以提交。见 Log。 |
-| A3 | 草稿图不算正式结果（交互模式） | 已审核；Owner 授权提交 | 本提交（A3） | 通过，可以提交。见 Log。 |
-| A4 | 只有用户明确要图才补图 | 待做 | | |
-| B | 无界面和 benchmark 运行只交付普通图片，不暴露绘图接口 | 待做 | | |
-| E | 文献咨询由 Coordinator 按需决定；咨询不做数据分析 | 待做 | | |
-| D | 已保存数据的清单 | 待做 | | |
-| C | 完整的绘图接口说明（交互模式） | 待做 | | |
-| F | 记录与披露（不改行为） | 待做 | | |
+| A3 | 草稿图不算正式结果（交互模式） | 已本地提交；未推送 | cef4736（A3） | 通过，可以提交。见 Log。 |
+| A4 | 只有用户明确要图才补图 | 已实现并通过全量测试，待审核与 Owner 提交 | | 通过，可以提交。见 Log。 |
+| B | 无界面和 benchmark 运行只交付普通图片，不暴露绘图接口 | Codex 独立复核通过；全量测试通过，待 Owner 提交 | | Claude 实现，Codex 独立复核通过。见最新 Log。 |
+| E | 文献咨询由 Coordinator 按需决定；咨询不做数据分析 | Codex 已复核；全量测试通过，待 Owner 提交 | | 通过，可以提交（Codex 独立复核）。见 Log。 |
+| D | 已保存数据的清单 | v1.5 披露检查已完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。v1.5 的披露检查已复核。见 Log。 |
+| C | 完整的绘图接口说明（交互模式） | v1.4 三处补充和措辞已完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。三处补充和措辞都已复核。见 Log。 |
+| F | 记录与披露（不改行为） | 说明与披露已完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。见 Log。 |
+| G | 大文件编辑路径缺少 `EditResult` 导入（方案外缺口，v1.4 新增） | Owner 已批准并完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。见 Log。 |
 | R3 | 服务器开跑前检查，然后重跑 E10（`methods-oceanx-flash-r3`） | 等 Owner 通知 | | |
 
-执行顺序：A1 → A2 → A3 → A4 → B → E → D → C → F → R3。A1 没合入之前不要启动任何运行。
+执行顺序：A1 → A2 → A3 → A4 → B → E → D → C → F → G → R3。A1 没合入之前不要启动任何运行。
 
 ## 3. 方案版本记录
 
@@ -50,6 +51,9 @@
 | v1 | 2026-10-03 | 第一版。依据 Owner 的四个决定，见第 4 节。Owner 已确认全文，包括五项细节决定。 |
 | v1.1 | 2026-10-03 | 并入 `CODEX_HANDOFF.md` 里仍然有用的部分（规则、基准、运行步骤、检查表、Log），并删除该文件。R3 出现异常时改为只报告，不再有预先批准的修复。各个包的内容不变。 |
 | v1.2 | 2026-10-03 | A1 补充一种情况：沿用原报告、又没有结束语时，回执也要写明这次尝试没有新产出，并给出原因。v1 的文字漏了这种情况。另外明确：额外情况只写进本文件的 Log，不再另建 `CODEX_HANDOFF.md`。 |
+| v1.3 | 2026-10-03 | 把审核时留下的要求写进对应的包，各包范围不变。B：开始之前先提交并行工作的改动；补图规则的措辞（来自 A4 审核）。C：草稿规则的措辞（来自 A3 审核）。 |
+| v1.4 | 2026-10-03 | 审核 E、D、C、F 之后的修订。C：说明要读到结尾、`fig.panel` 的关键字参数、提示里留一行调用骨架（这一条等 Owner 确认）。新增 G 包：大文件编辑路径缺少导入（等 Owner 确认）。D：CSV 行数统计的两条加固。R3：Linux 上加跑 D 和 B 的测试文件，检查表加数据清单一行、图一行写细。 |
+| v1.5 | 2026-10-03 | 复核 v1.4 的补充之后新增一处。D：工作区不允许向模型服务商披露元数据时，不生成也不放入数据清单。R3 的 Linux 测试加上大文件编辑的测试文件。其余各包不变。 |
 
 ## 4. Owner 的决定
 
@@ -67,6 +71,8 @@ Owner 同时确认了五项细节（2026-10-03），执行时不用再问：
 - Search Expert 在咨询里只查资料，不分析任务数据。
 - 数据清单每个目录最多列 12 个文件，总量约 4,000 字符。
 - 完整的绘图说明放在文件里，提示里只留简短规则和文件位置。
+
+Owner 于本轮另行明确批准 v1.4 的两项待确认改动：交互 Expert 提示增加一行简短调用骨架，以及 G 包补齐 `EditResult` 导入。其余边界不变，不授权提交、服务器同步或 R3。
 
 ## 5. 对诊断文档的审核结论
 
@@ -134,6 +140,13 @@ Owner 同时确认了五项细节（2026-10-03），执行时不用再问：
 
 ### B. 无界面和 benchmark 运行：只交付普通图片
 
+**开始之前**
+
+- B 要改 `benchmarking/server/run_oceanx.py` 和 `benchmarking/RUNNING.md`。这两个文件里现在有并行工作（benchmark 重置、Finch）的未提交改动。
+- `run_oceanx.py` 里的那部分调用 `configure_run(..., stack=stack)`，它依赖 `benchmark_run.py` 里同样未提交的改动。
+- 所以先由 Owner 把并行工作的改动单独提交，再开始 B。否则 B 的提交会带上其中一半，单独检出那个提交时启动脚本会报错。
+- 如果 Owner 决定暂不提交那批改动，Codex 在 Log 里列出 B 在这两个文件里改了哪几处，由 Owner 只提交这几处。
+
 **开关**
 
 - 环境变量 `OCEANX_FIGURE_DELIVERY`，取值 `interactive`（默认，桌面版行为不变）或 `static`。
@@ -176,6 +189,15 @@ Owner 同时确认了五项细节（2026-10-03），执行时不用再问：
 | skill `scientific-figure-design` | 不放进准备好的 skill 库（`prepare_skill_library`）。 |
 
 kernel 启动代码和结果运行器里对 `ScientificFigure` 的 import 可以保留，模型看不到它们。
+
+**补图规则的措辞（来自 A4 审核）**
+
+写 `COORDINATOR_VISUAL_DELIVERY_POLICY` 的静态版本时，交互版和静态版的补图规则都按下面的要求写：
+
+- 把“哪些图有资格补”直接写进条件句。现在的写法先说 “this follow-up”，下一句才讲补图，读到时还没有所指。
+- 用 “the user explicitly asked for”，不用 “the original user question”。桌面版里 Coordinator 看得到整个对话，用户在后面的消息里才要图也算数。
+- 参考写法：`If the Expert answered the scientific question but omitted a visual that the user explicitly asked for, you may make one and only one follow-up task call ...`，这段规则的后面接 `A visual that you added yourself in an Expert assignment does not qualify.`
+- `test_visual_follow_up_requires_the_original_user_request` 的断言随之更新，仍然覆盖两种工作流和两种交付模式。交互模式的断言里，B 只允许改这一处。
 
 **测试**
 
@@ -220,6 +242,22 @@ kernel 启动代码和结果运行器里对 `ScientificFigure` 的 import 可以
   - 提示里的清单不超过上面的限制。
   - 探测失败不影响 `build`。
 
+**加固（v1.4，来自审核；不挡 D 的提交，和 C 的三处一起做）**
+
+- 行数统计是探测里唯一和文件大小成正比的操作。实测 `csv.reader` 约 134 MB/s，也就是每 GB 约 7.4 秒；探测超时后不写缓存，之后每次 Expert 启动都会重试并再等一次。
+- 超过 256 MB 的 CSV 不数行数：`rows` 省略，清单那一行写 `rows not counted`。列名照常给出。
+- `_data_rows` 打开文件时加 `errors="replace"`。现在数据行里出现一个非 UTF-8 字节，整个文件就会被标成读不出来。
+- 测试：一个超过上限的 CSV 不被逐行读取（把上限调小来测）；一个含非 UTF-8 字节的 CSV 仍然给出列名和行数。
+
+**披露策略（v1.5，来自复核；提交前做）**
+
+- **问题**：每个工作区有一份 `ModelDataDisclosurePolicy`，默认全部允许，桌面版可以把 `metadata` 设成 `deny` 或 `prompt`。设了之后，`OceanContextBuilder.build` 不再把数据集的变量、维度等放进提示。数据清单放进提示的是同一类信息（派生文件的变量名、维度、单位、标题、CSV 列名），但它没有查这份策略。
+- **复现**：把工作区对当前服务商的 `metadata` 设成 `deny`，再构建 Expert 提示。上下文里已经没有 `dataset_context`，清单却还在，内容是 `outputs/mld.nc ("Annual MLD"): mld(time=12, lat=3) [m] ...`。
+- **改法**：`graphs.build` 里，只有当 `OceanContextBuilder.policy_for(workspace_id, provider_id).decision_for("metadata")` 是 `allow` 时才调用 `_saved_data_prompt`。它和 `build` 后面构建上下文用的是同一份策略。不允许时连探测也不要跑。
+- **不做**：不新增审计类别，不改策略本身，不改 `_earlier_work` 给出的目录路径（路径不是元数据）。
+- **测试**：用真实后端夹具。策略为 `deny` 和 `prompt` 时，提示里没有清单块，并且 `describe_saved_data` 没有被调用；设回 `allow` 时清单出现。
+- **影响范围**：benchmark 每次尝试都是新工作区，策略是默认的全部允许，所以 R3 的行为不变。受影响的只有桌面版里改过这项设置的工作区。
+
 ### C. 完整的绘图接口说明（交互模式）
 
 - 提示、`.runtime/result-api.md` 和 skill 用同一份说明，这份说明由 `scientific_view.py` 生成。内容包括：
@@ -228,12 +266,38 @@ kernel 启动代码和结果运行器里对 `ScientificFigure` 的 import 可以
   - `panel(...)`；
   - `ScientificPanel` 每个公开图层方法的准确签名，用 `inspect.signature` 取得；
   - 每种 `plot_kind` 一个可运行的例子；
-  - 草稿规则（A3）。
+  - 草稿规则（A3）。写成直接的用法：试验图用下划线开头的名字保存，最终图用普通名字。不写 “In interactive mode”，Expert 不知道有“模式”这个概念。
 - 系统提示里只留简短规则和文件位置：“完整说明在 <路径>，画第一张图之前读一遍”。“完整”这个说法由下面的测试来保证。
 - 测试：
   - 说明里列出了每个公开图层方法和每种 `plot_kind`。
   - 每个例子都能在临时的 `OCEAN_OUTPUT_DIR` 里运行并保存。
   - skill 里的例子同样能运行。
+
+**审核后补充（v1.4）。C 提交之前做这三处。**
+
+第 3 项的待确认标记保留为提案历史；Owner 本轮已明确批准，见最新 Log。
+
+1. **说明要能被读完。** 生成的说明是 260 行、16,459 个字符。Expert 的 `read_file` 默认一次只读 100 行，OceanX 的读取器每次最多返回 12,000 个字符（`native_text.TEXT_PAGE_CHARS`）。实测：默认参数要读 3 次，第一次停在 `panel.reference`，里面没有 `scatter`、`vector`、各 `plot_kind` 的限制和任何例子；`limit=300` 要读 2 次。提示、skill 和说明开头现在写的都是 “once”。
+   - 三处都改成“读到结尾”，写明行数（从生成的文本算出，不写死），并告诉 Expert 用 `limit=300`、按工具给出的 offset 继续读，直到没有剩余行。
+   - 参考写法：`Before drawing your first figure, read the complete Figure API at the Result API reference path above to its end ({n} lines: call read_file with limit=300 and continue from the offset it reports until no lines remain).`
+   - 不要为了一次读完去删内容，也不要改读取器的 12,000 字符上限。
+2. **`fig.panel` 的关键字参数。** 说明里现在印的是 `panel(figure: ScientificFigure, *, panel_id: str, x, y, ...)`，这是 `ScientificPanel.__init__` 的签名。照着写会报 `TypeError`（实测）。改成只列 `fig.panel` 通过 `**kwargs` 接受的参数，也就是去掉 `figure`、`panel_id`、`x`、`y`，并把这一行放进 `fig.panel` 一节，不要放在 `fig.save` 后面。
+3. **提示里留一行调用骨架（等 Owner 确认）。** HEAD 的提示里有 3 个内联例子，每个 Expert 都看得到。C 之后提示里只有文件位置，没读文件的 Expert 连 `fig.panel` 都得猜，比 HEAD 还差。在提示里加一行：`fig = ScientificFigure(plot_kind=..., title=...)`、`panel = fig.panel(x=..., y=...)`、图层方法的名字（从代码里取，11 个）、`fig.save('name.nc')`。大约 350 个字符，原来那一块约 1,500 个字符。只加在交互模式。
+
+**这三处的测试**
+
+- 用 `native_text.text_read` 按 `limit=300` 翻页：2 次读完，拼起来等于原文。说明以后变长到需要第 3 次时，这个测试要失败，提醒改提示里的读法。
+- 提示里有行数和 `to its end`，没有 `once`；skill 和说明开头同样。
+- 说明里不再出现 `panel(figure:`；说明里列出的每个关键字参数都能传给 `fig.panel(x=..., y=..., **参数)`。
+- 提示里的骨架列出了每个公开图层方法；静态模式的提示里没有这一行（B 的隔离测试已经覆盖）。
+
+**顺手改的措辞（同一次提交）**
+
+- 时间轴：写清 `datetime64`、`datetime` 和 ISO 字符串都会自动成为时间轴（代码先把前两种转成 ISO 字符串），`x_scale='time'` 只是显式声明。现在的写法让人以为 `datetime64` 必须加 `x_scale='time'`，而例子里并没有加。
+- `add_feature`：“lines and polygons are split at the antimeridian” 读起来像是代码会自动拆。实际是跨越的线和多边形会被拒绝，要调用者自己拆。
+- `ScientificFigure` 的 `source_handle`、`conclusions`、`spatial_context` 各补半句说明，现在只出现在签名里。
+- 生成器取图层说明时用 `.get`。完整性由测试保证；运行时不应该因为新加的方法漏写说明，就让所有 Expert 启动失败（现在会抛 `KeyError`）。
+- README 里 A4 那句 “explicitly requested in the original user question” 改成和提示一致的 “the user explicitly asked for”。
 
 ### F. 记录与披露（不改行为）
 
@@ -244,9 +308,19 @@ kernel 启动代码和结果运行器里对 `ScientificFigure` 的 import 可以
   - 研究预算是运行设置，会改变 Coordinator 的行为。
   - Finch 没有文献搜索；Claude 取决于它的工具配置；OceanX 按需咨询。
 
+### G. 大文件编辑路径缺少导入（v1.4 新增，Owner 已确认）
+
+- **问题**：`native_backend.py` 的 `OceanSandbox._aedit_via_upload` 在三个出口都构造 `EditResult`，包括成功的那一个，但模块没有导入它。
+- **什么时候触发**：deepagents 在一次 `edit_file` 的 `old_string` 加 `new_string` 超过 50,000 字节时走这条路径（`_EDIT_INLINE_MAX_BYTES`）。Expert 和 Coordinator 都用这个后端。
+- **后果（已复现）**：60,008 字节的编辑**已经写进磁盘**，然后抛 `NameError: name 'EditResult' is not defined`。LangGraph 默认的工具错误处理只接住参数错误，其他异常会继续向上抛，所以这不是一条模型能看到并重试的错误消息。
+- **范围**：HEAD 里就有，r1、r2 用的提交里也有。不是 A 到 F 引入的，现有测试都没走到这条路径。
+- **改法**：在 `from deepagents.backends.protocol import (...)` 里加上 `EditResult`。不改编辑算法，不改 deepagents。
+- **测试**：用真实沙箱做一次超过 50,000 字节的编辑，断言返回 `EditResult`、`occurrences == 1`、文件内容已替换；再测 `old_string` 不存在时返回带 `error` 的结果，而不是抛异常。
+- **为什么建议在 R3 之前修**：触发的概率低，但一旦触发，三小时的运行可能在写大报告时失败。改动只有一行。
+
 ## 7. R3：怎么跑、看什么、出了异常怎么办
 
-R3 只在 A 到 F 全部提交、通过 Claude 审核，并且 Owner 通知之后才跑。
+R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之后才跑。
 它带着 B、E 这些行为变化，所以和 r1、r2 不是严格的 A/B 对比，报告里要写明这一点。
 
 ### 7.1 已有的提交和基准
@@ -281,10 +355,10 @@ R3 只在 A 到 F 全部提交、通过 Claude 审核，并且 Owner 通知之�
    python benchmarking/server/check_setup.py --agent oceanx
    ```
 
-3. 跑只在 Linux 上执行的测试。macOS 会跳过它们，所以必须在这里通过：
+3. 跑只在 Linux 上执行的测试，macOS 会跳过它们，所以必须在这里通过。后三个文件（数据清单、静态交付、大文件编辑）在 macOS 上跑过，但它们用到沙箱，Linux 上还没跑过：
 
    ```bash
-   PYTHONPATH=src python -m pytest tests/test_sandbox tests/test_oceanx/test_persistent_kernels.py tests/test_oceanx/test_sandbox_self_check.py -q -p no:cacheprovider
+   PYTHONPATH=src python -m pytest tests/test_sandbox tests/test_oceanx/test_persistent_kernels.py tests/test_oceanx/test_sandbox_self_check.py tests/test_oceanx/test_saved_data_index.py tests/test_oceanx/test_static_figure_delivery.py tests/test_oceanx/test_native_large_edit.py -q -p no:cacheprovider
    ```
 
 4. 在 `benchmarking/.env` 里只改下面这些，其他设置和 r1、r2 保持一致：
@@ -334,13 +408,14 @@ R3 只在 A 到 F 全部提交、通过 Claude 审核，并且 Owner 通知之�
 | 8 | 状态为 `completed`，有最终报告和 `answer.md` | 是 |
 | 9 | 总时长 | 少于 180 分钟；约 135 分钟之后没有新委派 |
 | 10 | Agent 目录和研究树节点 | 每个节点和角色一个目录，没有两个节点共用 |
-| 11 | 图 | 报告：回执和收集结果里列出了哪些图；有没有补图任务，用户的问题是否明确要了这张图 |
+| 11 | 图 | `arm.json` 里 `figure_delivery` 是 `static`。报告：回执的 `Saved figures` 和收集结果里各列出了哪些图；有没有图只存在 `scratch/` 而没进 `outputs/`；有没有补图任务，用户的问题是否明确要了这张图 |
 | 12 | 文献咨询 | 报告：有没有发生；如果有，它的耗时和调用数、数据任务等了它多久、Search Expert 有没有对任务数据运行代码 |
 | 13 | 重复尝试和子节点 | 报告：第一次分析执行之前用了多少次模型调用，与 r2 对比 |
 | 14 | 第 60 次调用 | 报告：有没有结束语被存为报告，有没有触发纯文本重试 |
 | 15 | 最长的串行链 | 报告：深度和每层的耗时 |
 | 16 | 代码失败 | 报告：“代码”类失败占全部执行的比例；kernel 和 shell 各多少次 |
 | 17 | 总时长和模型调用数 | 报告：与 r1、r2 对比 |
+| 18 | 数据清单 | `backend.log` 里 `Could not describe the saved data` 出现 0 次。报告：多少个 Agent 目录生成了 `.runtime/data-index.json` |
 
 ### 7.4 出了异常先看哪里
 
@@ -355,6 +430,7 @@ R3 只在 A 到 F 全部提交、通过 Claude 审核，并且 Owner 通知之�
 | 同一节点尝试 3 次以上 | 每次回执的 `Result:` 一行。分清是 Coordinator 认为科学上还不完整，还是失败之后的重试。 |
 | 超时、没有最终报告，或预算停止后仍有委派 | 运行 `grep -a -o "Research status: [^\"]*" -r <attempt>/state \| tail` 看预算有没有传到。再看有没有出现 `Not started: most of the research time budget`。 |
 | 两个节点共用目录，或很多委派没绑定 | 研究树事件里 `binding` 为 `inferred` 和 `unbound` 的数量，以及显式 `node_id` 被拒绝的次数。 |
+| 数据清单探测失败 | `backend.log` 里 `Could not describe the saved data` 后面的原因，以及该 Agent 目录的 `.runtime/data-index-probe/`。清单只是提示，Expert 仍会启动，所以只报告次数和原因。 |
 | 代码失败多 | 按类型分组：形状或广播、名字或键、import、其他，每类举两个例子。不要手写 skill、lesson 或工具，这些由 meta-agent 负责。 |
 
 ### 7.5 报告格式
@@ -370,6 +446,426 @@ R3 只在 A 到 F 全部提交、通过 Claude 审核，并且 Owner 通知之�
 ## 8. Log
 
 Codex 在这里追加记录，最新的放在最上面。每条写：日期、做了哪个包或遇到什么情况、证据、改动、测试结果。
+
+### 2026-10-03 — Owner 授权将全部当前改动一起提交
+
+- Owner 明确要求“提交一下所有改动”，本次统一纳入 A4、B、E、D、C、F、G，以及当前 benchmark/Finch 的并行改动，不再按包拆分。
+- 提交前全量测试为 **972 passed, 8 skipped**，`git diff --check` 通过；待加入的新文件均为源码或测试，`benchmarking/.env` 仍被 Git 忽略。
+- 此次授权仅执行本地提交，不推送 origin、不拉取服务器、不启动 R3；各包的独立审核状态沿用进度表和对应 Log。
+
+### 2026-10-03 — Claude 审核 D 的 v1.5 披露检查：通过。A4 到 G 全部可以提交
+
+Owner 让我审核。本轮只改了本文件，没有改代码，没有提交。
+
+**结论**
+
+- **D 的 v1.5 补丁通过，可以提交。** `graphs.build` 只在工作区对当前服务商的元数据策略是 `allow` 时才生成和放入数据清单，用的是和后面构建上下文同一份策略。不允许时不跑探测，已有的缓存也不会被用来绕过。
+- **A4、B、E、D、C、F、G 现在都已实现、都有实现方之外的人看过，可以提交。** 方案里没有待改的代码了。
+
+**独立验证**
+
+- 用我上一轮自己写的复现脚本重跑：`metadata` 为 `deny` 时清单不再出现，`allow` 时照常出现。
+- **变异检查 4 项全部被抓到**，在草稿目录的副本上做：去掉判断（8 个失败）、把 `prompt` 当成允许（4 个）、查错策略类别（8 个）、先探测再隐藏文字（8 个）。
+- **默认策略下模型看到的文字没有任何变化**：交互模式 180 段、静态模式 174 段，和上一轮逐段相同。所以这个补丁不改变 R3 的行为。
+- **全量测试 972 个通过、8 个跳过**，和 Codex 报告的一致，测试前后工作区一致。
+  - 要说明的一点：我第一次跑全量时有 1 个失败，是 `test_run_claude.py::test_timeout_kills_children_retains_outputs`。第 1 节点名过它对时间敏感。当时我同时在副本上跑变异，机器负载高。按规则重跑：它单独跑 3 次都通过；没有其他任务时再跑全量，972 个全部通过。这个测试属于并行的 benchmark 工作，和本轮改动无关。
+- **Ruff**：24 个改动文件，HEAD 上 24 条，现在 15 条，没有任何一条增加。
+
+**对我上一轮说法的一处更正**
+
+- 我上一轮写的是“提交前补”，并说受影响的是“桌面版里改过这项设置的工作区”。这次我去查了桌面界面：设置对话框里**没有**修改这项策略的入口，前端只有类型定义，没有任何代码发送 `disclosure.policy.set`。目前只有通过协议才能把它设成拒绝。
+- 所以这个检查是对的，也该有（后端支持这份策略，自动放进提示的内容应该一致地遵守它），但它在今天的实际紧迫程度比我上一轮说的低。
+
+**记录在案的两处方案外现象（HEAD 里就有，和 R3 无关，现在不建议处理）**
+
+1. `src/oceanx/cli.py:279` 缺少 `RequestStore` 导入，`oceanx export` 一运行就报 `NameError`。上一条 Claude 的 Log 里已写，等 Owner 决定。
+2. **披露策略绑定到一个服务商，换服务商会把整份策略重置成全部允许。** `OceanContextBuilder.policy_for` 发现存储的服务商和当前的不同，就新建一份默认策略。实测：为 `provider_a` 设了 `deny`，一个使用 `provider_b` 的 Expert 构建提示之后，存储的策略变成 `provider_b`、全部允许；之后 `provider_a` 再查也是允许。数据集上下文和数据清单都受同样的影响。这是策略机制本身的行为，不是 D 引入的；而且界面上现在设不了 `deny`，所以今天没有用户会碰到。以后要给界面加这项设置时，应该先把这一点定下来。
+
+**提交时怎么分（Owner 请看）**
+
+工作区里有两批互不相关的改动，建议分成两次提交：先提交并行的 benchmark 重置和 Finch 工作，再提交方案里的 A4 到 G。
+
+- **只属于并行工作的 10 个文件**：`benchmarking/.env.example`，`benchmarking/server/` 下的 `benchmark_config.py`、`benchmark_run.py`、`finch_worker.py`、`run_claude.py`、`run_finch.py`，`benchmarking/tests/` 下的 `test_benchmark_run.py`、`test_run_claude.py`、`test_run_finch.py`、`test_finch_failure_replay.py`（新文件）。
+- **两边都改了的 2 个文件**，要用 `git add -p` 选：
+  - `benchmarking/server/run_oceanx.py` 共 6 块。后 2 块是并行工作的（`main` 拆成 `_main` 并加 `ExitStack`；`configure_run(..., stack=stack)`）。前 4 块是 B 的（`FIGURE_DELIVERY` 常量、`backend_environment` 的说明和 import、设置环境变量的一行、`arm_record` 里的 `figure_delivery`）。
+  - `benchmarking/RUNNING.md` 共 5 块。前 3 块是并行工作的（Finch 的执行超时、reset 的措辞、reset 一节）。第 4 块是 F 的（Run settings and comparison limits），第 5 块是 B 的（Every OceanX attempt delivers ordinary images）。
+- **其余 27 个文件都属于方案**。A4 到 G 在 `graphs.py`、`runtime.py`、`native_backend.py`、`README.md` 里互相重叠，拆不干净，合成一次提交。
+- 并行工作那一批我没有审核过，只确认了带着它全量测试能通过。
+
+**还没做的事**
+
+1. 提交（上面两次），并推送。A2、A3 已提交但还没推送。
+2. 服务器上跑第 7.2 节第 3 步的测试。A1 之后的所有改动都只在 macOS 上跑过。
+3. R3，等 Owner 通知。
+4. `cli.py` 的缺口，等 Owner 决定。
+5. 没有任何一个包用真实模型验证过。效果要等 R3；C 只影响桌面版，R3 测不到它。
+
+### 2026-10-03 — Codex 完成 D 的 v1.5 披露检查（待 Claude 复核与 Owner 提交）
+
+**范围与改动**
+
+- 按第 6 节 D（v1.5）补齐自动数据清单的披露检查，不改披露策略本身。
+- `graphs.build` 使用同一个 `OceanContextBuilder`，按当前工作区和模型 provider 读取策略；只有 `decision_for("metadata") == "allow"` 才调用 `_saved_data_prompt`。
+- `deny` 和 `prompt` 都跳过探测和清单注入，已有缓存也不能绕过检查；保留 earlier-work 的目录路径提示。不新增审计类别，不改缓存服务或探测脚本。
+- README 同步说明这项限制。
+
+**回归验证**
+
+- 新增 8 个参数化场景，覆盖 `deny`/`prompt`、交互/普通图片模式、research/standard 工作流。每个场景同时验证：初次禁止时不探测、不建缓存；允许后正常生成清单和缓存；已有缓存后撤销权限仍不调用探测、不注入清单，缓存内容不变。
+- 修改前新增测试 **8 failed**（`/private/tmp/oceanx-d-v15-red.log`）；修改后相关测试 **38 passed**（`/private/tmp/oceanx-d-v15-target.log`）。
+- 全量测试 **972 passed, 8 skipped**，143.12 秒（`/private/tmp/oceanx-d-v15-full.log`）。运行前后 209 个 Python 文件的哈希和 tracked diff 哈希一致。
+- 新增测试文件 Ruff 通过；`graphs.py` 的 Ruff 结果与 HEAD 相同，仍有既有的 I001、F401、RUF100 各一条，没有新增问题。未顺手修复它们。
+
+**边界与待办**
+
+- 本轮只在 macOS 使用合成测试数据验证，未进行 Linux 验证、真实模型调用或 R3。
+- 未提交、推送、同步服务器或启动 benchmark；停下等待 Claude 复核和 Owner 提交。
+- 上一条 Log 中的 `cli.py` 缺少 `RequestStore` 导入仍是方案外待决定事项，本轮未修改。
+
+### 2026-10-03 — Claude 复核 Codex 的 v1.4 补充（C、D、G），并发现 D 的一处遗漏
+
+Owner 让我复核。本轮只改了本文件，没有改代码，没有提交。
+
+**结论**
+
+| 包 | 结论 |
+|---|---|
+| C | 通过，可以提交。三处补充和措辞都按 v1.4 做了。 |
+| G | 通过，可以提交。 |
+| D | 两条加固通过。但复核时发现一个前两轮都没查到的问题：清单没有遵守工作区的披露策略。提交前补这一处，见第 6 节 D（v1.5）。 |
+| B | Codex 已独立复核通过。至此 A4 到 G 每个包都有实现方之外的人看过。 |
+
+**独立验证**
+
+- 全量测试 **964 个通过、8 个跳过**，和 Codex 报告的一致；测试前后工作区一致。
+- **变异检查 10 项全部被抓到**，在草稿目录的副本上做，没有碰工作区。
+  - G：去掉导入，2 个失败。
+  - D：去掉大小上限、去掉 `errors="replace"`、没数行数时显示成 0 行，各 1 个失败。
+  - C：提示改回 “once”（4 个）、去掉调用骨架（3 个）、`panel` 那一行改回旧写法（2 个）、说明加长到三页（1 个）、skill 里留着占位符（2 个）、缺说明时重新报错（1 个）。
+- **按模型实际的读取路径走了一遍。** 说明现在是 260 行、16,894 个字符。照提示的写法（`limit=300`，按返回的 offset 继续）通过真实沙箱读 `result-api.md`：2 次读完，拼起来和原文完全一致。skill 里的 `API.md` 经 `/skills/` 路径 1 次读完。准备好的 `SKILL.md` 里占位符已换成 260，没有残留。
+- `read_file` 的 `limit` 参数没有上限，`limit=300` 可用。
+- 占位符 `{{FIGURE_API_LINE_COUNT}}` 只存在于打包的源文件里。模型只读准备好的副本；其他读取打包 skill 的代码（学习区域、工具清单）只处理有学习区域的 skill，绘图 skill 没有学习区域，所以不会经过它们。
+- **交互模式**：180 段模型可见文字里有 10 段相对上一轮有变化，都是这一轮要改的（Expert 提示、`API.md`、`SKILL.md`），没有未替换的占位符。
+- **静态模式**：174 段文字相对上一轮没有任何变化，没有接口名泄漏，包括新加的骨架里的 `fig.panel`、`panel.field2d`。
+- Coordinator 提示仍是 4,999 个字符。
+- **Ruff**：24 个改动文件，HEAD 上 24 条，现在 15 条，没有任何一条增加。G 消掉了原有的 3 条未定义名字。
+
+**D 的遗漏：清单绕过了披露策略**
+
+- 发现的经过：复核完改动之后，我想了一遍 R3 之前还有什么没查过，想到清单是后端**自动**放进提示的数据信息，而 OceanX 对这类信息有一份用户可以设置的策略。
+- 复现见第 6 节 D（v1.5）。`metadata` 设为 `deny` 时，后端自己的上下文已经不带 `dataset_context`，清单照发。
+- 这是我定方案时漏掉的，不是 Codex 的实现问题。D 的方案里没有提这份策略。
+- 对 R3 没有影响：benchmark 的工作区用默认策略。对桌面版是一个需要补上的口子，所以放在提交之前。
+- 其他包我按同样的角度看了一遍：B、C、E、F、G 都没有新增自动放进提示的数据信息。
+
+**回答 Codex 的问题**
+
+- `tests/test_oceanx/test_native_large_edit.py` 加进第 7.2 节的 Linux 检查命令：加，已经改了。它走真实的 OS 沙箱，Linux 上是 bubblewrap，和 macOS 不是同一套实现。
+
+**顺带发现的另一处方案外缺口（未修改，等 Owner 决定）**
+
+- G 是 Ruff 的“未定义名字”检查发现的，所以我对 `src` 和 benchmark 脚本整体跑了一遍同样的检查。G 修好之后只剩一处：`src/oceanx/cli.py:279` 用了 `RequestStore`，但没有导入。
+- 实测：`oceanx export` 这个命令行子命令一运行就报 `NameError: name 'RequestStore' is not defined`。没有测试调用它；现有的导出测试走的是协议，不是命令行。
+- HEAD 里就有。它和 R3 无关，benchmark 不用这个命令；和 A 到 G 也无关。
+- 改法是加一行 `from oceanx.backend.store import RequestStore`，再加一个用 `typer` 的 `CliRunner` 调用 `export` 的测试。要不要做、放在哪个提交里，由 Owner 决定。
+
+**还没做的事**
+
+1. D 的披露策略一处（Codex）。
+2. `cli.py` 的缺口，等 Owner 决定。
+3. 提交。A4、B、E、D、C、F、G 都没提交，并且在 `graphs.py`、`runtime.py`、`native_backend.py`、`README.md` 等文件里互相重叠，只能合成一次提交，或者用 `git add -p` 拆。并行的 benchmark 重置和 Finch 改动也没提交，`run_oceanx.py` 和 `RUNNING.md` 里两边的改动混在一起。A2、A3 已提交但没推送。
+4. Linux 上的测试，命令在第 7.2 节第 3 步。A1 之后的所有改动都只在 macOS 上跑过。
+5. R3，等 Owner 通知。
+6. 没有任何一个包用真实模型验证过。C 只影响桌面版，R3 测不到它。
+
+### 2026-10-03 — Codex 完成 v1.4 的 C/D 补充与 G，独立复核 B（待审核与 Owner 提交）
+
+Owner 要求继续按本文件修改，并明确答复“两项都批准”：交互提示的一行调用骨架、G 包。先完成方案要求一起做的 C/D 补充并跑全量测试，然后做 G 再跑全量；期间只读复核 B。没有提交、推送、服务器操作、真实模型调用或 R3。
+
+**C：三处补充与措辞**
+
+- 提示、说明开头和准备好的 skill 副本均要求读到结尾，用 `limit=300`、按工具给出的 offset 续读。行数从最终生成文本计算，当前 **260 行、16,894 字符**；没有删内容或改变读取器的 12,000 字符上限。
+- skill 源文件使用行数占位符，准备副本时替换；替换后的文本参与内容哈希，学习区域和旧副本不改。
+- 在 `fig.panel` 一节列出真正转发的关键字参数，排除 `figure`、`panel_id`、`x`、`y`。测试把每个列出的关键字实际传给 `fig.panel`。
+- 仅交互提示增加 **303 字符**的一行骨架，包含构造、panel、全部 11 个图层方法和 save；名称从代码取得。静态模式不包含这行。
+- 明确 datetime64/datetime/ISO 自动成为时间轴、跨反经线几何由调用者拆分，并解释 source_handle/conclusions/spatial_context；说明查找改为 `.get`，完整性仍由测试强制检查。README 不再把补图限于最初问题。
+- 修改前 **8 failed, 15 passed**。新增真实 `native_text.text_read` 翻页测试：**恰好两页、拼接等于全文**，超过两页时失败提醒。测试还覆盖提示与 skill 的动态行数、实际参数、骨架完整性和缺少图层说明不阻止生成。
+
+**D：CSV 探测加固**
+
+- 超过 `256 * 1024 * 1024` 字节不扫描行数；列名保留、`rows` 省略，提示写 `rows not counted`，不伪装成 0 行。
+- 行数读取加 `errors="replace"`；列名探测也使用替换解码，避免 pandas 预读到非 UTF-8 数据时先失败。其余格式和缓存机制不改。
+- 修改前 **2 failed**。大文件测试缩小阈值并禁止 `_data_rows`；非 UTF-8 测试还含带引号的多行字段，断言列名和 2 条记录均正确。
+- C/D 完成后全量 **960 passed, 8 skipped，131.40 秒**，前后 208 个 Python 文件哈希一致。日志 `/private/tmp/oceanx-cd-v14-full.log`。
+
+**G：一行导入修复**
+
+- 先通过真实 OS 沙箱调用大文件 `aedit`，覆盖 Coordinator 的 `OceanSandbox` 和 Expert 的 `ResearchSandbox`；old/new 合计 **60,008 字节**，确实走大编辑路径。
+- 修复前成功编辑两例在文件已改后抛 `NameError`：**2 failed, 2 passed**；另两例确认找不到 old_string 时返回 error 且文件不变。
+- 源码只在 `deepagents.backends.protocol` 导入列表加 `EditResult`，不改算法、阈值、异常策略或 deepagents。修复后四例通过。
+
+**B：独立复核通过（不新增 B 行为）**
+
+- 逐处核对开关及 benchmark 环境/arm 记录、图片发现/哈希/路径映射、按 Agent 归属的回执和 output_refs、缓存保护、收集器移植链接、角色提示/工具/skill 隔离及交互默认行为。实现符合第 6 节 B；没有修改并行 reset/Finch 工作。
+- 重跑 B、G、收集及 arm 测试：**42 passed**。B 的真实后端夹具覆盖 7 种角色/工作流，先构建交互再构建静态，检查旧 API 文件移除和模型可见文字隔离。
+- 独立变异只在隔离进程里 patch，未写源码：图片发现返回空时，登记和带图回执测试 **2 failed, 1 passed**；关闭静态判断时，模型可见隔离测试 **1 failed**。关键回归确实会检测断链和泄漏。
+- 这是实现审核，不证明真实模型一定存对位置、引用正确或更快，也不等于审核了无关 benchmark/Finch 改动。
+
+**最终检查与剩余工作**
+
+- 全量 **964 passed, 8 skipped, 763 warnings，128.57 秒**；日志 `/private/tmp/oceanx-v14-final-full.log`。全量前后 **209 个 Python 文件内容哈希和 tracked diff 哈希均一致**；之后只更新本文件。
+- 新增/补充的生成器、probe 和测试 Ruff 通过；G 消除了原有三处 F821，`native_backend.py` 原有 import 排序提示保留。`git diff --check` 通过；Coordinator 提示仍 **4,999 字符**。
+- 只在本机 macOS、合成数据/假模型夹具验证，无私有数据。Linux 与实际效果仍等服务器验证；G 的真实沙箱回归文件为 `tests/test_oceanx/test_native_large_edit.py`，请 Claude 确认是否加进第 7.2 节的 Linux 检查命令。
+- 等 Claude 复核 C/D 本轮补充和 G、Owner 决定混合工作区提交边界；不自动进入 R3。评分、60 次上限、学习区域、沙箱和网络权限均未改变。
+
+### 2026-10-03 — Claude 审核 Codex 的 D 补丁、C、F，并处理方案外缺口
+
+Owner 让我查还有什么没做，并审核需要我看的部分。本轮只改了本文件，没有改代码，没有提交。
+
+**结论**
+
+| 包 | 结论 |
+|---|---|
+| E | 通过。我写的，Codex 独立复核过。 |
+| D | 通过。Codex 的两处补丁正确，测试有效。两条加固写进了第 6 节 D，不挡提交。 |
+| C | 实现符合方案，测试有效。但按 Expert 实际的读取路径量过以后，发现说明读不完；另有一行签名会误导。先补三处再提交，见第 6 节 C（v1.4）。 |
+| F | 通过。文字里对代码行为的陈述我逐条核对过，属实。 |
+| G（新） | 方案外缺口，已复现，建议 R3 之前修。等 Owner 确认。 |
+| B | 仍然没有独立审核。Codex 本轮只跑了静态隔离回归，它自己也说明这不算复审 B。 |
+
+**独立验证**
+
+- 全量测试 **954 个通过、8 个跳过**，和 Codex 报告的一致；测试前后工作区一致。
+- **变异检查 9 项全部被抓到。** 在草稿目录的副本上做，没有碰工作区。D：行数统计改回数换行（2 个失败）、缓存清理改回只在重新探测时进行（2 个失败）。C：提示不指向说明、`result-api.md` 不是生成的文本、skill 副本没有 `API.md`、例子缺 `units`、新增一个没写说明的图层方法（1 到 12 个失败）。F：说明改回归因、`EVALUATION.md` 少一条披露（各 1 个失败）。
+- **桌面版的提示相对 HEAD 改了什么。** 这是 Codex 说它没做的那项。7 种角色和模式共 177 段模型可见文字，9 段有变化，都是各包要改的：Coordinator 的两句咨询规则（E）和补图规则（A4、B）；Expert 规则里的 `units`、`long_name`、`title` 一句（D）；Figure API 整块换成指向说明的短规则（C）；Search Expert 的范围（E）；绘图 skill 多了指向说明的一段、三个自包含的例子和 `API.md`（C）。工具描述和讨论伙伴的提示没有变化。
+- **静态模式**：174 段文字里没有任何接口名，包括 `API.md` 和 `scientific_view`。
+- **依赖**：后端 import `oceanx.research.graphs` 时没有加载 matplotlib、numpy 或 xarray，耗时不变（1.49 秒，HEAD 是 1.46 秒）。打包脚本用 `--collect-submodules oceanx`，新模块不需要登记。
+- **Ruff**：23 个改动文件，HEAD 上 24 条，现在 18 条，没有任何一条增加。Codex 的说法属实。
+- B 和 A4 的测试没有被放宽。
+
+**D 的两处补丁**
+
+- 行数改用 `csv.reader`：正确，引号里的换行不再被算成记录。代价是速度，实测 200 MB 的 CSV 用时 1.56 秒（134 MB/s），原来数字节是 0.12 秒。正常大小的表没有影响；单个目录里 CSV 合计到 8 GB 左右才会碰到 60 秒的等待上限。
+- 另一个小退步：现在按 UTF-8 文本读，数据行里出现一个非 UTF-8 字节，整个文件就会被标成读不出来。
+- 文件删除后清理缓存：正确。旧行为只是缓存文件里留着无用条目，不影响返回结果。
+- 两条加固（大文件不数行数、`errors="replace"`）写进了第 6 节 D。
+
+**C：为什么要先补三处**
+
+- **说明读不完。** 说明是 260 行、16,459 个字符。Expert 的 `read_file` 默认一次 100 行，读取器每次最多 12,000 个字符。用读取器的真实函数量过：
+  - 默认参数：3 次。第一次是第 1 到 100 行，停在 `panel.reference`，没有 `scatter` 和 `vector`，没有各 `plot_kind` 的限制，没有任何例子。
+  - `limit=300`：2 次，第一次到第 144 行，停在第一个例子中间。
+  - 提示、skill 和说明开头写的都是 “once”。这是我定方案时没量过的地方，不是 Codex 的实现问题。
+- **`fig.panel` 的关键字参数那一行会误导。** 它印的是 `ScientificPanel.__init__` 的签名，带 `figure` 和必填的 `panel_id`。照着调用，实测得到 `TypeError`。这一行是我写生成器时留下的，Codex 的测试把它原样固定住了。
+- **没读文件的 Expert 比 HEAD 知道得少。** HEAD 的提示里有 3 个内联例子。现在提示里只有文件位置和草稿规则。所以建议留一行调用骨架，这一条改了已确认的细节（“提示里只留简短规则和文件位置”），等 Owner 确认。
+- Codex 改对的两处：整数时间戳只在显式声明时间轴时被拒绝；分类标签可以省略。我原来的写法是错的。
+- 其余是措辞，列在第 6 节 C 的“顺手改的措辞”里。另外实测了两件说明里没写错、但值得知道的事：没列出的 `plot_kind`（例如 `bar_chart`）也能保存；地图坐标不单调时代码会自己排序。
+
+**F**
+
+- “压缩请求单独计为 summary calls”：`metering.py` 里这类请求记为 `kind: "summary"`，属实。
+- “最后一次调用可能多发一次请求”：`88cab8b` 的纯文本重试会再调一次模型，账本多一行，属实。
+- “预算用到 75% 后不再开新委派”：`RESEARCH_BUDGET_STOP = 0.75`，属实。
+- 分类器的实现没有改，只改了说明；那个测试只是改了名字。
+
+**G：方案外缺口的处理**
+
+- Codex 登记的问题属实，而且比登记的更重一点：三个出口里包括成功的那一个。
+- 复现：用真实沙箱编辑一个文件，`old_string` 加 `new_string` 共 60,008 字节。文件已经被改，然后抛 `NameError`。4,008 字节的编辑走另一条路径，正常返回。
+- 我没有跑完整的 Agent 去看最后的任务状态。依据是 LangGraph 默认的工具错误处理只接住参数错误，其他异常会继续抛。
+- 按规则这不在已批准的范围里，所以写成 G 包，等 Owner 确认。
+
+**还没做的事**
+
+1. C 的三处小改和措辞，D 的两条加固（Codex）。
+2. G（等 Owner 确认，然后 Codex）。
+3. B 的独立复核（Codex）。
+4. 提交。A4、B、E、D、C、F 都没提交，而且在 `graphs.py`、`runtime.py`、`README.md` 等文件里互相重叠，只能合成一次提交，或者用 `git add -p` 拆。并行的 benchmark 重置和 Finch 改动也还没提交，`run_oceanx.py` 和 `RUNNING.md` 里两边的改动混在一起。A2、A3 已提交但没推送。
+5. Linux 上的测试。B 到 F 只在 macOS 上跑过。第 7.2 节第 3 步已经加上数据清单和静态交付两个测试文件。
+6. R3 本身，等 Owner 通知。检查表补了第 18 项（数据清单），第 11 项写细了。
+7. 没有任何一个包用真实模型验证过。E、D、B 的效果要等 R3；C 只影响桌面版，R3 测不到它。
+
+### 2026-10-03 — Codex 复核 E、D，完成 C、F（待 Claude 审核与 Owner 提交）
+
+Owner 要求检查并完善 Claude 的 E、D、C、F 工作。本轮依次复核 E、D，补齐 C 接线和测试，最后完成 F；没有提交、推送、服务器操作、真实模型调用或 benchmark 运行。评分标准、数据、学习区域、60 次上限、沙箱和网络权限均未改变，其他并行改动保留。
+
+**E：独立复核通过**
+
+- 检查了两处 Coordinator 规则和 Search Expert 的咨询范围：按需咨询，与数据分析并行；咨询不分析任务数据，需要数值验证时交回 Coordinator。没有改掉已有代码工具。
+- Coordinator 提示实测仍为 **4,999 字符**。本轮没有继续增加 Coordinator 提示。
+- E、D 原有定向测试先独立运行：**25 passed**。
+
+**D：发现并修复两项边界缺口**
+
+- CSV 的旧计数按物理换行计算，带引号的多行字段会被误算成多条记录。先新增失败测试，再改为流式 `csv.reader` 计数，跳过表头和空白行；不把整张表读进内存。
+- 文件删除后，如果没有其他文件需要重新探测，缓存不会更新；全部文件删除也会留下旧条目。先新增部分删除和全部删除两个失败测试，再让删除触发缓存清理，但不触发无必要的重新探测。
+- 三个新案例修改前均失败；修复后 E、D 定向测试 **28 passed**。保留 Claude 的异步清单块位置，内容和限制与方案一致；没有把异步探测塞入同步 `_earlier_work`。
+
+**C：完整说明已接线**
+
+- `figure_reference.py` 的共享说明同时写入交互任务的 `.runtime/result-api.md` 和允许使用绘图 skill 的角色副本 `scientific-figure-design/API.md`；生成内容参与 skill 副本哈希。
+- Expert 提示改为文件位置和“画第一张图之前读一遍”的短规则，移除旧内联 `FIGURE_API_CONTRACT`。静态模式不暴露接口、不生成这份说明。
+- skill 的三个例子改为各自自包含、可运行的程序，未改学习区域。README 补充共享说明的位置。
+- 校正说明中的两处细节：整数时间戳的拒绝针对显式时间轴，默认数值轴仍可用；分类标签省略时允许使用默认标签。未改绘图接口行为。
+- 新测试独立枚举全部 **11 个公开图层方法**和 **7 种 plot_kind**，核对准确签名和说明；运行说明中的七个例子、skill 的三个例子并检查结果与预览；验证实际 Expert 提示、task/skill 同文和接口限制。
+- C 修改前 **5 failed, 14 passed**，完成后 C 与 E/D、B 静态隔离定向测试合计 **60 passed**。这是静态隔离回归，不代表本轮完整复审了 B。
+
+**F：只改说明与披露**
+
+- `code_failures` 的说明改为观察到的类别，不据只读、超时或 kernel 消息直接归因。分类器实现及评分未改。
+- `RUNNING.md`、`EVALUATION.md` 补齐普通 PNG 交付、额外 provider/压缩请求账本、预算影响行为、三种方法的搜索能力差异四项披露。明确这里的 Finch-local 没有文献代理，不将其等同于上游所有模式。
+- 披露与归因测试修改前 **3 failed**；完成后该测试文件 **11 passed**。
+
+**最终验证与限制**
+
+- 全量测试：**954 passed, 8 skipped, 763 warnings，133.65 秒**；日志 `/private/tmp/oceanx-edcf-full-tests-20261003.log`。warnings 主要为现有 NumPy/NetCDF 弃用提示。
+- 全量测试前后核对 **208 个 Python 文件的内容哈希**及 tracked diff 哈希，均相同。测试覆盖的就是最终代码；之后只更新本文件。
+- 本轮新增/补齐的说明生成器、probe、对应测试及 evaluation 测试 Ruff 通过。对已有修改文件与 HEAD 比较，没有新增 Ruff 问题；既有问题见下一条 Log。
+- 只在本机 macOS、合成数据和假模型/后端夹具中验证。未运行真实模型或 Linux 测试，未启动 R3；不能据此声称实际耗时改善。未做交互提示全部段落的逐段快照比较，已检查实际构建提示和静态模式隔离。
+- A4、B、E、D、C、F 在部分源文件中重叠，其他 benchmark/reset/Finch 改动也仍在工作区。提交边界由 Owner 决定，本轮不擅自提交。
+
+### 2026-10-03 — 方案外既有缺口：大型原生文件编辑路径缺少 EditResult 导入（未修改）
+
+- Ruff 在 `src/oceanx/native_backend.py:127,135,138` 报告 `F821 Undefined name EditResult`。`ResearchSandbox._aedit_via_upload` 在上传失败、输出异常和成功分支均构造 `EditResult`，但模块没有导入它；触发这条路径时可能出现 `NameError`。
+- 对 `git show HEAD:src/oceanx/native_backend.py` 运行同样检查，三处问题已存在，因此不是本轮 C 接线引入；全量测试通过也不覆盖该遗漏。
+- 属于方案外情况，按规则只登记，未添加导入或修改这条编辑路径。请 Claude/Owner 决定是否另开最小修复及回归测试，不将本轮测试通过当作 R3 开跑授权。
+
+### 2026-10-03 — Claude 实现 E、D；C 做了一半；F 没做（使用额度用完，在这里停下）
+
+Owner 让我把 E、D、C、F 都做了。额度用完时 E 和 D 已完成，C 做了一半，F 没有开始。**没有提交，没有推送。**
+
+**E（已完成，无独立审核）**
+
+- `runtime.py`：研究树提示里“开头就启动文献咨询”改为“先做现有数据能回答的问题”；研究协调里改为“只有问题取决于 DatasetContext 没讲清的定义、方法或已发表机制时才咨询 Search Expert，与数据问题并行，不排在前面”。
+- Coordinator 提示原来是 4,990 字符，限制是不到 5,000。现在是 **4,999**，只剩 1 个字符。为了放得下，我把规则合并成两句，并删掉了“用用户问题、DatasetContext 和一次咨询来搭树”这句复述性的话（研究树提示和证据规则里已有同样的意思）。以后再给 Coordinator 加字，要先腾地方。
+- `team/profiles.py`：Search Expert 的说明加了三条范围：咨询只读资料并汇报，不分析任务数据；资料冲突或只有数值验证才能判断时，说明后停下，由 Coordinator 派给数据 Expert；只有委派明确要求复现或下载数据时才运行代码。没有去掉它的代码工具。
+- 测试：`test_bounded_delivery_policy.py` 更新两处措辞断言并新增 1 个测试。修改前 2 个失败。
+
+**D（已完成，无独立审核）**
+
+- `analysis_probe.py`：新增 `describe_saved_file`。NetCDF 取变量、维度、units、long_name 和 title/description；CSV 取列名和行数（按行计数）；`.npz` 只读 `.npy` 文件头，对象数组标 `needs_allow_pickle`。读不出来的文件记为 unavailable，不影响其他文件。
+- `expert_execution.py`：新方法 `describe_saved_data`。在沙箱里只读运行同一个探测脚本；outputs 在前、scratch 按最新在后，只描述前 12 个，其余只计数。缓存在 `<agent>/.runtime/data-index.json`，以（路径、大小、修改时间）为键，只重探改动的文件，消失的文件会被清掉。整体探测失败时抛 `ExpertCodeExecutionError` 且不写缓存。
+- `graphs.py`：`_earlier_work` 拆成 `_earlier_keys` 和 `_earlier_work`（`_earlier_work` 的输出不变）。新增 `_saved_data_prompt`、`_saved_data_block`、`_saved_file_line`。限制：每个目录 12 个文件、每个文件 200 字符、总共 4,000 字符，并写明省略了多少个文件或目录。探测失败或超过 60 秒只记警告，Expert 照常启动。
+- `runtime.py`：两个版本的 Expert 工作流规则（交互和静态）都加了一句：每个变量写 `units` 和 `long_name`，文件写一行 `title`。
+- README 加了一段。
+- **和方案的差别：** 清单放在 “Earlier steps…” 和 “earlier attempt” 两句之后的单独一块里，按目录分组；没有塞进 `_earlier_work`、`_earlier_attempt` 返回的行里。原因是这两个函数是同步的、现有测试直接调用它们，而探测要在沙箱里异步运行。内容和各项限制与方案一致。
+- 测试：新文件 `tests/test_oceanx/test_saved_data_index.py` 共 13 个：探测三种格式；`.npz` 不读数组；脚本入口；服务的顺序、`limit`、缓存、只重探改动的文件、失败不缓存；行格式；各项上限；重复尝试看到自己的目录；探测失败和超时不影响 `build`；祖先节点按最近优先。变异检查：去掉提示接入后 2 个失败，缓存不读取时 2 个失败，随后已还原。
+
+**C（做了一半，还没接线）**
+
+- 已有：新模块 `src/oceanx/figure_reference.py`，`figure_api_reference()` 生成完整说明（约 16 KB）：规则、`ScientificFigure`/`panel`/`add_feature`/`save` 的签名、11 个图层方法的准确签名（用 `inspect.signature`）和说明、7 种 `plot_kind` 及其限制、调色板、每种 `plot_kind` 一个完整例子。7 个例子都手工跑通并保存了。草稿规则已写成直接用法（`DRAFT_RULE`）。目前没有任何地方 import 这个模块，不影响现有行为。
+- 还没做，按顺序：
+  1. `graphs.build`：交互模式里整块 “Figure API (complete; …)”（用 `FIGURE_API_CONTRACT`）换成短规则：画第一张图之前读一遍 Result API reference，它是完整的，不要读源码或试错；再接 `DRAFT_RULE`。静态模式不动。
+  2. `native_backend.task_backend`：交互模式下 `result-api.md` 写 `figure_api_reference()`。
+  3. 删掉 `expert_execution.FIGURE_API_CONTRACT` 和 `graphs.py` 对它的 import（没有测试引用它）。
+  4. skill `scientific-figure-design/SKILL.md`：API 描述改为指向那份说明；它自己的三个例子要改成自包含、能运行的（现在用了未定义的数组）。
+  5. 新测试文件 `tests/test_oceanx/test_figure_api_reference.py`：说明里有每个公开图层方法（introspection 取）和它的精确签名；有代码库声明的每种 `plot_kind`（`InteractiveViewContent.view_kind` 的取值）；每个图层方法都有说明（防止新增方法漏写）；每个例子在临时 `OCEAN_OUTPUT_DIR` 里运行并生成 `.nc` 和预览；skill 里的例子能运行；几条“限制确实被代码执行”的检查（`spatial_map` 没有 `valid_mask`、`spatial_map` 多一层、`heatmap` 做地图缺 units、`scatter` 有 `color_values` 没 `colorbar_label`、整数时间戳）；提示指向说明、`result-api.md` 等于生成的文本、不含 “In interactive mode”。
+  6. README 一句，跑全量测试。注意 B 的 `test_a_static_run_shows_no_model_a_plotting_interface` 在交互模式下要求提示里有 “Figure API”，新的短规则要保留这个词。
+
+**F（没有开始）**
+
+- `evaluation/evaluate.py::code_failures` 的说明改成只描述类别，不归因。
+- `RUNNING.md` 和 `EVALUATION.md` 写第 6 节 F 的四点。E 已实现，第 4 点可以写“OceanX 按需咨询”。
+
+**验证**
+
+- 全量测试 **929 个通过、8 个跳过**（B 之后是 914：D 新增 13 个，D 和 E 各新增 1 个测试）。测试前后工作区一致。
+- 没有做：改动文件的 Ruff 比较；E、D 之后交互模式提示的逐段比较（这两个包有意改变了研究协调的两句、Expert 规则里的一句，以及重复尝试和子节点的清单块）；没有跑真实模型；只在 macOS 上测。
+
+**提交范围（Owner 请看）**
+
+- E、D：`src/oceanx/runtime.py`、`team/profiles.py`、`analysis_probe.py`、`expert_execution.py`、`research/graphs.py`、`README.md`、`tests/test_oceanx/test_bounded_delivery_policy.py`，新文件 `tests/test_oceanx/test_saved_data_index.py`。
+- C 的一半：新文件 `src/oceanx/figure_reference.py`（没有被任何地方使用）。
+- A4 和 B 仍未提交，和这些改动混在 `graphs.py`、`runtime.py`、`README.md`、`test_bounded_delivery_policy.py` 里。建议等 C 接线、F 做完以后一起提交，或者至少把 E、D 和 A4+B 放在同一次提交里。
+
+### 2026-10-03 — Claude 实现 B（Codex 额度用完；待 Owner 提交）
+
+Owner 说 Codex 的 5 小时额度用完了，让我直接实现 B。所以 B 是我写的，没有第二个人审核。
+
+**改了什么（都按第 6 节 B，没有加范围）**
+
+- 新文件 `src/oceanx/figure_delivery.py`：开关 `OCEANX_FIGURE_DELIVERY` 只在 `figure_delivery()` 里读取。空值是 `interactive`，写错（例如 `statik`）直接报错，不悄悄退回到会描述绘图接口的模式。另有 `static_figure_files()`：列出每个 Agent 的 `outputs/` 下任意层级的图片（`.png .jpg .jpeg .svg .pdf`），跳过 `_` 或 `.` 开头的文件名，不跟随任何符号链接。
+- `task_results.py`：`static` 模式下 `list` 和 `get` 把这些图片列为 `kind="file"` 的结果，内容字段按方案：`agent_key`、`result_key`、`output_path`、`render_status: "static"`、`preview_file`、`workspace_files`，另有带大小和 sha256 的文件记录。结果按（路径、修改时间、大小）缓存。
+- `cache_cleanup.py`：`static` 模式下这些图片和已发布视图一样受保护。
+- `research/services.py` 和 `graphs.py`：`static` 模式下回执写 `Saved figures (cite these paths):`，每行是绝对路径和标题，不再出现 `Published results`。节点的 `output_refs` 记图片的结果键。
+- 不暴露绘图接口，逐处换成静态版：Expert 工作流规则（`STATIC_EXPERT_WORKSTREAM_POLICY`，里面给了 matplotlib 存 PNG 的写法）、`graphs.build`（去掉 `Result API reference`、`ScientificFigure.save`、整块 Figure API、调色板、`[agent/result1]` 绑定段落、`.preview.png` 说明）、不写 `.runtime/result-api.md`（已有的旧文件会删掉）、`ocean_expert_run_code` 的描述、Coordinator 的引用规则和两段后缀、标准模式 Expert 提示里的 `.preview.png` 一句、skill 库里去掉 `scientific-figure-design`。
+- 补图规则按 v1.3 重写，交互版和静态版措辞一致：条件句写成 “omitted a visual that the user explicitly asked for”，后面接 “A visual that you added yourself in an Expert assignment does not qualify.”。
+- `run_oceanx.py`：`backend_environment` 把开关设为 `static`（覆盖 shell 里的任何设置），`arm_record` 记录 `figure_delivery`。`check_arm` 没有改，只记录。
+- README 和 `RUNNING.md` 各加一段说明。
+
+**证据**
+
+- 新测试 `tests/test_oceanx/test_static_figure_delivery.py` 共 13 个。其中最重要的一个起一个真实的后端，对 7 种角色和模式（Coordinator 研究/标准、两个数据 Expert、文献 Expert、讨论伙伴）分别取出模型实际看到的全部文字：系统提示、所有工具的描述、整个 skill 库。`static` 下断言不含 `ScientificFigure`、`Figure API`、`result-api`、`Published results`、`bracket`、`Workbench`、`.preview.png`，`result-api.md` 不存在，skill 库里没有绘图 skill；`interactive` 下断言这些仍在，保证检查有效。
+- 其余测试覆盖：开关取值；图片列表（深度、草稿、符号链接、scratch 不算）；结果记录的各个字段和重写后哈希变化；回执格式和 Expert 图的归属；缓存清理；skill 库；工具描述；两种补图规则一致。
+- `test_native_subagents.py` 里 A4 的测试按计划更新了断言，并改名为 `test_visual_follow_up_is_only_for_a_visual_the_user_asked_for`（旧名字里的 “original user request” 已经不准确）。
+- 基准测试：`test_run_oceanx_arms.py` 一个（环境和 arm 记录），`test_collect_oceanx.py` 一个：用真实的结果存储登记一张图，写进 `outputs.json`，收集后出现在 “Collected figures” 下，答案里引用的绝对路径被改写成可移植的链接，草稿图没有被收集。
+- **变异检查：** 临时让开关失效后，11 个静态相关测试失败，交互相关的 84 个照常通过，随后已还原。
+- **桌面版没有被悄悄改：** 用同一个脚本在 HEAD 和工作区各抓一遍 7 种角色/模式在 `interactive` 下的全部模型可见文字（177 段，含所有工具描述和 skill 文件）。唯一的差别是 Coordinator 两个系统提示里补图规则那一段，也就是 v1.3 要求的改动。
+- 全量测试：**914 个通过、8 个跳过**（上一次 899，新增 15 个），测试前后工作区哈希一致。`git diff --check` 通过。改动文件的 Ruff 提示 20 条降到 14 条，没有新增。
+- 这一轮抓到并修掉了一处真的漏洞：标准模式的静态 Expert 提示里还剩 `.preview.png`，因为原句在 “of a” 后换行，字符串替换没匹配上。现在改成把那一句参数化。
+
+**和方案的差别（都是细节，请知悉）**
+
+- 结果键保留扩展名（`<agent>/<路径>.png`），因为 `fig.png` 和 `fig.pdf` 要算两个结果；已发布视图的键是去掉扩展名的。
+- `static` 下 Expert 提示里整段 “Your Agent key … `[key/result1]`” 去掉了，只留工作流规则里的一句“在 `report.md` 里紧跟结论写图片文件名”。
+- 没有升 `OCEAN_RUNTIME_PROFILE_VERSION`：`interactive` 的权限和完成约定没有变，`static` 只用于全新的运行。
+- `OceanExpertRunCodeTool` 的静态描述是在 `__init__` 里设置的实例属性，类上的交互描述不变。
+
+**没有验证的**
+
+- 没有跑真实模型。Expert 会不会把最终图存到 `outputs/` 而不是 `scratch/`，会不会引用回执里的路径，要看 R3 检查表第 11 项。
+- 只在 macOS 上跑了测试。B 里没有依赖沙箱的逻辑，服务器上建议照常跑一遍全量测试。
+- kernel 启动代码和结果运行器里仍然预加载了 `ScientificFigure`（按方案保留）。Expert 在沙箱里 `import oceanx` 理论上能看到，提示和工具里没有提它。
+
+**提交范围（Owner 请看）**
+
+A4 和并行工作都还没提交，所以 B 和它们改了同一批文件。
+
+- 只属于 B：新文件 `src/oceanx/figure_delivery.py`、`tests/test_oceanx/test_static_figure_delivery.py`；改动文件 `src/oceanx/task_results.py`、`cache_cleanup.py`、`research/services.py`、`runtime.py`、`tools.py`、`native_skills.py`、`native_backend.py`、`benchmarking/tests/test_run_oceanx_arms.py`、`benchmarking/tests/test_collect_oceanx.py`。
+- 和 A4 混在一起：`src/oceanx/research/graphs.py`、`tests/test_oceanx/test_native_subagents.py`、`README.md`、本方案。A4 的那两句话已经被 B 按 v1.3 重写，在同一处，没法干净分开。**建议 A4 和 B 合成一个提交**（提交名 `A4+B`）；如果一定要分开，需要用 `git add -p`，A4 单独的内容是我上一条审核里看过的那两句话和对应测试。
+- 和并行工作（benchmark 重置、Finch）混在一起的两个文件，B 的改动块如下，用 `git add -p` 只选这几块：
+  - `benchmarking/server/run_oceanx.py`：`LIBRARY` 后面新增的常量 `FIGURE_DELIVERY`；`backend_environment` 里的 import 和 `env[FIGURE_DELIVERY_ENV] = FIGURE_DELIVERY`（含文档字符串）；`arm_record` 里的 `"figure_delivery"`。`main` 拆成 `_main` 和 `configure_run(..., stack=stack)` 是并行工作的，不属于 B。
+  - `benchmarking/RUNNING.md`：“OceanX review delivery” 一节里新增的 “Every OceanX attempt delivers ordinary images …” 一段。其余是并行工作的。
+- 本次没有提交、没有推送，没有动并行工作的文件。
+
+**下一个包是 E。**
+
+### 2026-10-03 — Claude 审核 A4：通过，可以提交
+
+- **实现符合方案。** `COORDINATOR_VISUAL_DELIVERY_POLICY` 加了两句：只有用户问题里明确要的图才有资格补图；Coordinator 自己在委派里加的图不算。标准和研究两种工作流用的是同一段文字。
+- **没有越界。** 没改调用上限、研究策略和 Expert 的方法选择。Coordinator 仍然可以在第一次委派里请 Expert 出图，受限的只是那一次补图。
+- **独立验证。** 去掉 `graphs.py` 的改动后，4 个新测试全部失败。全量测试 899 个通过、8 个跳过，测试前后工作区一致。
+- **测试能说明什么。** 它检查的是提示里有没有这几句话，不能说明模型会照做。实际效果由 R3 检查表第 11 项来看：有没有补图任务，用户的问题是否要了那张图。
+- **`static` 那两个测试参数现在不起作用。** `OCEANX_FIGURE_DELIVERY` 目前只有这个测试在设置，没有代码读取它，开关由 B 实现。这两个参数的用处是约束 B：静态版本必须保留这几句。
+- **两处措辞留给 B 一起改，不影响本次提交。** 已写进第 6 节 B（方案 v1.3）。
+  - “this follow-up” 出现在补图规则之前，读到时还没有所指。
+  - “the original user question” 在桌面版的多轮对话里可能被理解成只有第一条消息。Coordinator 看得到整个对话，用户在后面的消息里才要图也应该算。benchmark 只有一条用户消息，不受影响。
+- **B 开始之前要先处理一件事。** `benchmarking/server/run_oceanx.py` 里有并行工作的未提交改动，它依赖 `benchmark_run.py` 里同样未提交的改动，而 B 也要改这个文件。已写进第 6 节 B 的“开始之前”。
+- **本次提交的文件。** `src/oceanx/research/graphs.py`、`tests/test_oceanx/test_native_subagents.py`、`README.md` 和本方案。另外 11 个改动文件和 1 个未跟踪文件属于并行工作，不在 A4 里。
+- A2（`a3b9a4d`）和 A3（`cef4736`）还没有推送。
+- 下一个包是 B。
+
+### 2026-10-03 — Codex 完成 A4（待审核与 Owner 提交）
+
+- A3 已按 Owner 指令单独本地提交为 `cef4736`，提交名 `A3`，仅包含下面列出的六个文件。
+  本轮没有推送或服务器操作，其余 benchmark/reset/Finch 改动仍原样保留。
+- 先在 `test_native_subagents.py` 写参数化回归测试，截取 `_coordinator_agent` 真正传给
+  `build` 的提示后缀：标准、研究工作流各自在 `interactive`、`static` 环境值下验证。
+  修复前四项均因缺少“原始用户问题”的补图约束失败：**4 failed、53 deselected**。
+- 最小运行时改动仅为 `COORDINATOR_VISUAL_DELIVERY_POLICY` 的两句话：只有原始用户问题
+  明确要求的图才符合那一次补图的条件；Coordinator 在 Expert 委派里自行增加的图不符合。
+  两种工作流引用同一个规则；保留原有最多一次、同角色同节点、使用已保存证据的要求。
+  没有改调用上限、研究策略、首次科学分析或 Expert 选择方法的权限。
+- `README.md` 同步说明。当前静态交付开关尚未由 B 包实现；环境值测试仅确认这条共同
+  约束不会因该配置而缺失，不声称静态图片交付已可用。测试是提示契约回归，不是模型遵从率测量。
+- 针对性测试（native subagents + bounded delivery policy）：**67 passed**（2.49 秒）。
+  第 1 节全量命令：**899 passed、8 skipped**（128.18 秒）。
+  日志：`/private/tmp/oceanx-a4-full-tests-20261003.log`。沿用原生 Python 3.12.0 临时环境，
+  未修改依赖或产品沙箱；测试前后 **203 份 Python 文件的 SHA-256 清单完全一致**。
+- `git diff --check` 通过。修改源码与测试文件的 Ruff 提示与 `HEAD` 逐项一致
+  （import 顺序、未使用 import 和旧的 noqa），无新增，未扩大范围去修复。
+- **A4 保持未提交，停下等待审核与 Owner 提交。** 不开始 B，不启动 benchmark、
+  科学分析或付费模型调用，不操作服务器。
 
 ### 2026-10-03 — Owner 授权提交 A3，然后开始 A4
 

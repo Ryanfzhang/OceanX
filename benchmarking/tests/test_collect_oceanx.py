@@ -228,3 +228,38 @@ def test_result_named_result_json_does_not_overwrite_collection_metadata(tmp_pat
     assert summary['collection_status'] == 'complete'
     assert (target / 'delivery/file_1/v0001/result.json').read_bytes() == b'{"scientific": 1}'
     assert json.loads((target / 'records/file_1/v0001.json').read_text()) == record
+
+
+def test_static_figures_registered_by_the_result_store_are_collected(tmp_path, monkeypatch):
+    """The Expert's saved image is listed by the store, collected, and cited by its path."""
+    from types import SimpleNamespace
+
+    from oceanx.figure_delivery import FIGURE_DELIVERY_ENV
+    from oceanx.task_results import TaskResultStore
+
+    attempt, root = current_attempt(tmp_path)
+    image = root / 'agents/ocean-process-a/outputs/maps/mld_anomaly.png'
+    image.parent.mkdir(parents=True)
+    image.write_bytes(b'\x89PNG\r\n\x1a\nstatic figure')
+    (image.parent.parent / '_probe.png').write_bytes(b'a draft is not delivered')
+    projector = SimpleNamespace(
+        ensure_task_root=lambda _task_id: root,
+        store=SimpleNamespace(get_research_task=lambda _task_id: SimpleNamespace(workspace_id='workspace'),
+                              list_task_code_executions=lambda **_kwargs: ()))
+    monkeypatch.setenv(FIGURE_DELIVERY_ENV, 'static')
+    records = [item.as_payload() for item in TaskResultStore(task_workspaces=projector).list(task_id='task_123456')]
+    assert len(records) == 1
+    write_current_index(attempt, records)
+    cited = image.resolve()
+    (attempt / 'answer.md').write_text(f'The anomaly is shown in ![MLD anomaly]({cited}).\n')
+    target, summary = collected_attempt(attempt)
+    result_id = records[0]['result_ref']['result_id']
+    assert summary['png_count'] == summary['accepted_outputs'] == summary['registered_outputs'] == 1
+    assert summary['collection_status'] == 'complete' and not summary['collection_errors']
+    assert (target / f'delivery/{result_id}/v0001/mld_anomaly.png').read_bytes() == image.read_bytes()
+    review = (target / 'review.md').read_text()
+    link = f'delivery/{result_id}/v0001/mld_anomaly.png'
+    assert f'![MLD anomaly]({link})' in review  # the cited path became a portable link
+    assert str(cited) not in review and '## Collected figures' in review
+    assert f'![Figure]({link})' in review
+    assert not list(target.rglob('_probe.png'))

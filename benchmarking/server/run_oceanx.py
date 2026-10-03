@@ -25,6 +25,8 @@ _original_interaction_answer = batch.interaction_answer
 REPO = Path(__file__).resolve().parents[2]
 # Set by main() for this process: the frozen library snapshot copied into every attempt, if any.
 LIBRARY: Path | None = None
+# How every backend subprocess delivers figures: image files, as the other arms do.
+FIGURE_DELIVERY = "static"
 
 
 def file_sha256(path: Path) -> str | None:
@@ -73,9 +75,12 @@ def benchmark_interaction_answer(case, payload):
 
 def backend_environment(case) -> dict:
     """The case's time limit is also the research budget, so the Coordinator stops starting new
-    questions in time to deliver an answer before the attempt is cut off."""
+    questions in time to deliver an answer before the attempt is cut off. Every arm delivers
+    ordinary image files, and OceanX's plotting interface is described to no model."""
+    from oceanx.figure_delivery import FIGURE_DELIVERY_ENV
     from oceanx.research.graphs import RESEARCH_BUDGET_ENV
     env = dict(os.environ)
+    env[FIGURE_DELIVERY_ENV] = FIGURE_DELIVERY
     if case.timeout_seconds:
         env[RESEARCH_BUDGET_ENV] = str(round(case.timeout_seconds / 60, 1))
     return env
@@ -149,7 +154,8 @@ def arm_record(args) -> dict:
     from oceanx.research.policy import active_policy
     from oceanx.research.review import LIBRARY_FILES
     # The policy every backend subprocess will run: --policy if given, otherwise the default.
-    return {"arm": args.arm, "policy": active_policy().name, "oceanx_version": __version__, **git_identity(),
+    return {"arm": args.arm, "policy": active_policy().name, "figure_delivery": FIGURE_DELIVERY,
+            "oceanx_version": __version__, **git_identity(),
             "libraries": library_versions(),
             "library": None if LIBRARY is None else {
                 "snapshot": str(LIBRARY), "version": snapshot_version(LIBRARY),
@@ -174,6 +180,12 @@ def write_arm(attempt: Path) -> None:
 
 
 def main(argv=None):
+    from contextlib import ExitStack
+    with ExitStack() as stack:
+        return _main(argv, stack)
+
+
+def _main(argv, stack):
     if argv is None and len(sys.argv) == 3 and sys.argv[1] == "--backend":
         from benchmark_models import run_oceanx_gateway
 
@@ -201,7 +213,7 @@ def main(argv=None):
     config.endpoint(config.oceanx_api)
     args.config = config.source
     os.environ["OCEAN_BENCH_CONFIG"] = str(config.source)
-    configure_run(args, config, 'OceanX')
+    configure_run(args, config, 'OceanX', stack=stack)
     from oceanx.research.review import LIBRARY_FILES, LIBRARY_FROZEN_ENV
     global LIBRARY
     LIBRARY = None

@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 from oceanx.backend.store import RequestStore, ResearchTaskRecord
+from oceanx.figure_delivery import static_figure_files, static_figures
 from oceanx.task_results import TaskResultRecord
 from oceanx.task_workspace import TaskWorkspaceProjector
 
@@ -149,6 +150,9 @@ class TaskCacheCleaner:
             if isinstance(files, dict):
                 for name in files.values():
                     add(task_root, name)
+        if static_figures():
+            # In a static-delivery run the delivered figures are the images under outputs.
+            protected.update(path.resolve() for _, path in static_figure_files(task_root))
         return frozenset(protected)
 
     @staticmethod

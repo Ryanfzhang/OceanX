@@ -28,7 +28,9 @@ from langgraph.types import Command
 
 from oceanx.agent_tools import ToolRegistry
 from oceanx.deep_runtime import build_deep_agent_graph
-from oceanx.expert_execution import FIGURE_API_CONTRACT, STANDARD_MODE_CODE_SECONDS
+from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
+from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
+from oceanx.figure_delivery import static_figures
 from oceanx.model_config import load_model_profile
 from oceanx.research.metering import INSIDE_EXPERT
 from oceanx.research.services import (
@@ -87,15 +89,37 @@ plot, figure or other reusable scientific view to the responsible Expert as part
 A visual is delivered only when that Expert's native receipt lists a suitable server-verified key under
 Published results. A filename, ordinary NetCDF file or PNG path is not a desktop result.
 
-If the Expert answered the scientific question but omitted the explicitly requested visual, you may make
-one and only one follow-up task call to the same Expert role, for the same node_id when the question is a
-research-tree node, so it works in the same folder. Ask it only to publish the requested view from
-its saved evidence and include the previous report; do not request new analysis, visual polishing or another
-Expert. Never make a second visual-delivery follow-up and never create a replacement yourself. If that one
-follow-up still returns no suitable Published results key, finish honestly that the interactive visual was
-not delivered. When a suitable key exists, cite it next to the supported conclusion in the final answer.
+If the Expert answered the scientific question but omitted a visual that the user explicitly asked for, you may
+make one and only one follow-up task call to the same Expert role, for the same node_id when the question is a
+research-tree node, so it works in the same folder. A visual that you added yourself in an Expert assignment
+does not qualify. Ask it only to publish the requested view from its saved evidence and include the previous
+report; do not request new analysis, visual polishing or another Expert. Never make a second visual-delivery
+follow-up and never create a replacement yourself. If that one follow-up still returns no suitable Published
+results key, finish honestly that the interactive visual was not delivered. When a suitable key exists, cite it
+next to the supported conclusion in the final answer.
 A .preview.png is only the fallback owned by a registered interactive result, never a standalone result.
 """
+
+# The same duties for a static-delivery run, where a figure is an image file (see figure_delivery.py).
+STATIC_COORDINATOR_VISUAL_DELIVERY_POLICY = """\
+# Requested visual delivery
+Do not execute analysis code or create figures, images or result files yourself. Delegate a requested map,
+plot, figure or other reusable scientific view to the responsible Expert as part of its first assignment.
+A figure is delivered only when that Expert's native receipt lists its image file under Saved figures.
+
+If the Expert answered the scientific question but omitted a visual that the user explicitly asked for, you may
+make one and only one follow-up task call to the same Expert role, for the same node_id when the question is a
+research-tree node, so it works in the same folder. A visual that you added yourself in an Expert assignment
+does not qualify. Ask it only to save the requested figure from its saved evidence and include the previous
+report; do not request new analysis, visual polishing or another Expert. Never make a second visual-delivery
+follow-up and never create a replacement yourself. If that one follow-up still lists no suitable figure under
+Saved figures, finish honestly that the figure was not delivered. When a suitable figure is listed, cite its
+path next to the supported conclusion in the final answer.
+"""
+
+
+def _visual_delivery_policy() -> str:
+    return STATIC_COORDINATOR_VISUAL_DELIVERY_POLICY if static_figures() else COORDINATOR_VISUAL_DELIVERY_POLICY
 
 
 def _tool_name(tool) -> str | None:
@@ -342,16 +366,22 @@ def research_mode(config) -> bool:
     return config["configurable"].get("request_options", {}).get("workflow_mode", "research") == "research"
 
 
-STANDARD_EXPERT_POLICY = f"""\
+def _standard_expert_policy(saved_view: str) -> str:
+    return f"""\
 # Bounded request (research mode is off)
 The requested output (a figure, number, table, route or file) is the finish line. First cut the data to the
 variables, region, depth and period the request needs; never load a whole field or water column when a slice
 answers it. Compute it with one defensible method, publish it, write the report and stop. Do not add
 sensitivity tests, extra figures or statistics, investigations of individual cells or values, or re-checks of
-saved outputs unless a result is clearly wrong or the researcher asked. Do not open the .preview.png of a
+saved outputs unless a result is clearly wrong or the researcher asked. Do not open {saved_view} of a
 figure you just saved. State a remaining limitation in one sentence instead of investigating it. Each code run stops after {STANDARD_MODE_CODE_SECONDS} s; if one times
 out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
 """
+
+
+STANDARD_EXPERT_POLICY = _standard_expert_policy("the .preview.png")
+# A static run has no preview file beside a figure: the saved image is the figure.
+STATIC_STANDARD_EXPERT_POLICY = _standard_expert_policy("the image")
 
 STANDARD_COORDINATOR_POLICY = """\
 # Research mode is off
@@ -420,11 +450,9 @@ def services(config, role: str, run: AgentRun | None = None) -> OceanToolService
     )
 
 
-def _earlier_work(run: AgentRun) -> list[str]:
-    """Folders of the nodes above this one and of the nodes it waits for, nearest first.
-
-    Each node works in its own folder; these are mounted read-only for it.
-    """
+def _earlier_keys(run: AgentRun) -> list[tuple[str, list[str]]]:
+    """The nodes above this one and the nodes it waits for, nearest first, each with the keys of the
+    Agents that worked on it, latest attempt first."""
     if not run.node_id:
         return []
     tree = research_tree(run.task_id)
@@ -432,15 +460,147 @@ def _earlier_work(run: AgentRun) -> list[str]:
     sources = [".".join(parts[:depth]) for depth in range(len(parts) - 1, 0, -1)]
     found = tree.document()["nodes"].get(run.node_id) or {}
     sources += [node for node in found.get("dependencies", ()) if node not in sources]
-    lines = []
+    groups = []
     for node in sources:
-        keys = dict.fromkeys(attempt["agent_key"] for attempt in reversed(tree.attempts(node))
-                             if attempt.get("agent_key") not in (None, "", "coordinator", run.thread_id))
-        folders = [str(host().task_workspace_projector.expert_session_root(run.task_id, key))
-                   for key in keys]
-        if folders:
-            lines.append(f"{node}: {', '.join(folders)}")
-    return lines
+        keys = list(dict.fromkeys(attempt["agent_key"] for attempt in reversed(tree.attempts(node))
+                                  if attempt.get("agent_key") not in (None, "", "coordinator", run.thread_id)))
+        if keys:
+            groups.append((node, keys))
+    return groups
+
+
+def _earlier_work(run: AgentRun) -> list[str]:
+    """Folders of the nodes above this one and of the nodes it waits for, nearest first.
+
+    Each node works in its own folder; these are mounted read-only for it.
+    """
+    root = host().task_workspace_projector.expert_session_root
+    return [f"{node}: {', '.join(str(root(run.task_id, key)) for key in keys)}"
+            for node, keys in _earlier_keys(run)]
+
+
+SAVED_DATA_FILES = 12  # data files described per folder
+SAVED_DATA_FILE_CHARS = 200  # characters in one file's line
+SAVED_DATA_TOTAL_CHARS = 4_000  # characters of saved-data listing in one Expert's prompt
+SAVED_DATA_TIMEOUT_SECONDS = 60
+_NOTE_CHARS = 32  # room kept for "(+N more files not listed)" and "(+N more folders not listed)"
+
+
+def _fit(head: str, items: list[str], noun: str, hidden: int = 0, sep: str = "; ") -> str:
+    """The head and as many items as fit in one file's line, then how many were left out."""
+    kept: list[str] = []
+    for item in items:
+        left = len(items) - len(kept) - 1 + hidden
+        tail = f"{sep}+{left} more {noun}" if left else ""
+        if kept and len(head + sep.join([*kept, item]) + tail) > SAVED_DATA_FILE_CHARS:
+            break
+        kept.append(item)
+    left = len(items) - len(kept) + hidden
+    line = head + sep.join(kept) + (f"{sep}+{left} more {noun}" if left else "")
+    return line if len(line) <= SAVED_DATA_FILE_CHARS else line[: SAVED_DATA_FILE_CHARS - 1] + "…"
+
+
+def _saved_file_line(entry: dict) -> str:
+    """One saved data file as a line of at most SAVED_DATA_FILE_CHARS characters."""
+    name = str(entry.get("path", "?"))
+    if entry.get("inspection") != "ready":
+        error = str(entry.get("error") or "not described")
+        return _fit(f"{name}: could not be read ({error})", [], "")
+    kind = entry.get("kind")
+    if kind == "array":
+        sizes = entry.get("dimensions") or {}
+        variables = []
+        for variable in entry.get("variables") or ():
+            dims = ", ".join(f"{dim}={sizes[dim]}" if dim in sizes else str(dim)
+                             for dim in variable.get("dims") or ())
+            text = f"{variable.get('name')}({dims})"
+            if variable.get("units"):
+                text += f" [{variable['units']}]"
+            if variable.get("long_name"):
+                text += f' "{variable["long_name"]}"'
+            variables.append(text)
+        title = f' ("{entry["title"]}")' if entry.get("title") else ""
+        hidden = max(0, int(entry.get("variable_count") or 0) - len(variables))
+        return _fit(f"{name}{title}: ", variables, "variables", hidden)
+    if kind == "table":
+        columns = [str(column) for column in entry.get("columns") or ()]
+        hidden = max(0, int(entry.get("column_count") or 0) - len(columns))
+        rows = f"{int(entry['rows']):,} rows" if "rows" in entry else "rows not counted"
+        return _fit(f"{name}: {rows}; columns ", columns, "columns", hidden, ", ")
+    if kind == "arrays":
+        arrays = [f"{item.get('name')} {item.get('dtype')} {tuple(item.get('shape') or ())}"
+                  + (" (needs allow_pickle)" if item.get("needs_allow_pickle") else "")
+                  for item in entry.get("arrays") or ()]
+        hidden = max(0, int(entry.get("array_count") or 0) - len(arrays))
+        return _fit(f"{name}: ", arrays, "arrays", hidden)
+    return f"{name}: not described"
+
+
+def _saved_data_block(listing: list[tuple[Path, dict]]) -> str:
+    """What earlier folders saved, as prompt text of at most SAVED_DATA_TOTAL_CHARS characters.
+
+    Each folder lists at most SAVED_DATA_FILES files, one line each, and says how many files it
+    leaves out; folders that no longer fit are counted. Empty when nothing was saved.
+    """
+    title = "Saved data in those folders (outputs first, then the newest scratch files):\n"
+    lines: list[str] = []
+    used = len(title)
+    not_shown = 0
+    for folder, index in listing:
+        files = index.get("files") or []
+        if not files:
+            continue
+        file_lines = ["  " + _saved_file_line(entry) for entry in files[:SAVED_DATA_FILES]]
+        omitted = int(index.get("omitted") or 0) + len(files) - len(file_lines)
+        header = f"{folder}:"
+        cost = len(header) + 1
+        shown = []
+        for line in file_lines:
+            if used + cost + len(line) + 1 + 2 * _NOTE_CHARS > SAVED_DATA_TOTAL_CHARS:
+                break
+            shown.append(line)
+            cost += len(line) + 1
+        if not shown:
+            not_shown += 1
+            continue
+        omitted += len(file_lines) - len(shown)
+        block = [header, *shown, *([f"  (+{omitted} more files not listed)"] if omitted else [])]
+        lines.extend(block)
+        used += sum(len(line) + 1 for line in block)
+    if not lines:
+        return ""
+    if not_shown:
+        lines.append(f"(+{not_shown} more folders not listed)")
+    return title + "\n".join(lines) + "\n"
+
+
+async def _saved_data_prompt(run: AgentRun, *, own: bool) -> str:
+    """What the folders this Expert continues from have saved, so it need not open them to find out.
+
+    The files are described by the sandbox probe and cached (see describe_saved_data). Any failure
+    leaves the Expert with the folder paths alone: this is a hint and never keeps an Expert from starting.
+    """
+    describe = getattr(getattr(host(), "expert_code_execution", None), "describe_saved_data", None)
+    if describe is None:
+        return ""
+    try:
+        keys = list(dict.fromkeys(
+            ([run.thread_id] if own else []) + [key for _, keys in _earlier_keys(run) for key in keys]))
+        results = await asyncio.gather(*(
+            asyncio.wait_for(describe(task_id=run.task_id, agent_thread_id=key, limit=SAVED_DATA_FILES),
+                             SAVED_DATA_TIMEOUT_SECONDS) for key in keys), return_exceptions=True)
+        root = host().task_workspace_projector.expert_session_root
+        listing = []
+        for key, result in zip(keys, results):
+            if isinstance(result, Exception):
+                _LOGGER.warning("Could not describe the saved data of %s: %r", key, result)
+            else:
+                listing.append((root(run.task_id, key), result))
+        return _saved_data_block(listing)
+    except Exception:  # a hint only
+        _LOGGER.warning("Could not describe the saved data for %s", run.node_id or run.thread_id,
+                        exc_info=True)
+        return ""
 
 
 def _earlier_attempt(run: AgentRun) -> str:
@@ -460,8 +620,11 @@ def _earlier_attempt(run: AgentRun) -> str:
 
 async def build(config, role: str, *, run: AgentRun | None = None, middleware=None,
                 subagents=None, suffix=""):
+    from oceanx.context import OceanContextBuilder
+
     svc = services(config, role, run)
     c = config["configurable"]
+    context_builder = OceanContextBuilder(store=host().store, paths=host().paths)
     research = research_mode(config)
     composition = await (
         build_ocean_runtime(services=svc, research_mode=research) if role == "coordinator" else
@@ -485,29 +648,32 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
     from oceanx.native_backend import task_backend
     filesystem, working_directory = task_backend(host(), config, run=run, library=library)
     discussion = role == "scientific_discussion_partner"
+    static = static_figures()  # a static run describes no plotting interface (figure_delivery.py)
     if discussion:
         prompt += "\nUse ls, glob, grep and read_file to consult supplied data and result paths. These tools are read-only."
     elif role != "coordinator":
         prompt += (f"\nWorking directory for native file tools and execute: {working_directory}. "
-                   f"Result API reference: {working_directory.parent / '.runtime' / 'result-api.md'}. "
-                   "This working directory is task scratch: keep reusable calculations here, "
-                   "not in outputs. Scratch may be removed after the task becomes idle. "
+                   + ("" if static else
+                      f"Result API reference: {working_directory.parent / '.runtime' / 'result-api.md'}. ")
+                   + "This working directory is task scratch: keep reusable calculations "
+                   + ("and exploratory plots " if static else "")
+                   + "here, not in outputs. Scratch may be removed after the task becomes idle. "
                    "Save only final deliverables under OCEAN_OUTPUT_DIR; "
-                   "ScientificFigure.save('name.nc') publishes there automatically. "
-                   "Use supplied absolute data/result paths with native file tools or execute. "
+                   + ("a final figure saved there as a PNG is delivered. " if static else
+                      "ScientificFigure.save('name.nc') publishes there automatically. ")
+                   + "Use supplied absolute data/result paths with native file tools or execute. "
                    "Source data and other agents' evidence are read-only; your working directory is writable.")
-        prompt += ("\nFigure API (complete; do not read OceanX source code to learn it): "
-                   + FIGURE_API_CONTRACT["constructor"] + ". Examples:\n"
-                   + "\n".join(FIGURE_API_CONTRACT["examples"])
-                   + "\n" + FIGURE_API_CONTRACT["draft_rule"]
-                   + "\nPalettes: ocean_teal (sequential, default), blue_red (diverging), grouped (categories).")
+        if not static:
+            prompt += ("\n" + figure_reading_rule("the Result API reference path above")
+                       + " " + DRAFT_RULE + "\n" + figure_call_skeleton())
         if not research:
-            prompt += "\n" + STANDARD_EXPERT_POLICY
+            prompt += "\n" + (STATIC_STANDARD_EXPERT_POLICY if static else STANDARD_EXPERT_POLICY)
         else:
             limit = int(svc.expert_code_execution.limits.wall_time_seconds or 300)
             prompt += (f"\nEach execute or ocean_expert_run_code run is stopped after {limit} s; a larger "
                        "timeout does not extend it. Split long work and save intermediate files.")
-    if svc.native_vision and research and role not in {"coordinator", "scientific_discussion_partner"}:
+    if (svc.native_vision and research and not static
+            and role not in {"coordinator", "scientific_discussion_partner"}):
         prompt += (
             "\nA saved figure may have a sibling .preview.png. Inspect it only when the image itself "
             "is scientific evidence needed for your reasoning, such as a spatial pattern; preview "
@@ -526,13 +692,14 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
     if run:
         assigned = host().research.report_path(run)
         prompt += f"\nBackend-assigned report file: {assigned}\n"
-        prompt += (
-            f"Your Agent key is {run.thread_id}. When a saved result supports a claim, write the complete "
-            f"Agent-owned binding yourself, for example [{run.thread_id}/result1] for result1.nc. "
-            "The result name is the .nc path below outputs without its extension; a tree node such as "
-            "B1.1 is not a result name. Put the binding immediately after the supported claim so later "
-            "synthesis can preserve it unchanged.\n"
-        )
+        if not static:  # a static run cites the figure file by name instead (see the Expert policy)
+            prompt += (
+                f"Your Agent key is {run.thread_id}. When a saved result supports a claim, write the complete "
+                f"Agent-owned binding yourself, for example [{run.thread_id}/result1] for result1.nc. "
+                "The result name is the .nc path below outputs without its extension; a tree node such as "
+                "B1.1 is not a result name. Put the binding immediately after the supported claim so later "
+                "synthesis can preserve it unchanged.\n"
+            )
         try:
             earlier = _earlier_work(run)
         except Exception:  # a hint only; never keep an Expert from starting
@@ -544,14 +711,17 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                        + "; ".join(earlier) + ".\n")
         if not discussion:
             prompt += _earlier_attempt(run)
+        if context_builder.policy_for(
+            workspace_id=c["workspace_id"], provider_id=svc.provider_id,
+        ).decision_for("metadata") == "allow":
+            prompt += await _saved_data_prompt(run, own=not discussion)
         prompt += ("Return the report as final text; the backend saves it at this path.\n" if discussion else
                    "Create report.md at this exact path as soon as you have a defensible partial answer, "
                    "and keep it current as evidence changes. Begin with a short ## Summary. Do not defer "
                    "the report until the end, repeat it, or announce its path in chat.\n")
     if role in DATA_EXPERT_ROLES:
         await _describe_task_data(c)
-    from oceanx.context import OceanContextBuilder
-    context = OceanContextBuilder(store=host().store, paths=host().paths).build(
+    context = context_builder.build(
         workspace_id=c["workspace_id"], provider_id=svc.provider_id, task_id=c["task_id"],
         dataset_context_root=task_root / ".runtime" / "analysis-context")
     prompt += ("\nA source with inspection ready lists its checked variables, dimensions, units "
@@ -673,8 +843,13 @@ async def expert(config, role: str):
         handoff = report_summary(text) or text.strip() or _missing_report(
             state["messages"], host().research.report_path(run))
         published_results: list[tuple[str, str]] = []
+        saved_figures: list[tuple[str, str]] = []  # a static run: (absolute path, title)
+        figure_keys: list[str] = []
+        static = static_figures()
         result_store = getattr(host(), "task_results", None)
         if result_store is not None:
+            task_root = (host().task_workspace_projector.ensure_task_root(run.task_id).resolve()
+                         if static else None)
             for record in result_store.list(task_id=run.task_id):
                 result_key = record.content.get("result_key")
                 if (
@@ -684,6 +859,14 @@ async def expert(config, role: str):
                     and result_key.strip()
                 ):
                     published_results.append((result_key.strip(), record.title))
+                elif (
+                    static
+                    and record.agent_run_id == run.thread_id
+                    and record.content.get("render_status") == "static"
+                    and isinstance(record.content.get("output_path"), str)
+                ):
+                    saved_figures.append((str(task_root / record.content["output_path"]), record.title))
+                    figure_keys.append(str(result_key))
         # Structured binding from the delegation (see research/delegation.py);
         # no node ID is parsed from free text here.
         if run.node_id and path is not None and handoff:
@@ -696,7 +879,8 @@ async def expert(config, role: str):
                     delegation_id=run.delegation_id,
                     attempt_id=run.attempt_id,
                     expert_role=role,
-                    output_refs=tuple(dict.fromkeys(key for key, _ in published_results)),
+                    output_refs=tuple(dict.fromkeys(
+                        [key for key, _ in published_results] + figure_keys)),
                     started_at=run.delegation_started_at,
                 )
                 node = next(n for n in attached["projection"]["nodes"] if n["id"] == run.node_id)
@@ -710,6 +894,7 @@ async def expert(config, role: str):
             handoff,
             path,
             tuple(dict.fromkeys(published_results)),
+            saved_figures=tuple(dict.fromkeys(saved_figures)) if static else None,
         )
         if unchanged_report:
             if closing:
@@ -737,6 +922,7 @@ async def _coordinator_agent(config):
              for profile in AGENT_PROFILES]
     report = coordinator_report_path(config)
     report.parent.mkdir(parents=True, exist_ok=True)
+    static = static_figures()  # a static run describes no plotting interface (figure_delivery.py)
     if not research_mode(config):
         return await build(config, "coordinator", subagents=specs, suffix=(
             "\n" + STANDARD_COORDINATOR_POLICY + "\n# Standard workflow\n"
@@ -745,11 +931,14 @@ async def _coordinator_agent(config):
             "standalone questions to the appropriate Experts whenever the request needs scientific data "
             "analysis, statistical inference, literature or requested dataset acquisition, or a reusable "
             "scientific result. Multiple independent questions may run in parallel. Synthesize returned "
-            "Expert results directly in chat. Cite only keys listed under Published results in the native "
-            "task receipt; never invent result1, cite an ordinary output file as a desktop result, or embed "
-            "a local preview path. Create a Coordinator report "
-            "only when the user explicitly asks for one.\n\n"
-            + COORDINATOR_VISUAL_DELIVERY_POLICY
+            "Expert results directly in chat. "
+            + ("Cite a figure only by a path listed under Saved figures in the native task receipt; "
+               "never invent a figure path. " if static else
+               "Cite only keys listed under Published results in the native "
+               "task receipt; never invent result1, cite an ordinary output file as a desktop result, or embed "
+               "a local preview path. ")
+            + "Create a Coordinator report only when the user explicitly asks for one.\n\n"
+            + _visual_delivery_policy()
         ))
     from oceanx.research.delegation import StructuredDelegationMiddleware
     tree = research_tree(config["configurable"]["task_id"])
@@ -768,13 +957,16 @@ async def _coordinator_agent(config):
         "Use those compact fields for tree decisions and read report.md only when synthesis needs more detail. "
         "Before you first choose which follow-up questions to pursue, read "
         "/skills/research-trajectory-planning/SKILL.md once. "
-        "Only the server-verified keys under Published results are desktop bindings; preserve those exactly. "
-        "Never invent result1, cite an ordinary output file as a desktop result, or embed a local preview "
-        "path. If a claim has no published result, refer to the Expert report in prose without bracket syntax. "
-        "When the research question is answered, write the final answer to the assigned report, begin it "
+        + ("Only the paths listed under Saved figures in a receipt are delivered figures; copy them exactly "
+           "and never invent a path. If a claim has no saved figure, refer to the Expert report in prose. "
+           if static else
+           "Only the server-verified keys under Published results are desktop bindings; preserve those exactly. "
+           "Never invent result1, cite an ordinary output file as a desktop result, or embed a local preview "
+           "path. If a claim has no published result, refer to the Expert report in prose without bracket syntax. ")
+        + "When the research question is answered, write the final answer to the assigned report, begin it "
         "with a short ## Summary, and finish. First read the tree with "
         "update_research_tree(changes=[], view='full') and end with the required ## Research Tree section.\n\n"
-        + COORDINATOR_VISUAL_DELIVERY_POLICY))
+        + _visual_delivery_policy()))
 
 
 async def coordinator(config):

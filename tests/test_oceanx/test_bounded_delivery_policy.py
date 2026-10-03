@@ -52,7 +52,6 @@ def test_coordinator_keeps_user_constraints_and_publication_contract():
 def test_coordinator_is_short_and_delegates_questions_not_method_forms():
     prompt = coordinator_prompt()
     assert len(prompt) < 5_000
-    assert "user question, DatasetContext and one bounded standalone" in prompt
     assert "Literature expands and tests the initial problem space" in prompt
     assert "it never determines the tree by itself" in prompt
     assert "Select a scientific subquestion before choosing expertise" in prompt
@@ -106,9 +105,28 @@ def test_experts_keep_evidence_without_workflow_checklists():
 
 def test_data_work_does_not_wait_for_the_literature_consultation():
     prompt = coordinator_prompt()
-    assert ("Launch the bounded literature consultation together with any question that only "
-            "characterizes the supplied data") in prompt
+    assert "Start with questions the supplied data can answer" in prompt
+    assert ("Consult the Search Expert only when the question turns on a definition, method or "
+            "published mechanism DatasetContext does not settle, alongside the data questions, "
+            "not before them") in prompt
+    # The consultation is the Coordinator's choice, not a preset first step.
+    assert "Launch the bounded literature consultation" not in prompt
+    assert "one bounded standalone" not in prompt
     assert "Before delegating, use the data context and bounded literature" not in prompt
+
+
+def test_a_consultation_reads_sources_and_does_not_analyse_the_task_data():
+    from oceanx.team.profiles import get_agent_profile
+
+    search = _flatten(profile_system_prompt(get_agent_profile("literature_reproduction_expert")))
+    assert "A consultation reads sources and reports; it does not analyse the task's data" in search
+    assert ("When sources conflict, or only a numerical check can decide, say so and stop: the "
+            "Coordinator assigns the check to a data Expert") in search
+    assert ("Run code only when the assignment explicitly asks to reproduce a result or download "
+            "data") in search
+    for role in ("ocean_process_expert", "statistical_inference_expert"):
+        assert "A consultation reads sources" not in _flatten(
+            profile_system_prompt(get_agent_profile(role)))
 
 
 def test_delivery_uses_assigned_file_not_a_terminal_tool():
@@ -135,3 +153,11 @@ def test_notes_and_skills_are_not_hidden_coordination_protocols():
     assert "one scientific question" in NATIVE_TASK_DESCRIPTION
     assert "Parent question, Parent answer, Parent report" in NATIVE_TASK_DESCRIPTION
     assert "Do not prescribe methods, metrics, figures" in NATIVE_TASK_DESCRIPTION
+
+
+def test_experts_label_what_they_save_so_a_later_step_need_not_open_it():
+    from oceanx.runtime import STATIC_EXPERT_WORKSTREAM_POLICY
+
+    for policy in (OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY):
+        assert ("Give every variable you save `units` and `long_name` attributes and the file a "
+                "one-line `title` attribute") in _flatten(policy)

@@ -343,6 +343,12 @@ def export_delivery(workspace, directory):
 
 
 def main(argv=None):
+    from contextlib import ExitStack
+    with ExitStack() as stack:
+        return _main(argv, stack)
+
+
+def _main(argv, stack):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--queries", type=Path)
     parser.add_argument("--output", type=Path)
@@ -359,7 +365,7 @@ def main(argv=None):
     config = load_config(args.config)
     config.endpoint('anthropic')
     from benchmark_run import configure_run
-    configure_run(args, config, 'Claude')
+    configure_run(args, config, 'Claude', stack=stack)
     if args.model and args.model != config.model:
         raise ValueError("Model differs from benchmarking/.env; change BENCH_MODEL there for all agents")
     args.model = config.model

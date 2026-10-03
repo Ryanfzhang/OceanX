@@ -15,12 +15,23 @@ chain. Explicitly pointing `--state-dir` at an old database is rejected, not upg
 Agent Server owns native conversation checkpoints. Native Expert tasks have isolated model
 contexts. Each research-tree node has its own backend-assigned workspace, and its Python kernel
 lives for one attempt; another attempt at the node continues in its files. Old local execution
-checkpoints are not imported.
+checkpoints are not imported. An Expert that continues from earlier work, as a repeat attempt or as
+a child of another node, is shown what those folders hold: the sandbox probe describes their data
+files from the headers only (a NetCDF file's variables, dimensions, units and title, a CSV file's
+columns and rows, an `.npz` file's arrays) and caches the description in the folder's
+`.runtime/data-index.json`. The prompt lists at most 12 files per folder (outputs first, then the
+newest scratch files), about 200 characters per file and about 4,000 characters in all, and says how
+many files it leaves out; if the probe fails the Expert still starts with the folder paths.
+This automatic saved-data listing follows the workspace's metadata disclosure policy for the
+current model provider: only `allow` enables it; `deny` and `prompt` skip both probing and listing,
+including reuse of an existing metadata cache. Earlier-work directory paths remain available.
 
 Interactive figures use self-describing NetCDF files saved through
 `oceanx.scientific_view.ScientificFigure`. Ordinary NetCDF files are not user-facing figures.
 Saved interactive figures whose filenames start with `_` or `.` are drafts, including inside
 output subdirectories: their files and previews remain on disk but are not listed as results.
+Before drawing, interactive Experts read one generated API reference with current signatures,
+plot-kind restrictions and runnable examples; the task reference and figure-design skill use the same text.
 Their previews and interactive views are generated deterministically; there is no Visualization
 Expert or model-authored figure specification. Old
 JSON/column payloads and previous scientific figure schemas are not converted. The former
@@ -28,6 +39,15 @@ Research Tree scheduler and async-tool wrappers have been removed. The current t
 question/evidence document edited by the Coordinator; it has no agent lifecycle state. Its decision
 log, outcomes and labels feed a human-gated research-policy improvement loop (see
 [research-policy operations](docs/research-policy-operations.md)).
+
+A headless benchmark run delivers ordinary images instead. `OCEANX_FIGURE_DELIVERY=static` (set by
+`benchmarking/server/run_oceanx.py` for every OceanX arm; the desktop never sets it and is unchanged)
+leaves no model with a description of `ScientificFigure`, the Figure API, `Published results` bindings
+or `.preview.png` files, in any prompt, tool description or skill. The final figure is a PNG, JPEG, SVG
+or PDF that the Expert saves with matplotlib anywhere under its node's `outputs/` folder; exploratory
+plots stay in `scratch/`, and a name starting with `_` or `.` is a draft. `TaskResultStore.list` then
+lists these images as `file` results with `render_status: "static"`, and each Expert receipt lists
+the node's images under `Saved figures (cite these paths):` instead of `Published results`.
 
 After updating, close the running desktop and run `npm start` in `frontend/ocean-desktop`
 from the activated OceanX conda environment. It rebuilds an outdated sidecar and frontend.
@@ -86,6 +106,9 @@ state. OceanX does not mirror them into a second database lifecycle. There is no
 author/reviewer loop. The Coordinator may explicitly ask another Expert or the read-only Discussion
 Partner when a scientific disagreement warrants it. A native task returns its report Summary,
 report path and saved `.nc` outputs to the same Coordinator run.
+The single visual-delivery follow-up is only for a visual the user explicitly asked for,
+not one the Coordinator added to an Expert assignment. This applies in standard and research
+workflows; it does not require Experts to add figures or change their scientific methods.
 Dependencies determine question order, not an instruction to merge the whole project into one task.
 An explicit `task.node_id` must exist after the short node-write wait; otherwise the task returns
 an error without starting the Expert. A node ID inferred only from description text may still

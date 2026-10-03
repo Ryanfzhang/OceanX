@@ -42,17 +42,32 @@ def format_expert_receipt(
     summary: str,
     report_path: Path | None,
     published_results: tuple[tuple[str, str], ...] = (),
+    saved_figures: tuple[tuple[str, str], ...] | None = None,
 ) -> str:
-    """Return the report summary plus server-verified desktop bindings."""
+    """Return the report summary plus the server-verified figures.
+
+    The figures are desktop bindings, or, when ``saved_figures`` is given (a static-delivery
+    run), the image files the Expert saved, each as an absolute path and a title.
+    """
     sections = [summary.strip()]
-    sections.append(
-        "Published results (only these bracket bindings open in the desktop):\n"
-        + (
-            "\n".join(f"- [{key}] — {title}" for key, title in published_results)
-            if published_results
-            else "- None"
+    if saved_figures is None:
+        sections.append(
+            "Published results (only these bracket bindings open in the desktop):\n"
+            + (
+                "\n".join(f"- [{key}] — {title}" for key, title in published_results)
+                if published_results
+                else "- None"
+            )
         )
-    )
+    else:
+        sections.append(
+            "Saved figures (cite these paths):\n"
+            + (
+                "\n".join(f"- {path} — {title}" for path, title in saved_figures)
+                if saved_figures
+                else "- None"
+            )
+        )
     sections.append(f"Report: {report_path if report_path else 'None'}")
     return "\n\n".join(sections)
 

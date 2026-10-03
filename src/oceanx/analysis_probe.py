@@ -2,6 +2,7 @@
 
 This module runs in the same scientific Python environment as Expert code.  It
 opens coordinates and variable metadata without loading full scientific arrays.
+It also describes the data files an Expert saved (see ``describe_saved_file``).
 """
 
 from __future__ import annotations
@@ -13,6 +14,12 @@ from typing import Any
 
 _ARRAY_FORMATS = {".nc", ".nc4", ".cdf", ".netcdf"}
 _TABLE_SUFFIXES = {".csv", ".parquet", ".pq"}
+# The data files an Expert saves that ``describe_saved_file`` can describe.
+SAVED_DATA_SUFFIXES = frozenset(_ARRAY_FORMATS | {".csv", ".npz"})
+_SAVED_CSV_ROW_MAX_BYTES = 256 * 1024 * 1024
+_SAVED_VARIABLES = 24
+_SAVED_COLUMNS = 64
+_SAVED_ARRAYS = 64
 
 
 def _json_value(value: Any) -> Any:
@@ -318,6 +325,99 @@ def inspect_source(source: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _short(value: Any, limit: int = 200) -> str:
+    text = " ".join(str(value).split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _describe_array_file(path: Path) -> dict[str, Any]:
+    import xarray as xr
+
+    dataset = xr.open_dataset(path, chunks=None, decode_times=False)
+    try:
+        variables = []
+        for name, variable in list(dataset.data_vars.items())[:_SAVED_VARIABLES]:
+            item: dict[str, Any] = {"name": str(name), "dims": [str(dim) for dim in variable.dims]}
+            for key in ("units", "long_name"):
+                if str(variable.attrs.get(key, "")).strip():
+                    item[key] = _short(variable.attrs[key], 80)
+            variables.append(item)
+        description: dict[str, Any] = {
+            "kind": "array",
+            "dimensions": {str(name): int(size) for name, size in dataset.sizes.items()},
+            "variables": variables,
+            "variable_count": len(dataset.data_vars),
+        }
+        title = dataset.attrs.get("title") or dataset.attrs.get("description")
+        if title:
+            description["title"] = _short(title)
+        return description
+    finally:
+        dataset.close()
+
+
+def _data_rows(path: Path) -> int:
+    """Count CSV records without retaining their values; quoted newlines are not rows."""
+    import csv
+
+    with path.open(encoding="utf-8-sig", errors="replace", newline="") as stream:
+        records = (row for row in csv.reader(stream) if row)
+        next(records, None)  # header
+        return sum(1 for _ in records)
+
+
+def _describe_csv_file(path: Path) -> dict[str, Any]:
+    import pandas as pd
+
+    columns = [str(name) for name in pd.read_csv(path, nrows=0, encoding_errors="replace").columns]
+    described = {"kind": "table", "columns": columns[:_SAVED_COLUMNS], "column_count": len(columns)}
+    if path.stat().st_size <= _SAVED_CSV_ROW_MAX_BYTES:
+        described["rows"] = _data_rows(path)
+    return described
+
+
+def _describe_npz_file(path: Path) -> dict[str, Any]:
+    """Array names, shapes and types from the .npy headers inside the archive; no array is read."""
+    import zipfile
+
+    from numpy.lib import format as npy
+
+    arrays = []
+    with zipfile.ZipFile(path) as archive:
+        members = [item for item in archive.infolist() if item.filename.endswith(".npy")]
+        for item in members[:_SAVED_ARRAYS]:
+            with archive.open(item) as member:
+                version = npy.read_magic(member)
+                reader = npy.read_array_header_1_0 if version == (1, 0) else npy.read_array_header_2_0
+                shape, _fortran, dtype = reader(member)
+            entry: dict[str, Any] = {"name": item.filename[: -len(".npy")],
+                                     "shape": [int(size) for size in shape], "dtype": str(dtype)}
+            if dtype.hasobject:
+                entry["needs_allow_pickle"] = True
+            arrays.append(entry)
+    return {"kind": "arrays", "arrays": arrays, "array_count": len(members)}
+
+
+def describe_saved_file(path: Path) -> dict[str, Any]:
+    """Saved-file metadata: NetCDF variables, dimensions, units and title, CSV columns and rows,
+    or .npz array headers. Only CSV files up to the size cap are streamed to count records.
+
+    A file that cannot be read is described as unavailable, so one bad file never hides the others.
+    """
+    suffix = path.suffix.lower()
+    try:
+        if suffix in _ARRAY_FORMATS:
+            return {"inspection": "ready", **_describe_array_file(path)}
+        if suffix == ".csv":
+            return {"inspection": "ready", **_describe_csv_file(path)}
+        if suffix == ".npz":
+            return {"inspection": "ready", **_describe_npz_file(path)}
+        return {"inspection": "not_a_dataset"}
+    # Readers raise many third-party exception types; this is the error-normalization boundary.
+    except Exception as exc:  # noqa: BLE001
+        return {"inspection": "unavailable", "error": _short(f"{type(exc).__name__}: {exc}")}
+
+
 def main() -> None:
     input_path = Path(sys.argv[1])
     output_path = Path(sys.argv[2])
@@ -326,6 +426,10 @@ def main() -> None:
         "schema_version": "ocean-analysis-context/v1",
         "sources": [inspect_source(item) for item in payload.get("sources", [])],
     }
+    if "files" in payload:  # saved data files: [{"key": ..., "path": ...}]
+        output["files"] = [
+            {"key": item["key"], **describe_saved_file(Path(item["path"]))} for item in payload["files"]
+        ]
     output_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
 
 

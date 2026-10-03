@@ -53,7 +53,7 @@ if 'TIMEOUT' in prompt:
 if 'FAIL' in prompt:
     (attempt / 'worker_result.json').write_text(json.dumps({'status':'failed','stop_reason':'step_limit'}))
     sys.exit(1)
-(attempt / 'answer.md').write_text('Executed answer: 42')
+(attempt / 'answer.md').write_text('placeholder' if 'PLACEHOLDER' in prompt else 'Executed answer: 42')
 (attempt / 'worker_result.json').write_text(json.dumps({'status':'completed','steps':2}))
 ''')
     monkeypatch.setattr(runner, "WORKER", fake)
@@ -83,6 +83,8 @@ def test_success_resume_and_artifacts(setup):
     [record] = results(output)
     attempt = Path(record["attempt_dir"])
     assert record["status"] == "completed" and record["steps"] == 2
+    assert record["delivery_check"]["status"] == "unverified"
+    assert record["delivery_check"]["scientific_validation"] == "not_evaluated"
     assert record["external_usage"]["input_tokens"] == 100
     assert (root / "data/input.nc").read_bytes() == b"unchanged"
     assert not list(output.rglob("*.nc"))
@@ -115,6 +117,9 @@ def test_no_argument_launch_from_env(setup, archive, monkeypatch):
     assert results(output)[0]['id'] == 'Q07'
     identity = json.loads((output / 'manifest.json').read_text())['identity']
     assert identity['max_steps'] == 17
+    assert identity['execution_timeout'] == 1200
+    attempt = Path(results(output)[0]['attempt_dir'])
+    assert json.loads((attempt / 'worker.json').read_text())['execution_timeout'] == 1200
     assert 'secret-test-key' not in json.dumps(identity)
 
 
@@ -278,7 +283,10 @@ def test_meter_records_raw_request_once_and_redacts_failure(tmp_path, monkeypatc
     monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(Router=Router))
     restore = worker.install_meter(tmp_path, "secret-test-key")
     async def run():
-        await Router().acompletion("test", [{"role": "user", "content": "query"}])
+        await Router().acompletion("test", [{"role": "user", "content": "query"}],
+            tools=[{"type": "function", "function": {"name": "edit_cell"}}],
+            tool_choice="required", temperature=1, parallel_tool_calls=False,
+            api_key="secret-test-key", api_base="https://example.invalid", extra_body={"secret": "hidden"})
         with pytest.raises(ValueError):
             await Router().acompletion("test", [], fail=True)
     try:
@@ -288,6 +296,35 @@ def test_meter_records_raw_request_once_and_redacts_failure(tmp_path, monkeypatc
     calls = runner.read_calls(tmp_path / "model_calls.jsonl")
     assert len(calls) == 2 and calls[0]["usage"]["input_tokens"] == 10
     assert calls[1]["error"] == "<REDACTED>"
+    requests = [r for r in runner.read_calls(tmp_path / "transcript.jsonl")
+                if r["type"] == "model.request"]
+    assert requests[0]["parameters"] == {
+        "tools": [{"type": "function", "function": {"name": "edit_cell"}}],
+        "tool_choice": "required", "temperature": 1, "parallel_tool_calls": False}
+    assert "secret-test-key" not in (tmp_path / "transcript.jsonl").read_text()
+    assert "hidden" not in (tmp_path / "transcript.jsonl").read_text()
+
+
+def test_placeholder_is_invalid_delivery_despite_completed_runtime(setup):
+    _, output, invoke, _ = setup
+    assert runner.main(invoke([("PLACEHOLDER", 5)])) == 0
+    [record] = results(output)
+    assert record["status"] == "completed"  # Episode termination is preserved.
+    assert record["delivery_check"] == {
+        "status": "invalid", "issues": ["placeholder_answer"],
+        "successful_notebook_executions": 0,
+        "evidence_notes": ["no_successful_notebook_execution"],
+        "scientific_validation": "not_evaluated"}
+
+
+def test_execution_does_not_certify_scientific_quality(tmp_path):
+    (tmp_path / "answer.md").write_text("I inspected the input directories.")
+    (tmp_path / "code_runs.jsonl").write_text(
+        json.dumps({"state": "running"}) + "\n" + json.dumps({"state": "succeeded"}) + "\n")
+    check = runner.delivery_check(tmp_path)
+    assert check["status"] == "unverified"
+    assert check["successful_notebook_executions"] == 1
+    assert check["scientific_validation"] == "not_evaluated"
 
 
 def test_external_blind_evidence_and_null_usage(setup, tmp_path):

@@ -178,6 +178,24 @@ def evidence_manifest(workspace):
     return {"schema_version": 1, "files": files}
 
 
+def delivery_check(directory):
+    """Check submission hygiene separately from runtime completion and science.
+
+    A successful notebook replay proves execution, not a useful analysis. Neither
+    a nonempty answer nor these checks can replace the external scientific rubric.
+    """
+    answer = directory / "answer.md"
+    text = answer.read_text(encoding="utf-8").strip() if answer.is_file() else ""
+    executions = sum(record.get("state") == "succeeded"
+                     for record in read_calls(directory / "code_runs.jsonl"))
+    placeholder = text.casefold().strip("` \t\r\n.!:") == "placeholder"
+    return {"status": "not_submitted" if not text else "invalid" if placeholder else "unverified",
+            "issues": ["placeholder_answer"] if placeholder else [],
+            "successful_notebook_executions": executions,
+            "evidence_notes": [] if executions else ["no_successful_notebook_execution"],
+            "scientific_validation": "not_evaluated"}
+
+
 def run_case(case, directory, args, env, cancelled):
     directory.mkdir(parents=True, mode=0o700)
     workspace = directory / "workspace"
@@ -219,6 +237,7 @@ def run_case(case, directory, args, env, cancelled):
     write_json(directory / "artifacts.json", inventory(workspace))
     write_json(directory / "evidence_manifest.json", evidence_manifest(workspace))
     result = {"id": case.id, "agent": "finch-local", "status": status,
+              "delivery_check": delivery_check(directory),
               "started_at": at, "elapsed_seconds": time.monotonic() - started,
               "exit_code": code, "stop_reason": reason or terminal.get("stop_reason"),
               "runner_error": error,
@@ -233,6 +252,12 @@ def run_case(case, directory, args, env, cancelled):
 
 
 def main(argv=None):
+    from contextlib import ExitStack
+    with ExitStack() as stack:
+        return _main(argv, stack)
+
+
+def _main(argv, stack):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--queries", type=Path)
     parser.add_argument("--output", type=Path)
@@ -254,7 +279,7 @@ def main(argv=None):
     config = load_config(args.config)
     config.endpoint(config.oceanx_api)
     from benchmark_run import configure_run
-    configure_run(args, config, 'Finch')
+    configure_run(args, config, 'Finch', stack=stack)
     if sys.platform != "linux":
         raise ValueError("Finch runner requires Linux Bubblewrap; no Docker or unsandboxed fallback")
     if os.getuid() == 0:
@@ -325,7 +350,9 @@ def main(argv=None):
                 result = run_case(case, directory, args, env, lambda: stopped[0])
                 with (output / "results.jsonl").open("a", encoding="utf-8") as stream:
                     stream.write(json.dumps(result, ensure_ascii=False) + "\n")
-                print(f"[{case.id}] {result['status']}", flush=True)
+                delivery = result["delivery_check"]
+                print(f"[{case.id}] runtime={result['status']} delivery={delivery['status']} "
+                      f"notebook_executions={delivery['successful_notebook_executions']}", flush=True)
                 failed |= result["status"] != "completed"
         finally:
             for sig, handler in previous.items():

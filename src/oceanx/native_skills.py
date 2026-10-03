@@ -13,6 +13,7 @@ from pathlib import Path
 from deepagents.backends import CompositeBackend, FilesystemBackend, StateBackend
 from deepagents.middleware.permissions import FilesystemPermission
 
+from oceanx.figure_delivery import INTERACTIVE_FIGURE_SKILLS, static_figures
 from oceanx.skill_regions import packaged_skill
 from oceanx.skills import (
     ocean_reference_root,
@@ -34,6 +35,8 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
     """
     revisions = revisions or {}
     allowed = {s.name for s in ocean_skill_metadata(role=role, capabilities=capabilities)}
+    if static_figures():
+        allowed -= INTERACTIVE_FIGURE_SKILLS  # a static run describes no plotting interface
     files = []
     for source in ocean_skill_dirs(capabilities=capabilities):
         for directory in sorted(source.iterdir()):
@@ -45,6 +48,14 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
     files.extend((p, Path("references") / p.relative_to(references))
                  for p in sorted(references.rglob("*"))
                  if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc")
+    generated = {}
+    figure_lines = None
+    if "scientific-figure-design" in allowed:
+        from oceanx.figure_reference import figure_api_reference
+
+        reference = figure_api_reference()
+        figure_lines = len(reference.splitlines())
+        generated[Path("skills/scientific-figure-design/API.md")] = reference.encode("utf-8")
 
     def content(source: Path, relative: Path) -> bytes:
         if relative.parts[0] != "skills":
@@ -54,11 +65,15 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
         if revised is None and document:
             # Nothing learned: the region markers still must not reach a reader.
             revised = packaged_skill(source.parent, source.read_text(encoding="utf-8"))
+        if document and relative.parts[1] == "scientific-figure-design" and figure_lines is not None:
+            revised = revised.replace("{{FIGURE_API_LINE_COUNT}}", str(figure_lines))
         return source.read_bytes() if revised is None else revised.encode("utf-8")
 
     digest = hashlib.sha256()
     for source, relative in files:
         digest.update(str(relative).encode() + b"\0" + content(source, relative) + b"\0")
+    for relative, data in generated.items():
+        digest.update(str(relative).encode() + b"\0" + data + b"\0")
     target = root / digest.hexdigest()
     if target.is_dir():
         return target
@@ -70,6 +85,10 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
             destination = staging / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(content(source, relative))
+        for relative, data in generated.items():
+            destination = staging / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
         # Concurrent native subagents can prepare the same role snapshot. An
         # existing complete snapshot wins; readers never see a partial copy.
         try:

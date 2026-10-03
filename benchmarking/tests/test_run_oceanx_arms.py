@@ -123,3 +123,15 @@ def test_the_case_time_limit_becomes_the_research_budget(monkeypatch):
     env = run_oceanx.backend_environment(SimpleNamespace(timeout_seconds=10800))
     assert env[RESEARCH_BUDGET_ENV] == "180.0"
     assert RESEARCH_BUDGET_ENV not in run_oceanx.backend_environment(SimpleNamespace(timeout_seconds=None))
+
+
+def test_every_attempt_delivers_ordinary_images_and_the_arm_record_says_so(monkeypatch):
+    from oceanx.figure_delivery import FIGURE_DELIVERY_ENV
+    # A shell setting never reaches an arm: its backend always delivers image files.
+    monkeypatch.setenv(FIGURE_DELIVERY_ENV, "interactive")
+    for timeout in (10800, None):
+        assert run_oceanx.backend_environment(SimpleNamespace(timeout_seconds=timeout))[
+            FIGURE_DELIVERY_ENV] == "static"
+    monkeypatch.setattr(run_oceanx, "git_identity", lambda: {"commit": "c", "dirty": False})
+    monkeypatch.setattr(run_oceanx, "LIBRARY", None)
+    assert run_oceanx.arm_record(SimpleNamespace(arm="B", queries=None))["figure_delivery"] == "static"

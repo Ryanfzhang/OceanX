@@ -1,5 +1,7 @@
 """.env-only launch, immutable shared inputs and concurrent starts; no API calls."""
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
+import fcntl
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from benchmark_config import load_config, ROOT
-from benchmark_run import configure_run, shared_queries
+from benchmark_run import configure_run, shared_queries, reset_experiment
 from oceanx.batch import load_queries
 from test_prepare_queries import archive as archive
 
@@ -26,6 +28,7 @@ def test_template_contains_all_launch_settings_and_an_empty_key():
     assert config.run['BENCH_DATA_ROOT'] == '/import/home3/share/mafzhang'
     assert config.run['BENCH_TASKS'] == 'available'
     assert config.run['BENCH_FINCH_PYTHON'].endswith('/finch-bench/bin/python')
+    assert config.run['BENCH_FINCH_EXECUTION_TIMEOUT'] == '1200'
     assert config.run['BENCH_CLAUDE_ALLOW_TOOLS']
     with pytest.raises(ValueError, match='DEEPSEEK_API_KEY'):
         config.endpoint('openai')
@@ -159,3 +162,62 @@ def test_explicit_cli_still_works_without_shared_roots(configured):
     configure_run(args, load_config(file), 'Claude')
     assert args.queries == Path('explicit.jsonl') and args.output == Path('explicit-output')
     assert args.claude == 'claude' and args.allow_tools == [] and not args.resume
+
+
+@pytest.mark.parametrize('damage', ['config', 'queries', 'missing_manifest'])
+def test_reset_reuses_name_after_errors_without_mixing_old_results(configured, damage):
+    queries, runs = shared_queries(load_config(configured))
+    old_input = queries.read_bytes()
+    result = runs / 'Finch/Q07/attempt-failed/result.json'
+    result.parent.mkdir(parents=True)
+    result.write_text('{"status":"failed"}')
+    if damage == 'config':
+        configured.write_text(configured.read_text().replace('BENCH_TASKS=Q07,Q08', 'BENCH_TASKS=Q07'))
+    elif damage == 'queries':
+        queries.write_text('corrupted')
+    else:
+        queries.with_name('selection.json').unlink()
+    config = load_config(configured)
+    archived = reset_experiment(config)
+    assert archived.parent == runs.parent.parent / '.archive'
+    assert (archived / 'runs/Finch/Q07/attempt-failed/result.json').read_text() == '{"status":"failed"}'
+    assert not runs.parent.exists()
+    new_queries, new_runs = shared_queries(config)
+    assert new_queries == queries and new_runs == runs
+    assert not list(new_runs.glob('*/Q07/attempt-*/result.json'))
+    assert [c.id for c in load_queries(new_queries)] == (['Q07'] if damage == 'config' else ['Q07', 'Q08'])
+    if damage == 'config':
+        assert (archived / 'inputs/queries.jsonl').read_bytes() == old_input
+
+
+def test_reset_does_not_create_an_absent_experiment(configured):
+    assert reset_experiment(load_config(configured)) is None
+    assert not (configured.parent / 'results/pilot-r1').exists()
+
+
+def test_concurrent_launch_leases_block_reset_until_every_runner_exits(configured):
+    config = load_config(configured)
+    with ExitStack() as stack:
+        for _ in range(3):
+            args = SimpleNamespace(queries=None, output=None, resume=None, arm=None, claude=None, allow_tools=None)
+            configure_run(args, config, 'Claude', stack=stack)
+        with pytest.raises(ValueError, match='Experiment is running'):
+            reset_experiment(config)
+    assert reset_experiment(config).is_dir()
+
+
+def test_reset_respects_older_runner_locks(configured):
+    _, runs = shared_queries(load_config(configured))
+    path = runs / 'Finch/.runner.lock'
+    path.parent.mkdir(parents=True)
+    with path.open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(ValueError, match='Experiment is running'):
+            reset_experiment(load_config(configured))
+    oceanx = runs / 'OceanX/.runner.lock'
+    oceanx.parent.mkdir()
+    oceanx.write_text('12345')
+    with pytest.raises(ValueError, match='Runner lock exists'):
+        reset_experiment(load_config(configured))
+    oceanx.unlink()
+    assert reset_experiment(load_config(configured)).is_dir()

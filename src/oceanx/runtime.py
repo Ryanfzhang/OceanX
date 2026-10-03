@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from oceanx.agent_tools import ToolRegistry
+from oceanx.figure_delivery import static_figures
 from oceanx.tools import (
     OceanToolServices,
     create_ocean_discussion_tool_registry,
@@ -53,6 +54,17 @@ Finish normally after saving. The Coordinator decides follow-up and final synthe
 """
 
 
+# How the Coordinator cites a saved figure; the end of its "Evidence and publication" policy.
+# A static-delivery run cites image paths and names no desktop binding (see figure_delivery.py).
+_CITATION_RULE = """saved result only by a server-verified Agent-qualified key listed under Published results in an Expert
+receipt, and preserve that binding exactly. Never invent result1, turn an ordinary output file into a result
+binding, or embed a local preview path.
+"""
+_STATIC_CITATION_RULE = """saved figure only by a path listed under Saved figures in an Expert receipt, copied exactly.
+Never invent a figure path.
+"""
+
+
 OCEAN_AGENT_SKILL_POLICY = """\
 # Optional method guidance
 Read a relevant SKILL.md with read_file only when it materially helps the analysis. Skills guide
@@ -64,9 +76,8 @@ OCEAN_EXPLORATION_POLICY = """\
 # Research tree
 You own Observe, Ideate, Select and every scientific status decision. Tree branches are scientific subquestions,
 not a checklist. Put the user question at ROOT as a non-delegated anchor; its children are
-executable questions. Launch the bounded literature consultation together with any question that
-only characterizes the supplied data; then use both to add materially distinct, non-duplicate
-candidates. Select only worthwhile candidates. The tree view's frontier lists the selected questions
+executable questions. Start with questions the supplied data can answer; add materially distinct,
+non-duplicate candidates as reports return. Select only worthwhile candidates. The tree view's frontier lists the selected questions
 ready to run; run them concurrently. Continue only directions whose reports expose a consequential
 uncertainty, contradiction, or discriminating follow-up.
 
@@ -124,10 +135,7 @@ acquisition. Naming an external dataset
 as necessary comparison evidence authorizes its public subset. Ask again only for restricted, credentialed
 or paid access, or when the selected mode forbids it. Literature acquisition mode governs paper full text,
 not named scientific datasets. State missing-data limits. Synthesize saved reports and evidence. Cite a
-saved result only by a server-verified Agent-qualified key listed under Published results in an Expert
-receipt, and preserve that binding exactly. Never invent result1, turn an ordinary output file into a result
-binding, or embed a local preview path.
-"""
+""" + (_STATIC_CITATION_RULE if static_figures() else _CITATION_RULE)
     team_policy = """# Coordinator
 Select a scientific subquestion before choosing expertise. Choose the Expert for the question; the Expert
 chooses methods. Delegate data analysis, inference, literature, requested acquisition and reusable results;
@@ -138,8 +146,9 @@ authorization. When paper selection is needed, the Search Expert pauses its own 
 keep running. Do not request papers after it has delivered.
 """
     research_team_policy = """# Research coordination
-Use the user question, DatasetContext and one bounded standalone Search Expert consultation to frame
-the tree. Literature expands and tests the initial problem space; it never determines the tree by itself.
+Consult the Search Expert only when the question turns on a definition, method or published mechanism
+DatasetContext does not settle, alongside the data questions, not before them. Literature expands and
+tests the initial problem space; it never determines the tree by itself.
 Put a result-dependent question below its evidence; an independent mechanism opens an independent root
 direction. Simple requested operations skip it and do not become research trees.
 """
@@ -198,7 +207,8 @@ OCEAN_EXPERT_WORKSTREAM_POLICY = """\
 Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
 estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
 not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
-as bare .npz files. For a user-facing interactive figure, use
+as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
+one-line `title` attribute, so a later step can tell what it holds without opening it. For a user-facing interactive figure, use
 `from oceanx.scientific_view import ScientificFigure`, supply the computed arrays and complete panel/layer
 structure, then call `figure.save('concise-name.nc')`. That explicit save is the delivery boundary; ordinary
 NetCDF files are not figures. Cite the assigned Agent namespace plus filename stem in report.md immediately
@@ -209,6 +219,25 @@ scientific evidence you need to interpret, such as a spatial pattern. For spatia
 validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather than plotted
 values. Every spatial field must pass an explicit Boolean `valid_mask` to `field2d`; zero remains valid where
 that mask is True.
+"""
+
+# The same duties for a static-delivery run: the final figure is an ordinary image file, and no
+# plotting interface is named (see figure_delivery.py).
+STATIC_EXPERT_WORKSTREAM_POLICY = """\
+# Evidence and results
+Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
+estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
+not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
+as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
+one-line `title` attribute, so a later step can tell what it holds without opening it. Make a final figure with matplotlib and save it as a PNG under OCEAN_OUTPUT_DIR, for
+example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'), dpi=150,
+bbox_inches='tight')`; that file is the delivered figure. Keep exploratory plots in your working directory.
+Name the figure file in report.md immediately after the supported claim. You own the scientific visual
+encoding, including plot type, axes, layers, comparisons and scientific scales; label axes with units. Do not
+spend a separate round polishing or reviewing the rendered layout. Inspect a saved image only when the image
+itself is scientific evidence you need to interpret, such as a spatial pattern. For spatial fields, preserve
+the source validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather
+than plotted values, so mask them (NaN or a masked array); zero remains valid where the mask is True.
 """
 
 
@@ -223,7 +252,7 @@ async def build_ocean_expert_runtime(
     if forbidden:
         names = ", ".join(sorted(forbidden))
         raise ValueError(f"build_ocean_expert_runtime owns {names}")
-    policy = OCEAN_EXPERT_WORKSTREAM_POLICY
+    policy = STATIC_EXPERT_WORKSTREAM_POLICY if static_figures() else OCEAN_EXPERT_WORKSTREAM_POLICY
     profile = OceanRuntimeProfile(
         tool_registry=create_ocean_expert_tool_registry(services),
         system_prompt_sections=(

@@ -40,6 +40,15 @@ Choose a palette from the meaning of the variable, not merely from its numerical
 
 ## Figure construction
 
+Before drawing your first figure, read [the complete Figure API reference](API.md) to its end
+({{FIGURE_API_LINE_COUNT}} lines: call read_file with limit=300 and continue from the offset it
+reports until no lines remain). It is
+generated from the same implementation as the `Result API reference` file named in your system
+prompt; use its exact signatures, plot-kind restrictions and runnable examples rather than
+reading OceanX source code or testing guessed arguments. Save trial figures with `_`-prefixed
+names and final figures with plain names. Names starting with `.` are also drafts; their files
+and previews stay on disk but are not listed as results.
+
 Match the plot to the data structure: maps for spatial fields, time series for evolution, profiles
 for vertical structure, heatmaps for two-dimensional coordinates, and scatter plots for paired
 observations. Keep titles interpretive but short. Use compact axis and colourbar labels with units;
@@ -60,18 +69,41 @@ mask is `True`—for example, zero satellite retrievals over valid ocean must no
 land.
 
 ```python
+import numpy as np
 from oceanx.scientific_view import ScientificFigure
 
+lag = np.arange(-3, 4)
+correlation = np.array([0.1, 0.3, 0.6, 0.9, 0.6, 0.3, 0.1])
 figure = ScientificFigure(plot_kind="scatter", title="Lag correlation")
 panel = figure.panel(x=lag, y=correlation, x_label="Lag", y_label="Correlation")
 panel.scatter()
 figure.save("lag.nc")
+```
 
+```python
+import numpy as np
+from oceanx.scientific_view import ScientificFigure
+
+salinity = np.array([34.5, 34.8, 35.0, 35.2])
+temperature = np.array([26.0, 20.0, 14.0, 8.0])
+depth = np.array([0.0, 50.0, 200.0, 800.0])
 figure = ScientificFigure(plot_kind="ts_diagram", title="Water-mass structure")
 panel = figure.panel(x=salinity, y=temperature, x_label="Salinity", y_label="Temperature")
 panel.scatter(color_values=depth, palette="depth", colorbar_label="Depth (m)")
 figure.save("samples.nc")
+```
 
+```python
+import numpy as np
+from oceanx.scientific_view import ScientificFigure
+
+longitude = np.array([120.0, 121.0, 122.0, 123.0])
+latitude = np.array([20.0, 21.0, 22.0])
+comparison_class = np.array([[1, 1, 2, 3], [1, 2, 2, 3], [1, 2, 3, 3]])
+wet_cells = np.ones(comparison_class.shape, dtype=bool)
+wet_cells[0, 0] = False
+comparison_domain = np.ones(comparison_class.shape, dtype=bool)
+comparison_domain[-1, -1] = False
 figure = ScientificFigure(plot_kind="spatial_map", title="Comparison domain")
 panel = figure.panel(x=longitude, y=latitude, x_label="Longitude", y_label="Latitude")
 panel.field2d(

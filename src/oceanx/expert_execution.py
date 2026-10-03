@@ -39,52 +39,9 @@ FIGURE_IMPORT = "from oceanx.scientific_view import ScientificFigure"
 # Per-run wall-time cap for bounded (standard-mode) requests; research keeps the default 300 s.
 STANDARD_MODE_CODE_SECONDS = 120
 
+SAVED_DATA_INDEX_SCHEMA = "ocean-saved-data-index/v1"
 
-FIGURE_API_CONTRACT = {
-    "contract_version": "oceanx-scientific-figure-python/v4",
-    "constructor": (
-        "ScientificFigure(*, plot_kind, title, subtitle='', caption='', columns=1, "
-        "spatial_context=None, source_handle=None, conclusions=())"
-    ),
-    "rule": (
-        "The Expert supplies the computed arrays and complete scientific visual structure. "
-        "Create panels with explicit axes, then add line, scatter, field2d, categories, band, "
-        "vector, contour, annotation or reference layers. Figure.save('name.nc') is the explicit "
-        "user-facing result boundary. Ordinary NetCDF files are data files and are not displayed. "
-        "For spatial fields, preserve the scientific validity mask: land and cells outside the "
-        "analysis domain are missing, not plotted values; every spatial field must pass "
-        "field2d(..., valid_mask=...). "
-        "Omit style arguments to use the Workbench defaults; specify them only when the scientific "
-        "figure needs a deliberate override."
-    ),
-    "draft_rule": (
-        "In interactive mode, saved figures whose filenames start with '_' or '.' are drafts "
-        "and are excluded from the user-facing result list, even after ScientificFigure.save(). "
-        "This also applies to filenames inside output subdirectories. Their data and previews "
-        "remain on disk; use a filename without either prefix for a final figure."
-    ),
-    "examples": [
-        (
-            "fig = ScientificFigure(plot_kind='time_series', title='Regional temperature'); "
-            "panel = fig.panel(x=time, y=bay, x_label='Time', y_label='Temperature', "
-            "y_units='degC'); panel.line(label='Bay'); "
-            "panel.line(x=time, y=gulf, label='Gulf'); fig.save('comparison.nc')"
-        ),
-        (
-            "fig = ScientificFigure(plot_kind='spatial_map', title='Temperature anomaly'); "
-            "panel = fig.panel(x=longitude, y=latitude, x_label='Longitude', y_label='Latitude'); "
-            "panel.field2d(anomaly, valid_mask=wet_cells, variable='temperature_anomaly', units='degC', "
-            "palette='blue_red', color_domain=[-3, 3], colorbar_label='Temperature anomaly (degC)'); "
-            "fig.save('anomaly.nc')"
-        ),
-        (
-            "fig = ScientificFigure(plot_kind='scatter', title='Paired observations'); "
-            "panel = fig.panel(x=observed, y=modelled, x_label='Observed', y_label='Modelled'); "
-            "panel.scatter(opacity=0.2, radius=1.0); "
-            "panel.line(x=limits, y=limits, label='1:1'); fig.save('paired.nc')"
-        ),
-    ],
-}
+
 
 _RESULT_RUNNER = '''"""Framework entry point for one OceanX analysis program."""
 
@@ -287,6 +244,7 @@ class ExpertCodeExecutionService:
         self._runtime_error: str | None = None
         runtime_capabilities()
         self._analysis_context_locks: dict[str, asyncio.Lock] = {}
+        self._saved_data_locks: dict[str, asyncio.Lock] = {}
         self._task_dataset_contexts: dict[
             tuple[str, tuple[tuple[str, str], ...]], dict[str, object]
         ] = {}
@@ -629,6 +587,159 @@ class ExpertCodeExecutionService:
             and ("members" not in source or cls._context_is_confirmed(source["members"]))
             for source in sources
         )
+
+    async def describe_saved_data(
+        self, *, task_id: str, agent_thread_id: str, limit: int = 12,
+    ) -> dict[str, object]:
+        """What one Expert's folder holds, described from the headers of its data files.
+
+        The data files under the folder's ``outputs`` and ``scratch`` are ordered outputs first,
+        then scratch, each newest first. The first ``limit`` are described in the sandbox by the
+        read-only probe and the rest are only counted. The description is cached in
+        ``.runtime/data-index.json``, keyed by each file's size and modification time, so a folder
+        that has not changed costs nothing to ask about again.
+
+        Returns ``{"files": [...], "omitted": n}``; each file has its ``path`` relative to the
+        folder and the probe's description. Raises ``ExpertCodeExecutionError`` when the probe
+        could not describe the files at all, and then caches nothing.
+        """
+
+        from oceanx.analysis_probe import SAVED_DATA_SUFFIXES
+
+        root = self.task_workspaces.expert_session_root(task_id, agent_thread_id).resolve()
+        candidates: list[tuple[str, Path, int, int]] = []
+        for part in ("outputs", "scratch"):
+            folder = root / part
+            if folder.is_symlink() or not folder.is_dir():
+                continue
+            found: list[tuple[str, Path, int, int]] = []
+            for directory, subfolders, names in os.walk(folder, followlinks=False):
+                subfolders.sort()
+                for name in names:
+                    path = Path(directory) / name
+                    if path.suffix.lower() not in SAVED_DATA_SUFFIXES or path.is_symlink():
+                        continue
+                    try:
+                        stat = path.stat()
+                    except OSError:
+                        continue
+                    if path.is_file():
+                        found.append((path.relative_to(root).as_posix(), path, stat.st_size, stat.st_mtime_ns))
+            candidates.extend(sorted(found, key=lambda item: (-item[3], item[0])))
+        chosen = candidates[:limit]
+        cache_path = root / ".runtime" / "data-index.json"
+        async with self._saved_data_locks.setdefault(str(root), asyncio.Lock()):
+            cached = self._read_saved_data_index(cache_path)
+            fresh = [
+                item for item in chosen
+                if (cached.get(item[0]) or {}).get("size") != item[2]
+                or (cached.get(item[0]) or {}).get("mtime_ns") != item[3]
+            ]
+            if fresh:
+                described = await self._probe_saved_files(root, fresh)
+                for key, _path, size, mtime_ns in fresh:
+                    cached[key] = {"size": size, "mtime_ns": mtime_ns, "info": described[key]}
+            present = {item[0] for item in candidates}
+            if fresh or set(cached) - present:
+                cached = {key: entry for key, entry in cached.items() if key in present}
+                temporary = cache_path.with_name(cache_path.name + ".tmp")
+                temporary.write_text(
+                    json.dumps({"schema_version": SAVED_DATA_INDEX_SCHEMA, "files": cached},
+                               ensure_ascii=False, indent=1),
+                    encoding="utf-8",
+                )
+                temporary.replace(cache_path)
+        return {
+            "files": [{"path": key, **cached[key]["info"]} for key, *_ in chosen],
+            "omitted": len(candidates) - len(chosen),
+        }
+
+    @staticmethod
+    def _read_saved_data_index(path: Path) -> dict[str, dict[str, Any]]:
+        """The cached descriptions; a missing, unreadable or old-format cache is simply empty."""
+
+        if path.is_symlink() or not path.is_file():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        files = payload.get("files") if isinstance(payload, dict) else None
+        if not isinstance(files, dict) or payload.get("schema_version") != SAVED_DATA_INDEX_SCHEMA:
+            return {}
+        return {
+            key: entry for key, entry in files.items()
+            if isinstance(key, str) and isinstance(entry, dict) and isinstance(entry.get("info"), dict)
+            and isinstance(entry.get("size"), int) and isinstance(entry.get("mtime_ns"), int)
+        }
+
+    async def _probe_saved_files(
+        self, root: Path, files: list[tuple[str, Path, int, int]],
+    ) -> dict[str, dict[str, Any]]:
+        """Describe data files in the sandbox, read-only, with the same probe as the dataset context."""
+
+        probe_root = root / ".runtime" / "data-index-probe"
+        temporary_root = probe_root / "temporary"
+        temporary_root.mkdir(parents=True, exist_ok=True)
+        probe_script = probe_root / "analysis_probe.py"
+        shutil.copy2(_analysis_probe_source(), probe_script)
+        probe_input = probe_root / "input.json"
+        probe_output = probe_root / "output.json"
+        probe_output.unlink(missing_ok=True)  # never read the answer to an earlier question
+        probe_input.write_text(
+            json.dumps({"files": [{"key": key, "path": str(path)} for key, path, _, _ in files]}),
+            encoding="utf-8",
+        )
+        try:
+            runtime = await asyncio.to_thread(self.require_runtime)
+            result = await run_sandboxed_command(
+                (str(runtime.executable), str(probe_script), str(probe_input), str(probe_output)),
+                policy=SandboxExecutionPolicy(
+                    read_only_roots=tuple(
+                        root / part for part in ("outputs", "scratch") if (root / part).is_dir()
+                    ),
+                    runtime_read_roots=runtime.read_roots,
+                    writable_roots=(probe_root,),
+                    output_root=probe_root,
+                    temporary_root=temporary_root,
+                    limits=ResourceLimits(
+                        wall_time_seconds=min(120.0, self.limits.wall_time_seconds),
+                        cpu_time_seconds=min(90, self.limits.cpu_time_seconds),
+                        memory_bytes=self.limits.memory_bytes,
+                        disk_bytes=min(67_108_864, self.limits.disk_bytes),
+                        stdout_bytes=65_536,
+                        stderr_bytes=65_536,
+                        output_file_count=16,
+                        output_total_bytes=16_777_216,
+                    ),
+                    allow_child_processes=False,
+                ),
+                cwd=probe_root,
+                environment={
+                    "CONDA_DEFAULT_ENV": runtime.environment_name,
+                    "CONDA_PREFIX": str(runtime.prefix),
+                    "PYTHONNOUSERSITE": "1",
+                },
+            )
+        except (OSError, RuntimeError, SandboxUnavailableError, ValueError) as exc:
+            raise ExpertCodeExecutionError(f"The saved-data probe could not run: {exc}") from exc
+        if not probe_output.is_file():
+            stderr = result.stderr.decode("utf-8", errors="replace")[-500:]
+            raise ExpertCodeExecutionError(
+                f"The saved-data probe produced no output: {stderr or result.returncode}"
+            )
+        try:
+            payload = json.loads(probe_output.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ExpertCodeExecutionError(f"The saved-data probe output is unreadable: {exc}") from exc
+        described = {
+            item["key"]: {name: value for name, value in item.items() if name != "key"}
+            for item in payload.get("files", ())
+            if isinstance(item, dict) and isinstance(item.get("key"), str)
+        }
+        if any(key not in described for key, _, _, _ in files):
+            raise ExpertCodeExecutionError("The saved-data probe described only some of the files")
+        return described
 
     async def run_python(
         self,

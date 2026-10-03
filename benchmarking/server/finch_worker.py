@@ -78,7 +78,7 @@ def install_meter(attempt, secret):
     """Meter raw router responses once, including malformed-action retries.
 
     Do not sum LLMResult per-choice counts, which repeat the same request usage.
-    No API kwargs/configuration is written to the transcript.
+    Record only an allowlist of tool/decoding parameters, never routing credentials.
     """
     import litellm
     original = litellm.Router.acompletion
@@ -91,7 +91,10 @@ def install_meter(attempt, secret):
         started = time.monotonic()
         append_json(attempt / "transcript.jsonl", {
             "type": "model.request", "call_id": call_id,
-            "messages": kwargs.get("messages", args[1] if len(args) > 1 else [])})
+            "messages": kwargs.get("messages", args[1] if len(args) > 1 else []),
+            "parameters": {key: kwargs[key] for key in (
+                "tools", "tool_choice", "temperature", "max_tokens", "parallel_tool_calls")
+                if key in kwargs}})
         record = {"call_id": call_id, "role": "finch", "state": "failed",
                   "started_at": datetime.now(UTC).isoformat()}
         try:

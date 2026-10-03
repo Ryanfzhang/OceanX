@@ -610,8 +610,11 @@ def disk(attempt: Path) -> dict:
 
 
 def code_failures(code: list[tuple[str, dict]]) -> dict:
-    """Why code runs did not succeed. The first three are the environment's fault, not the code's:
-    the kernel never started, the time limit stopped the run, or the sandbox refused a write."""
+    """Classify observed failures, not their causes or whose fault they are.
+
+    A read-only refusal may be correctly protecting another node's files; a time limit
+    may reflect slow computation. Kernel-start messages alone do not establish the cause.
+    """
     found = {"kernel_start": 0, "time_limit": 0, "read_only": 0, "cancelled": 0, "code": 0}
     for state, body in code:
         if state in ("succeeded", "running"):

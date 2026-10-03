@@ -312,7 +312,28 @@ def test_inventory_records_what_each_attempt_cost_and_kept(tmp_path):
     assert evaluate.run_record(attempt, {"arm": "C1"})["missing"] == ["agent conversations"]
 
 
-def test_code_failures_name_the_environment_apart_from_the_code():
+def test_code_failure_descriptions_do_not_assign_fault():
+    description = evaluate.code_failures.__doc__
+    assert "environment's fault" not in description
+    assert "not the code's" not in description
+    assert "protecting another node's files" in description
+    assert "slow computation" in description
+
+
+@pytest.mark.parametrize("name", ["RUNNING.md", "EVALUATION.md"])
+def test_run_disclosures_cover_delivery_requests_budgets_and_search(name):
+    text = (evaluate.TASKS.parent / name).read_text()
+    section = text.split("## Run settings and comparison limits", 1)[1].split("\n## ", 1)[0]
+    assert "OCEANX_FIGURE_DELIVERY=static" in section
+    assert "not exposed" in section
+    assert "extra provider request" in section and "compaction" in section and "ledger" in section
+    assert "75%" in section and "changes Coordinator behavior" in section
+    assert "Finch-local has no literature-search agent" in section
+    assert "Claude Code's search depends on its configured tools" in section
+    assert "OceanX consults Search Expert on demand" in section
+
+
+def test_code_failures_classify_observed_failures_without_assigning_fault():
     # What the server run of 2026-10-03 needed counting by hand.
     code = [
         ("succeeded", {}),
