@@ -194,6 +194,8 @@ def configure_run(args, config, method, *, stack=None):
             args.library = path_value(setting(config, 'BENCH_OCEANX_LIBRARY'))
         os.environ['OCEANX_MAX_PARALLEL_EXPERTS'] = str(number(
             config, 'BENCH_OCEANX_MAX_PARALLEL_EXPERTS', integer=True))
+        os.environ['OCEANX_MAX_PARALLEL_SEARCH_EXPERTS'] = str(number(
+            config, 'BENCH_OCEANX_MAX_PARALLEL_SEARCH_EXPERTS', integer=True))
         if args.timeout is None:
             args.timeout = number(config, 'BENCH_TIMEOUT_SECONDS', maximum=604800)
     elif method == 'Claude':

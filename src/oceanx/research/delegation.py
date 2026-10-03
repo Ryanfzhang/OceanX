@@ -37,6 +37,28 @@ NODE_ID_ARG_DESCRIPTION = (
     "Research-tree node ID this question answers, for example B1.2. "
     "Omit only for questions that are not research-tree nodes."
 )
+_VISUAL_NOUN = re.compile(
+    r"(?i)\b(?:figure|plot|map|chart|graph|visual(?:ization|isation)?|image)\b|"
+    r"(?:图表|地图|可视化|绘图|图像)"
+)
+_VISUAL_DELIVERY_VERB = re.compile(
+    r"(?i)\b(?:publish|save|render|create|make|produce|deliver|missing|omitted|redraw)\b|"
+    r"(?:补图|出图|保存|生成|绘制|重画|缺少)"
+)
+VISUAL_FOLLOWUP_REFUSAL = (
+    "Not started: this is a visual-only follow-up, but the researcher did not request a visual. "
+    "Use the existing scientific report in the final synthesis instead."
+)
+
+
+def explicitly_requests_visual(text: str) -> bool:
+    """A narrow, auditable check for an explicit visual deliverable in the user's own words."""
+    return bool(_VISUAL_NOUN.search(text or ""))
+
+
+def visual_only_followup(text: str) -> bool:
+    """Recognize a delivery retry, not an analysis that happens to discuss a mapped field."""
+    return bool(_VISUAL_NOUN.search(text or "") and _VISUAL_DELIVERY_VERB.search(text or ""))
 
 
 @dataclass(frozen=True)
@@ -103,10 +125,14 @@ def _extended_task_tool(native):
 class StructuredDelegationMiddleware(AgentMiddleware):
     """Coordinator middleware: advertise ``node_id`` and bind each ``task`` call to it."""
 
-    def __init__(self, tree=None, node_wait_seconds: float = NODE_WAIT_SECONDS):
+    def __init__(
+        self, tree=None, node_wait_seconds: float = NODE_WAIT_SECONDS,
+        original_question: str = "",
+    ):
         super().__init__()
         self.tree = tree
         self.node_wait_seconds = node_wait_seconds
+        self.original_question = original_question
         self._display_tool = None
 
     # --- model side: advertise node_id ------------------------------------
@@ -160,11 +186,30 @@ class StructuredDelegationMiddleware(AgentMiddleware):
                      "Add or select it with update_research_tree, then delegate again."),
             tool_call_id=call["id"], name="task", status="error")
 
+    def _refused_unrequested_visual_followup(self, request):
+        call = request.tool_call
+        if self.tree is None or call.get("name") != "task":
+            return None
+        args = call.get("args") or {}
+        description = str(args.get("description") or "")
+        if explicitly_requests_visual(self.original_question) or not visual_only_followup(description):
+            return None
+        node_id = str(args.get("node_id") or "").strip() or infer_node_id(description)
+        if not node_id or not self.tree.has_node(node_id) or not self.tree.attempts(node_id):
+            return None
+        return ToolMessage(
+            content=VISUAL_FOLLOWUP_REFUSAL,
+            tool_call_id=call["id"], name="task", status="error",
+        )
+
     def wrap_tool_call(self, request, handler):
         deadline = time.monotonic() + self.node_wait_seconds
         while self._awaited_node(request, deadline):
             time.sleep(0.05)
         refused = self._refused_explicit_node(request)
+        if refused is not None:
+            return refused
+        refused = self._refused_unrequested_visual_followup(request)
         if refused is not None:
             return refused
         request, delegation = self._prepare(request)
@@ -181,6 +226,9 @@ class StructuredDelegationMiddleware(AgentMiddleware):
         refused = self._refused_explicit_node(request)
         if refused is not None:
             return refused
+        refused = self._refused_unrequested_visual_followup(request)
+        if refused is not None:
+            return refused
         request, delegation = self._prepare(request)
         token = _CURRENT.set(delegation)
         try:
@@ -190,6 +238,6 @@ class StructuredDelegationMiddleware(AgentMiddleware):
 
 
 __all__ = [
-    "Delegation", "StructuredDelegationMiddleware", "current_delegation", "infer_node_id",
-    "resolve_delegation",
+    "Delegation", "StructuredDelegationMiddleware", "current_delegation",
+    "explicitly_requests_visual", "infer_node_id", "resolve_delegation", "visual_only_followup",
 ]

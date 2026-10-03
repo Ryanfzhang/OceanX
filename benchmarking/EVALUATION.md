@@ -17,9 +17,11 @@ helped can only be read from the process measures (lessons named, helper calls, 
 
 ## Run settings and comparison limits
 
-- OceanX benchmark runs use `OCEANX_FIGURE_DELIVERY=static`: Experts normally save final figures
-  as ordinary PNG images. OceanX's interactive plotting interface is not exposed to the models;
-  the desktop's interactive mode is unchanged.
+- OceanX benchmark runs use `OCEANX_FIGURE_DELIVERY=static`: when the researcher requested a
+  visual, or a figure is necessary scientific evidence, Experts save it as an ordinary PNG image.
+  OceanX's interactive plotting interface is not exposed to the models; the desktop's interactive
+  mode is unchanged. Image reads give the model a JPEG preview bounded to 1024 px on its longest
+  edge while preserving the full-resolution result on disk.
 - The Expert's last, tool-free delivery call may issue an extra provider request if its first
   reply contains tool markers rather than a report. Context compaction requests are counted
   separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
@@ -30,7 +32,8 @@ helped can only be read from the process measures (lessons named, helper calls, 
 - Finch-local has no literature-search agent; it is not the full Robin system.
   Claude Code's search depends on its configured tools. OceanX consults Search Expert on demand
   for definitions, methods or published mechanisms the data context does not settle. These search
-  capabilities are not identical; report them when comparing methods.
+  capabilities are not identical; report them when comparing methods. Its single independent
+  search slot does not occupy either data-analysis slot.
 - Failure categories describe observed messages, not blame. A read-only refusal may correctly
   protect another node's evidence, and a timeout may reflect slow computation. Inspect logs before
   assigning a cause; collection completeness and a successful run do not establish scientific correctness.
@@ -132,10 +135,12 @@ Four rules follow:
   checkpoint files hold almost nothing, and "end of agent conversations" when they were last written
   before the last model call ended. The checkpoints stay in the framework's format; no portable export is
   made.
-- **Scratch arrays are most of the size.** In a two-hour pilot run they were 3.4 of 3.5 GB. `inventory`
-  reports each attempt's disk use and its scratch share. Scratch can be recomputed from the kept code and
-  the data; if the disk cannot hold it, the owner decides whether to delete `scratch/` folders, and only
-  after `inventory` has run.
+- **Scratch arrays are disposable after validated collection.** In one E10 run they were 5.398 of
+  5.4 GB. `inventory` reports each attempt's disk use and its scratch share. Once a completed attempt
+  has a final answer and collection has no errors, the collector removes all node `scratch/` folders
+  and writes `scratch_cleanup.json`. It retains scratch if the final answer or a nested Expert report
+  still cites an absolute scratch path. Reports, saved code, registered outputs and runtime records are
+  not removed. Later inventory records both current scratch and the bytes already released.
 
 ## Running arms
 

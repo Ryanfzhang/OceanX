@@ -161,7 +161,9 @@ def arm_record(args) -> dict:
                 "snapshot": str(LIBRARY), "version": snapshot_version(LIBRARY),
                 "sha256": {name: file_sha256(LIBRARY / name) for name in LIBRARY_FILES}},
             "queries": str(args.queries) if args.queries else None,
-            "max_parallel_experts": os.environ.get("OCEANX_MAX_PARALLEL_EXPERTS", "2")}
+            "max_parallel_experts": os.environ.get("OCEANX_MAX_PARALLEL_EXPERTS", "2"),
+            "max_parallel_search_experts": os.environ.get(
+                "OCEANX_MAX_PARALLEL_SEARCH_EXPERTS", "1")}
 
 
 def check_arm(output: Path) -> None:

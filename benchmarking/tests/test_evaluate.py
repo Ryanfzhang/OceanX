@@ -283,6 +283,7 @@ def test_inventory_records_what_each_attempt_cost_and_kept(tmp_path):
     assert full["conversations"] == {"checkpoint_bytes": 1200, "written_after_last_model_call": True,
                                      "history_files": 1, "history_bytes": 20}
     assert full["disk"]["scratch"] == 2000 and full["disk"]["total"] > 2000
+    assert full["disk"]["scratch_released"] == 0
     # Each question of the tree carries its own cost; the Coordinator's calls are on the root.
     root, decisive, side = full["questions"]
     assert (root["node"], root["expert"], root["model_calls"], root["input_tokens"]) == ("B1", "coordinator", 1, 1000)
@@ -352,6 +353,22 @@ def test_code_failures_classify_observed_failures_without_assigning_fault():
         "tokens": {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "calls": 0,
                    "failed_calls": 0},
         "code_runs": {"total": 7, "by_state": {"succeeded": 1}, "failures": evaluate.code_failures(code)},
-        "disk": {"total": 0, "scratch": 0}, "documents": [], "missing": [], "questions": []})
+        "disk": {"total": 0, "scratch": 0, "scratch_released": 0},
+        "documents": [], "missing": [], "questions": []})
     assert ("Code runs: 7 (6 did not succeed: 1 kernel start, 1 time limit, 1 read only, "
             "1 cancelled, 1 code)") in page
+
+
+def test_inventory_accounts_for_scratch_released_by_collection(tmp_path):
+    attempt = tmp_path / "Q01/attempt-1"
+    attempt.mkdir(parents=True)
+    (attempt / "kept.txt").write_bytes(b"kept")
+    (attempt / "scratch_cleanup.json").write_text(json.dumps({
+        "status": "cleaned", "bytes_released": 5_400_000_000,
+    }))
+
+    size = evaluate.disk(attempt)
+
+    assert size["scratch"] == 0
+    assert size["scratch_released"] == 5_400_000_000
+    assert size["total"] < size["scratch_released"]

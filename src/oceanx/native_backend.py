@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import shlex
@@ -25,14 +26,19 @@ from deepagents.backends.protocol import (
 from deepagents.backends.sandbox import (
     BaseSandbox,
     _build_edit_tmpfile_cmd,
+    _get_backend_read_file_type,
     _map_edit_error,
     _parse_read_output,
-    _get_backend_read_file_type,
 )
 
+from oceanx import native_text
 from oceanx.sandbox import SandboxExecutionPolicy, run_sandboxed_command
 from oceanx.sandbox.execution import POSIX_SHELL, shell_runtime_roots
-from oceanx import native_text
+
+_RASTER_IMAGE_SUFFIXES = frozenset(
+    {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp", ".gif"}
+)
+STATIC_IMAGE_PREVIEW_MAX_EDGE = 1024
 
 
 class OceanSandbox(BaseSandbox):
@@ -97,7 +103,41 @@ class OceanSandbox(BaseSandbox):
         return asyncio.run(self.aread(file_path, offset, limit))
 
     async def aread(self, file_path, offset=0, limit=2000):
-        # Keep native image/PDF/media handling, not a blanket text truncation.
+        # Bound static benchmark figures before they enter model context. The full-resolution image
+        # remains on disk as the durable result; read_file supplies a compact scientific preview.
+        from oceanx.figure_delivery import static_figures
+        if static_figures() and Path(file_path).suffix.lower() in _RASTER_IMAGE_SUFFIXES:
+            preview_root = self.temporary / "image-previews"
+            preview = preview_root / (hashlib.sha256(str(file_path).encode()).hexdigest() + ".jpg")
+            code = (
+                "from pathlib import Path\n"
+                "from PIL import Image, ImageOps\n"
+                f"source=Path({str(file_path)!r})\n"
+                f"target=Path({str(preview)!r})\n"
+                "target.parent.mkdir(parents=True, exist_ok=True)\n"
+                "with Image.open(source) as opened:\n"
+                "    image=ImageOps.exif_transpose(opened)\n"
+                f"    image.thumbnail(({STATIC_IMAGE_PREVIEW_MAX_EDGE}, "
+                f"{STATIC_IMAGE_PREVIEW_MAX_EDGE}))\n"
+                "    if image.mode in {'RGBA', 'LA'} or (image.mode == 'P' and 'transparency' in image.info):\n"
+                "        rgba=image.convert('RGBA')\n"
+                "        background=Image.new('RGB', rgba.size, 'white')\n"
+                "        background.paste(rgba, mask=rgba.getchannel('A'))\n"
+                "        image=background\n"
+                "    else:\n"
+                "        image=image.convert('RGB')\n"
+                "    image.save(target, format='JPEG', quality=82, optimize=True)\n"
+                "    for edge, quality in ((768, 76), (512, 72)):\n"
+                "        if target.stat().st_size <= 450 * 1024:\n"
+                "            break\n"
+                "        image.thumbnail((edge, edge))\n"
+                "        image.save(target, format='JPEG', quality=quality, optimize=True)\n"
+            )
+            result = await self.aexecute("python3 -c " + shlex.quote(code))
+            if result.exit_code != 0:
+                return f"Could not create bounded image preview: {result.output[:1000]}"
+            return await super().aread(str(preview), offset, limit)
+        # Keep native PDF/media handling, not a blanket text truncation.
         if _get_backend_read_file_type(file_path) != "text":
             return await super().aread(file_path, offset, limit)
         result = await self._text_helper(operation="read", file_path=file_path, offset=offset,

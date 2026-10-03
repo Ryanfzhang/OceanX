@@ -27,14 +27,18 @@ from oceanx.research.graphs import (
     COORDINATOR_VISUAL_DELIVERY_POLICY,
     EXPERT_FINAL_CALL,
     EXPERT_MODEL_CALL_LIMIT,
+    EXPERT_REPORT_CHECKPOINT_START,
     EXPERT_WIND_DOWN_START,
     MAX_PARALLEL_EXPERTS,
+    MAX_PARALLEL_SEARCH_EXPERTS,
     WIND_DOWN_REFUSAL,
     ExpertCallBudgetMiddleware,
     _coordinator_agent,
     _expert_slots,
     _missing_report,
     _parallel_expert_limit,
+    _parallel_search_expert_limit,
+    _search_expert_slots,
     _wind_down_request,
 )
 from oceanx.team.profiles import AGENT_PROFILES, get_agent_profile
@@ -368,6 +372,7 @@ def test_expert_receipt_preview_and_server_error_are_human_readable():
 
 def test_expert_model_call_limit_is_native_and_per_run():
     assert EXPERT_MODEL_CALL_LIMIT == 60
+    assert EXPERT_REPORT_CHECKPOINT_START == 30
     assert EXPERT_WIND_DOWN_START == 48
     assert EXPERT_FINAL_CALL == 59
     source = Path(__file__).parents[2] / "src/oceanx/research/graphs.py"
@@ -375,7 +380,7 @@ def test_expert_model_call_limit_is_native_and_per_run():
     assert "ModelCallLimitMiddleware" in text
     assert "ExpertCallBudgetMiddleware(ModelCallLimitMiddleware)" in text
     assert "super().__init__(run_limit=EXPERT_MODEL_CALL_LIMIT" in text
-    assert "middleware=[ExpertCallBudgetMiddleware()]" in text
+    assert "middleware=[ExpertCallBudgetMiddleware(" in text
     assert 'graph.add_edge("author", "receipt")' in text
     assert "finish_report" not in text
     assert "report_phase" not in text
@@ -407,6 +412,28 @@ def test_expert_wind_down_filters_tools_inside_one_native_run():
     final = _wind_down_request(request(59))
     assert final.tools == []
     assert "Final delivery call" in final.system_message.text
+
+
+def test_report_checkpoint_blocks_more_analysis_until_the_first_report_is_saved(tmp_path):
+    tools = [SimpleNamespace(name=name) for name in ("read_file", "write_file", "execute")]
+    report = tmp_path / "report.md"
+
+    def request(call_count):
+        return ModelRequest(
+            model=SimpleNamespace(), messages=[], tools=tools,
+            state={"messages": [], "run_model_call_count": call_count},
+            system_message=SystemMessage(content="base"),
+        )
+
+    middleware = ExpertCallBudgetMiddleware(report_path=report)
+    before = middleware._prepare_request(request(EXPERT_REPORT_CHECKPOINT_START - 1))
+    assert before.tools == tools
+    checkpoint = middleware._prepare_request(request(EXPERT_REPORT_CHECKPOINT_START))
+    assert [tool.name for tool in checkpoint.tools] == ["read_file", "write_file"]
+    assert "Required report checkpoint" in checkpoint.system_message.text
+    report.write_text("## Summary\nResult: partial\n")
+    resumed = middleware._prepare_request(request(EXPERT_REPORT_CHECKPOINT_START + 1))
+    assert resumed.tools == tools
 
 
 class _BudgetProbeModel(FakeMessagesListChatModel):
@@ -544,12 +571,25 @@ def test_expert_runs_share_an_app_wide_parallel_limit():
     assert "async with slot:" in source  # every Expert run goes through the pool
 
 
+def test_search_experts_have_one_separate_slot_from_data_experts():
+    async def scenario():
+        assert _search_expert_slots() is _search_expert_slots()
+        assert _search_expert_slots() is not _expert_slots()
+
+    asyncio.run(scenario())
+    assert MAX_PARALLEL_SEARCH_EXPERTS == 1
+
+
 def test_parallel_expert_limit_setting(monkeypatch):
     monkeypatch.delenv("OCEANX_MAX_PARALLEL_EXPERTS", raising=False)
     assert _parallel_expert_limit() == 2
     for value, expected in (("3", 3), ("0", 1), ("many", 2)):
         monkeypatch.setenv("OCEANX_MAX_PARALLEL_EXPERTS", value)
         assert _parallel_expert_limit() == expected
+    monkeypatch.delenv("OCEANX_MAX_PARALLEL_SEARCH_EXPERTS", raising=False)
+    assert _parallel_search_expert_limit() == 1
+    monkeypatch.setenv("OCEANX_MAX_PARALLEL_SEARCH_EXPERTS", "2")
+    assert _parallel_search_expert_limit() == 2
 
 
 def test_missing_report_receipt_never_forwards_tool_markup(tmp_path):
@@ -1030,11 +1070,16 @@ async def test_research_coordinator_checks_the_budget_before_binding_a_node(monk
     monkeypatch.setattr(graphs, "research_tree",
                         lambda _task_id: SimpleNamespace(policy=SimpleNamespace(guidance="")))
     monkeypatch.setenv(graphs.RESEARCH_BUDGET_ENV, "180")
-    assert await _coordinator_agent(_config()) == "graph"
+    config = _config()
+    config["configurable"]["original_question"] = "Assess mixed-layer-depth sensitivity."
+    assert await _coordinator_agent(config) == "graph"
     budget, binding = captured["middleware"]
     assert isinstance(budget, graphs.ResearchBudgetMiddleware) and budget.budget == 180
     assert isinstance(binding, StructuredDelegationMiddleware)
+    assert binding.original_question == config["configurable"]["original_question"]
     assert "Research time budget: 180 minutes. After 135 minutes" in captured["suffix"]
+    assert "Reconcile every returned node's latest Result" in captured["suffix"]
+    assert "Do not synthesize from only the first reports" in captured["suffix"]
     monkeypatch.delenv(graphs.RESEARCH_BUDGET_ENV)
     await _coordinator_agent(_config())
     assert captured["middleware"][0].budget is None

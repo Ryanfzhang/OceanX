@@ -158,9 +158,11 @@ This smoke repeat diagnoses the corrected model routing; it is not a new formal 
 
 ## Run settings and comparison limits
 
-- OceanX benchmark runs use `OCEANX_FIGURE_DELIVERY=static`: Experts normally save final figures
-  as ordinary PNG images. OceanX's interactive plotting interface is not exposed to the models;
-  the desktop's interactive mode is unchanged.
+- OceanX benchmark runs use `OCEANX_FIGURE_DELIVERY=static`: when the researcher requested a
+  visual, or a figure is necessary scientific evidence, Experts save it as an ordinary PNG image.
+  OceanX's interactive plotting interface is not exposed to the models; the desktop's interactive
+  mode is unchanged. Reading one of these images gives the model a JPEG preview bounded to 1024 px
+  on its longest edge, while the full-resolution result remains on disk.
 - The Expert's last, tool-free delivery call may issue an extra provider request if its first
   reply contains tool markers rather than a report. Context compaction requests are counted
   separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
@@ -171,7 +173,8 @@ This smoke repeat diagnoses the corrected model routing; it is not a new formal 
 - Finch-local has no literature-search agent; it is not the full Robin system.
   Claude Code's search depends on its configured tools. OceanX consults Search Expert on demand
   for definitions, methods or published mechanisms the data context does not settle. These search
-  capabilities are not identical; report them when comparing methods.
+  capabilities are not identical; report them when comparing methods. Search Expert has one
+  independent slot by default and therefore does not occupy either data-analysis slot.
 - Failure categories describe observed messages, not blame. A read-only refusal may correctly
   protect another node's evidence, and a timeout may reflect slow computation. Inspect logs before
   assigning a cause; collection completeness and a successful run do not establish scientific correctness.
@@ -183,6 +186,9 @@ delivers that report and its original Summary; a short closing reply is added on
 the Coordinator receipt. The closing reply becomes the report only when no nonempty
 report exists, for the Discussion Partner, or when it contains a nonempty `## Summary`.
 Without closing prose, the receipt explicitly says so and gives the model-call stop reason.
+If an Expert reaches model call 30 without saving a report, analysis tools pause until it writes a
+defensible partial `report.md`; it may then continue analysis and update the report. This is a
+checkpoint, not a lower replacement for the 60-call limit.
 
 Every OceanX attempt delivers ordinary images, as the Claude Code and Finch arms do:
 `run_oceanx.py` starts the backend with `OCEANX_FIGURE_DELIVERY=static` and records
@@ -199,6 +205,12 @@ folder after the batch. Open its `index.md`, then each attempt's `review.md` for
 answer, figure gallery, registered result data and links to saved reports/code.
 The collector reads `outputs.json.task_results`; it does not discover results by
 scanning ordinary NetCDF files, run models, rerun analysis, or modify the original answer.
+After a completed attempt has a final answer and collection finishes without errors, the collector
+deletes every node's disposable `scratch/` directory and records file count and released bytes in
+`scratch_cleanup.json`. Reports, code, registered outputs and runtime records remain. If a final
+answer or any nested Expert report still cites an absolute scratch path, cleanup is refused and the
+reason is recorded instead of silently breaking the evidence trail. Later inventory still reports
+the released byte count from this manifest.
 
 `summary.json` and each `collection_manifest.json` distinguish runtime status from
 collection status. `collection_status=complete` means the available answer and

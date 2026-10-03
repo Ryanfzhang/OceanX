@@ -161,3 +161,4 @@ def test_experts_label_what_they_save_so_a_later_step_need_not_open_it():
     for policy in (OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY):
         assert ("Give every variable you save `units` and `long_name` attributes and the file a "
                 "one-line `title` attribute") in _flatten(policy)
+        assert "requested a visual or" in _flatten(policy)

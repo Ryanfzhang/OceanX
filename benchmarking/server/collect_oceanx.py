@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import time
@@ -202,6 +203,61 @@ def collect_analysis_records(attempt: Path, target: Path, task_id: str | None,
     return documents, 'missing'
 
 
+def _scratch_cleanup(attempt: Path, target: Path, task_id: str | None, *, ready: bool) -> dict:
+    """Remove disposable task scratch only after a complete, validated collection.
+
+    Final reports and the answer must not depend on scratch. If they do, retain it and make the
+    contract violation visible instead of silently breaking the evidence trail.
+    """
+    prior = attempt / 'scratch_cleanup.json'
+    if prior.is_file() and not prior.is_symlink():
+        try:
+            existing = json.loads(prior.read_text(encoding='utf-8'))
+            if existing.get('status') == 'cleaned':
+                (target / 'scratch_cleanup.json').write_text(
+                    json.dumps(existing, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+                return existing
+        except (OSError, ValueError, TypeError):
+            pass
+    record = {'schema_version': 1, 'status': 'retained', 'file_count': 0, 'bytes_released': 0}
+    if not ready:
+        record['reason'] = 'collection is incomplete'
+    elif task_id is None:
+        record['reason'] = 'task identity is unavailable'
+    else:
+        try:
+            root = task_root(attempt, task_id)
+            scratches = sorted(
+                path for path in (root / 'agents').glob('*/scratch')
+                if path.is_dir() and not path.is_symlink()
+            )
+            texts = []
+            reports = sorted((root / 'agents').rglob('report.md'))
+            for path in [attempt / 'answer.md', *reports]:
+                if path.is_file() and not path.is_symlink():
+                    texts.append(path.read_text(encoding='utf-8', errors='replace'))
+            references = [str(path) for path in scratches if any(str(path) in text for text in texts)]
+            if references:
+                record['reason'] = 'final text references scratch: ' + ', '.join(references)
+            else:
+                files = total = 0
+                for scratch in scratches:
+                    for directory, _, names in os.walk(scratch, followlinks=False):
+                        for name in names:
+                            path = Path(directory) / name
+                            files += 1
+                            if path.is_file() and not path.is_symlink():
+                                total += path.stat().st_size
+                    shutil.rmtree(scratch)
+                record.update(status='cleaned', file_count=files, bytes_released=total)
+        except (OSError, ValueError, TypeError) as exc:
+            record['reason'] = f'cleanup could not be verified: {exc}'
+    content = json.dumps(record, ensure_ascii=False, indent=2) + '\n'
+    (target / 'scratch_cleanup.json').write_text(content, encoding='utf-8')
+    (attempt / 'scratch_cleanup.json').write_text(content, encoding='utf-8')
+    return record
+
+
 def collect_run(run: Path, destination: Path | None = None) -> Path:
     run = run.resolve()
     if not run.is_dir():
@@ -319,13 +375,18 @@ def collect_run(run: Path, destination: Path | None = None) -> Path:
         if errors:
             review += '\n\n## Collection issues\n\n' + '\n'.join(f'- {error}' for error in errors)
         (target / "review.md").write_text(review, encoding="utf-8")
+        scratch_cleanup = _scratch_cleanup(
+            attempt, target, result.get('task_id'),
+            ready=result.get('status') == 'completed' and has_answer and not errors,
+        )
         delivery = {'schema_version': 1, 'source': 'task_results' if canonical else 'legacy_receipts',
                     'runtime_status': result.get('status'), 'collection_status': delivery_status,
                     'has_final_answer': has_answer, 'registered_outputs': registered,
                     'accepted_outputs': accepted, 'png_count': len(figures),
                     'notebook_kind': notebook_kind, 'analysis_notebook_provided': notebook_kind == 'provided',
                     'results': entries if canonical else [], 'documents': documents,
-                    'collection_errors': errors, 'recomputed': False}
+                    'collection_errors': errors, 'scratch_cleanup': scratch_cleanup,
+                    'recomputed': False}
         (target / 'collection_manifest.json').write_text(json.dumps(delivery, ensure_ascii=False, indent=2) + '\n')
         summary.append({
             "id": result.get("id", attempt.parent.name), "attempt": attempt.name,
@@ -333,6 +394,7 @@ def collect_run(run: Path, destination: Path | None = None) -> Path:
             "accepted_outputs": accepted, "png_count": len(figures), "collection_errors": errors,
             'collection_status': delivery_status, 'registered_outputs': registered,
             'notebook_kind': notebook_kind,
+            'scratch_cleanup': scratch_cleanup,
             "elapsed_seconds": result.get("elapsed_seconds"),
             "coordinator_usage": result.get("coordinator_usage"), "expert_usage": result.get("expert_usage"),
             "review": (relative / "review.md").as_posix(),

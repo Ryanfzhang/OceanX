@@ -593,7 +593,7 @@ def questions(digest: dict, calls: list[dict], files: list[dict]) -> list[dict]:
 
 
 def disk(attempt: Path) -> dict:
-    """Bytes in the attempt folder, and how many of them are arrays in the agents' scratch folders."""
+    """Current bytes plus scratch bytes already released by validated collection."""
     total = scratch = 0
     for folder, _, names in os.walk(attempt):
         inside = Path(folder).relative_to(attempt).parts
@@ -606,7 +606,16 @@ def disk(attempt: Path) -> dict:
             total += size
             # workspace / OceanX Tasks / <task> / agents / <agent> / scratch
             scratch += size if inside[3:4] == ("agents",) and inside[5:6] == ("scratch",) else 0
-    return {"total": total, "scratch": scratch}
+    released = 0
+    cleanup = attempt / "scratch_cleanup.json"
+    if cleanup.is_file() and not cleanup.is_symlink():
+        try:
+            record = json.loads(cleanup.read_text(encoding="utf-8"))
+            if record.get("status") == "cleaned":
+                released = max(0, int(record.get("bytes_released") or 0))
+        except (OSError, ValueError, TypeError):
+            pass
+    return {"total": total, "scratch": scratch, "scratch_released": released}
 
 
 def code_failures(code: list[tuple[str, dict]]) -> dict:
@@ -807,10 +816,11 @@ def record_page(record: dict) -> str:
     spent_tokens = (f"- Tokens: {millions(tokens['input_tokens'])} input ({millions(tokens['cached_input_tokens'])} "
                     f"from cache), {millions(tokens['output_tokens'])} output, {tokens['calls']} model calls "
                     f"({tokens['failed_calls']} failed)")
+    released = size.get("scratch_released", 0)
     kept = (f"- Kept: {kinds.count('final report')} final report, {kinds.count('question report')} question "
             f"reports, {kinds.count('report version')} report versions, {kinds.count('conversation history')} "
             f"conversation histories, {gigabytes(size['total'])} on disk ({gigabytes(size['scratch'])} in scratch "
-            "folders)")
+            "folders" + (f", {gigabytes(released)} scratch released after collection" if released else "") + ")")
     header = ("| Node | Question | Answered by | Status | Label | Attempts (without a report) | Minutes | "
               "Input tokens | Output tokens | Skills opened | Report |")
     causes = runs.get("failures") or {}
@@ -864,6 +874,8 @@ def inventory(args) -> dict:
     return {"attempts": len(records), "complete": len(records) - len(incomplete), "incomplete": incomplete,
             "disk_gb": round(sum(r["disk"]["total"] for r in records) / 1e9, 1),
             "scratch_gb": round(sum(r["disk"]["scratch"] for r in records) / 1e9, 1),
+            "scratch_released_gb": round(sum(
+                r["disk"].get("scratch_released", 0) for r in records) / 1e9, 1),
             "report": str(out / "inventory.md")}
 
 

@@ -210,7 +210,8 @@ not by numeric axis, and save reusable arrays as NetCDF with their dimensions an
 as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
 one-line `title` attribute, so a later step can tell what it holds without opening it. For a user-facing interactive figure, use
 `from oceanx.scientific_view import ScientificFigure`, supply the computed arrays and complete panel/layer
-structure, then call `figure.save('concise-name.nc')`. That explicit save is the delivery boundary; ordinary
+structure, then call `figure.save('concise-name.nc')` when the researcher requested a visual or the visual is
+necessary scientific evidence. That explicit save is the delivery boundary; ordinary
 NetCDF files are not figures. Cite the assigned Agent namespace plus filename stem in report.md immediately
 after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
 comparisons and scientific scales. Omit style arguments to use the Workbench defaults. Do not spend a separate
@@ -229,7 +230,9 @@ Keep verified calculations and code. Derive reported values and labels from save
 estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
 not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
 as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
-one-line `title` attribute, so a later step can tell what it holds without opening it. Make a final figure with matplotlib and save it as a PNG under OCEAN_OUTPUT_DIR, for
+one-line `title` attribute, so a later step can tell what it holds without opening it. When the researcher
+requested a visual or a figure is necessary scientific evidence, make the final figure with matplotlib and
+save it as a PNG under OCEAN_OUTPUT_DIR, for
 example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'), dpi=150,
 bbox_inches='tight')`; that file is the delivered figure. Keep exploratory plots in your working directory.
 Name the figure file in report.md immediately after the supported claim. You own the scientific visual

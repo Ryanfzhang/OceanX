@@ -338,6 +338,64 @@ def test_middleware_logs_delegation_strips_arg_and_exposes_binding(tmp_path):
     assert middleware.wrap_tool_call(_Request(other), lambda r: r.tool_call) == other
 
 
+def test_visual_only_retry_is_refused_when_the_researcher_did_not_request_a_visual(tmp_path):
+    tree = mechanism_tree(tmp_path)
+    tree.update([{"action": "set_status", "target": "B1.3", "status": "selected"}])
+    tree.attach_result(
+        "B1.3", summary=SUMMARY, agent_key="ocean-a", report_path="/report.md",
+    )
+    middleware = StructuredDelegationMiddleware(
+        tree, original_question="How much do definitions and averaging affect mixed-layer depth?",
+    )
+    call = {"name": "task", "id": "visual", "args": {
+        "description": "B1.3: publish the missing comparison figure from saved evidence",
+        "subagent_type": "ocean_process_expert", "node_id": "B1.3",
+    }}
+    result = middleware.wrap_tool_call(_Request(call), lambda _request: "started")
+    assert isinstance(result, ToolMessage)
+    assert result.status == "error"
+    assert "researcher did not request a visual" in result.text
+
+
+def test_visual_retry_is_allowed_when_the_researcher_explicitly_requested_it(tmp_path):
+    tree = mechanism_tree(tmp_path)
+    tree.update([{"action": "set_status", "target": "B1.3", "status": "selected"}])
+    tree.attach_result(
+        "B1.3", summary=SUMMARY, agent_key="ocean-a", report_path="/report.md",
+    )
+    middleware = StructuredDelegationMiddleware(
+        tree, original_question="Plot a comparison figure of both mixed-layer definitions.",
+    )
+    call = {"name": "task", "id": "visual", "args": {
+        "description": "B1.3: publish the missing comparison figure from saved evidence",
+        "subagent_type": "ocean_process_expert", "node_id": "B1.3",
+    }}
+    assert middleware.wrap_tool_call(_Request(call), lambda _request: "started") == "started"
+
+
+@pytest.mark.asyncio
+async def test_async_visual_only_retry_has_the_same_request_gate(tmp_path):
+    tree = mechanism_tree(tmp_path)
+    tree.update([{"action": "set_status", "target": "B1.3", "status": "selected"}])
+    tree.attach_result(
+        "B1.3", summary=SUMMARY, agent_key="ocean-a", report_path="/report.md",
+    )
+    middleware = StructuredDelegationMiddleware(
+        tree, original_question="Assess mixed-layer-depth sensitivity.",
+    )
+    call = {"name": "task", "id": "visual-async", "args": {
+        "description": "B1.3: render the omitted comparison plot from saved evidence",
+        "subagent_type": "ocean_process_expert", "node_id": "B1.3",
+    }}
+
+    async def should_not_start(_request):
+        raise AssertionError("visual-only retry started")
+
+    result = await middleware.awrap_tool_call(_Request(call), should_not_start)
+    assert isinstance(result, ToolMessage)
+    assert result.status == "error"
+
+
 @pytest.mark.asyncio
 async def test_a_node_added_in_the_same_turn_is_bound_when_its_task_starts(tmp_path):
     # r2, 2026-10-03: the Coordinator added B1.3.1.1.1 and delegated it in one turn. Tool calls

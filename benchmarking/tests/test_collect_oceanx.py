@@ -1,7 +1,7 @@
 import hashlib
 import json
-import pytest
 
+import pytest
 from collect_oceanx import collect_run
 
 
@@ -129,6 +129,47 @@ def test_current_results_use_immutable_store_and_collect_reports_and_tables(tmp_
     assert (target / 'delivery/table_1/v0001/table.csv').read_bytes() == b'x,y\n1,2\n'
     assert (target / 'reports/coordinator/report.md').read_text() == 'coordinator report'
     assert 'delivery/table_1/v0001/table.csv' in (target / 'review.md').read_text()
+
+
+def test_successful_collection_clears_all_scratch_and_records_what_was_removed(tmp_path):
+    attempt, root = current_attempt(tmp_path)
+    write_current_index(attempt, [result_record(root)])
+    scratch = root / 'agents/expert/scratch'
+    (scratch / 'nested').mkdir(parents=True)
+    (scratch / 'small.txt').write_bytes(b'small')
+    (scratch / 'nested/large.nc').write_bytes(b'x' * 1024)
+
+    target, summary = collected_attempt(attempt)
+
+    assert not scratch.exists()
+    cleanup = json.loads((attempt / 'scratch_cleanup.json').read_text())
+    assert cleanup['file_count'] == 2
+    assert cleanup['bytes_released'] == 1029
+    assert cleanup['status'] == 'cleaned'
+    assert json.loads((target / 'scratch_cleanup.json').read_text()) == cleanup
+    assert summary['scratch_cleanup']['status'] == 'cleaned'
+    recollection = collect_run(attempt.parents[1])
+    repeated = json.loads((recollection / 'E10/attempt-1/scratch_cleanup.json').read_text())
+    assert repeated == cleanup  # recollection must not erase the original released-byte count
+
+
+def test_collection_keeps_scratch_when_a_final_report_still_references_it(tmp_path):
+    attempt, root = current_attempt(tmp_path)
+    write_current_index(attempt, [result_record(root)])
+    scratch = root / 'agents/expert/scratch'
+    scratch.mkdir(parents=True)
+    evidence = scratch / 'only-evidence.nc'
+    evidence.write_bytes(b'evidence')
+    report = root / 'agents/expert/reports/B1/report.md'
+    report.parent.mkdir(parents=True)
+    report.write_text(f'Result depends on {evidence}.')
+
+    target, summary = collected_attempt(attempt)
+
+    assert evidence.exists()
+    assert summary['scratch_cleanup']['status'] == 'retained'
+    assert 'final text references scratch' in summary['scratch_cleanup']['reason']
+    assert json.loads((target / 'scratch_cleanup.json').read_text())['status'] == 'retained'
 
 
 @pytest.mark.parametrize('failure', ['checksum', 'size', 'missing', 'escape', 'symlink', 'foreign_task'])

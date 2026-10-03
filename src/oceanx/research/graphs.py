@@ -48,6 +48,7 @@ from oceanx.tools import OceanToolServices
 
 _LOGGER = logging.getLogger(__name__)
 EXPERT_MODEL_CALL_LIMIT = 60
+EXPERT_REPORT_CHECKPOINT_START = 30
 EXPERT_WIND_DOWN_START = 48
 EXPERT_FINAL_CALL = EXPERT_MODEL_CALL_LIMIT - 1
 
@@ -59,10 +60,19 @@ def _parallel_expert_limit() -> int:
         return 2
 
 
-# Expert runs that may work at once across the whole app; the rest wait for a free slot.
-# Each run loads data and runs code on this machine, so this bounds local CPU and memory.
+def _parallel_search_expert_limit() -> int:
+    try:
+        return max(1, int(os.environ.get("OCEANX_MAX_PARALLEL_SEARCH_EXPERTS", "1")))
+    except ValueError:
+        return 1
+
+
+# Data Expert runs that may work at once across the whole app; Search has its own small pool below.
+# Data runs load arrays and execute code on this machine, so their pool bounds local CPU and memory.
 MAX_PARALLEL_EXPERTS = _parallel_expert_limit()
+MAX_PARALLEL_SEARCH_EXPERTS = _parallel_search_expert_limit()
 _EXPERT_SLOTS: tuple[asyncio.AbstractEventLoop, asyncio.Semaphore] | None = None
+_SEARCH_EXPERT_SLOTS: tuple[asyncio.AbstractEventLoop, asyncio.Semaphore] | None = None
 
 
 def _expert_slots() -> asyncio.Semaphore:
@@ -72,6 +82,17 @@ def _expert_slots() -> asyncio.Semaphore:
     if _EXPERT_SLOTS is None or _EXPERT_SLOTS[0] is not loop:
         _EXPERT_SLOTS = (loop, asyncio.Semaphore(MAX_PARALLEL_EXPERTS))
     return _EXPERT_SLOTS[1]
+
+
+def _search_expert_slots() -> asyncio.Semaphore:
+    """A small independent pool so source consultation cannot block data analysis."""
+    global _SEARCH_EXPERT_SLOTS
+    loop = asyncio.get_running_loop()
+    if _SEARCH_EXPERT_SLOTS is None or _SEARCH_EXPERT_SLOTS[0] is not loop:
+        _SEARCH_EXPERT_SLOTS = (loop, asyncio.Semaphore(MAX_PARALLEL_SEARCH_EXPERTS))
+    return _SEARCH_EXPERT_SLOTS[1]
+
+
 _WIND_DOWN_TOOLS = frozenset({"ls", "glob", "grep", "read_file", "write_file", "edit_file"})
 COORDINATOR_FILESYSTEM_TOOLS = (
     "ls",
@@ -164,6 +185,10 @@ def _wind_down_request(request):
 WIND_DOWN_REFUSAL = (
     "Not run: the analysis phase of this assignment is over and only file tools work now. "
     "Write or update report.md from the evidence you already have, then finish."
+)
+REPORT_CHECKPOINT_REFUSAL = (
+    "Not run: first save the defensible partial answer you already have to the backend-assigned "
+    "report.md. After that checkpoint, analysis tools become available again."
 )
 
 
@@ -290,23 +315,60 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
     refused without running; call 60 is a tool-free delivery call.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, report_path: Path | None = None) -> None:
         super().__init__(run_limit=EXPERT_MODEL_CALL_LIMIT, exit_behavior="end")
+        self.report_path = report_path
+
+    def _checkpoint_pending(self, request) -> bool:
+        call_count = int(request.state.get("run_model_call_count", 0))
+        try:
+            saved = self.report_path is not None and self.report_path.is_file() \
+                and self.report_path.stat().st_size > 0
+        except OSError:
+            saved = False
+        return (
+            self.report_path is not None
+            and EXPERT_REPORT_CHECKPOINT_START <= call_count < EXPERT_WIND_DOWN_START
+            and not saved
+        )
+
+    def _prepare_request(self, request):
+        request = _wind_down_request(request)
+        if not self._checkpoint_pending(request):
+            return request
+        base_prompt = request.system_message.text if request.system_message else ""
+        instruction = (
+            "# Required report checkpoint\n"
+            "Pause further analysis. Use the available filesystem tools now to write the first "
+            "defensible partial answer to the backend-assigned report.md. Keep limitations honest. "
+            "This is an updatable checkpoint, not the end of the assignment; after it is saved, "
+            "the analysis tools return on the next call."
+        )
+        return request.override(
+            tools=[tool for tool in request.tools if _tool_name(tool) in _WIND_DOWN_TOOLS],
+            system_message=SystemMessage(content=f"{base_prompt}\n\n{instruction}".strip()),
+        )
 
     def wrap_model_call(self, request, handler):
-        request = _wind_down_request(request)
+        request = self._prepare_request(request)
         response = handler(request)
         return handler(_plain_text_request(request)) if _undelivered(request, response) else response
 
     async def awrap_model_call(self, request, handler):
-        request = _wind_down_request(request)
+        request = self._prepare_request(request)
         response = await handler(request)
         return await handler(_plain_text_request(request)) if _undelivered(request, response) else response
 
     def wrap_tool_call(self, request, handler):
+        if self._checkpoint_pending(request) and request.tool_call.get("name") not in _WIND_DOWN_TOOLS:
+            return ToolMessage(content=REPORT_CHECKPOINT_REFUSAL, tool_call_id=request.tool_call["id"],
+                               name=request.tool_call.get("name"), status="error")
         return _refused_tool_call(request) or handler(request)
 
     async def awrap_tool_call(self, request, handler):
+        if self._checkpoint_pending(request) and request.tool_call.get("name") not in _WIND_DOWN_TOOLS:
+            return ToolMessage(content=REPORT_CHECKPOINT_REFUSAL, tool_call_id=request.tool_call["id"],
+                               name=request.tool_call.get("name"), status="error")
         return _refused_tool_call(request) or await handler(request)
 
 
@@ -655,7 +717,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         prompt += (f"\nWorking directory for native file tools and execute: {working_directory}. "
                    + ("" if static else
                       f"Result API reference: {working_directory.parent / '.runtime' / 'result-api.md'}. ")
-                   + "This working directory is task scratch: keep reusable calculations "
+                   + "This working directory is task scratch: keep only calculations needed by a later "
+                   "node or retry "
                    + ("and exploratory plots " if static else "")
                    + "here, not in outputs. Scratch may be removed after the task becomes idle. "
                    "Save only final deliverables under OCEAN_OUTPUT_DIR; "
@@ -671,7 +734,10 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         else:
             limit = int(svc.expert_code_execution.limits.wall_time_seconds or 300)
             prompt += (f"\nEach execute or ocean_expert_run_code run is stopped after {limit} s; a larger "
-                       "timeout does not extend it. Split long work and save intermediate files.")
+                       "timeout does not extend it. Split long work. ocean_expert_run_code keeps Python "
+                       "variables for this attempt, so prefer it for iterative array analysis; use execute "
+                       "for reproducible scripts or shell work. Do not save full source-field copies merely "
+                       "to carry state within one attempt. Save only a checkpoint another node or retry needs.")
     if (svc.native_vision and research and not static
             and role not in {"coordinator", "scientific_discussion_partner"}):
         prompt += (
@@ -804,13 +870,20 @@ async def expert(config, role: str):
             config,
             role,
             run=run,
-            middleware=[ExpertCallBudgetMiddleware()],
+            middleware=[ExpertCallBudgetMiddleware(report_path=host().research.report_path(run))],
         )
         # The read-only Discussion Partner runs no code, so it does not take a slot.
-        slot = contextlib.nullcontext() if role == "scientific_discussion_partner" else _expert_slots()
+        slot = (
+            contextlib.nullcontext()
+            if role == "scientific_discussion_partner"
+            else _search_expert_slots()
+            if role == "literature_reproduction_expert"
+            else _expert_slots()
+        )
         if isinstance(slot, asyncio.Semaphore) and slot.locked():
-            _LOGGER.info("Expert %s waits for one of %d parallel slots", run.thread_id,
-                         MAX_PARALLEL_EXPERTS)
+            limit = (MAX_PARALLEL_SEARCH_EXPERTS
+                     if role == "literature_reproduction_expert" else MAX_PARALLEL_EXPERTS)
+            _LOGGER.info("Expert %s waits for one of %d parallel slots", run.thread_id, limit)
         async with slot:
             token = INSIDE_EXPERT.set(True)  # the Coordinator's inherited meter skips these calls
             try:
@@ -946,7 +1019,8 @@ async def _coordinator_agent(config):
     budget = research_budget_minutes()
     # The budget check comes first, so a refused assignment is never bound to a tree node.
     return await build(config, "coordinator", subagents=specs,
-                       middleware=[ResearchBudgetMiddleware(budget), StructuredDelegationMiddleware(tree)],
+                       middleware=[ResearchBudgetMiddleware(budget), StructuredDelegationMiddleware(
+                           tree, original_question=config["configurable"].get("original_question", ""))],
                        suffix=(
         (f"\n{guidance}\n" if guidance else "")
         + (f"\nResearch time budget: {budget:.0f} minutes. After {RESEARCH_BUDGET_STOP * budget:.0f} "
@@ -965,7 +1039,11 @@ async def _coordinator_agent(config):
            "path. If a claim has no published result, refer to the Expert report in prose without bracket syntax. ")
         + "When the research question is answered, write the final answer to the assigned report, begin it "
         "with a short ## Summary, and finish. First read the tree with "
-        "update_research_tree(changes=[], view='full') and end with the required ## Research Tree section.\n\n"
+        "update_research_tree(changes=[], view='full'). Reconcile every returned node's latest Result and "
+        "Evidence and limitations before writing: keep numbers from different definitions, thresholds, "
+        "periods or regions explicitly separated, and open a listed report when its compact Summary is "
+        "insufficient or conflicts with another node. Do not synthesize from only the first reports. End "
+        "with the required ## Research Tree section.\n\n"
         + _visual_delivery_policy()))
 
 
