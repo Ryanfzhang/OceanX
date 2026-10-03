@@ -92,16 +92,36 @@ async def test_standard_workflow_keeps_native_experts_without_a_research_tree(
     assert "execute" not in COORDINATOR_FILESYSTEM_TOOLS
 
 
-def test_same_root_branch_reuses_workspace_and_independent_roots_do_not():
-    first = AgentRun.from_config(_config(), "ocean_process_expert", question="B1: establish anomaly")
+def test_each_tree_node_has_its_own_workspace_and_another_attempt_reuses_it():
+    parent = AgentRun.from_config(_config(), "ocean_process_expert", question="B1: establish anomaly")
     child = AgentRun.from_config(_config(), "ocean_process_expert", question="B1.2: test transport")
+    again = AgentRun.from_config(_config(), "ocean_process_expert",
+                                 question="B1.2: publish the transport map from the saved evidence")
     sibling = AgentRun.from_config(_config(), "ocean_process_expert", question="B2: test mixing")
-    assert first.thread_id == child.thread_id
-    assert first.thread_id != sibling.thread_id
-    assert first.agent_run_id == first.thread_id
+    assert len({parent.thread_id, child.thread_id, sibling.thread_id}) == 3
+    assert again.thread_id == child.thread_id
+    assert parent.agent_run_id == parent.thread_id
 
 
-def test_same_expert_keeps_distinct_parent_and_child_reports(tmp_path):
+def test_the_tree_binding_names_the_node_when_the_question_names_its_parent():
+    from oceanx.research import delegation
+
+    question = "Continue B1: test transport"
+    token = delegation._CURRENT.set(delegation.resolve_delegation(
+        {"node_id": "B1.2", "description": question}))
+    try:
+        run = AgentRun.from_config(_config(), "ocean_process_expert", question=question)
+    finally:
+        delegation._CURRENT.reset(token)
+    assert run.node_id == "B1.2"
+    assert run.thread_id == expert_agent_key("task", "ocean_process_expert", "B1.2: transport")
+    assert run.thread_id != expert_agent_key("task", "ocean_process_expert", question)
+    card = _child("call-1", question)
+    card["node_id"] = "B1.2"
+    assert _team([card]).agents[1].agent_id == run.thread_id
+
+
+def test_parent_and_child_nodes_keep_reports_in_their_own_folders(tmp_path):
     def root(_task_id, agent_key):
         path = tmp_path / "agents" / agent_key
         (path / "outputs").mkdir(parents=True, exist_ok=True)
@@ -120,11 +140,13 @@ def test_same_expert_keeps_distinct_parent_and_child_reports(tmp_path):
     second_child = AgentRun.from_config(
         _config(), "ocean_process_expert", question="Question (B1.2): test transport"
     )
-    assert parent.thread_id == first_child.thread_id == second_child.thread_id
+    assert len({parent.thread_id, first_child.thread_id, second_child.thread_id}) == 3
     paths = {services.report_path(run) for run in (parent, first_child, second_child)}
     assert len(paths) == 3
-    assert services.report_path(parent).as_posix().endswith("/reports/B1/report.md")
-    assert services.report_path(first_child).as_posix().endswith("/reports/B1.1/report.md")
+    assert services.report_path(parent).as_posix().endswith(
+        f"/{parent.thread_id}/reports/B1/report.md")
+    assert services.report_path(first_child).as_posix().endswith(
+        f"/{first_child.thread_id}/reports/B1.1/report.md")
 
 
 def test_agent_report_collection_does_not_judge_report_content(tmp_path):
@@ -504,6 +526,83 @@ def test_missing_report_receipt_never_forwards_tool_markup(tmp_path):
     assert _missing_report([question, AIMessage(content="Done.")], report) == "Done."
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fails,close_fails", [(False, False), (True, False), (False, True)])
+async def test_each_expert_attempt_closes_its_node_kernel(monkeypatch, tmp_path, fails, close_fails):
+    from oceanx.research import graphs
+
+    closed = []
+
+    class Kernels:
+        async def close(self, key):
+            closed.append(key)
+            if close_fails:  # a cleanup problem must not fail a finished attempt
+                raise RuntimeError("kernel busy")
+
+    def root(_task_id, agent_key):
+        path = tmp_path / "agents" / agent_key
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    projector = SimpleNamespace(expert_session_root=root)
+    fake_host = SimpleNamespace(
+        research=ResearchServices(SimpleNamespace(task_workspace_projector=projector,
+                                                  expert_code_execution=None)),
+        task_workspace_projector=projector,
+        expert_code_execution=SimpleNamespace(kernels=Kernels()),
+    )
+
+    class Author:
+        async def ainvoke(self, state, config):
+            if fails:
+                raise RuntimeError("model failed")
+            return {"messages": [*state["messages"], AIMessage(content="Done.")]}
+
+    async def fake_build(*_args, **_kwargs):
+        return Author()
+
+    monkeypatch.setattr(graphs, "host", lambda: fake_host)
+    monkeypatch.setattr(graphs, "build", fake_build)
+    graph = await graphs.expert(_config(), "ocean_process_expert")
+    state = {"messages": [HumanMessage(content="B1.2: test transport")]}
+    if fails:
+        with pytest.raises(RuntimeError, match="model failed"):
+            await graph.ainvoke(state, _config())
+    else:
+        await graph.ainvoke(state, _config())
+    key = expert_agent_key("task", "ocean_process_expert", "B1.2: test transport")
+    # Its memory never reaches another node or a later attempt; the files stay.
+    assert closed == [str(tmp_path / "agents" / key)]
+
+
+def test_an_expert_is_shown_the_folders_of_the_nodes_it_continues(monkeypatch, tmp_path):
+    from oceanx.research import graphs
+
+    attempts = {
+        "B1.3": [{"agent_key": "ocean-process-old"}, {"agent_key": "ocean-process-new"}],
+        "B1": [{"agent_key": "statistics-b1"}, {"agent_key": "coordinator"}],
+        "B2.1": [{"agent_key": "ocean-process-own"}, {"agent_key": "ocean-process-b21"}],
+    }
+    tree = SimpleNamespace(
+        document=lambda: {"nodes": {"B1.3.1": {"dependencies": ["B2.1", "B1"]}}},
+        attempts=lambda node: attempts.get(node, []))
+    monkeypatch.setattr(graphs, "research_tree", lambda _task_id: tree)
+    monkeypatch.setattr(graphs, "host", lambda: SimpleNamespace(task_workspace_projector=SimpleNamespace(
+        expert_session_root=lambda _task_id, key: tmp_path / "agents" / key)))
+    run = AgentRun("ws", "task", "request", "ocean-process-own", "server", "ocean_process_expert",
+                   question="B1.3.1: test the depth", node_id="B1.3.1")
+    agents = tmp_path / "agents"
+    # Nearest node first, its latest attempt first; never the Coordinator or this node itself.
+    assert graphs._earlier_work(run) == [
+        f"B1.3: {agents / 'ocean-process-new'}, {agents / 'ocean-process-old'}",
+        f"B1: {agents / 'statistics-b1'}",
+        f"B2.1: {agents / 'ocean-process-b21'}",
+    ]
+    unbound = AgentRun("ws", "task", "request", "ocean-process-x", "server", "ocean_process_expert",
+                       question="What is the trend?")
+    assert graphs._earlier_work(unbound) == []
+
+
 def _team(children, state="running"):
     router = object.__new__(OceanRequestRouter)
     router._native_task_activity = {}
@@ -527,7 +626,7 @@ def test_team_card_uses_same_identity_as_expert_workspace_from_start_to_followup
     assert started.agents[1].status == "working"
     first.update(status="completed", agent_key=expected.thread_id, report_path="/report.md")
     assert _team([first]).agents[1].status == "completed"
-    followup = _child("call-2", "B1.2: test transport")
+    followup = _child("call-2", "B1: publish the requested anomaly map from the saved evidence")
     snapshot = _team([first, followup])
     assert len(snapshot.agents) == 2
     assert snapshot.agents[1].agent_id == expected.thread_id
@@ -540,13 +639,13 @@ def test_team_card_uses_same_identity_as_expert_workspace_from_start_to_followup
     followup["status"] = "failed"
     failed = _team([first, followup])
     assert failed.agents[1].status == "failed"  # not the earlier success
-    other = _child("call-3", "B2: test mixing")
-    assert len(_team([first, followup, other]).agents) == 3
+    child = _child("call-3", "B1.2: test transport")
+    assert len(_team([first, followup, child]).agents) == 3  # a child node is its own Expert
 
 
 def test_finished_parallel_assignment_does_not_hide_work_still_running_on_same_expert():
     first = _child("call-1", "B1: anomaly")
-    second = _child("call-2", "B1.1: depth", "completed")
+    second = _child("call-2", "B1: depth of the anomaly", "completed")
     snapshot = _team([first, second])
     assert len(snapshot.agents) == 2
     assert snapshot.agents[1].status == "working"
@@ -572,7 +671,24 @@ def test_completed_expert_card_uses_report_result_as_its_preview():
     assert snapshot.todos[0].report_title == agent.activity
 
 
-def test_reused_expert_keeps_every_assignment_report_in_todos():
+def test_every_delegation_of_one_node_stays_on_one_card_whatever_its_wording():
+    # A retry, a report recovery and a visual follow-up of B1.3.1, as the Coordinator wrote them.
+    descriptions = ("B1.3.1: test the depth of the anomaly",
+                    "Recover the report from the saved files",
+                    "Continue B1.3: publish the requested depth map")
+    children = []
+    for index, description in enumerate(descriptions, 1):
+        child = _child(f"call-{index}", description, "completed" if index < 3 else "running")
+        child["node_id"] = "B1.3.1"
+        children.append(child)
+    snapshot = _team(children)
+    expected = expert_agent_key("task", "ocean_process_expert", "", "B1.3.1")
+    assert [agent.agent_id for agent in snapshot.agents[1:]] == [expected]
+    assert snapshot.agents[1].status == "working"
+    assert len(snapshot.todos) == 3
+
+
+def test_repeated_work_on_one_node_keeps_every_assignment_report_in_todos():
     first = _child("call-1", "B1.1: establish anomaly", "completed")
     first.update(
         report_path="/task/agents/ocean/reports/B1.1/report.md",
@@ -580,23 +696,23 @@ def test_reused_expert_keeps_every_assignment_report_in_todos():
         created_at="2026-09-18T10:00:00Z",
         last_updated_at="2026-09-18T10:05:00Z",
     )
-    second = _child("call-2", "B1.2: test transport", "completed")
+    second = _child("call-2", "B1.1: publish the anomaly map", "completed")
     second.update(
-        report_path="/task/agents/ocean/reports/B1.2/report.md",
-        summary="Result: B1.2 found no resolved transport signal.",
+        report_path="/task/agents/ocean/reports/B1.1/report.md",
+        summary="Result: B1.1 published the anomaly map.",
         created_at="2026-09-18T10:06:00Z",
         last_updated_at="2026-09-18T10:11:00Z",
     )
     snapshot = _team([first, second])
 
-    assert len(snapshot.agents) == 2  # Coordinator plus one reused Ocean Expert.
+    assert len(snapshot.agents) == 2  # Coordinator plus the one Expert of node B1.1.
     assert [todo.report_path for todo in snapshot.todos] == [
         "/task/agents/ocean/reports/B1.1/report.md",
-        "/task/agents/ocean/reports/B1.2/report.md",
+        "/task/agents/ocean/reports/B1.1/report.md",
     ]
     assert [todo.report_title for todo in snapshot.todos] == [
         "B1.1 established the surface anomaly.",
-        "B1.2 found no resolved transport signal.",
+        "B1.1 published the anomaly map.",
     ]
     assert [todo.updated_at for todo in snapshot.todos] == [
         "2026-09-18T10:05:00Z",

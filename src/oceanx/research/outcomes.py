@@ -30,7 +30,7 @@ def _usage(record: dict) -> tuple[int, int]:
 def _executions_for(attempts: list[dict], executions: list[dict]) -> list[dict]:
     """Code runs by the attempt's Agent inside the attempt's time window.
 
-    Agents on one root branch share a key (and kernel), so the window separates nodes.
+    Every attempt at one node uses the node's key, so the window separates the attempts.
     """
     runs = []
     for attempt in attempts:

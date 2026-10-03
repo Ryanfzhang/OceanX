@@ -258,6 +258,38 @@ async def test_parallel_native_task_events_keep_their_own_assignment_when_start_
 
 
 @pytest.mark.asyncio
+async def test_a_task_call_keeps_its_id_and_node_when_delegation_drops_node_id():
+    class Graph:
+        async def aget_state(self, _config):
+            return type("Snapshot", (), {"values": {}})()
+
+        async def astream_events(self, *_args, **_kwargs):
+            calls = [
+                {"id": "call-bound", "name": "task", "type": "tool_call",
+                 "args": {"subagent_type": "ocean_process_expert",
+                          "description": "Continue B1: transport", "node_id": "B1.2"}},
+                {"id": "call-plain", "name": "task", "type": "tool_call",
+                 "args": {"subagent_type": "ocean_process_expert", "description": "B2: mixing"}},
+            ]
+            yield {"event": "on_chat_model_end", "run_id": "model", "data": {
+                "output": AIMessage(content="", tool_calls=calls)}}
+            # The delegation middleware removes node_id before the native task tool runs.
+            for call in reversed(calls):
+                executed = {key: value for key, value in call["args"].items() if key != "node_id"}
+                yield {"event": "on_tool_start", "name": "task", "run_id": call["id"] + "-run",
+                       "data": {"input": executed}}
+            yield {"event": "on_chat_model_end", "run_id": "final", "data": {
+                "output": AIMessage(content="Final synthesis.")}}
+
+    engine = DeepAgentEngine(graph=Graph(), thread_id="coordinator",
+                             operation_id_factory=lambda *_args: "operation")
+    events = [e async for e in engine.submit_message("study", request_id="req")]
+    starts = [e for e in events if isinstance(e, ToolExecutionStarted)]
+    assert [e.tool_call_id for e in starts] == ["call-plain", "call-bound"]
+    assert [e.tool_input.get("node_id") for e in starts] == [None, "B1.2"]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("delivery", ["normal", "disconnect", "empty", "length", "refusal"])
 async def test_deep_agent_returns_one_final_answer_with_fixture_tool_allowlist(
     tmp_path: Path, delivery: str, monkeypatch,

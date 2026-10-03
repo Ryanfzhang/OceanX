@@ -13,9 +13,9 @@ copying the original scientific files. Existing API credentials/settings are ret
 The database is created from `src/oceanx/backend/schema.sql`, with no historical migration
 chain. Explicitly pointing `--state-dir` at an old database is rejected, not upgraded.
 Agent Server owns native conversation checkpoints. Native Expert tasks have isolated model
-contexts. Questions under the same root research branch reuse one backend-assigned workspace and
-persistent Python kernel, while independent roots remain isolated. Old local execution checkpoints
-are not imported.
+contexts. Each research-tree node has its own backend-assigned workspace, and its Python kernel
+lives for one attempt; another attempt at the node continues in its files. Old local execution
+checkpoints are not imported.
 
 Interactive figures use self-describing NetCDF files saved through
 `oceanx.scientific_view.ScientificFigure`. Ordinary NetCDF files are not user-facing figures.
@@ -68,8 +68,8 @@ There is no separate Data Expert. Before the first analysis Expert of a task sta
 reads the supplied data's metadata once; DatasetContext then lists its variables, dimensions, units
 and time ranges for every later agent, and each analysis Expert inspects further detail only when its
 question needs it. The backend also supplies the original user request. Native task model
-contexts are isolated; questions in the same root branch reuse its fixed working/output directory
-and live kernel. Experts choose their methods and
+contexts are isolated; each tree node has its own working/output directory and reads the folders
+of the nodes it continues read-only. Experts choose their methods and
 write the canonical `report.md`, beginning with a short `## Summary`; no second result summary is
 generated. Scheduling, cancellation and child completion remain native DeepAgents/Agent Server
 state. OceanX does not mirror them into a second database lifecycle. There is no automatic
@@ -132,7 +132,7 @@ inherit server credentials. Native filesystem operations do not count as scienti
 explicit Expert commands use the existing execution records and artifact snapshots.
 Agents choose how to inspect data (e.g. a short xarray script), without a required startup scan.
 The duplicate OceanX listing, dataset-inspection and text-reading tools have been removed.
-Shell processes are fresh; the existing Python tool retains kernel variables within a root branch.
+Shell processes are fresh; the existing Python tool retains kernel variables within one attempt.
 Discussion Partner is read-only: only native `ls`, `glob`, `grep` and `read_file` are exposed,
 with no shell/Python execution or file-modification tools.
 

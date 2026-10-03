@@ -83,32 +83,30 @@ def host():
 
 
 def expert_agent_key(task_id: str, role: str, question: str, node_id: str | None = None) -> str:
-    """The same identity for an Expert's files, execution and UI participant.
+    """The same identity for an Expert's files, kernel, execution and UI participant.
 
-    A structured tree binding decides the root branch; otherwise the legacy text
-    match is used. Both give the same key when the question names its node.
+    Each research-tree node has its own identity, so nodes running at the same time never
+    share files or kernel memory, and another attempt at a node continues in its files.
+    The structured tree binding names the node; otherwise the first node ID in the
+    question does. Both give the same key when the question names its node.
     """
-    match = re.search(r"(?<![A-Za-z0-9])B(\d+)(?:\.\d+)*(?![A-Za-z0-9])", question)
-    if node_id:
-        branch = node_id.split(".")[0]
-    else:
-        branch = f"B{match.group(1)}" if match else question.strip()
+    match = re.search(r"(?<![A-Za-z0-9])B\d+(?:\.\d+)*(?![A-Za-z0-9])", question)
+    node = node_id or (match.group(0) if match else question.strip())
     role_name = {
         "ocean_process_expert": "ocean-process",
         "statistical_inference_expert": "statistics",
         "literature_reproduction_expert": "literature",
         "scientific_discussion_partner": "discussion",
     }.get(role, role.replace("_", "-"))
-    identity = "\x1f".join((task_id, role, branch)).encode("utf-8")
+    identity = "\x1f".join((task_id, role, node)).encode("utf-8")
     return f"{role_name}-{hashlib.sha256(identity).hexdigest()[:10]}"
 
 
 def expert_assignment_key(question: str) -> str:
     """Return one stable report directory for one tree question.
 
-    A root branch keeps one Expert identity, while B1, B1.1 and B1.2 keep
-    separate reports. This lets sibling follow-ups read the same immutable
-    parent answer without overwriting it.
+    Every attempt at B1.2 writes reports/B1.2/report.md in the node's own folder;
+    the report history keeps what each earlier attempt delivered.
     """
     match = re.search(r"(?<![A-Za-z0-9])(B\d+(?:\.\d+)*)(?![A-Za-z0-9])", question)
     if match:

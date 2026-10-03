@@ -257,9 +257,17 @@ class DeepAgentEngine:
                     opaque_tool_runs.add(run_id)
                     tool_name = str(event.get("name") or "")
                     tool_input = data.get("input")
+                    named = [item for item in pending_calls if item["name"] == tool_name]
+                    # A middleware may drop an argument before execution (delegation drops
+                    # node_id), so the model's call can hold more than the executed input.
                     call = next(
-                        (item for item in pending_calls if item["name"] == tool_name
-                         and (not isinstance(tool_input, dict) or item["args"] == tool_input)),
+                        (item for item in named
+                         if not isinstance(tool_input, dict) or item["args"] == tool_input),
+                        None,
+                    ) or next(
+                        (item for item in named if isinstance(tool_input, dict) and all(
+                            key in item["args"] and item["args"][key] == value
+                            for key, value in tool_input.items())),
                         None,
                     )
                     if call is not None:

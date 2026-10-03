@@ -85,7 +85,8 @@ A visual is delivered only when that Expert's native receipt lists a suitable se
 Published results. A filename, ordinary NetCDF file or PNG path is not a desktop result.
 
 If the Expert answered the scientific question but omitted the explicitly requested visual, you may make
-one and only one follow-up task call to the same Expert role. Ask it only to publish the requested view from
+one and only one follow-up task call to the same Expert role, for the same node_id when the question is a
+research-tree node, so it works in the same folder. Ask it only to publish the requested view from
 its saved evidence and include the previous report; do not request new analysis, visual polishing or another
 Expert. Never make a second visual-delivery follow-up and never create a replacement yourself. If that one
 follow-up still returns no suitable Published results key, finish honestly that the interactive visual was
@@ -311,6 +312,29 @@ def services(config, role: str, run: AgentRun | None = None) -> OceanToolService
     )
 
 
+def _earlier_work(run: AgentRun) -> list[str]:
+    """Folders of the nodes above this one and of the nodes it waits for, nearest first.
+
+    Each node works in its own folder; these are mounted read-only for it.
+    """
+    if not run.node_id:
+        return []
+    tree = research_tree(run.task_id)
+    parts = run.node_id.split(".")
+    sources = [".".join(parts[:depth]) for depth in range(len(parts) - 1, 0, -1)]
+    found = tree.document()["nodes"].get(run.node_id) or {}
+    sources += [node for node in found.get("dependencies", ()) if node not in sources]
+    lines = []
+    for node in sources:
+        keys = dict.fromkeys(attempt["agent_key"] for attempt in reversed(tree.attempts(node))
+                             if attempt.get("agent_key") not in (None, "", "coordinator", run.thread_id))
+        folders = [str(host().task_workspace_projector.expert_session_root(run.task_id, key))
+                   for key in keys]
+        if folders:
+            lines.append(f"{node}: {', '.join(folders)}")
+    return lines
+
+
 async def build(config, role: str, *, run: AgentRun | None = None, middleware=None,
                 subagents=None, suffix=""):
     svc = services(config, role, run)
@@ -385,6 +409,15 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
             "B1.1 is not a result name. Put the binding immediately after the supported claim so later "
             "synthesis can preserve it unchanged.\n"
         )
+        try:
+            earlier = _earlier_work(run)
+        except Exception:  # a hint only; never keep an Expert from starting
+            _LOGGER.warning("Could not list earlier work for %s", run.node_id, exc_info=True)
+            earlier = []
+        if earlier:
+            prompt += ("Earlier steps saved their files (scratch, outputs, reports) in these folders, "
+                       "read-only for you; reuse them rather than recomputing: "
+                       + "; ".join(earlier) + ".\n")
         prompt += ("Return the report as final text; the backend saves it at this path.\n" if discussion else
                    "Create report.md at this exact path as soon as you have a defensible partial answer, "
                    "and keep it current as evidence changes. Begin with a short ## Summary. Do not defer "
@@ -442,8 +475,20 @@ def _missing_report(messages, report_path: Path) -> str:
               else f"it stopped after {calls} model calls")
     root = report_path.parents[2]
     return (f"Result: No report — {reason} without writing {report_path}. Its saved files are in "
-            f"{root / 'scratch'} and {root / 'outputs'}. To recover, ask the same Expert to write "
-            "the report from those files.")
+            f"{root / 'scratch'} and {root / 'outputs'}. To recover, delegate the same node to the "
+            "same Expert role and ask it to write the report from those files.")
+
+
+async def _close_kernel(run: AgentRun) -> None:
+    """A kernel lives for one attempt: its memory never reaches another node or a later attempt,
+    and only running Experts hold memory. Saved files stay."""
+    execution = getattr(host(), "expert_code_execution", None)
+    if execution is not None:
+        root = host().task_workspace_projector.expert_session_root(run.task_id, run.thread_id)
+        try:
+            await execution.kernels.close(str(root))
+        except Exception:  # cleanup must not turn a finished attempt into a failed one
+            _LOGGER.warning("Could not close the kernel of %s", run.thread_id, exc_info=True)
 
 
 async def expert(config, role: str):
@@ -471,6 +516,8 @@ async def expert(config, role: str):
                 result = await author.ainvoke(state, config=config)
             finally:
                 INSIDE_EXPERT.reset(token)
+                if role != "scientific_discussion_partner":
+                    await asyncio.shield(_close_kernel(run))
         return {
             **result,
             "question": question,

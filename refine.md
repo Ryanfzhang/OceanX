@@ -17,10 +17,11 @@ checklist. Independent nodes on the ready frontier can be emitted as parallel ta
 Coordinator turn; the research policy decides whether deeper ready nodes wait for shallower ones.
 A dependent node waits for its evidence dependency.
 
-Native task model contexts are isolated. Questions under the same root tree branch share one
-backend-assigned working directory and persistent Python kernel so durable files and in-memory
-arrays can be reused. Independent roots remain isolated. Experts never read another agent's private
-conversation history; they receive explicit evidence paths instead.
+Native task model contexts are isolated. Each tree node has its own backend-assigned working
+directory, so nodes running at the same time never share files or kernel memory; a kernel lives for
+one attempt, and another attempt at the node continues in its files. An Expert is told the folders
+of the nodes it continues (ancestors and dependencies) and reads them read-only. Experts never read
+another agent's private conversation history; they receive explicit evidence paths instead.
 
 ## Research Tree
 

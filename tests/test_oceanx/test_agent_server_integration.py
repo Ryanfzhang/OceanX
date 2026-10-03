@@ -210,17 +210,17 @@ async def test_desktop_gateway_projects_native_task_without_owning_it(tmp_path, 
                         next_snapshot = next(e for e in events[index + 1:] if e["type"] == "team.snapshot")
                         assert any(a["agent_run_id"] == event["payload"]["tool_call_id"]
                                    and a["status"] == "working" for a in next_snapshot["payload"]["agents"])
-                # Same B1 Expert starts, completes, starts B1.1 and completes
-                # on one card. B2 (same role) gets its own card.
+                # B1, its follow-up B1.1 and B2 (same role) each have their own
+                # Expert, folder and card; each card starts and completes once.
                 if mode == "gateway_followup":
-                    assert len({a["agent_id"] for a in experts}) == 2
+                    assert len({a["agent_id"] for a in experts}) == 3
                     b1_key = experts[0]["agent_id"]
                     b1 = [a for a in experts if a["agent_id"] == b1_key]
                     states = [a["status"] for i, a in enumerate(b1)
                               if i == 0 or a["status"] != b1[i - 1]["status"]]
-                    assert states == ["working", "completed", "working", "completed"]
-                    assert len({a["agent_run_id"] for a in b1}) == 2
-                    assert len(snapshots[-1]["payload"]["agents"]) == 3
+                    assert states == ["working", "completed"]
+                    assert len({a["agent_run_id"] for a in b1}) == 1
+                    assert len(snapshots[-1]["payload"]["agents"]) == 4
                     assert len(snapshots[-1]["payload"]["todos"]) == 3
                     assignments = [todo["question"] for todo in snapshots[-1]["payload"]["todos"]]
                     assert all(text.startswith("Question (") for text in assignments)

@@ -2331,6 +2331,7 @@ class OceanRequestRouter:
                         "request_id": request.request_id,
                         "agent_name": str(event.tool_input.get("subagent_type") or "expert"),
                         "description": str(event.tool_input.get("description") or "Research subquestion"),
+                        "node_id": str(event.tool_input.get("node_id") or "").strip() or None,
                         "status": "running",
                         "created_at": now,
                         "last_updated_at": now,
@@ -2928,7 +2929,8 @@ class OceanRequestRouter:
                 continue
             profile_id = str(item.get("agent_name") or item.get("subagent_type") or "expert")
             question = str(item.get("description") or item.get("input") or "Research subquestion")
-            child_id = str(item.get("agent_key") or expert_agent_key(task_id or "", profile_id, question))
+            child_id = str(item.get("agent_key") or expert_agent_key(
+                task_id or "", profile_id, question, item.get("node_id")))
             question = self._bounded_text(question, 8_000)
             profile = next((p for p in AGENT_PROFILES if p.profile_id == profile_id), None)
             raw_status = str(item.get("status") or "pending").lower()
