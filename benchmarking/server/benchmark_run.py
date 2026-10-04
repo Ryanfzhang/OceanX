@@ -196,6 +196,10 @@ def configure_run(args, config, method, *, stack=None):
             config, 'BENCH_OCEANX_MAX_PARALLEL_EXPERTS', integer=True))
         os.environ['OCEANX_MAX_PARALLEL_SEARCH_EXPERTS'] = str(number(
             config, 'BENCH_OCEANX_MAX_PARALLEL_SEARCH_EXPERTS', integer=True))
+        # Lower than the desktop's 60 only; a higher limit is not a setting.
+        os.environ['OCEANX_EXPERT_CALL_LIMIT'] = str(number(
+            config, 'BENCH_OCEANX_EXPERT_CALL_LIMIT', integer=True, minimum=10, maximum=60,
+            inclusive_min=True))
         if args.timeout is None:
             args.timeout = number(config, 'BENCH_TIMEOUT_SECONDS', maximum=604800)
     elif method == 'Claude':

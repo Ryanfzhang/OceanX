@@ -31,6 +31,8 @@ BENCH_RESUME=false
 - `BENCH_TASKS=available`: select all numerically complete questions once; print exclusions.
 - `BENCH_TASKS=all`: require every question in the selected suite/set to have complete data.
 - `BENCH_TASKS=Q07,Q08,Q09`: require exactly these questions; commas or spaces are accepted.
+- `BENCH_OCEANX_EXPERT_CALL_LIMIT=40`: model calls one Expert may use (10 to 60; 60 is the desktop's
+  limit). Compare runs only at the same value, and give a run with another value a new `BENCH_EXPERIMENT`.
 - For an unscored smoke run: `BENCH_SUITE=evolution`, `BENCH_TASKS=E10` and a new experiment name.
 - Evolution round A/B: `BENCH_SUITE=evolution`, `BENCH_EVOLUTION_SET=A` or `B`.
   All 24 evolution questions are selected when that field is empty and tasks are `all`/`available`.
@@ -169,7 +171,9 @@ This smoke repeat diagnoses the corrected model routing; it is not a new formal 
 - The Expert's last, tool-free delivery call may issue an extra provider request if its first
   reply contains tool markers rather than a report. Context compaction requests are counted
   separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
-  the 60-call loop limit is not an exact count of all provider requests.
+  the Expert call limit (60 on the desktop; `BENCH_OCEANX_EXPERT_CALL_LIMIT`, 10 to 60, in benchmark runs
+  and recorded in `arm.json`) is not an exact count of all provider requests. At a lower limit the report
+  checkpoint falls at half of it and the wind-down at four fifths, as at 30 and 48 of 60.
 - `BENCH_TIMEOUT_SECONDS` supplies OceanX's research budget: after 75% no new Expert assignment
   starts. This is a run setting that changes Coordinator behavior, not merely an external timeout;
   disclose it alongside the commit, model, delivery mode and other run settings.
@@ -191,7 +195,11 @@ report exists, for the Discussion Partner, or when it contains a nonempty `## Su
 Without closing prose, the receipt explicitly says so and gives the model-call stop reason.
 If an Expert reaches model call 30 without saving a report, analysis tools pause until it writes a
 defensible partial `report.md`; it may then continue analysis and update the report. This is a
-checkpoint, not a lower replacement for the 60-call limit.
+checkpoint, not a lower replacement for the call limit.
+Every Expert is told its call budget in its instructions, and each call after the first ends its last tool
+result with a line such as `[Budget: model call 13 of 40; 20 left for analysis, then 8 only to finish the
+report.]`. The line is added to that request only and is never saved in the conversation, so the cached
+prompt prefix does not change. This applies to the desktop's Experts too.
 
 Every OceanX attempt delivers ordinary images, as the Claude Code and Finch arms do:
 `run_oceanx.py` starts the backend with `OCEANX_FIGURE_DELIVERY=static` and records

@@ -101,8 +101,10 @@ class FixtureModel(FakeMessagesListChatModel):
                             "from pathlib import Path\nPath('evidence.txt').write_text('mean=2')\n")
                     answer = call("ocean_expert_run_code", {"purpose": "Verify persistent and isolated scientific execution", "code": code})
                     return ChatResult(generations=[ChatGeneration(message=answer)])
+                # The budget line a real model reads after the result is not part of the result.
+                result_text = re.sub(r"\n\n\[Budget: [^\]]*\]$", "", computed[-1].text)
                 try:
-                    payload = json.loads(computed[-1].text)
+                    payload = json.loads(result_text)
                 except ValueError:
                     raise AssertionError(f"Unexpected code result: {computed[-1].text}") from None
                 assert payload.get("state") == "succeeded", payload

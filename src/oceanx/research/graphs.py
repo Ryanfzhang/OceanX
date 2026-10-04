@@ -47,10 +47,27 @@ from oceanx.tools import OceanToolServices
 
 
 _LOGGER = logging.getLogger(__name__)
-EXPERT_MODEL_CALL_LIMIT = 60
-EXPERT_REPORT_CHECKPOINT_START = 30
-EXPERT_WIND_DOWN_START = 48
-EXPERT_FINAL_CALL = EXPERT_MODEL_CALL_LIMIT - 1
+
+
+def _expert_call_limit() -> int:
+    """Model calls one Expert run may use: 60 on the desktop, lowered by the benchmark's setting."""
+    try:
+        return max(10, int(os.environ.get("OCEANX_EXPERT_CALL_LIMIT", "60")))
+    except ValueError:
+        return 60
+
+
+def _expert_call_phases(limit: int) -> tuple[int, int, int]:
+    """Where the report checkpoint, the wind-down and the final call fall in a budget of ``limit`` calls.
+
+    Half, four fifths and the last call, which is 30, 48 and 59 of 60; a lower limit keeps the shape.
+    """
+    return limit // 2, limit * 4 // 5, limit - 1
+
+
+EXPERT_MODEL_CALL_LIMIT = _expert_call_limit()
+EXPERT_REPORT_CHECKPOINT_START, EXPERT_WIND_DOWN_START, EXPERT_FINAL_CALL = _expert_call_phases(
+    EXPERT_MODEL_CALL_LIMIT)
 
 
 def _parallel_expert_limit() -> int:
@@ -182,6 +199,46 @@ def _wind_down_request(request):
     )
 
 
+def _call_budget_sentence() -> str:
+    """The Expert's whole budget, once, in its instructions (the same for the whole run)."""
+    return (
+        f"Call budget: you have {EXPERT_MODEL_CALL_LIMIT} model calls for this assignment, and one call "
+        f"can run several tools. Analysis tools work through call {EXPERT_WIND_DOWN_START}; calls "
+        f"{EXPERT_WIND_DOWN_START + 1} to {EXPERT_FINAL_CALL} may only finish the report, and call "
+        f"{EXPERT_MODEL_CALL_LIMIT} has no tools. The end of each tool result shows which call you are on "
+        "and how many remain.\n"
+    )
+
+
+def _budget_note(call_count: int) -> str:
+    """Where the next model call falls in the budget; ``call_count`` calls have been made."""
+    call, limit = call_count + 1, EXPERT_MODEL_CALL_LIMIT
+    if call_count >= EXPERT_FINAL_CALL:
+        return f"[Budget: model call {call} of {limit}, the last; no tools.]"
+    if call_count >= EXPERT_WIND_DOWN_START:
+        return (f"[Budget: model call {call} of {limit}; analysis is over, {limit - call_count} left only to "
+                "finish the report; the last has no tools.]")
+    return (f"[Budget: model call {call} of {limit}; {EXPERT_WIND_DOWN_START - call_count} left for analysis, "
+            f"then {limit - EXPERT_WIND_DOWN_START} only to finish the report.]")
+
+
+def _with_budget_note(request):
+    """End the last tool result of this request with the calls that remain.
+
+    Only this request carries the note, never the saved conversation, so the cached prompt prefix does
+    not change; the first call has no tool result, and the instructions state the budget.
+    """
+    messages = list(request.messages)
+    if not messages or not isinstance(messages[-1], ToolMessage):
+        return request
+    note = _budget_note(int(request.state.get("run_model_call_count", 0)))
+    last = messages[-1]
+    content = ([*last.content, {"type": "text", "text": note}] if isinstance(last.content, list)
+               else f"{last.content}\n\n{note}")
+    messages[-1] = last.model_copy(update={"content": content})
+    return request.override(messages=messages)
+
+
 WIND_DOWN_REFUSAL = (
     "Not run: the analysis phase of this assignment is over and only file tools work now. "
     "Write or update report.md from the evidence you already have, then finish."
@@ -311,8 +368,9 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
 
     Keeping both behaviours on the same middleware prevents the wind-down from
     depending on private state owned by a separate middleware instance.  Calls
-    49--59 retain only report/file tools, and any other tool they still request is
-    refused without running; call 60 is a tool-free delivery call.
+    49--59 of the default 60 (the last fifth, before the final call) retain only
+    report/file tools, and any other tool they still request is refused without
+    running; the last call is a tool-free delivery call.
     """
 
     def __init__(self, *, report_path: Path | None = None) -> None:
@@ -351,7 +409,7 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
     def _prepare_request(self, request):
         request = _wind_down_request(request)
         if not self._checkpoint_pending(request):
-            return request
+            return _with_budget_note(request)
         base_prompt = request.system_message.text if request.system_message else ""
         instruction = (
             "# Required report checkpoint\n"
@@ -360,10 +418,10 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
             "This is an updatable checkpoint, not the end of the assignment; after it is saved, "
             "the analysis tools return on the next call."
         )
-        return request.override(
+        return _with_budget_note(request.override(
             tools=[tool for tool in request.tools if _tool_name(tool) in _WIND_DOWN_TOOLS],
             system_message=SystemMessage(content=f"{base_prompt}\n\n{instruction}".strip()),
-        )
+        ))
 
     def wrap_model_call(self, request, handler):
         request = self._prepare_request(request)
@@ -797,6 +855,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    "Create report.md at this exact path as soon as you have a defensible partial answer, "
                    "and keep it current as evidence changes. Begin with a short ## Summary. Do not defer "
                    "the report until the end, repeat it, or announce its path in chat.\n")
+        prompt += _call_budget_sentence()
     if role in DATA_EXPERT_ROLES:
         await _describe_task_data(c)
     context = context_builder.build(

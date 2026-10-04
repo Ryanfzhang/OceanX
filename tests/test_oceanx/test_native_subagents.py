@@ -35,6 +35,8 @@ from oceanx.research.graphs import (
     WIND_DOWN_REFUSAL,
     ExpertCallBudgetMiddleware,
     _coordinator_agent,
+    _expert_call_limit,
+    _expert_call_phases,
     _expert_slots,
     _missing_report,
     _parallel_expert_limit,
@@ -634,6 +636,75 @@ def test_parallel_expert_limit_setting(monkeypatch):
     assert _parallel_search_expert_limit() == 1
     monkeypatch.setenv("OCEANX_MAX_PARALLEL_SEARCH_EXPERTS", "2")
     assert _parallel_search_expert_limit() == 2
+
+
+def test_expert_call_limit_is_set_by_the_environment_and_never_below_ten(monkeypatch):
+    monkeypatch.delenv("OCEANX_EXPERT_CALL_LIMIT", raising=False)
+    assert _expert_call_limit() == 60  # the desktop's limit
+    for value, expected in (("40", 40), ("3", 10), ("many", 60), ("", 60)):
+        monkeypatch.setenv("OCEANX_EXPERT_CALL_LIMIT", value)
+        assert _expert_call_limit() == expected
+
+
+def test_report_checkpoint_and_wind_down_keep_their_place_in_the_budget():
+    assert _expert_call_phases(60) == (30, 48, 59)
+    assert (EXPERT_REPORT_CHECKPOINT_START, EXPERT_WIND_DOWN_START, EXPERT_FINAL_CALL) == (
+        _expert_call_phases(EXPERT_MODEL_CALL_LIMIT))
+    assert _expert_call_phases(40) == (20, 32, 39)
+    for limit in range(10, 121):
+        checkpoint, wind_down, final = _expert_call_phases(limit)
+        assert 0 < checkpoint < wind_down < final == limit - 1
+
+
+def test_a_lower_call_limit_moves_the_wind_down_and_the_final_call_with_it(monkeypatch):
+    from oceanx.research import graphs
+
+    checkpoint, wind_down, final = _expert_call_phases(40)
+    for name, value in (("EXPERT_MODEL_CALL_LIMIT", 40), ("EXPERT_REPORT_CHECKPOINT_START", checkpoint),
+                        ("EXPERT_WIND_DOWN_START", wind_down), ("EXPERT_FINAL_CALL", final)):
+        monkeypatch.setattr(graphs, name, value)
+    research_calls = report_reads = 0
+
+    @tool
+    def execute(value: int) -> str:
+        """Perform one probe research operation."""
+        nonlocal research_calls
+        research_calls += 1
+        return str(value)
+
+    @tool
+    def read_file(value: int) -> str:
+        """Perform one probe report-file read."""
+        nonlocal report_reads
+        report_reads += 1
+        return str(value)
+
+    def call(name: str, index: int) -> AIMessage:
+        return AIMessage(content="", tool_calls=[{
+            "name": name, "args": {"value": index}, "id": f"{name}-{index}", "type": "tool_call"}])
+
+    # Calls 1-32 analyse, calls 33-39 are the wind-down, call 40 is the tool-free delivery call.
+    responses = [call("execute", index) for index in range(32)]
+    responses.extend(call("read_file", index) for index in range(33, 40))
+    responses.append(AIMessage(content="Final report delivery."))
+    model = _BudgetProbeModel(responses=responses)
+    graph = create_agent(model=model, tools=[execute, read_file], system_prompt="base",
+                         middleware=[ExpertCallBudgetMiddleware()])
+
+    result = asyncio.run(graph.ainvoke({"messages": [HumanMessage(content="research")]}))
+
+    assert result["messages"][-1].text == "Final report delivery."
+    assert (research_calls, report_reads, len(model.seen_messages)) == (32, 7, 40)
+    for call_index, messages in enumerate(model.seen_messages, start=1):
+        system = next(message.text for message in messages if isinstance(message, SystemMessage))
+        if call_index <= 32:
+            assert "Reserved report wind-down" not in system
+        elif call_index < 40:
+            assert "Reserved report wind-down" in system
+        else:
+            assert "Final delivery call" in system
+    assert all("execute" in names for names in model.bound_tool_names[:32])
+    assert all("execute" not in names for names in model.bound_tool_names[32:])
 
 
 def test_missing_report_receipt_never_forwards_tool_markup(tmp_path):

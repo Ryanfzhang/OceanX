@@ -36,6 +36,34 @@ def test_template_contains_all_launch_settings_and_an_empty_key():
         config.endpoint('openai')
 
 
+def test_template_sets_the_expert_call_limit_under_test():
+    template = ROOT / 'benchmarking/.env.example'
+    assert 'BENCH_OCEANX_EXPERT_CALL_LIMIT=40' in template.read_text().splitlines()  # written out, not defaulted
+    assert load_config(template).run['BENCH_OCEANX_EXPERT_CALL_LIMIT'] == '40'
+
+
+def oceanx_args():
+    return SimpleNamespace(queries=None, output=None, resume=None, arm=None, library=None, timeout=None)
+
+
+@pytest.mark.parametrize('line, expected', [('', '40'), ('BENCH_OCEANX_EXPERT_CALL_LIMIT=30\n', '30'),
+                                            ('BENCH_OCEANX_EXPERT_CALL_LIMIT=10\n', '10'),
+                                            ('BENCH_OCEANX_EXPERT_CALL_LIMIT=60\n', '60')])
+def test_expert_call_limit_reaches_the_backend_environment(configured, monkeypatch, line, expected):
+    monkeypatch.setenv('OCEANX_EXPERT_CALL_LIMIT', '60')  # restored afterwards; configure_run overwrites it
+    configured.write_text(configured.read_text() + line)
+    configure_run(oceanx_args(), load_config(configured), 'OceanX')
+    assert os.environ['OCEANX_EXPERT_CALL_LIMIT'] == expected
+
+
+@pytest.mark.parametrize('value', ['9', '0', '61', 'forty'])
+def test_expert_call_limit_stays_between_ten_and_the_desktop_limit(configured, monkeypatch, value):
+    monkeypatch.setenv('OCEANX_EXPERT_CALL_LIMIT', '60')
+    configured.write_text(configured.read_text() + f'BENCH_OCEANX_EXPERT_CALL_LIMIT={value}\n')
+    with pytest.raises(ValueError, match='BENCH_OCEANX_EXPERT_CALL_LIMIT'):
+        configure_run(oceanx_args(), load_config(configured), 'OceanX')
+
+
 def test_concurrent_methods_share_one_selection(configured):
     config = load_config(configured)
     with ThreadPoolExecutor(max_workers=3) as pool:
@@ -119,6 +147,7 @@ def test_evolution_set_and_space_separated_tasks(configured):
 def test_no_argument_oceanx_launch(configured, monkeypatch):
     import benchmark_config
     import run_oceanx
+    monkeypatch.setenv('OCEANX_EXPERT_CALL_LIMIT', '60')  # restored afterwards; the launch sets it
     monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(configured))
     monkeypatch.setenv('OCEANX_RESEARCH_POLICY', 'v0-coordinator-bfs')
     monkeypatch.setattr(benchmark_config, 'preflight', lambda **_: None)
@@ -137,6 +166,7 @@ def test_no_argument_oceanx_launch(configured, monkeypatch):
     assert observed == {'ids': ['Q07', 'Q08'], 'output': configured.parent / 'results/pilot-r1/runs/OceanX',
                         'resume': False}
     assert run_oceanx.ARM['policy'] == 'v2-nested'
+    assert os.environ['OCEANX_EXPERT_CALL_LIMIT'] == '40'  # the benchmark's setting, not the desktop's 60
 
 
 def test_distinct_method_output_names_are_required(configured):

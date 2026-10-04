@@ -107,9 +107,11 @@ def test_arm_record_names_the_policy_and_the_library(snapshot, monkeypatch):
     monkeypatch.setattr(run_oceanx, "git_identity", lambda: {"commit": "c", "dirty": False})
     monkeypatch.delenv("OCEANX_RESEARCH_POLICY", raising=False)
     monkeypatch.setenv("OCEANX_MAX_PARALLEL_SEARCH_EXPERTS", "1")
+    monkeypatch.setenv("OCEANX_EXPERT_CALL_LIMIT", "40")
     record = run_oceanx.arm_record(SimpleNamespace(arm="C1", queries=None))
     assert record["policy"] == "v2-nested"  # nothing passed: the default policy, by name
     assert record["max_parallel_search_experts"] == "1"
+    assert record["expert_call_limit"] == "40"  # a run with another limit is another arm configuration
     assert record["library"] == {"snapshot": str(snapshot), "version": run_oceanx.snapshot_version(snapshot),
                                  "sha256": {name: run_oceanx.file_sha256(snapshot / name) for name in FILES}}
     monkeypatch.setattr(run_oceanx, "LIBRARY", None)

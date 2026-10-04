@@ -163,7 +163,8 @@ def arm_record(args) -> dict:
             "queries": str(args.queries) if args.queries else None,
             "max_parallel_experts": os.environ.get("OCEANX_MAX_PARALLEL_EXPERTS", "2"),
             "max_parallel_search_experts": os.environ.get(
-                "OCEANX_MAX_PARALLEL_SEARCH_EXPERTS", "1")}
+                "OCEANX_MAX_PARALLEL_SEARCH_EXPERTS", "1"),
+            "expert_call_limit": os.environ.get("OCEANX_EXPERT_CALL_LIMIT", "60")}
 
 
 def check_arm(output: Path) -> None:

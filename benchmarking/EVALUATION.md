@@ -26,7 +26,11 @@ helped can only be read from the process measures (lessons named, helper calls, 
 - The Expert's last, tool-free delivery call may issue an extra provider request if its first
   reply contains tool markers rather than a report. Context compaction requests are counted
   separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
-  the 60-call loop limit is not an exact count of all provider requests.
+  the Expert call limit (60 on the desktop; `BENCH_OCEANX_EXPERT_CALL_LIMIT`, 10 to 60, in benchmark runs
+  and recorded in `arm.json`) is not an exact count of all provider requests. At a lower limit the report
+  checkpoint falls at half of it and the wind-down at four fifths, as at 30 and 48 of 60.
+  Each Expert is told the budget in its instructions and, from the second call, in a line at the end of the
+  last tool result with the calls that remain; the line is not saved in the conversation.
 - `BENCH_TIMEOUT_SECONDS` supplies OceanX's research budget: after 75% no new Expert assignment
   starts. This is a run setting that changes Coordinator behavior, not merely an external timeout;
   disclose it alongside the commit, model, delivery mode and other run settings.
