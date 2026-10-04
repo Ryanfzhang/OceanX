@@ -17,6 +17,7 @@ import {useUiLanguage} from './i18n.js';
 import {isModelProviderReady} from './model-provider.js';
 import {pendingInteractionFromPayload, type PendingInteraction} from './pending-interaction.js';
 import {paperAcquisitionStorageKey, parsePaperAcquisitionCommand, readPaperAcquisitionMode, type PaperAcquisitionMode} from './paper-acquisition-mode.js';
+import {readParallelExperts, writeParallelExperts, type ParallelExperts} from './parallel-experts.js';
 import {forgetProject, mergeRememberedProjects, parseProjectCatalog, rememberProject, upsertTaskPreservingOrder, type ProjectCatalogEntry} from './project-catalog.js';
 import {revisionFromRequestFailure} from './request-recovery.js';
 import {requestId} from './request-id.js';
@@ -154,6 +155,8 @@ export function App(): React.JSX.Element {
   const [modelSaving, setModelSaving] = useState(false);
   const [runtime, setRuntime] = useState<ReturnType<typeof parseDesktopRuntimeCapabilities>>(null);
   const [density, setDensity] = useState<DisplayDensity>('comfortable');
+  const [parallelExperts, setParallelExpertsState] = useState<ParallelExperts>(() => readParallelExperts(window.localStorage));
+  const setParallelExperts = (count: ParallelExperts) => {writeParallelExperts(window.localStorage, count); setParallelExpertsState(count);};
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('system');
   const [systemTheme, setSystemTheme] = useState<ResolvedAppearanceTheme>(appearance);
   const [update, setUpdate] = useState<DesktopUpdateStatus>({configured: false, state: 'unavailable'});
@@ -635,7 +638,7 @@ export function App(): React.JSX.Element {
     const activePaperMode = readPaperAcquisitionMode(window.localStorage, paperAcquisitionStorageKey(workspacePathRef.current, task.task_id));
     const id = requestId('session_submit');
     setTranscript((current) => [...current, optimisticUser(id, userText)]); setPrompt(''); setStreaming(''); setTeam(null); setActiveRequestId(id); setInlineStatus(null);
-    void send({protocol_version: 2, request_id: id, type: 'session.submit', payload: {text: userText, context_refs: [], literature_acquisition_mode: activePaperMode, workflow_mode: mode}, context: {...contextRef.current!, task_id: task.task_id}, expected_workspace_revision: workspaceRef.current?.revision ?? 0, expected_task_revision: task.task_revision});
+    void send({protocol_version: 2, request_id: id, type: 'session.submit', payload: {text: userText, context_refs: [], literature_acquisition_mode: activePaperMode, workflow_mode: mode, max_parallel_experts: readParallelExperts(window.localStorage)}, context: {...contextRef.current!, task_id: task.task_id}, expected_workspace_revision: workspaceRef.current?.revision ?? 0, expected_task_revision: task.task_revision});
   };
   const toggleWorkflowMode = () => {
     const task = taskRef.current;
@@ -1197,7 +1200,7 @@ export function App(): React.JSX.Element {
       </div> : null}
     </section>
     {resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} error={resultError} onClose={closeResult} />}
-    <DesktopSettingsDialog open={settingsOpen} status={status} projectName={projectName} runtime={runtime} modelProvider={modelProvider} modelProviderSaving={modelSaving} displayDensity={density} onDisplayDensity={setDensity} appearanceTheme={appearanceTheme} onAppearanceTheme={setAppearanceTheme} onConfigureModelProvider={configureModel} update={update} onCheckForUpdate={() => void window.oceanDesktop.checkForUpdate().then(setUpdate)} onInstallUpdate={() => void window.oceanDesktop.installPreparedUpdate().then(setUpdate)} onClose={() => setSettingsOpen(false)} />
+    <DesktopSettingsDialog open={settingsOpen} status={status} projectName={projectName} runtime={runtime} modelProvider={modelProvider} modelProviderSaving={modelSaving} displayDensity={density} onDisplayDensity={setDensity} appearanceTheme={appearanceTheme} onAppearanceTheme={setAppearanceTheme} parallelExperts={parallelExperts} onParallelExperts={setParallelExperts} onConfigureModelProvider={configureModel} update={update} onCheckForUpdate={() => void window.oceanDesktop.checkForUpdate().then(setUpdate)} onInstallUpdate={() => void window.oceanDesktop.installPreparedUpdate().then(setUpdate)} onClose={() => setSettingsOpen(false)} />
     <ResearchLibraryDialog open={libraryOpen} onClose={() => setLibraryOpen(false)} request={libraryRequest} />
     <TaskDeleteDialog task={deleteCandidate?.task ?? null} onCancel={() => setDeleteCandidate(null)} onConfirm={deleteTask} />
     <ProjectRemoveDialog project={projectRemoveCandidate} onCancel={() => setProjectRemoveCandidate(null)} onConfirm={() => void removeProject()} />

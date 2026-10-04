@@ -2143,6 +2143,20 @@
           "title": "Literature Acquisition Mode",
           "type": "string"
         },
+        "max_parallel_experts": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Parallel Experts"
+        },
         "text": {
           "maxLength": 32000,
           "minLength": 1,

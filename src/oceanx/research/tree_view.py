@@ -153,6 +153,25 @@ def render_full(tree: dict, *, include_history: bool = False,
     return "\n".join(lines)
 
 
+def render_results(tree: dict) -> str:
+    """Every returned node's complete Result and Evidence and limitations, in tree order.
+
+    The tree view clips them to 320 characters and one sentence, which hides a correction made late in a
+    long Summary: in Q08 of the 40-call batch the final answer kept a number a later node had corrected.
+    A node that corrects an earlier one replaces its value.
+    """
+    found = nodes(tree)
+    returned = sorted((key for key in found if found[key].get("result")),
+                      key=lambda key: [int(part) for part in re.findall(r"\d+", key)])
+    lines = [f"research tree revision {tree['revision']}: complete results of {len(returned)} returned nodes"]
+    for node_id in returned:
+        summary = found[node_id]["result"].get("summary", "")
+        result = _field(summary, "Result") or re.sub(r"\s+", " ", summary).strip()
+        lines += ["", f"{node_id} {found[node_id]['question']}", f"  Result: {result}",
+                  f"  Evidence and limitations: {_field(summary, 'Evidence and limitations')}"]
+    return "\n".join(lines)
+
+
 def render_delta(tree: dict, changed: list[str], *, created: list[str] = ()) -> str:
     found = nodes(tree)
     live = _live(tree)
@@ -172,4 +191,4 @@ def render_delta(tree: dict, changed: list[str], *, created: list[str] = ()) -> 
     return "\n".join(lines)
 
 
-__all__ = ["TREE_SECTION", "node_line", "render_delta", "render_full", "result_fields"]
+__all__ = ["TREE_SECTION", "node_line", "render_delta", "render_full", "render_results", "result_fields"]

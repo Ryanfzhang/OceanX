@@ -109,6 +109,8 @@ class SessionSubmitPayload(StrictModel):
     )
     literature_acquisition_mode: LiteratureAcquisitionMode = "ask_before_download"
     workflow_mode: WorkflowMode = "research"
+    # How many data Experts may work at once (the desktop's setting); None keeps the backend's default.
+    max_parallel_experts: int | None = Field(default=None, ge=1, le=8, strict=True)
 
     @model_validator(mode="after")
     def _require_non_whitespace_text(self) -> SessionSubmitPayload:

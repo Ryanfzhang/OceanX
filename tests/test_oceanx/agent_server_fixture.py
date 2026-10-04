@@ -32,11 +32,57 @@ class FixtureModel(FakeMessagesListChatModel):
 
     async def _agenerate(self, messages, **kwargs):
         await asyncio.sleep(30 if os.environ.get("OCEAN_FIXTURE_MODE") == "cancel" else 0.05)
+        if "task" not in self.names and any(
+                "SLOW_BRANCH" in m.text for m in messages if isinstance(m, HumanMessage)):
+            # An Expert that returns well after its sibling, or not before the request is cancelled.
+            try:
+                await asyncio.sleep(30 if os.environ.get("OCEAN_FIXTURE_MODE") == "cancel_background" else 4)
+            except asyncio.CancelledError:
+                print("FIXTURE: the slow Expert's model call was cancelled", flush=True)
+                raise
         return self._generate(messages, **kwargs)
+
+    def _background_coordinator(self, messages, call):
+        """Two Experts at once, one slow: go on when the first returns, then wait for the other."""
+        results = [m for m in messages if isinstance(m, ToolMessage)]
+        waited = [m for m in results if m.name == "await_experts"]
+        # The desktop's setting travelled with session.submit and sized the app-wide pool for this run.
+        from oceanx.research import graphs
+        assert graphs._expert_slots().limit == 3, graphs._expert_slots().limit
+        if not results:
+            return AIMessage(content="", tool_calls=[
+                {"name": "task", "id": str(uuid4()), "type": "tool_call", "args": {
+                    "subagent_type": "scientific_discussion_partner",
+                    "description": assignment_text(node, question)}}
+                for node, question in (
+                    ("B1", ("Explain whether formation and persistence are different questions. "
+                            "Remember CAMPECHE_ONE.")),
+                    ("B2", "SLOW_BRANCH Explore an independent alternative."))])
+        if not waited:
+            # Called again as soon as B1 returned; B2 is still working.
+            assert any("is working in the background" in m.text for m in results), [m.text for m in results]
+            return call("await_experts", {})
+        if not any(m.name in {"write_file", "edit_file"} for m in results):
+            assert "Receipt of B2" in waited[-1].text, waited[-1].text
+            first = next(m for m in results if m.name == "task" and m.text.startswith("Result:"))
+            summary, _report = parse_expert_receipt(first.text)
+            assigned = re.search(r"Backend-assigned final report file: ([^\n]+)", "\n".join(
+                m.text for m in messages if isinstance(m, SystemMessage)))
+            if assigned is None:  # the standard workflow answers in chat, without a report file
+                return AIMessage(content="Fixture synthesis. " + summary)
+            return call("write_file", {"file_path": assigned.group(1), "content":
+                "# Fixture synthesis\n\n## Summary\n\n" + summary})
+        return AIMessage(content="Saved the report.")
 
     def _generate(self, messages, **kwargs):
         def call(name, args):
             return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": str(uuid4()), "type": "tool_call"}])
+        if "task" in self.names and os.environ.get("OCEAN_FIXTURE_MODE") in {
+                "gateway_background", "cancel_background"}:
+            assert "await_experts" in self.names
+            answer = self._background_coordinator(messages, call)
+            answer.usage_metadata = {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120}
+            return ChatResult(generations=[ChatGeneration(message=answer)])
         if "task" in self.names:
             assert "finish_research" not in self.names
             if os.environ.get("OCEAN_FIXTURE_MODE") in {"gateway", "gateway_followup", "gateway_missing_report"}:

@@ -645,14 +645,23 @@ class ResearchTree:
                 "projection": projection(tree, focus=[node_id]),
             }
 
-    def view_text(self, changes: list[dict], *, full: bool = False,
+    def view_text(self, changes: list[dict], *, full: bool = False, results: bool = False,
                   last_seen_revision: int | None = None) -> tuple[str, int]:
-        """Compact text view: delta after an edit, full view on request or revision gap."""
-        from oceanx.research.tree_view import render_delta, render_full  # noqa: PLC0415
+        """Compact text view: delta after an edit, full view on request or revision gap.
+
+        ``results`` instead lists every returned node's complete Result and limits (the tree view clips them).
+        """
+        from oceanx.research.tree_view import (  # noqa: PLC0415
+            render_delta,
+            render_full,
+            render_results,
+        )
         with _locked(self.path):
             before, after, created, changed = self._mutate(changes)
             gap = last_seen_revision is None or last_seen_revision != before.get("revision")
-            if full or gap or not changes:
+            if results:
+                text = render_results(after)
+            elif full or gap or not changes:
                 text = render_full(after, include_history=full)
             else:
                 text = render_delta(after, changed, created=created)

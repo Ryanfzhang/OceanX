@@ -98,6 +98,24 @@ def test_session_submit_accepts_a_typed_literature_acquisition_preference() -> N
     assert request.payload.literature_acquisition_mode == "search_only"
 
 
+def _submit(payload: dict):
+    return parse_request({
+        "protocol_version": 2, "request_id": "req_parallel", "type": "session.submit",
+        "payload": {"text": "Compare the two products", **payload},
+        "context": {"session_id": "session_parallel", "workspace_id": "workspace_parallel",
+                    "client_id": "desktop_parallel", "task_id": "task_parallel"},
+        "expected_workspace_revision": 0,
+    })
+
+
+def test_session_submit_carries_the_desktops_parallel_expert_setting() -> None:
+    assert _submit({}).payload.max_parallel_experts is None  # not sent: the backend's own default
+    assert _submit({"max_parallel_experts": 3}).payload.max_parallel_experts == 3
+    for value in (0, 9, "many", 2.5):
+        with pytest.raises(ValidationError):
+            _submit({"max_parallel_experts": value})
+
+
 def test_session_submit_accepts_an_explicit_workflow_mode() -> None:
     request = parse_request(
         {

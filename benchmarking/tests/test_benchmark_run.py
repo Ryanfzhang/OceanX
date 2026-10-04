@@ -42,6 +42,28 @@ def test_template_sets_the_expert_call_limit_under_test():
     assert load_config(template).run['BENCH_OCEANX_EXPERT_CALL_LIMIT'] == '40'
 
 
+def test_template_allows_three_data_experts_at_once():
+    template = ROOT / 'benchmarking/.env.example'
+    assert 'BENCH_OCEANX_MAX_PARALLEL_EXPERTS=3' in template.read_text().splitlines()  # written out, not defaulted
+    assert load_config(template).run['BENCH_OCEANX_MAX_PARALLEL_EXPERTS'] == '3'
+
+
+@pytest.mark.parametrize('line, expected', [('', '3'), ('BENCH_OCEANX_MAX_PARALLEL_EXPERTS=2\n', '2'),
+                                            ('BENCH_OCEANX_MAX_PARALLEL_EXPERTS=4\n', '4')])
+def test_data_expert_slots_reach_the_backend_environment(configured, monkeypatch, line, expected):
+    monkeypatch.setenv('OCEANX_MAX_PARALLEL_EXPERTS', '2')  # restored afterwards; configure_run overwrites it
+    configured.write_text(configured.read_text() + line)
+    configure_run(oceanx_args(), load_config(configured), 'OceanX')
+    assert os.environ['OCEANX_MAX_PARALLEL_EXPERTS'] == expected
+
+
+def test_zero_data_expert_slots_is_refused(configured, monkeypatch):
+    monkeypatch.setenv('OCEANX_MAX_PARALLEL_EXPERTS', '2')
+    configured.write_text(configured.read_text() + 'BENCH_OCEANX_MAX_PARALLEL_EXPERTS=0\n')
+    with pytest.raises(ValueError, match='BENCH_OCEANX_MAX_PARALLEL_EXPERTS'):
+        configure_run(oceanx_args(), load_config(configured), 'OceanX')
+
+
 def oceanx_args():
     return SimpleNamespace(queries=None, output=None, resume=None, arm=None, library=None, timeout=None)
 
@@ -148,6 +170,7 @@ def test_no_argument_oceanx_launch(configured, monkeypatch):
     import benchmark_config
     import run_oceanx
     monkeypatch.setenv('OCEANX_EXPERT_CALL_LIMIT', '60')  # restored afterwards; the launch sets it
+    monkeypatch.setenv('OCEANX_MAX_PARALLEL_EXPERTS', '2')
     monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(configured))
     monkeypatch.setenv('OCEANX_RESEARCH_POLICY', 'v0-coordinator-bfs')
     monkeypatch.setattr(benchmark_config, 'preflight', lambda **_: None)
@@ -167,6 +190,7 @@ def test_no_argument_oceanx_launch(configured, monkeypatch):
                         'resume': False}
     assert run_oceanx.ARM['policy'] == 'v2-nested'
     assert os.environ['OCEANX_EXPERT_CALL_LIMIT'] == '40'  # the benchmark's setting, not the desktop's 60
+    assert os.environ['OCEANX_MAX_PARALLEL_EXPERTS'] == '3'  # the benchmark runs three data Experts at once
 
 
 def test_distinct_method_output_names_are_required(configured):

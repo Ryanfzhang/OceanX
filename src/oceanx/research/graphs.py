@@ -1,15 +1,16 @@
-"""OceanX graphs built from native synchronous DeepAgents subagents.
+"""OceanX graphs built from native DeepAgents subagents.
 
 The Coordinator is one Agent Server run. Its ``task`` calls invoke compiled
 Expert graphs directly and return compact file-backed receipts to the same run;
 OceanX does not mirror child lifecycle, enqueue callbacks, or resume a second
-Coordinator run.
+Coordinator run. Each Expert works as a background job of that run, so the
+Coordinator is called again when the next one returns rather than when the whole
+batch has (background_experts.py).
 """
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import dataclasses
 import json
 import logging
 import os
@@ -24,7 +25,6 @@ from deepagents.middleware.summarization import SummarizationState
 from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Command
 
 from oceanx.agent_tools import ToolRegistry
 from oceanx.deep_runtime import build_deep_agent_graph
@@ -32,6 +32,8 @@ from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
 from oceanx.figure_delivery import static_figures
 from oceanx.model_config import load_model_profile
+from oceanx.research.background_experts import (
+    AWAIT_TOOL, BackgroundDelegationMiddleware, RunningExperts, appended)
 from oceanx.research.metering import INSIDE_EXPERT
 from oceanx.research.services import (
     AgentRun,
@@ -43,6 +45,7 @@ from oceanx.research.services import (
 from oceanx.runtime import build_ocean_discussion_runtime, build_ocean_expert_runtime, build_ocean_runtime
 from oceanx.skills import JINA_READER_CAPABILITY, LITERATURE_CAPABILITY, WEB_SEARCH_CAPABILITY
 from oceanx.team.profiles import AGENT_PROFILES, get_agent_profile, profile_system_prompt
+from oceanx.research.tool_calls import ToolCallRepairMiddleware
 from oceanx.tools import OceanToolServices
 
 
@@ -88,26 +91,72 @@ def _parallel_search_expert_limit() -> int:
 # Data runs load arrays and execute code on this machine, so their pool bounds local CPU and memory.
 MAX_PARALLEL_EXPERTS = _parallel_expert_limit()
 MAX_PARALLEL_SEARCH_EXPERTS = _parallel_search_expert_limit()
-_EXPERT_SLOTS: tuple[asyncio.AbstractEventLoop, asyncio.Semaphore] | None = None
-_SEARCH_EXPERT_SLOTS: tuple[asyncio.AbstractEventLoop, asyncio.Semaphore] | None = None
+PARALLEL_EXPERTS_CEILING = 8  # the largest value a request may ask for
 
 
-def _expert_slots() -> asyncio.Semaphore:
-    """The app-wide slot pool; the Agent Server runs every graph on one event loop."""
+class _Slots:
+    """Experts that may work at once; the limit can change while some hold a slot or wait for one."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit, self.active = limit, 0
+        self._freed = asyncio.Event()  # set, and replaced, whenever a waiting Expert may look again
+
+    def locked(self) -> bool:
+        return self.active >= self.limit
+
+    def resize(self, limit: int) -> None:
+        if limit != self.limit:
+            self.limit = limit
+            self._wake()
+
+    def _wake(self) -> None:
+        freed, self._freed = self._freed, asyncio.Event()
+        freed.set()
+
+    async def __aenter__(self) -> None:
+        while self.active >= self.limit:
+            await self._freed.wait()
+        self.active += 1
+
+    async def __aexit__(self, *_exc) -> None:
+        self.active -= 1
+        self._wake()
+
+
+_EXPERT_SLOTS: tuple[asyncio.AbstractEventLoop, _Slots] | None = None
+_SEARCH_EXPERT_SLOTS: tuple[asyncio.AbstractEventLoop, _Slots] | None = None
+
+
+def _expert_slots(limit: int | None = None) -> _Slots:
+    """The app-wide slot pool; the Agent Server runs every graph on one event loop.
+
+    ``limit`` is the desktop's setting, which each request carries; a Coordinator run applies it
+    when it starts, so the pool follows the newest request.
+    """
     global _EXPERT_SLOTS
     loop = asyncio.get_running_loop()
     if _EXPERT_SLOTS is None or _EXPERT_SLOTS[0] is not loop:
-        _EXPERT_SLOTS = (loop, asyncio.Semaphore(MAX_PARALLEL_EXPERTS))
+        _EXPERT_SLOTS = (loop, _Slots(MAX_PARALLEL_EXPERTS))
+    if limit is not None:
+        _EXPERT_SLOTS[1].resize(limit)
     return _EXPERT_SLOTS[1]
 
 
-def _search_expert_slots() -> asyncio.Semaphore:
+def _search_expert_slots() -> _Slots:
     """A small independent pool so source consultation cannot block data analysis."""
     global _SEARCH_EXPERT_SLOTS
     loop = asyncio.get_running_loop()
     if _SEARCH_EXPERT_SLOTS is None or _SEARCH_EXPERT_SLOTS[0] is not loop:
-        _SEARCH_EXPERT_SLOTS = (loop, asyncio.Semaphore(MAX_PARALLEL_SEARCH_EXPERTS))
+        _SEARCH_EXPERT_SLOTS = (loop, _Slots(MAX_PARALLEL_SEARCH_EXPERTS))
     return _SEARCH_EXPERT_SLOTS[1]
+
+
+def _requested_parallel_experts(config) -> int | None:
+    """The data-Expert limit this request asks for (the desktop's setting), or None for the default."""
+    value = config["configurable"].get("request_options", {}).get("max_parallel_experts")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return None
+    return min(value, PARALLEL_EXPERTS_CEILING)
 
 
 _WIND_DOWN_TOOLS = frozenset({"ls", "glob", "grep", "read_file", "write_file", "edit_file"})
@@ -341,20 +390,9 @@ class ResearchBudgetMiddleware(AgentMiddleware):
         return None
 
     def _with_status(self, request, result):
-        if request.tool_call.get("name") != "task":
+        if request.tool_call.get("name") not in {"task", AWAIT_TOOL}:
             return result
-        status = self._status()
-
-        def stamped(message):
-            if not isinstance(message, ToolMessage):
-                return message
-            return message.model_copy(update={"content": f"{message.text}\n\n{status}"})
-
-        update = getattr(result, "update", None)
-        if isinstance(result, Command) and isinstance(update, dict) and update.get("messages"):
-            return dataclasses.replace(result, update={**update, "messages": [
-                stamped(message) for message in update["messages"]]})
-        return stamped(result)
+        return appended(result, self._status())
 
     def wrap_tool_call(self, request, handler):
         return self._start(request) or self._with_status(request, handler(request))
@@ -941,7 +979,8 @@ async def expert(config, role: str):
             config,
             role,
             run=run,
-            middleware=[ExpertCallBudgetMiddleware(report_path=host().research.report_path(run))],
+            middleware=[ExpertCallBudgetMiddleware(report_path=host().research.report_path(run)),
+                        ToolCallRepairMiddleware()],
         )
         # The read-only Discussion Partner runs no code, so it does not take a slot.
         slot = (
@@ -951,10 +990,8 @@ async def expert(config, role: str):
             if role == "literature_reproduction_expert"
             else _expert_slots()
         )
-        if isinstance(slot, asyncio.Semaphore) and slot.locked():
-            limit = (MAX_PARALLEL_SEARCH_EXPERTS
-                     if role == "literature_reproduction_expert" else MAX_PARALLEL_EXPERTS)
-            _LOGGER.info("Expert %s waits for one of %d parallel slots", run.thread_id, limit)
+        if isinstance(slot, _Slots) and slot.locked():
+            _LOGGER.info("Expert %s waits for one of %d parallel slots", run.thread_id, slot.limit)
         async with slot:
             token = INSIDE_EXPERT.set(True)  # the Coordinator's inherited meter skips these calls
             try:
@@ -1057,7 +1094,19 @@ async def expert(config, role: str):
     return graph.compile()
 
 
-async def _coordinator_agent(config):
+BACKGROUND_EXPERTS_RULE = (
+    "Experts work in the background. A task call returns as soon as the next running Expert finishes: "
+    "with that Expert's receipt, or saying that its own Expert is still working, in which case the "
+    "receipt comes with a later task or await_experts result. When a receipt arrives while other Experts "
+    "are still running, you decide whether to wait: continue that node's own line at once, delegating its "
+    "follow-up without waiting for the others; but a new question that several outstanding results must "
+    "decide together waits until they have all returned, so call await_experts with their node_ids. Call "
+    "await_experts when you have nothing to delegate, and write the final answer only when no Expert is "
+    "still running.\n"
+)
+
+
+async def _coordinator_agent(config, experts: RunningExperts | None = None):
     # Workflow mode controls research-tree exploration, not whether the
     # Coordinator has a team. Standard requests may still need one or more
     # bounded Experts for analysis, acquisition, inference, or saved results.
@@ -1067,15 +1116,19 @@ async def _coordinator_agent(config):
     report = coordinator_report_path(config)
     report.parent.mkdir(parents=True, exist_ok=True)
     static = static_figures()  # a static run describes no plotting interface (figure_delivery.py)
+    # Listed first: the rest of a task call then runs inside the Expert's background job.
+    background = BackgroundDelegationMiddleware(experts if experts is not None else RunningExperts())
     if not research_mode(config):
-        return await build(config, "coordinator", subagents=specs, suffix=(
+        return await build(config, "coordinator", subagents=specs,
+                           middleware=[background, ToolCallRepairMiddleware()], suffix=(
             "\n" + STANDARD_COORDINATOR_POLICY + "\n# Standard workflow\n"
             "Do not create or update a research tree, generate candidate/frontier nodes, or expand the "
             "request into an open-ended research project. This does not disable the team. Delegate bounded "
             "standalone questions to the appropriate Experts whenever the request needs scientific data "
             "analysis, statistical inference, literature or requested dataset acquisition, or a reusable "
-            "scientific result. Multiple independent questions may run in parallel. Synthesize returned "
-            "Expert results directly in chat. "
+            "scientific result. Multiple independent questions may run in parallel. Experts work in the "
+            "background: a task call returns when the next one finishes, and await_experts returns the "
+            "receipts of the others. Synthesize only after every Expert has returned, directly in chat. "
             + ("Cite a figure only by a path listed under Saved figures in the native task receipt; "
                "never invent a figure path. " if static else
                "Cite only keys listed under Published results in the native "
@@ -1088,15 +1141,18 @@ async def _coordinator_agent(config):
     tree = research_tree(config["configurable"]["task_id"])
     guidance = tree.policy.guidance  # lessons are not prompt text; see build()
     budget = research_budget_minutes()
-    # The budget check comes first, so a refused assignment is never bound to a tree node.
+    # The budget check comes before the binding, so a refused assignment is never bound to a tree node.
     return await build(config, "coordinator", subagents=specs,
-                       middleware=[ResearchBudgetMiddleware(budget), StructuredDelegationMiddleware(
-                           tree, original_question=config["configurable"].get("original_question", ""))],
+                       middleware=[background, ResearchBudgetMiddleware(budget),
+                                   StructuredDelegationMiddleware(
+                           tree, original_question=config["configurable"].get("original_question", "")),
+                           ToolCallRepairMiddleware()],
                        suffix=(
         (f"\n{guidance}\n" if guidance else "")
         + (f"\nResearch time budget: {budget:.0f} minutes. After {RESEARCH_BUDGET_STOP * budget:.0f} "
            "minutes no new Expert assignment starts, so answer the main question before then; each "
            "receipt shows the time used.\n" if budget else "")
+        + "\n" + BACKGROUND_EXPERTS_RULE
         + f"\nBackend-assigned final report file: {report}\n"
         "Native task receipts contain Result, Evidence and limitations, Further analysis, and Report. "
         "Use those compact fields for tree decisions and read report.md only when synthesis needs more detail. "
@@ -1110,11 +1166,16 @@ async def _coordinator_agent(config):
            "path. If a claim has no published result, refer to the Expert report in prose without bracket syntax. ")
         + "When the research question is answered, write the final answer to the assigned report, begin it "
         "with a short ## Summary, and finish. First read the tree with "
-        "update_research_tree(changes=[], view='full'). Reconcile every returned node's latest Result and "
-        "Evidence and limitations before writing: keep numbers from different definitions, thresholds, "
-        "periods or regions explicitly separated, and open a listed report when its compact Summary is "
-        "insufficient or conflicts with another node. Do not synthesize from only the first reports. End "
-        "with the required ## Research Tree section.\n\n"
+        "update_research_tree(changes=[], view='full') for the Research Tree section, then with "
+        "view='results': the tree view clips each Result and limit, so a correction made late in a "
+        "Summary appears only in view='results'. Reconcile every returned node's latest Result and "
+        "Evidence and limitations before writing: a node that corrects an earlier one replaces its value, "
+        "so use the corrected value and say it was corrected; keep numbers from different definitions, "
+        "thresholds, periods or regions explicitly separated; open a listed report when a Summary is "
+        "insufficient or two nodes conflict. Do not synthesize from only the first reports. Word each "
+        "conclusion no more strongly than its evidence: write 'consistent with' unless an analysis "
+        "separated the cause from the alternatives, and call a comparison independent only if the "
+        "evidence shows it is. End with the required ## Research Tree section.\n\n"
         + _visual_delivery_policy()))
 
 
@@ -1122,12 +1183,21 @@ async def coordinator(config):
     async def coordinate(state, config):
         # Agent Server profiles graph schemas without request configuration, so
         # task-bound paths and subagents must be assembled when this node runs.
-        # This is still one Coordinator run: native ``task`` calls execute and
-        # return inside this invocation, with no callback or follow-up run.
+        # This is still one Coordinator run: native ``task`` calls execute inside
+        # this invocation, as background jobs of it (background_experts.py), with
+        # no callback or follow-up run.
         report = coordinator_report_path(config)
         previous_report_revision = file_revision(report)
-        agent = await _coordinator_agent(config)
-        result = await agent.ainvoke(state, config=config)
+        # The desktop sends its parallel-Experts setting with each request; the newest request sizes
+        # the app-wide pool. None (the benchmark) keeps the environment's value.
+        _expert_slots(_requested_parallel_experts(config))
+        experts = RunningExperts()
+        agent = await _coordinator_agent(config, experts)
+        try:
+            result = await agent.ainvoke(state, config=config)
+        finally:
+            # None is left when the run ended normally; a failed or cancelled run stops its Experts.
+            await experts.close()
         report_text = (
             report.read_text(encoding="utf-8").strip()
             if file_revision(report) is not None

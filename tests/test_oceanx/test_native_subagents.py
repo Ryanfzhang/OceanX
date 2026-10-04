@@ -41,9 +41,12 @@ from oceanx.research.graphs import (
     _missing_report,
     _parallel_expert_limit,
     _parallel_search_expert_limit,
+    _requested_parallel_experts,
     _search_expert_slots,
     _wind_down_request,
 )
+from oceanx.research.background_experts import BackgroundDelegationMiddleware, RunningExperts
+from oceanx.research.tool_calls import ToolCallRepairMiddleware
 from oceanx.team.profiles import AGENT_PROFILES, get_agent_profile
 
 
@@ -76,15 +79,21 @@ async def test_standard_workflow_keeps_native_experts_without_a_research_tree(
     async def fake_expert(_config, profile_id):
         return f"runnable:{profile_id}"
 
-    async def fake_build(_config, role, *, subagents=None, suffix="", **_kwargs):
-        captured.update(role=role, subagents=subagents, suffix=suffix)
+    async def fake_build(_config, role, *, subagents=None, suffix="", middleware=None, **_kwargs):
+        captured.update(role=role, subagents=subagents, suffix=suffix, middleware=middleware)
         return "graph"
 
     monkeypatch.setattr(graphs, "expert", fake_expert)
     monkeypatch.setattr(graphs, "build", fake_build)
     monkeypatch.setattr(graphs, "coordinator_report_path", lambda _config: tmp_path / "report.md")
 
-    assert await _coordinator_agent(config) == "graph"
+    experts = RunningExperts()
+    assert await _coordinator_agent(config, experts) == "graph"
+    background, repair = captured["middleware"]
+    assert isinstance(background, BackgroundDelegationMiddleware) and background.experts is experts
+    assert isinstance(repair, ToolCallRepairMiddleware)  # a stray bracket must not end a standard run either
+    assert "Experts work in the background" in captured["suffix"]
+    assert "Synthesize only after every Expert has returned" in captured["suffix"]
     assert captured["role"] == "coordinator"
     assert {item["name"] for item in captured["subagents"]} == {
         profile.profile_id for profile in AGENT_PROFILES
@@ -608,13 +617,118 @@ def test_expert_runs_share_an_app_wide_parallel_limit():
         assert _expert_slots() is _expert_slots()  # one pool for every task on the loop
         await asyncio.gather(*(expert_run() for _ in range(5)))
 
-    asyncio.run(scenario())
+    asyncio.run(asyncio.wait_for(scenario(), timeout=10))  # a slot that is never freed fails, not hangs
     assert peak == MAX_PARALLEL_EXPERTS
     peak = 0
-    asyncio.run(scenario())  # a new event loop gets a fresh pool instead of failing
+    asyncio.run(asyncio.wait_for(scenario(), timeout=10))  # a new event loop gets a fresh pool
     assert peak == MAX_PARALLEL_EXPERTS
     source = (Path(__file__).parents[2] / "src/oceanx/research/graphs.py").read_text()
     assert "async with slot:" in source  # every Expert run goes through the pool
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ending", ["failed", "cancelled"])
+async def test_a_coordinator_run_that_ends_early_leaves_no_expert_working(monkeypatch, tmp_path, ending):
+    from oceanx.research import graphs
+
+    stopped = []
+
+    async def an_expert_that_never_returns():
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            stopped.append("expert")
+            raise
+
+    class Agent:
+        async def ainvoke(self, _state, config=None):
+            self.experts.start({"id": "call", "args": {"description": "B1.1: q", "subagent_type": "x"}},
+                               an_expert_that_never_returns())
+            await asyncio.sleep(0)
+            if ending == "failed":
+                raise RuntimeError("provider failure")
+            await asyncio.Event().wait()
+
+    async def fake_agent(_config, experts):
+        agent = Agent()
+        agent.experts = experts
+        return agent
+
+    monkeypatch.setattr(graphs, "_coordinator_agent", fake_agent)
+    monkeypatch.setattr(graphs, "coordinator_report_path", lambda _config: tmp_path / "report.md")
+    graph = await graphs.coordinator(_config())
+    run = asyncio.ensure_future(graph.ainvoke({"messages": [HumanMessage(content="q")]}, _config()))
+    if ending == "cancelled":
+        await asyncio.sleep(0.05)
+        run.cancel()
+    with pytest.raises((RuntimeError, asyncio.CancelledError)):
+        await asyncio.wait_for(run, timeout=10)
+
+    assert stopped == ["expert"]
+
+
+def test_the_slot_limit_can_change_while_experts_wait():
+    order = []
+
+    async def expert(name, release):
+        async with _expert_slots():
+            order.append(name)
+            await release.wait()
+
+    async def scenario():
+        slots = _expert_slots(1)
+        assert slots.limit == 1
+        release = asyncio.Event()
+        runs = [asyncio.ensure_future(expert(name, release)) for name in "abc"]
+        await asyncio.sleep(0.01)
+        assert order == ["a"] and slots.locked()  # one slot: the others wait
+        _expert_slots(3)  # the desktop's setting was raised
+        await asyncio.sleep(0.01)
+        assert order == ["a", "b", "c"]  # the waiting Experts started without anyone finishing
+        release.set()
+        await asyncio.gather(*runs)
+        assert slots.active == 0 and _expert_slots() is slots and slots.limit == 3  # no value keeps the limit
+
+    asyncio.run(asyncio.wait_for(scenario(), timeout=10))  # a slot that never frees fails, not hangs
+
+
+def test_a_lower_slot_limit_applies_to_the_experts_that_start_next():
+    order = []
+
+    async def expert(name, release):
+        async with _expert_slots():
+            order.append(name)
+            await release.wait()
+
+    async def scenario():
+        slots = _expert_slots(2)
+        first = asyncio.Event()
+        runs = [asyncio.ensure_future(expert(name, first)) for name in "ab"]
+        await asyncio.sleep(0.01)
+        _expert_slots(1)  # lowered while two are working: they finish, the next one waits for both
+        later = asyncio.Event()
+        runs.append(asyncio.ensure_future(expert("c", later)))
+        await asyncio.sleep(0.01)
+        assert order == ["a", "b"] and slots.active == 2
+        first.set()
+        await asyncio.sleep(0.01)
+        assert order == ["a", "b", "c"] and slots.active == 1
+        later.set()
+        await asyncio.gather(*runs)
+
+    asyncio.run(asyncio.wait_for(scenario(), timeout=10))
+
+
+@pytest.mark.parametrize("options, expected", [
+    ({}, None), ({"max_parallel_experts": 3}, 3), ({"max_parallel_experts": None}, None),
+    ({"max_parallel_experts": 0}, None), ({"max_parallel_experts": "3"}, None),
+    ({"max_parallel_experts": True}, None), ({"max_parallel_experts": 50}, 8),
+])
+def test_the_request_may_set_how_many_data_experts_work_at_once(options, expected):
+    config = _config()
+    config["configurable"]["request_options"] = options
+    assert _requested_parallel_experts(config) == expected
+    assert _requested_parallel_experts(_config()) is None  # no options at all: the environment's default
 
 
 def test_search_experts_have_one_separate_slot_from_data_experts():
@@ -1109,6 +1223,39 @@ async def test_expert_receipt_preserves_an_unchanged_report(
     assert version.read_text(encoding="utf-8") == saved
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("options, expected", [
+    ({"max_parallel_experts": 4}, 4),      # the desktop's setting, sent with the request
+    ({}, MAX_PARALLEL_EXPERTS),            # none sent (the benchmark): the environment's value stays
+])
+async def test_a_coordinator_run_sizes_the_data_expert_pool_from_its_request(
+    monkeypatch, tmp_path, options, expected,
+):
+    from oceanx.research import graphs
+
+    seen = {}
+
+    class Agent:
+        async def ainvoke(self, state, config=None):
+            seen["data"] = _expert_slots().limit
+            seen["search"] = _search_expert_slots().limit
+            return {"messages": [*state["messages"], AIMessage(content="answer")]}
+
+    async def fake_agent(_config, _experts):
+        return Agent()
+
+    monkeypatch.setattr(graphs, "_coordinator_agent", fake_agent)
+    monkeypatch.setattr(graphs, "coordinator_report_path", lambda _config: tmp_path / "report.md")
+    config = _config()
+    config["configurable"]["request_options"] = {"workflow_mode": "standard", **options}
+    _expert_slots(MAX_PARALLEL_EXPERTS)  # whatever an earlier request left in the app-wide pool
+    graph = await graphs.coordinator(config)
+
+    await graph.ainvoke({"messages": [HumanMessage(content="q")]}, config)
+
+    assert seen == {"data": expected, "search": MAX_PARALLEL_SEARCH_EXPERTS}  # Search keeps its own pool
+
+
 def test_another_attempt_at_a_question_is_told_to_continue_its_earlier_work(monkeypatch, tmp_path):
     from oceanx.research import graphs
 
@@ -1159,6 +1306,13 @@ def test_research_budget_stamps_receipts_and_stops_new_assignments():
     refused = budget.wrap_tool_call(request(call_id="call-4"),
                                     lambda _request: pytest.fail("no new assignment after 75%"))
     assert (refused.status, refused.text) == ("error", BUDGET_REFUSAL)
+    # Waiting for Experts that are already working is never refused, and its result shows the time
+    # used too: receipts can now reach the Coordinator through it.
+    waited = ToolMessage(content="Receipt of B1.2 (x):\nResult: done.", tool_call_id="call-5",
+                         name="await_experts")
+    stamped_wait = budget.wrap_tool_call(request("await_experts", "call-5"), lambda _request: waited)
+    assert stamped_wait.text.endswith("75 min elapsed of a 100-minute budget; 2 Expert assignments so far. "
+                                      "Start no new assignment; write the final report.")
     # Without a budget the receipt shows the time used and nothing is refused.
     unlimited = ResearchBudgetMiddleware(None, clock=lambda: 10 ** 6)
     assert unlimited.wrap_tool_call(request(), lambda _request: receipt).text.endswith(
@@ -1188,14 +1342,28 @@ async def test_research_coordinator_checks_the_budget_before_binding_a_node(monk
     config = _config()
     config["configurable"]["original_question"] = "Assess mixed-layer-depth sensitivity."
     assert await _coordinator_agent(config) == "graph"
-    budget, binding = captured["middleware"]
+    background, budget, binding, repair = captured["middleware"]
+    # First, so the budget check, the tree binding and the native tool all run inside the Expert's job.
+    assert isinstance(background, BackgroundDelegationMiddleware)
     assert isinstance(budget, graphs.ResearchBudgetMiddleware) and budget.budget == 180
     assert isinstance(binding, StructuredDelegationMiddleware)
+    assert isinstance(repair, ToolCallRepairMiddleware)  # last, so it sees the model's reply first
     assert binding.original_question == config["configurable"]["original_question"]
     assert "Research time budget: 180 minutes. After 135 minutes" in captured["suffix"]
-    assert "Reconcile every returned node's latest Result" in captured["suffix"]
-    assert "Do not synthesize from only the first reports" in captured["suffix"]
+    suffix = captured["suffix"]
+    # The Owner's rule: results arrive one by one, and the Coordinator decides whether to wait.
+    assert "A task call returns as soon as the next running Expert finishes" in suffix
+    assert "continue that node's own line at once" in suffix
+    assert "a new question that several outstanding results must decide together waits" in suffix
+    assert "call await_experts with their node_ids" in suffix
+    assert "write the final answer only when no Expert is still running" in suffix
+    assert "view='full'" in suffix and "view='results'" in suffix  # the tree for its section, the results to reconcile
+    assert "clips each Result" in suffix and "a correction made late in a Summary" in suffix
+    assert "a node that corrects an earlier one replaces its value" in suffix
+    assert "Do not synthesize from only the first reports" in suffix
+    assert "no more strongly than its evidence" in suffix  # the wording rule scored down in Q08
+    assert "call a comparison independent only if the evidence shows it is" in suffix
     monkeypatch.delenv(graphs.RESEARCH_BUDGET_ENV)
     await _coordinator_agent(_config())
-    assert captured["middleware"][0].budget is None
+    assert captured["middleware"][1].budget is None
     assert "Research time budget" not in captured["suffix"]

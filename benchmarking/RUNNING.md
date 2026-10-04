@@ -174,6 +174,26 @@ This smoke repeat diagnoses the corrected model routing; it is not a new formal 
   the Expert call limit (60 on the desktop; `BENCH_OCEANX_EXPERT_CALL_LIMIT`, 10 to 60, in benchmark runs
   and recorded in `arm.json`) is not an exact count of all provider requests. At a lower limit the report
   checkpoint falls at half of it and the wind-down at four fifths, as at 30 and 48 of 60.
+- A model reply whose tool-call arguments are valid JSON plus stray closing brackets is repaired and the tool runs;
+  a reply with no runnable tool call is asked for once more. Before this, one such reply ended the Coordinator and
+  failed the whole question (Q07 of the 40-call batch, after 21 seconds).
+- `BENCH_OCEANX_MAX_PARALLEL_EXPERTS=3`: data Experts that may work at once; a Search Expert has its own slot
+  (`BENCH_OCEANX_MAX_PARALLEL_SEARCH_EXPERTS=1`), so up to four Experts run together. Watch memory in the first run
+  with this setting; `arm.json` records both. The desktop has the same setting under Settings, Research runtime
+  (1 to 4, default 2); it travels with each request (`session.submit.max_parallel_experts`).
+- Experts work in the background of the Coordinator's run. A `task` call returns when the next running Expert
+  finishes, not when the slowest of its batch has, and `await_experts` is how the Coordinator waits: for the next
+  one, for named nodes, or for all. The Coordinator decides whether to continue one node's own line at once or to
+  wait for several results that a new question depends on; it cannot finish while an Expert is running. Each
+  Expert's own `task` tool run still ends with its own receipt. Elapsed times of runs made before this change
+  (every batch waited for its slowest Expert) are not comparable with later ones.
+- Before the final answer the Coordinator reads every returned node's complete Result and Evidence and limitations
+  with `update_research_tree(changes=[], view='results')`. The ordinary tree view clips each Result to 320 characters
+  and each limit to one sentence, which hid a correction in Q08 of the 40-call batch (0.879 to 0.778 m/s) from the final
+  answer. Experts begin a Result that changes an earlier node's number with `Corrects B1.x: ...`.
+- Only the user's own question authorizes dataset acquisition. The Coordinator and Expert prompts say so;
+  an assignment that says an Expert "is authorized" is not a request (Q08 of the 40-call batch downloaded WOA18
+  and Argo on the Coordinator's own authorization and used them in the answer).
 - `BENCH_TIMEOUT_SECONDS` supplies OceanX's research budget: after 75% no new Expert assignment
   starts. This is a run setting that changes Coordinator behavior, not merely an external timeout;
   disclose it alongside the commit, model, delivery mode and other run settings.

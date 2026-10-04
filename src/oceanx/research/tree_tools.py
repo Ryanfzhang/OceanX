@@ -52,9 +52,10 @@ class QuestionTreeUpdate(BaseModel):
         default_factory=list,
         description="One atomic decision batch. Empty reads the current view.",
     )
-    view: Literal["decision", "full"] = Field(
+    view: Literal["decision", "full", "results"] = Field(
         default="decision",
-        description="Use full only once when writing the final Research Tree section.",
+        description=("Use full only once when writing the final Research Tree section; results lists every "
+                     "returned node's complete Result and Evidence and limitations, which full clips."),
     )
 
 
@@ -81,7 +82,8 @@ _DESCRIPTION = (
     "The response is text: one line per node; after an edit only changed nodes, the frontier and "
     "live candidates are returned, and the complete view whenever the tree changed elsewhere. "
     "Before the final research report, read once with changes=[] and view=full to render the "
-    "complete Research Tree. Never store methods, transcripts, report text or agent lifecycle here. "
+    "complete Research Tree, and once with view=results for every returned node's complete Result and "
+    "Evidence and limitations, which the tree view clips. Never store methods, transcripts, report text or agent lifecycle here. "
     "Use DeepAgents' native task tool separately for delegation."
 )
 _HYPOTHESES = (
@@ -99,7 +101,8 @@ def research_tree_tool(tree):
         try:
             payload = [change.model_dump(exclude_none=True) for change in (changes or [])]
             text, last_seen["revision"] = tree.view_text(
-                payload, full=view == "full", last_seen_revision=last_seen["revision"])
+                payload, full=view == "full", results=view == "results",
+                last_seen_revision=last_seen["revision"])
             return text
         except (ValueError, OSError) as exc:
             return f"Tree unchanged: {exc}"

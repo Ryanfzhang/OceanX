@@ -52,7 +52,9 @@ Write None for the three parent fields when there is no parent. Copy a parent's 
 report Summary and report path from the research tree. Do not prescribe methods, metrics, figures or an
 output format. The participant chooses its methods and returns Result, Evidence and limitations, Further
 analysis, and Report. Put independent questions from the same frontier in parallel task calls; keep
-dependent questions sequential."""
+dependent questions sequential. A call starts its participant in the background and returns when the next
+running participant finishes, so its result may say that its own participant is still working;
+await_experts returns the receipts still to come."""
 
 
 def _configure_native_harness(provider: str) -> None:
@@ -168,7 +170,7 @@ class DeepAgentEngine:
         inputs = {"messages": await self._input_messages(config, text)}
         self._stream_turn_index = 0
         pending_calls: deque[dict[str, Any]] = deque()
-        tool_started: dict[str, tuple[float, str, str | None]] = {}
+        tool_started: dict[str, tuple[float, str, str | None, str]] = {}  # ... and the call's turn
         opaque_tool_runs: set[str] = set()
         model_turns: dict[str, str] = {}
         completed_model_runs: set[str] = set()
@@ -283,7 +285,7 @@ class DeepAgentEngine:
                     operation_id = self.operation_id_factory(
                         request_id or self.thread_id, "langgraph", call_id
                     )
-                    tool_started[run_id] = (time.monotonic(), call_id, operation_id)
+                    tool_started[run_id] = (time.monotonic(), call_id, operation_id, call["turn_id"])
                     yield ToolExecutionStarted(
                         tool_name=tool_name,
                         tool_input=dict(call["args"]),
@@ -295,8 +297,11 @@ class DeepAgentEngine:
                     continue
                 if name in {"on_tool_end", "on_tool_error"}:
                     tool_name = str(event.get("name") or "")
-                    started, call_id, operation_id = tool_started.pop(
-                        run_id, (time.monotonic(), run_id, run_id)
+                    # An Expert works in the background and can return during a later turn; its
+                    # completion still belongs to the turn whose task call started it.
+                    started, call_id, operation_id, call_turn = tool_started.pop(
+                        run_id, (time.monotonic(), run_id, run_id,
+                                 f"{request_id or self.thread_id}:turn:{turn_index}")
                     )
                     output, status_error = _tool_output(
                         data.get("output") if name == "on_tool_end" else data.get("error")
@@ -306,7 +311,7 @@ class DeepAgentEngine:
                         output=output,
                         is_error=name == "on_tool_error" or status_error,
                         tool_call_id=call_id,
-                        turn_id=f"{request_id or self.thread_id}:turn:{turn_index}",
+                        turn_id=call_turn,
                         request_id=request_id,
                         operation_id=operation_id,
                         duration_seconds=max(0.0, time.monotonic() - started),

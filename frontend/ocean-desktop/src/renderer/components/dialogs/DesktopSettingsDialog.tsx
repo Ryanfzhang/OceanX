@@ -4,6 +4,7 @@ import {CloudDownload, Cog, ShieldCheck, X} from 'lucide-react';
 import type {DesktopUpdateStatus, ModelProviderSetup, ModelProviderStatus, ModelRoleProviderSetup, ModelRoleProviderStatus} from '../../../shared/bridge.js';
 import {useUiLanguage} from '../../i18n.js';
 import {editableModelId, isConcreteModelId, isModelProviderReady} from '../../model-provider.js';
+import {PARALLEL_EXPERTS_CHOICES, type ParallelExperts} from '../../parallel-experts.js';
 import type {AppearanceTheme, DesktopRuntimeCapabilities, DisplayDensity} from '../../types.js';
 import {ModalDialog} from './ModalDialog.js';
 
@@ -73,6 +74,8 @@ export function DesktopSettingsDialog({
   onDisplayDensity,
   appearanceTheme,
   onAppearanceTheme,
+  parallelExperts,
+  onParallelExperts,
   onConfigureModelProvider,
   update,
   onCheckForUpdate,
@@ -89,6 +92,8 @@ export function DesktopSettingsDialog({
   onDisplayDensity: (density: DisplayDensity) => void;
   appearanceTheme: AppearanceTheme;
   onAppearanceTheme: (theme: AppearanceTheme) => void;
+  parallelExperts: ParallelExperts;
+  onParallelExperts: (count: ParallelExperts) => void;
   onConfigureModelProvider: (setup: ModelProviderSetup) => void;
   update: DesktopUpdateStatus;
   onCheckForUpdate: () => void;
@@ -120,7 +125,7 @@ export function DesktopSettingsDialog({
     <header><div><Cog size={17} /><strong>{text('Settings', '设置')}</strong></div><button data-dialog-dismiss onClick={onClose} title={text('Close settings', '关闭设置')} aria-label={text('Close settings', '关闭设置')}><X size={15} /></button></header>
     <section className="settings-section" aria-label="Connection"><h2>{text('Connection', '连接')}</h2><dl className="settings-facts"><div><dt>{text('Backend', '后端')}</dt><dd><i className={status === 'Ready' || status === '已就绪' ? 'ready' : ''} aria-hidden="true" />{status}</dd></div><div><dt>{text('Project', '项目')}</dt><dd title={projectName}>{projectName}</dd></div></dl></section>
     <ModelProviderSettings status={modelProvider} saving={modelProviderSaving} onSave={onConfigureModelProvider} />
-    <section className="settings-section" aria-label="Research runtime"><h2>{text('Research runtime', '研究运行时')}</h2>{runtime ? <><p className="settings-section-summary">{text(`${availableConnections} of ${runtime.connections.length} connections available`, `${runtime.connections.length} 个连接中有 ${availableConnections} 个可用`)}</p><ul className="settings-runtime-list" aria-label="Research runtime connections">{runtime.connections.map((connection) => <li key={connection.id}><span><i className={connection.available ? 'ready' : ''} aria-hidden="true" />{connection.label}</span><small>{connection.available ? text('Available', '可用') : text('Unavailable', '不可用')}</small></li>)}</ul></> : <p className="settings-section-summary">{text('Awaiting backend capabilities', '正在等待后端能力信息')}</p>}</section>
+    <section className="settings-section" aria-label="Research runtime"><h2>{text('Research runtime', '研究运行时')}</h2>{runtime ? <><p className="settings-section-summary">{text(`${availableConnections} of ${runtime.connections.length} connections available`, `${runtime.connections.length} 个连接中有 ${availableConnections} 个可用`)}</p><ul className="settings-runtime-list" aria-label="Research runtime connections">{runtime.connections.map((connection) => <li key={connection.id}><span><i className={connection.available ? 'ready' : ''} aria-hidden="true" />{connection.label}</span><small>{connection.available ? text('Available', '可用') : text('Unavailable', '不可用')}</small></li>)}</ul></> : <p className="settings-section-summary">{text('Awaiting backend capabilities', '正在等待后端能力信息')}</p>}<div className="settings-appearance-control"><span>{text('Parallel data Experts', '同时工作的数据专家')}</span><div className="settings-density" role="group" aria-label="Parallel data Experts">{PARALLEL_EXPERTS_CHOICES.map((count) => <button key={count} className={parallelExperts === count ? 'active' : ''} aria-pressed={parallelExperts === count} onClick={() => onParallelExperts(count)}>{count}</button>)}</div></div><p className="settings-section-summary">{text('How many data Experts analyze at once. More finish a batch sooner but use more memory and CPU. The Search Expert has its own slot. Applies from the next request.', '同时进行数据分析的专家数量。数量越多，一批问题完成得越快，但占用更多内存和 CPU。搜索专家另有一个独立名额。从下一次提问起生效。')}</p></section>
     <section className="settings-section" aria-label="Appearance"><h2>{text('Appearance and language', '外观与语言')}</h2><div className="settings-appearance-control"><span>{text('Interface language', '界面语言')}</span><div className="settings-density" role="group" aria-label="Interface language"><button className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>English</button><button className={language === 'zh' ? 'active' : ''} aria-pressed={language === 'zh'} onClick={() => setLanguage('zh')}>中文</button></div></div><div className="settings-appearance-control"><span>{text('Color theme', '颜色主题')}</span><div className="settings-density" role="group" aria-label="Color theme"><button className={appearanceTheme === 'system' ? 'active' : ''} aria-pressed={appearanceTheme === 'system'} onClick={() => onAppearanceTheme('system')}>{text('System', '跟随系统')}</button><button className={appearanceTheme === 'light' ? 'active' : ''} aria-pressed={appearanceTheme === 'light'} onClick={() => onAppearanceTheme('light')}>{text('Light', '浅色')}</button><button className={appearanceTheme === 'dark' ? 'active' : ''} aria-pressed={appearanceTheme === 'dark'} onClick={() => onAppearanceTheme('dark')}>{text('Dark', '深色')}</button></div></div><div className="settings-appearance-control"><span>{text('Interface density', '界面密度')}</span><div className="settings-density" role="group" aria-label="Interface density"><button className={displayDensity === 'comfortable' ? 'active' : ''} aria-pressed={displayDensity === 'comfortable'} onClick={() => onDisplayDensity('comfortable')}>{text('Comfortable', '舒适')}</button><button className={displayDensity === 'compact' ? 'active' : ''} aria-pressed={displayDensity === 'compact'} onClick={() => onDisplayDensity('compact')}>{text('Compact', '紧凑')}</button></div></div></section>
     {update.configured ? <section className="settings-section settings-update" aria-label="Desktop update"><h2>{text('Desktop update', '桌面端更新')}</h2><p className="settings-section-summary">{updateState}</p>{updateHandoffState ? <p className="settings-section-summary">{updateHandoffState}</p> : null}{update.state === 'prepared' ? <button className="settings-disclosure-button" onClick={onInstallUpdate}><CloudDownload size={14} />{text('Restart and install', '重启并安装')}</button> : <button className="settings-disclosure-button" onClick={onCheckForUpdate} disabled={update.state === 'checking' || update.state === 'installing'}><CloudDownload size={14} />{text('Check for update', '检查更新')}</button>}</section> : null}
   </ModalDialog>;

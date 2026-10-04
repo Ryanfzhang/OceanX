@@ -1,7 +1,7 @@
 # OceanX 修复方案（带版本控制）
 
-**方案版本：v1.9（2026-10-04）**
-**状态：v1.7 记录 Owner 根据 R3 实测批准的统一优化：阻止未请求的单独补图、限制送入模型的图片大小、优先复用持久 kernel、文献与数据分析分槽、成功收集后清理全部 scratch、以及第 30 次调用的报告检查点。图片仍可进入模型以判断空间 pattern，但使用有界预览。实现和本机回归见最新 Log；正式 benchmark 尚未启动。v1.8 记录 Claude 复核已推送的 `f404221` 后，经 Owner 授权做的四处修改：预览失败不再让 Expert 崩溃；scratch 只删大于 10 MB 的文件并列出清单；补图拒绝只在 benchmark 生效且识别更宽；检查点不再拒绝第 30 次已发出的调用。v1.9 记录 Owner 的决定：先把 benchmark 里每个 Expert 的模型调用上限从 60 降到 40，测几道题看分数和用时（设置见 `BENCH_OCEANX_EXPERT_CALL_LIMIT`，桌面端仍是 60）。**
+**方案版本：v1.13（2026-10-04）**
+**状态：v1.7 记录 Owner 根据 R3 实测批准的统一优化：阻止未请求的单独补图、限制送入模型的图片大小、优先复用持久 kernel、文献与数据分析分槽、成功收集后清理全部 scratch、以及第 30 次调用的报告检查点。图片仍可进入模型以判断空间 pattern，但使用有界预览。实现和本机回归见最新 Log；正式 benchmark 尚未启动。v1.8 记录 Claude 复核已推送的 `f404221` 后，经 Owner 授权做的四处修改：预览失败不再让 Expert 崩溃；scratch 只删大于 10 MB 的文件并列出清单；补图拒绝只在 benchmark 生效且识别更宽；检查点不再拒绝第 30 次已发出的调用。v1.9 记录 Owner 的决定：先把 benchmark 里每个 Expert 的模型调用上限从 60 降到 40，测几道题看分数和用时（设置见 `BENCH_OCEANX_EXPERT_CALL_LIMIT`，桌面端仍是 60）。v1.10 记录上限 40 的第一次测试结果和随之做的两处修改：模型工具调用多一个括号时不再让整题失败；只有用户自己的问题才能授权获取数据集。v1.11 记录 Owner 对 Q08 两个版本的暂定审阅分和据此做的修改：最终综合前能看到每个节点的完整 Result 和限制，Expert 把修正写在 Result 最前面，结论措辞不超过证据。v1.12 记录 Owner 决定把 benchmark 的数据 Expert 空位由 2 改到 3，以及对 Q08 为什么仍用 87 分钟的分析。v1.13 记录 Owner 要求实现的后台委派：同一批委派不再等最后一个 Expert 返回，每个 Expert 一返回 Coordinator 就继续；是接着做这条线还是等几条结果一起定，由 Coordinator 决定。并行 Expert 数成为设置：benchmark 在 `.env`，桌面端在设置对话框。**
 基于提交 `88cab8b`。问题记录见 `OCEANX_E10_DIAGNOSIS_2026-10-03.md`。
 分工：Claude 负责方案和审核，Codex 负责执行，Owner 负责提交每个版本。
 
@@ -59,6 +59,10 @@
 | v1.7 | 2026-10-04 | Owner 批准 R3 后续六项优化。图片不是禁止送入模型，而是转换为最长边 1024 px、最多约 450 KiB 的 JPEG 预览；成功且无收集错误的 attempt 删除全部 scratch，并留下清单和释放字节数。另加最终综合必须核对所有返回节点的约束。 |
 | v1.8 | 2026-10-04 | Claude 复核 `f404221`，Owner 授权按复核意见修改。（1）静态模式读图预览失败返回 `ReadResult` 错误，不再抛异常；（2）scratch 清理由“删整个目录”改为“只删大于 10 MB 的文件，记录列出每个被删文件”，因为 R3 的报告用相对路径引用 scratch 里的小文件，脚本也在其中；（3）补图拒绝只在 static（benchmark）运行生效，“研究者要了图”的识别放宽，补图句式只看任务段；（4）检查点只拒绝第 31 至 48 次调用发出的非文件工具。其余各项不变。 |
 | v1.9 | 2026-10-04 | Owner 决定先把 benchmark 里 Expert 的模型调用上限由 60 降到 40，测几道题。新增设置 `BENCH_OCEANX_EXPERT_CALL_LIMIT`（10 到 60，`.env.example` 里写 40，桌面端不设置时仍是 60）；报告检查点和收尾阶段按比例跟着上限走（上限的一半和五分之四，60 时是第 30 和 48 次，40 时是第 20 和 32 次）；值写入 `arm.json` 的 `expert_call_limit`。其余各项不变。 |
+| v1.10 | 2026-10-04 | 上限 40 的第一次测试：Q07 在 21 秒内失败（Coordinator 的工具调用参数多了一个 `}`，没有可执行的调用，整个请求结束）；Q08 完成。修改两处：（1）新增 `ToolCallRepairMiddleware`，参数是完整 JSON 加多余的右括号时修复并照常执行，没有可执行的调用时重试一次，Coordinator 和所有 Expert 都装；（2）Coordinator 和 Expert 的提示里写明只有用户自己的话才能授权获取数据集，Coordinator 不能自己授权（Q08 里 Coordinator 在任务描述里写“you are authorized to acquire”WOA18 和 Argo）。其余各项不变。 |
+| v1.11 | 2026-10-04 | Owner 对 Q08 的暂定审阅分：上限 40 的版本 76.25，上限 60 的版本 72.50（评分标准仍是草稿，不是正式得分）。40 次版的主要扣分是最终答案没有吸收后来节点的修正（平均流速 0.879 改成 0.778 m/s，答案仍写 0.88）、对温度差异的解释过于确定、把 Argo 称为独立验证。原因查明：Coordinator 的树视图把每个节点的 Result 截成 320 字、限制只留第一句，修正埋在长摘要里它根本看不到。修改：新增 `update_research_tree` 的 `results` 视图，列出每个已返回节点完整的 Result 和限制，最终综合前读取；Expert 的摘要规则要求修正写在 Result 最前面、第一句限制写最影响结果的那条；Coordinator 的最终综合规则增加“修正过的值取代旧值”和“结论不超过证据、没有证据不称独立”。其余各项不变。 |
+| v1.12 | 2026-10-04 | Owner 决定把 benchmark 的数据 Expert 空位由 2 改到 3（`BENCH_OCEANX_MAX_PARALLEL_EXPERTS=3`，`.env.example` 和默认值；桌面端仍是 2）。Q08 在上限 40 下用时分析：最长依赖链 51 分钟，Coordinator 分批启动造成约 25 分钟，空位等待约 9 分钟。其余各项不变。 |
+| v1.13 | 2026-10-04 | Owner 要求实现 `task` 的异步，并定了规则：一条委派自己的后续，结果一到就直接委派；需要几条已派出的结果共同决定的新子问题，要等，由 Coordinator 决定。实现：每个 `task` 在 Coordinator 这次运行的后台启动 Expert，下一个 Expert 一返回就把这一轮交还给 Coordinator；新工具 `await_experts` 用来等（等下一个、等指定节点、等全部）；有 Expert 未返回时 Coordinator 不能结束。并行数：benchmark 仍用 `.env` 的 `BENCH_OCEANX_MAX_PARALLEL_EXPERTS`，桌面端新增设置（1 到 4，默认 2），随每次请求发送。其余各项不变。 |
 
 ## 4. Owner 的决定
 
@@ -453,6 +457,170 @@ R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之�
 ## 8. Log
 
 Codex 在这里追加记录，最新的放在最上面。每条写：日期、做了哪个包或遇到什么情况、证据、改动、测试结果。
+
+### 2026-10-04 — 后台委派：Coordinator 不再等一批里最慢的 Expert；并行数成为设置（Claude，待提交）
+
+**Owner 的要求和规则。** “实现 task 的异步，避免同一委派要等最后一个完成才继续”；“并行几个 expert 应该写在 config 里，比如 benchmarking/.env 还有桌面端前端里面”；
+规则由 Owner 给出：想开一个需要几条已派出结果共同决定的新子问题，就得等；是某条委派自己的后续，就直接委派；这由 Coordinator 决定。
+
+**为什么以前要等。** LangGraph 把一条模型回复里的每个工具调用作为同一步里的任务，这一步所有任务都结束才会再调用模型；DeepAgents 的 `task` 又是等子代理结束才返回。
+所以一批 Expert 只能一起交还（Q08：B1.3 在 14 分钟返回，它的后续到 41.8 分钟才启动）。DeepAgents 自带的异步子代理是把 Expert 放到另外的服务端运行里再轮询，
+会打断现在单次运行的事件流、取消和检查点结构，没有采用。
+
+**做法（`src/oceanx/research/background_experts.py`）。**
+
+- `task` 调用在 Coordinator 这次运行里把原生 `task` 作为后台作业启动（原生工具原样执行，所以它自己的开始、结束事件、回执、研究树绑定、检查点都不变），
+  然后等到“下一个 Expert 结束”就返回：自己的 Expert 已结束就返回原来的回执；还没结束就返回一句“Started: B1.5 (...) is working in the background ...”。
+- 自己的调用已经返回、之后才结束的 Expert，回执由后面的 `task` 或 `await_experts` 结果带回（标明 `Receipt of B1.5 (...)`），每份回执只交付一次。
+  一次交付不超过 12,000 字符（DeepAgents 会把超过 16,000 字符的工具结果挪到文件里），放不下的留给下一次并提示还有几份。
+- 新工具 `await_experts`：不带参数等下一个 Expert；`node_ids` 等指定节点都返回；`wait_for_all` 等全部。
+- Coordinator 的回复如果要结束而还有 Expert 没返回或回执没交付，会被接上一次 `await_experts`，不能提前结束。
+- 同一个角色、同一个节点的 Expert 还在跑时，再次委派会被拒绝（两个 Expert 会共用同一个目录和 kernel）。这是后台化带来的新情况，以前 Coordinator 在 Expert 运行期间不会被调用。
+- 预算检查、节点绑定和原生工具都在后台作业里执行，所以被拒绝的委派（预算用完、节点不存在、无需求的补图）立刻返回，不拖住同一轮的其他委派。
+- 运行失败或被取消时，`coordinate` 节点的 `finally` 会停掉仍在跑的 Expert。Expert 失败仍像以前一样让整次运行失败（在取回它的那次调用里抛出）。
+- Coordinator 的规则写进提示（研究模式和标准模式都有）：回执到达时其他 Expert 还在跑，由它决定——这条线自己的后续马上委派；需要几条结果共同决定的新问题，用 `await_experts` 等齐。
+  研究树规则里的“After each report batch consider …”改成了“As reports return consider …”，因为结果现在是一份一份到的（Coordinator 提示组合后 4,978 字符）。
+  `task` 工具说明里也写明“返回时自己的参与者可能还在工作”。
+- 桌面事件：一个 `task` 的结束事件现在可能出现在后面的回合里，它仍归属发起它的那个回合（`deep_runtime.py`）。
+
+**并行数。** 空位池改为可调（`graphs._Slots`）。benchmark：`.env` 的 `BENCH_OCEANX_MAX_PARALLEL_EXPERTS`（现为 3）和 `BENCH_OCEANX_MAX_PARALLEL_SEARCH_EXPERTS`（1），不变。
+桌面端：设置对话框“研究运行时”里新增“同时工作的数据专家”（1 到 4，默认 2，存在本机），随每次 `session.submit` 的 `max_parallel_experts`（1 到 8）发送，
+每次 Coordinator 运行开始时用它设定全应用的空位池；搜索专家仍是独立的 1 个名额。协议文件已重新生成。
+
+**顺带更正。** v1.10 我写“Coordinator 和所有 Expert 都装了工具调用修复”，其实标准模式的 Coordinator 没有装；这次补上了。
+
+**验证（都在 Mac 上，没有真实模型）**
+
+- 先在真实的库上做了实验：工具调用提前返回、嵌套图在后台继续，事件、嵌套检查点、最终状态都正常，运行结束后没有残留任务。
+- 新增单元测试 22 项（单个委派原样返回、一批里第一个返回就继续、后续在兄弟节点还在跑时启动、忙时到达的回执随下一次调用带回、等指定节点或全部、不能提前结束、
+  失败照旧让运行失败且只抛一次、拒绝不拖住其他委派、重复委派被拒绝、每份回执只交付一次、交付大小、关闭时取消等），重复运行 25 次稳定。写完后重读代码又发现并修了一处会卡死的情况（读不到所属回合的调用互相顶掉唤醒），有测试。
+- 真实 Agent Server 加假模型的端到端测试 3 项：两个 Expert 一快一慢，研究模式和标准模式各一次，事件顺序是 B1 结束、Coordinator 的等待开始、B2 结束（带自己的回执）、等待结束，
+  团队快照出现过“一个完成、一个工作中”；桌面端发送的 `max_parallel_experts=3` 到达了空位池；在 Coordinator 等待慢 Expert 时取消，5 秒内结束，慢 Expert 的模型调用确实被取消，日志无残留任务报错。
+- 21 个变异检查（把每个行为改回去）全部被测试抓到；有两个最初没抓干净（一个回执被同一轮的另一个调用拿走、一个结束的 Expert 不释放空位只会让旧测试卡住），已补测试并给相关测试加了超时。
+- Python 全量：**1111 passed、8 skipped、0 failed**（上一条是 1070）。桌面端：vitest **41 个文件、227 项通过**，三处 TypeScript 类型检查无错误，ESLint 只有以前就有的那一条。改动文件的 Ruff 结果与 HEAD 相同（33 条旧的，没有新增）；`git diff --check` 通过。
+
+**没有验证、需要真实运行确认**
+
+- 真实模型会不会按规则使用：收到第一份回执后是继续这条线还是等，会不会恰当地调用 `await_experts`。省多少时间也没有测：按 Q08 的节点用时模拟，
+  “父节点一返回就启动、3 个空位”是 54.8 分钟（实际 87 分钟），这是上限，取决于 Coordinator 怎么决定。
+- Coordinator 会被调用得更多（每个 Expert 返回一次，而不是每批一次），它自己的调用次数和 token 会增加。
+- 3 个数据 Expert 同时跑的内存和 CPU。
+- 桌面端的设置控件只做了渲染测试和类型检查，没有在运行中的应用里看过。
+- Linux 上的全量测试。
+
+**已知限制**
+
+- 桌面端取消请求后，对话里会留下“还在后台工作”的那条工具结果，而 Expert 已随取消停止；下一次请求里没有 Expert 在跑，`await_experts` 会回答没有。
+- 服务端进程重启后不能续跑后台的 Expert（以前也不支持中途续跑）。
+- 这次之前的运行每批都等最慢的 Expert，用时不能和之后的运行直接比较。
+
+
+### 2026-10-04 — Q08 为什么仍用 87 分钟；数据 Expert 空位由 2 改到 3（Claude，待提交）
+
+Owner 同意空位改 3，并问为什么仍然这么耗时。以下是对上限 40 的 Q08（`/Users/ryanzhang/tmp2`）的只读分析，另用 16 个节点的实际用时做了一个调度模拟
+（按原样模拟得 88.2 分钟，实际 87.1 分钟）。只有这一次运行，节点用时本身有波动。
+
+**87 分钟的构成**
+
+| 部分 | 分钟 | 说明 |
+|---|---|---|
+| 最长依赖链 | 51 | 即使资源不限、没有任何等待，B1.1 到 B1.4 到 B1.4.1 到 B1.4.1.1 到 B1.4.1.1.1 再加最终答案也要 51 分钟；每一环是一个完整的 Expert 调查，5 到 22 分钟 |
+| Coordinator 分批启动 | 约 25 | 一个回合里的多个 `task` 同时跑，下一个回合要等全部返回；例如 B1.3 在 14.0 分钟返回，它的后续 B1.3.1（最长的节点，22 分钟）却要等到 B1.8 在 40.8 分钟返回后才在 41.8 分钟启动，多等了 28 分钟 |
+| 数据空位等待 | 约 9 | 第 2、3 阶段各同时委派 3 个数据节点，只有 2 个空位，B1.5 等了 5.9 分钟，B1.8 等了 10.4 分钟 |
+| 其他 | 约 2 | Coordinator 读结果和委派的间隔 |
+
+模拟（用实际节点用时）：按原样（分批、2 空位）88.2 分钟；分批、3 空位 79.4；分批、空位不限 79.4；每个节点在父节点返回后立即启动：2 空位 70.9，3 空位 54.8，空位不限 51.2。
+所以空位 2 改 3 约省 9 分钟（与之对应，再多空位也没有用，因为分批是瓶颈）；再取消分批约省 25 分钟，合计 87 降到约 55 分钟。
+
+**依赖链各条的长度（含最终答案）：** B1.4 一支 51.2（B1.4.1 起是 Coordinator 自己授权获取 WOA18 和 Argo 的三个节点，v1.10 起不会再有）；B1.8 一支 47.8；B1.3 一支 39.2；B1.6 一支 33.4；B1.7 20.3；B1.5 16.8；B1.2 6.6。
+去掉外部数据那一支后，这棵树的下限约 48 分钟。
+
+**一个节点内部的时间（574 次 Expert 模型调用，共 95 分钟，平均 10 秒，中位 5.2 秒）：** 每次调用平均写 2,062 个输出 token，其中 1,123 个（54%）是推理；每 1,000 个输出 token 约 4.5 秒，
+所以约 94% 的模型时间是在写输出，等待和读提示只占 6%（提示缓存命中约 80%）。时间集中在少数长调用：最慢的 5%（29 次，每次超过 30 秒）占 24%（22.5 分钟）；
+只有 4 次超过 60 秒（共 7.4 分钟，推理占 93%），其中 1 次写满 32,768 个 token（147 秒）。把每次调用的输出限制到 8,192 个 token 最多省约 5.7 分钟（6%），还可能截断正常的长脚本，不值得。
+代码另有 49 分钟（其中 44% 是失败或超时的长运行）。
+
+**修改：** `.env.example` 和 `RUN_DEFAULTS` 里 `BENCH_OCEANX_MAX_PARALLEL_EXPERTS` 由 2 改为 3（桌面端不设置时仍是 2，`arm.json` 已记录该值）。
+新增 4 项测试（模板写明 3、默认 3、`.env` 里的值传到后端、0 被拒绝），3 个变异检查全部被抓到。**没有验证：** 3 个数据 Expert 同时跑时服务器的内存和 CPU；第一次用这个设置时请留意内存。
+
+**待 Owner 决定：** 取消分批需要让 Coordinator 的委派变成异步：`task` 立刻返回，Expert 在后台跑，哪个先返回就先把它的后续接上。现在的原生 `task` 是同步的，所以这是较大的改动
+（预计再省约 25 分钟，Q08 87 降到约 55 分钟）。较小的办法是让 Expert 在同一次委派里把自己这一支继续做下去，上限 60 时它们就是这样做的，所以上限 40 的节点更短、层数更多、分批的损失更多。
+
+
+### 2026-10-04 — Q08 两版的暂定审阅分，以及最终答案没吸收修正的原因和修改（Claude，待提交）
+
+**Owner 的暂定审阅分（评分标准 `tasks/Q08/evaluator/rubric.json` 仍是草稿，参考结果及容差未冻结，不是正式得分；一对运行，差距在波动范围内，不能据此认为减少轮次提高了质量）：**
+上限 40（`benchmarking_oceanx_40`）76.25，上限 60（`benchmarking_oceanx`）72.50。效率对照：用时 87 分 11 秒对 79 分 20 秒，Expert 尝试 16 对 12，模型调用 605 对 653，
+token 4,235 万对 5,189 万（少 18.4%，用时多 9.9%）。40 次版的主要扣分：（1）最终答案没吸收最后一个速度子报告对陆地、浅水掩码的修正，第一阶段平均流速 0.879 应为 0.778 m/s，答案仍写 0.88；
+（2）把温度差异归因于论文的背景参考水，但没有恢复论文的具体参考样本，过于确定；（3）把 Argo 称为独立验证，没有证明它们未参与再分析同化。
+
+**第（1）项的原因（我从下载的运行里查明）：** Coordinator 写最终答案前只读了一次树视图（`view='full'`），没有打开任何 Expert 报告。树视图把每个节点的 Result 截成 320 字符，
+Evidence and limitations 只留第一句（160 字符），而这条修正在 B1.8.1.1.1 的 5,168 字符摘要的限制部分深处（“moves the S1 window mean from 0.879 to 0.778 m s⁻¹”），视图里根本没有；
+父节点 B1.8.1.1 的 Result 里的 0.88 倒是在视图里。上一轮加的“Reconcile every returned node's latest Result and Evidence and limitations”因此无法照做。
+
+**修改**
+
+1. `update_research_tree` 新增 `view='results'`：列出每个已返回节点完整的 Result 和 Evidence and limitations（按树的顺序），`view='full'` 不变，所以最终报告的 Research Tree 小节照旧。
+2. Coordinator 的最终综合规则：先读 `view='full'` 写 Research Tree 小节，再读 `view='results'`；修正过的节点取代旧值并说明已修正；两个节点冲突或摘要不够时打开报告；
+   结论不比证据更强，没有分离出原因就写 consistent with，只有证据表明独立才称独立。
+3. Expert 摘要规则：修改了前面节点的数字或结论时，Result 以 `Corrects B1.x: <quantity> from X to Y` 开头；Evidence and limitations 的第一句写最影响结果的那条限制（Coordinator 只看得到这一句和 Result 的前 320 字符）。
+
+**验证（Mac）：** 先写测试并确认失败；新增 5 项测试（视图截断与完整、顺序和只列已返回节点、工具暂存的取值、Coordinator 规则、Expert 规则），6 个变异检查全部被抓到。**没有验证：** 真实模型会不会照做。
+这些只是让信息可见并写明规则，模型仍可能忽略；下一次 Q08 跑完后看最终答案是否用了修正后的值。
+
+**待 Owner 决定的一点：外部数据。** 审阅分把 Argo、WOA 对照记为 40 次版的优点，但这两项数据是 Coordinator 自己授权下载的，题目只给 GLORYS12，并且判定里有“not testable with the supplied data”这一类。
+v1.10 起提示里只有用户自己的话才能授权获取数据，以后的运行不会再下载它们。所以：上限 40 对上限 60 的分差里有一部分来自外部数据，下一批（没有外部数据）的分数不能直接和这两个版本比。
+如果基准允许在题目要求解释与观测的差异时用公开观测数据，需要明确写进题目或规则，而不是让 Coordinator 自己授权。
+
+
+### 2026-10-04 — 上限 40 的第一次测试：Q07 没跑起来，Q08 用时没有缩短，并发现一处授权漏洞（Claude，待提交）
+
+Owner 把 Q07、Q08 在上限 40 下的结果下载到 `/Users/ryanzhang/tmp2`（提交 `77eb1b6`，`arm.json` 里 `expert_call_limit` 为 40）。以下都是只读分析。
+
+**Q07：21 秒就失败，没有数据。** Coordinator 第 3 次调用发出的 `update_research_tree` 参数是 `{"changes": [], "view": "full"}}`（多一个 `}`），
+LangChain 把它记成无效工具调用，没有任何可执行的调用，循环结束，请求以“OceanX stopped without a user-facing conclusion”失败。这和上限无关，也与预算提示无关（Expert 还没启动）。
+Q08 的 605 次调用里没有无效工具调用。
+
+**Q08（上限 40）与此前上限 60 的那次（Codex 的数字）：**
+
+| | 上限 60 | 上限 40 |
+|---|---|---|
+| 用时 | 79.3 分钟 | 87.2 分钟 |
+| Expert 委派 | 12 | 16 |
+| 模型调用 | 653 | 605（含 12 次摘要） |
+| token | 约 5,189 万 | 约 4,230 万（输入 4,100 万，其中缓存 3,280 万；输出 133 万） |
+
+只有一对运行，运行间本来就有波动，所以只能说：**上限降到 40 没有缩短用时，总工作量被分摊到更多节点上**，token 少了约 18%。
+
+- **Expert 会按预算调整工作量。** 16 个 Expert 用了 29 到 40 次调用（中位 36），15 个自己结束，只有 1 个用满；报告里 95% 的数字在第 31 次调用（中位）已经出现，
+  而上限 60 时（R3）是第 48 次左右，比例几乎一样。它们读了预算提示：331 处与预算相关的文字，例如“Careful with call budget: 35 calls left, 28 for analysis”。
+- **第一份报告几乎都是检查点逼出来的。** 16 个里 15 个的第一次写报告在第 22 次调用（检查点在第 21 次），没有自己提前写的；16 个都交了报告，没有“没写报告”的情况。
+- **预算偏紧会留下未完成的东西，再由新节点接上。** B1.8 的报告写着“corrected recomputation was cut off by the call budget”，B1.8 这一支接着有 B1.8.1、B1.8.1.1、B1.8.1.1.1 共四层。
+- **关键路径上的时间构成（87 分钟）：** 模型调用约 50%，代码约 23%，并发空位等待约 19%（第 2、3 阶段各有 3 个数据节点同时委派，只有 2 个空位，B1.5 等了约 6 分钟、B1.8 等了约 10 分钟），Coordinator 和收尾约 7%。
+  数据 Expert 空位由 2 改 3 估计能省约 9 分钟。
+- **代码：** 330 次，共 49 分钟，其中 68 次失败、2 次超时；最长的 6 次失败或超时（300、291、281、214、155、51 秒）合计约 21.5 分钟，占代码时间的 44%。
+  例如 B1.3.1 在整个 2011-2017 上逐日检测涡旋，300 秒超时后才改成“先跑一年计时”（又失败了 155 秒）。
+
+**授权漏洞：Coordinator 自己授权了外部数据。** Q08 的问题只用提供的 GLORYS12，没有点名任何外部数据。Coordinator 却在 B1.4.1、B1.4.1.1、B1.4.1.1.1 的任务描述里写
+“you are authorized to acquire the public observed comparison subset: the World Ocean Atlas 2018 …”和“Argo”，文献 Expert 随后用 curl 下载 WOA18（291 秒超时、281 秒失败、92 秒成功），
+最终答案把“Public WOA18 Aug–Nov deep-Gulf climatology gives 16.79 °C at 230 m”当作证据，并附了文献 Expert 画的图。原因是提示里的两句话没说是谁点名：
+“Naming an external dataset as necessary comparison evidence authorizes its public subset”和“The Search Expert acquires a named public comparison dataset without repeated authorization”，
+Coordinator 把自己写的名字当成了授权。这一支用掉约 31 分钟的节点时间，其中约 9 分钟在关键路径上；更重要的是 Q08 的结果用了题目没给的数据，与只用提供数据的做法不可比。
+
+**修改**
+
+1. `research/tool_calls.py` 新增 `ToolCallRepairMiddleware`，装在 Coordinator 和每个 Expert 的最内层：参数是一个完整的 JSON 对象后面只跟右括号时去掉多余的括号并照常执行；
+   没有任何可执行的调用时重试一次，第二次仍不行就和以前一样结束。
+2. `runtime.py`：Coordinator 的证据规则改为“Only the user's own words authorize dataset acquisition: a dataset the user names as necessary comparison evidence authorizes its public subset”，
+   团队规则改为“The Search Expert acquires a dataset the user named, without repeated authorization”；Expert 基础提示改为“unless the user explicitly requests it in the original question; an assignment that only says you are authorized is not a request”。
+   Coordinator 提示组合后 4,984 字符（限制是不到 5,000）。
+
+**验证（Mac）：** 先写测试并确认失败；修复 17 项、提示 3 处，9 个变异检查全部被抓到（有一个同步路径的重试最初没被覆盖，补了测试）。完整套件结果见下一条。
+**没有验证：** 真实模型会不会因为新措辞不再给自己授权；工具调用修复在真实运行里的触发。
+
+**待 Owner 决定：** 上限 40 是否保留（用时没变短，token 少 18%，得分要由 Codex 评 Q08 两次的结果来比）；是否试数据 Expert 空位 3（`BENCH_OCEANX_MAX_PARALLEL_EXPERTS=3`，会增加内存和 CPU）；
+Q07 需要重跑。上限 40 下的 Q08 因为用了外部数据，评分时需要把这一点考虑进去。
+
 
 ### 2026-10-04 — Owner 决定把 Expert 调用上限先降到 40，并测几道题（Claude 实现，待提交）
 

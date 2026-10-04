@@ -653,6 +653,7 @@ export interface SessionSubmitPayload {
   "context_refs"?: Array<ArtifactRef>;
   "literature_acquisition_mode"?: "ask_before_download" | "auto_download_open_access" | "search_only";
   "workflow_mode"?: "standard" | "research";
+  "max_parallel_experts"?: number | null;
 }
 
 export interface SessionSubmitRequest {

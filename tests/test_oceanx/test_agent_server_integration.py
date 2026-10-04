@@ -259,8 +259,121 @@ async def test_desktop_gateway_projects_native_task_without_owning_it(tmp_path, 
                 await asyncio.to_thread(process.wait)
 
 
+def _start_fixture_server(tmp_path, mode, log):
+    """The fixture Agent Server as a subprocess: (process, port, token)."""
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    token = str(uuid4())
+    process = subprocess.Popen(
+        [sys.executable, str(Path(__file__).with_name("agent_server_fixture.py")),
+         "--state", str(tmp_path / "state"), "--port", str(port)],
+        stdout=log, stderr=log,
+        env={**os.environ, "OCEAN_SERVER_TOKEN": token,
+             "OCEAN_DESKTOP_TOKEN": token + "-desktop", "OCEAN_FIXTURE_MODE": mode,
+             "LANGSMITH_TRACING": "false", "LANGCHAIN_TRACING_V2": "false"},
+    )
+    return process, port, token
+
+
 @pytest.mark.asyncio
-async def test_desktop_cancel_stops_native_agent_server_run_promptly(tmp_path):
+@pytest.mark.parametrize("workflow_mode", ["research", "standard"])
+async def test_the_coordinator_goes_on_when_the_first_of_two_experts_returns(tmp_path, workflow_mode):
+    """The real Agent Server and desktop protocol: B1 returns, the Coordinator is called again and
+    waits, and only then does the slow B2 return, with its own receipt on its own task call."""
+    logpath = tmp_path / "server.log"
+    with logpath.open("w") as log:
+        process, port, token = _start_fixture_server(tmp_path, "gateway_background", log)
+        try:
+            url = f"http://127.0.0.1:{port}"
+            headers = {"authorization": "Bearer " + token}
+            await _wait_for_server(process, url, headers, logpath)
+            from websockets.asyncio.client import connect
+            async with connect(url.replace("http:", "ws:") + "/ocean/protocol",
+                               additional_headers={**headers,
+                                                   "x-ocean-desktop-token": token + "-desktop"}) as ws:
+                context = {}
+
+                async def send(kind, payload, request_id):
+                    frame = {"protocol_version": 2, "request_id": request_id,
+                             "type": kind, "payload": payload}
+                    if context:
+                        frame.update(context=context, expected_workspace_revision=1)
+                    await ws.send(json.dumps(frame))
+
+                async def terminal(request_id):
+                    seen = []
+                    async with asyncio.timeout(120):
+                        while True:
+                            event = json.loads(await ws.recv())
+                            seen.append(event)
+                            assert event["type"] not in {"system.error", "request.failed"}, (
+                                json.dumps(event) + logpath.read_text()[-8000:])
+                            if event.get("request_id") == request_id and event["type"] in {
+                                "system.ready", "request.completed"
+                            }:
+                                return event, seen
+
+                await send("system.handshake", {"client_kind": "desktop", "client_version": "test",
+                                                  "supported_protocol_versions": [2]}, "req_hello")
+                hello, _ = await terminal("req_hello")
+                context.update(client_id=hello["payload"]["client_id"],
+                               session_id=hello["payload"]["session_id"], workspace_id="ws_fixture")
+                await send("workspace.open", {"path": str(tmp_path / "state/workspace")}, "req_open")
+                await terminal("req_open")
+                context["task_id"] = "task_fixture"
+                # max_parallel_experts is the desktop's setting; the fixture checks that it reached the pool.
+                await send("session.submit", {"text": "Campeche mechanisms?", "max_parallel_experts": 3,
+                                               "workflow_mode": workflow_mode,
+                                               "literature_acquisition_mode": "search_only"}, "req_research")
+                final, events = await terminal("req_research")
+                assert "Formation and persistence" in json.dumps(final)
+
+                tools = [e for e in events if e["type"] in {"tool.call.started", "tool.call.completed"}]
+                started = {e["payload"]["tool_call_id"]: e["payload"] for e in tools
+                           if e["type"] == "tool.call.started"}
+                order = [(e["type"].rsplit(".", 1)[1], started[e["payload"]["tool_call_id"]]["tool_name"],
+                          "B2" if "Question (B2)" in str(started[e["payload"]["tool_call_id"]]["input"])
+                          else "B1" if "Question (B1)" in str(started[e["payload"]["tool_call_id"]]["input"])
+                          else "") for e in tools]
+                position = {item: order.index(item) for item in order}
+                # B1 back, the Coordinator's next call (the wait) under way, and only then B2 back.
+                assert (position[("completed", "task", "B1")] < position[("started", "await_experts", "")]
+                        < position[("completed", "task", "B2")] < position[("completed", "await_experts", "")])
+
+                completed = {started[e["payload"]["tool_call_id"]]["input"].get("description", "")[:13]:
+                             e["payload"] for e in tools if e["type"] == "tool.call.completed"
+                             and e["payload"]["tool_name"] == "task"}
+                slow = completed["Question (B2)"]
+                # The slow Expert's own task call still ends with its own receipt, as the desktop expects.
+                summary, report_path = parse_expert_receipt(slow["output"])
+                assert summary.startswith("Result: Formation and persistence") and Path(report_path).is_file()
+                assert "is working in the background" not in slow["output"]
+                waited = next(e["payload"] for e in tools if e["type"] == "tool.call.completed"
+                              and e["payload"]["tool_name"] == "await_experts")
+                assert "Receipt of B2 (scientific_discussion_partner)" in waited["output"]
+
+                snapshots = [e for e in events if e["type"] == "team.snapshot"]
+                experts = [a for a in snapshots[-1]["payload"]["agents"] if a["agent_id"] != "coordinator"]
+                assert len(experts) == 2 and {a["status"] for a in experts} == {"completed"}
+                assert all(a["report_path"] for a in experts)
+                # While B2 was still working, B1 was already shown as completed.
+                assert any(sorted(a["status"] for a in e["payload"]["agents"] if a["agent_id"] != "coordinator")
+                           == ["completed", "working"] for e in snapshots)
+        finally:
+            process.terminate()
+            try:
+                await asyncio.to_thread(process.wait, timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                await asyncio.to_thread(process.wait)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["cancel", "cancel_background"])
+async def test_desktop_cancel_stops_native_agent_server_run_promptly(tmp_path, mode):
+    # cancel: during the Coordinator's first model call. cancel_background: while the Coordinator
+    # waits for a slow Expert that keeps working in the background of the run.
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -272,7 +385,7 @@ async def test_desktop_cancel_stops_native_agent_server_run_promptly(tmp_path):
              "--state", str(tmp_path / "state"), "--port", str(port)],
             stdout=log, stderr=log,
             env={**os.environ, "OCEAN_SERVER_TOKEN": token,
-                 "OCEAN_DESKTOP_TOKEN": token + "-desktop", "OCEAN_FIXTURE_MODE": "cancel",
+                 "OCEAN_DESKTOP_TOKEN": token + "-desktop", "OCEAN_FIXTURE_MODE": mode,
                  "LANGSMITH_TRACING": "false", "LANGCHAIN_TRACING_V2": "false"},
         )
         try:
@@ -311,10 +424,16 @@ async def test_desktop_cancel_stops_native_agent_server_run_promptly(tmp_path):
                 await wait_for("req_open", {"request.completed"})
                 context["task_id"] = "task_fixture"
                 await send("session.submit", {
-                    "text": "Campeche mechanisms?",
+                    "text": "Campeche mechanisms?", "max_parallel_experts": 3,
                     "literature_acquisition_mode": "search_only",
                 }, "req_research")
                 await wait_for("req_research", {"request.accepted"})
+                if mode == "cancel_background":
+                    async with asyncio.timeout(60):
+                        while True:  # B1 has returned and the Coordinator now waits for the slow B2
+                            event = await wait_for("req_research", {"tool.call.started"})
+                            if event["payload"]["tool_name"] == "await_experts":
+                                break
 
                 started = time.monotonic()
                 await send("request.cancel", {
@@ -337,6 +456,13 @@ async def test_desktop_cancel_stops_native_agent_server_run_promptly(tmp_path):
                 assert terminals["req_cancel"]["payload"]["result"]["target_state"] == "cancelled"
                 assert snapshots[-1]["status"] == "incomplete"
                 assert all(agent["status"] != "working" for agent in snapshots[-1]["agents"])
+            if mode == "cancel_background":
+                await asyncio.sleep(1)
+                log_text = logpath.read_text()
+                # The slow Expert was stopped with the run, and nothing is left pending or failing later.
+                assert "FIXTURE: the slow Expert's model call was cancelled" in log_text, log_text[-6000:]
+                for trace in ("Task was destroyed but it is pending", "never retrieved", "Traceback"):
+                    assert trace not in log_text, log_text[-6000:]
         finally:
             process.terminate()
             try:

@@ -258,6 +258,49 @@ async def test_parallel_native_task_events_keep_their_own_assignment_when_start_
 
 
 @pytest.mark.asyncio
+async def test_an_expert_that_returns_during_a_later_turn_completes_the_turn_that_started_it():
+    # Experts work in the background: a task's own run can end after the Coordinator has been
+    # called again, and its completion still belongs to the call and the turn that started it.
+    class Graph:
+        async def aget_state(self, _config):
+            return type("Snapshot", (), {"values": {}})()
+
+        async def astream_events(self, *_args, **_kwargs):
+            calls = [{"id": f"call-{branch}", "name": "task", "type": "tool_call",
+                      "args": {"subagent_type": "ocean_process_expert", "description": f"{branch}: study"}}
+                     for branch in ("B1", "B2")]
+            wait = {"id": "call-wait", "name": "await_experts", "type": "tool_call", "args": {}}
+            yield {"event": "on_chat_model_start", "run_id": "model-1", "data": {}}
+            yield {"event": "on_chat_model_end", "run_id": "model-1", "data": {
+                "output": AIMessage(content="", tool_calls=calls)}}
+            for call in calls:
+                yield {"event": "on_tool_start", "name": "task", "run_id": call["id"] + "-run",
+                       "data": {"input": call["args"]}}
+            yield {"event": "on_tool_end", "name": "task", "run_id": "call-B1-run",
+                   "data": {"output": "B1 receipt"}}
+            yield {"event": "on_chat_model_start", "run_id": "model-2", "data": {}}
+            yield {"event": "on_chat_model_end", "run_id": "model-2", "data": {
+                "output": AIMessage(content="", tool_calls=[wait])}}
+            yield {"event": "on_tool_start", "name": "await_experts", "run_id": "wait-run",
+                   "data": {"input": {}}}
+            yield {"event": "on_tool_end", "name": "task", "run_id": "call-B2-run",
+                   "data": {"output": "B2 receipt"}}
+            yield {"event": "on_tool_end", "name": "await_experts", "run_id": "wait-run",
+                   "data": {"output": "Receipt of B2"}}
+            yield {"event": "on_chat_model_start", "run_id": "model-3", "data": {}}
+            yield {"event": "on_chat_model_end", "run_id": "model-3", "data": {
+                "output": AIMessage(content="Final synthesis.")}}
+
+    engine = DeepAgentEngine(graph=Graph(), thread_id="coordinator",
+                             operation_id_factory=lambda *_args: "operation")
+    events = [e async for e in engine.submit_message("study", request_id="req")]
+    ends = {e.tool_call_id: e for e in events if isinstance(e, ToolExecutionCompleted)}
+    assert (ends["call-B1"].output, ends["call-B1"].turn_id) == ("B1 receipt", "req:turn:1")
+    assert (ends["call-B2"].output, ends["call-B2"].turn_id) == ("B2 receipt", "req:turn:1")
+    assert (ends["call-wait"].output, ends["call-wait"].turn_id) == ("Receipt of B2", "req:turn:2")
+
+
+@pytest.mark.asyncio
 async def test_a_task_call_keeps_its_id_and_node_when_delegation_drops_node_id():
     class Graph:
         async def aget_state(self, _config):

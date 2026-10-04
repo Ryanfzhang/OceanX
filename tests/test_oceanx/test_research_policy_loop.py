@@ -279,6 +279,55 @@ def test_compact_view_keeps_decision_limit_and_folds_finished_branches(tmp_path)
     assert "→ Limit" in render_full(tree.document(), include_history=True)
 
 
+# Q08 of the 40-call batch: B1.8.1.1.1 corrected its parent's S1 window mean deep inside a long Summary; the
+# tree view clips Result to 320 characters and the limit to its first sentence, so the final answer kept 0.88.
+LATE_CORRECTION = (
+    "Result: " + "The ring is marked and its flank maxima are stable across both windows. " * 6 + "\n"
+    "Evidence and limitations: Like-for-like sections only. A land-mask fix moves the S1 window mean from "
+    "0.879 to 0.778 m/s without changing any within-record statement.\n"
+    "Further analysis: None")
+
+
+def returned_node(tmp_path, summary=LATE_CORRECTION):
+    tree = mechanism_tree(tmp_path)
+    tree.update([{"action": "set_status", "target": "B1.3", "status": "selected"}])
+    tree.attach_result("B1.3", summary=summary, agent_key="ocean-a", report_path="/report.md")
+    return tree
+
+
+def test_the_tree_view_clips_a_late_correction_and_the_results_view_shows_it(tmp_path):
+    tool = research_tree_tool(returned_node(tmp_path))
+
+    full = asyncio.run(tool.coroutine(changes=[], view="full"))
+    results = asyncio.run(tool.coroutine(changes=[], view="results"))
+
+    assert "0.778" not in full  # the 320-character Result and the one-sentence limit end before it
+    assert "…" in full
+    assert "from 0.879 to 0.778 m/s" in results
+    assert results.count("The ring is marked") == 6  # the complete Result, not a clip
+    assert "B1.3" in results and "Result:" in results and "Evidence and limitations:" in results
+
+
+def test_the_results_view_lists_only_returned_nodes_in_tree_order(tmp_path):
+    tree = returned_node(tmp_path)
+    tree.update([{"action": "set_status", "target": "B1.4", "status": "selected"}])
+    tree.attach_result("B1.4", summary=SUMMARY, agent_key="ocean-b", report_path="/report-b.md")
+
+    results = asyncio.run(research_tree_tool(tree).coroutine(changes=[], view="results"))
+
+    assert results.index("B1.3") < results.index("B1.4")
+    assert "B1.1" not in results.split("\n", 1)[1]  # a node with no result is not listed
+    assert "complete results of 2 returned nodes" in results.split("\n", 1)[0]
+
+
+def test_the_tree_tool_offers_the_results_view_and_still_rejects_unknown_views(tmp_path):
+    tool = research_tree_tool(returned_node(tmp_path))
+    schema = tool.args_schema.model_json_schema()
+    assert schema["properties"]["view"]["enum"] == ["decision", "full", "results"]
+    assert "results" in schema["properties"]["view"]["description"]
+    assert "view=results" in tool.description  # the Coordinator is told where the complete results are
+
+
 def test_tool_returns_delta_then_full_view_after_external_change(tmp_path):
     tree = mechanism_tree(tmp_path)
     tool = research_tree_tool(tree)

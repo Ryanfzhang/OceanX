@@ -1980,6 +1980,7 @@ class OceanRequestRouter:
         agent_session.runtime.engine.set_request_options(
             literature_acquisition_mode=request.payload.literature_acquisition_mode,
             workflow_mode=request.payload.workflow_mode,
+            max_parallel_experts=request.payload.max_parallel_experts,
         )
         self._agent_request_clients[request.request_id] = client
         self._agent_request_sessions[request.request_id] = agent_session.runtime_key

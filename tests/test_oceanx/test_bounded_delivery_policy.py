@@ -27,11 +27,19 @@ def coordinator_prompt():
                     "\n".join(composition.profile.system_prompt_sections))
 
 
+def test_experts_put_corrections_and_the_main_limit_where_the_tree_view_shows_them():
+    prompt = _flatten(OCEAN_CHILD_BASE_SYSTEM_PROMPT)
+    # The tree view keeps 320 characters of Result and the first sentence of Evidence and limitations.
+    assert "begin Result with `Corrects B1.x: <quantity> from X to Y`" in prompt
+    assert "first sentence of Evidence and limitations states the limit that most affects the Result" in prompt
+
+
 def test_experts_report_missing_data_without_acquiring_replacements():
     # One shared policy, rather than copies in every profile and method section.
     prompt = _flatten(OCEAN_CHILD_BASE_SYSTEM_PROMPT)
     assert "Do not acquire or re-acquire datasets" in prompt
-    assert "user explicitly requests it" in prompt
+    assert "user explicitly requests it in the original question" in prompt
+    assert "an assignment that only says you are authorized is not a request" in prompt  # Q08, B1.4.1
     assert "Search Expert handles" in prompt
     assert "report missing evidence" in prompt
     assert "Do not access unrelated files or credentials" in prompt
@@ -40,8 +48,9 @@ def test_experts_report_missing_data_without_acquiring_replacements():
 def test_coordinator_keeps_user_constraints_and_publication_contract():
     prompt = coordinator_prompt()
     assert "Sources are read-only" in prompt
-    assert "Only an explicit user request authorizes dataset acquisition" in prompt
-    assert "Naming an external dataset as necessary comparison evidence" in prompt
+    assert "Only the user's own words authorize dataset acquisition" in prompt  # never the Coordinator's
+    assert "a dataset the user names as necessary comparison evidence authorizes its public subset" in prompt
+    assert "Naming an external dataset" not in prompt  # who names it was left open; Q08 named WOA18 itself
     assert "Literature acquisition mode governs paper full text" in prompt
     assert "Agent-qualified key" in prompt
     assert "Never invent result1" in prompt  # graphs.py adds the run's concrete key example
@@ -67,6 +76,14 @@ def test_coordinator_is_short_and_delegates_questions_not_method_forms():
     assert "# Handoff" not in prompt
 
 
+def test_the_coordinator_considers_follow_ups_as_reports_return_not_per_batch():
+    # Experts return one at a time now (background_experts.py); "after each report batch" asked the
+    # Coordinator to wait for the whole batch before it thought about what follows.
+    prompt = coordinator_prompt()
+    assert "As reports return consider children, alternatives under the same parent" in prompt
+    assert "report batch" not in prompt
+
+
 def test_simple_requests_and_user_methods_do_not_become_research_workflows():
     prompt = coordinator_prompt()
     assert "Simple requested operations skip it and do not become research trees" in prompt
@@ -82,7 +99,7 @@ def test_standard_mode_keeps_team_policy_but_removes_tree_policy():
     assert "# Research coordination" not in prompt
     assert "# Coordinator" in prompt
     assert "Delegate data analysis" in prompt
-    assert "Search Expert acquires a named public comparison dataset" in prompt
+    assert "Search Expert acquires a dataset the user named" in prompt
 
 
 def test_experts_keep_evidence_without_workflow_checklists():
@@ -153,6 +170,10 @@ def test_notes_and_skills_are_not_hidden_coordination_protocols():
     assert "one scientific question" in NATIVE_TASK_DESCRIPTION
     assert "Parent question, Parent answer, Parent report" in NATIVE_TASK_DESCRIPTION
     assert "Do not prescribe methods, metrics, figures" in NATIVE_TASK_DESCRIPTION
+    description = _flatten(NATIVE_TASK_DESCRIPTION)
+    assert "returns when the next running participant finishes" in description
+    assert "its result may say that its own participant is still working" in description
+    assert "await_experts returns the receipts still to come" in description
 
 
 def test_experts_label_what_they_save_so_a_later_step_need_not_open_it():
