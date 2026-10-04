@@ -704,23 +704,37 @@ async def test_zero_resource_quotas_allow_completion(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_cancelling_sandboxed_command_terminates_its_process_group(tmp_path: Path):
+async def test_cancelling_sandboxed_command_terminates_its_process_group(
+    tmp_path: Path, monkeypatch
+):
     capabilities = get_sandbox_execution_capabilities()
     if not capabilities.available:
         pytest.skip(capabilities.reason or "sandbox backend is unavailable")
 
     policy, work = _policy(tmp_path, limits=_resource_limits(wall_time_seconds=0))
-    pid_file = policy.output_root / "sandboxed.pid"
+    ready_file = policy.output_root / "ready.txt"
     script = work / "wait_for_cancel.py"
     script.write_text(
         "import os\n"
         "import time\n"
         "from pathlib import Path\n"
-        "Path(os.environ['OUTPUT_DIR']).joinpath('sandboxed.pid').write_text(str(os.getpid()))\n"
+        "Path(os.environ['OUTPUT_DIR']).joinpath('ready.txt').write_text('ready')\n"
         "time.sleep(30)\n",
         encoding="utf-8",
     )
 
+    # Capture the host-side launcher, not the child's namespace-local PID.
+    # On Linux the child's PID can be 2, which names an unrelated host process.
+    processes = []
+    create_subprocess_exec = asyncio.create_subprocess_exec
+
+    async def record_process(*args, **kwargs):
+        process = await create_subprocess_exec(*args, **kwargs)
+        if str(script.resolve()) in args:
+            processes.append(process)
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", record_process)
     execution = asyncio.create_task(
         run_sandboxed_command(
             _python_command(script),
@@ -730,26 +744,35 @@ async def test_cancelling_sandboxed_command_terminates_its_process_group(tmp_pat
         )
     )
     for _ in range(100):
-        if pid_file.exists():
+        if ready_file.exists():
             break
         await asyncio.sleep(0.02)
     else:
         execution.cancel()
         await asyncio.gather(execution, return_exceptions=True)
-        raise AssertionError("Sandboxed fixture never wrote its process identifier")
+        raise AssertionError("Sandboxed fixture never became ready")
 
-    pid = int(pid_file.read_text(encoding="utf-8"))
-    execution.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await execution
-    for _ in range(100):
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            break
-        await asyncio.sleep(0.02)
-    else:
-        raise AssertionError("Cancelled sandbox process remained alive")
+    try:
+        assert len(processes) == 1
+        process = processes[0]
+        assert process.returncode is None
+        os.killpg(process.pid, 0)  # Establish that this host process group exists.
+        execution.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await execution
+        for _ in range(100):
+            try:
+                os.killpg(process.pid, 0)
+            except ProcessLookupError:
+                break
+            await asyncio.sleep(0.02)
+        else:
+            raise AssertionError("Cancelled sandbox process group remained alive")
+        assert process.returncode is not None
+    finally:
+        if not execution.done():
+            execution.cancel()
+            await asyncio.gather(execution, return_exceptions=True)
 
 
 @pytest.mark.asyncio

@@ -111,13 +111,18 @@ import os, socket
 from pathlib import Path
 source, secret, output = map(Path, __import__('sys').argv[1:])
 assert source.read_text() == 'shared data'
-for path in (source, secret):
-    try: path.write_text('changed')
-    except OSError: pass
-    else: raise AssertionError('outside write allowed')
+# Check the host secret is hidden before any same-named private file is created.
 try: secret.read_text()
 except OSError: pass
 else: raise AssertionError('secret read allowed')
+try: source.write_text('changed')
+except OSError: pass
+else: raise AssertionError('readonly source write allowed')
+# Unmounted paths may be writable in bubblewrap's private filesystem. Such a
+# write must not expose or modify the host secret (checked again by the parent).
+try: secret.write_text('sandbox-only')
+except OSError: pass
+else: assert secret.read_text() == 'sandbox-only'
 try: socket.socket().connect(('1.1.1.1', 443))
 except OSError: pass
 else: raise AssertionError('network allowed')

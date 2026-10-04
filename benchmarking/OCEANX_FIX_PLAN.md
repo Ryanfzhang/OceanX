@@ -42,6 +42,7 @@
 | G | 大文件编辑路径缺少 `EditResult` 导入（方案外缺口，v1.4 新增） | Owner 已批准并完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。见 Log。 |
 | R3 | 服务器开跑前检查，然后重跑 E10（`methods-oceanx-flash-r3`） | 已完成并分析，见 Log | | |
 | R3 follow-up | R3 的六项耗时、token 与存储优化 | v1.8 已提交（`b0a2618`）；v1.9 的上限 40 在工作区待提交；服务器全量 1020 passed、4 failed：两个已知旧沙箱测试，加两个此前从未在服务器上跑过的 Finch 沙箱测试（已改，待复跑） | | |
+| Linux 测试修正 | 修正取消测试的进程号及文件隔离测试的预期，不改沙箱 | 本机与服务器全量通过；Owner 已授权提交和服务器同步，见最新 Log | | |
 
 执行顺序：A1 → A2 → A3 → A4 → B → E → D → C → F → G → R3。A1 没合入之前不要启动任何运行。
 
@@ -366,7 +367,7 @@ R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之�
 
 3. 跑只在 Linux 上执行的测试，macOS 会跳过它们，所以必须在这里通过。后三个文件（数据清单、静态交付、大文件编辑）在 macOS 上跑过，但它们用到沙箱，Linux 上还没跑过：
 
-   **已知会失败的两个旧测试（v1.6），不挡 R3：**`tests/test_sandbox/test_execution.py::test_cancelling_sandboxed_command_terminates_its_process_group` 和 `tests/test_sandbox/test_linux.py::test_native_linux_readonly_network_fork_and_secret_isolation`。原因见 Log。除这两个之外有任何失败，都不要开跑。
+   **2026-10-05 更新：**Owner 已批准修正两个旧沙箱测试的 Linux 检查方式；不改沙箱权限。它们不再作为已知失败豁免，以下测试必须全部通过。历史诊断与本次验证见 Log。
 
    ```bash
    PYTHONPATH=src python -m pytest tests/test_sandbox tests/test_oceanx/test_persistent_kernels.py tests/test_oceanx/test_sandbox_self_check.py tests/test_oceanx/test_saved_data_index.py tests/test_oceanx/test_static_figure_delivery.py tests/test_oceanx/test_native_large_edit.py -q -p no:cacheprovider
@@ -457,6 +458,17 @@ R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之�
 ## 8. Log
 
 Codex 在这里追加记录，最新的放在最上面。每条写：日期、做了哪个包或遇到什么情况、证据、改动、测试结果。
+
+### 2026-10-05 — Owner 批准修正两个旧沙箱测试，并提交 origin、同步服务器（Codex）
+
+- **范围：**只改两个测试及本文件。不修改分析代码、沙箱权限、研究策略或 benchmark 结果，不中断正在运行的任务。
+- **修改前证据：**服务器 `0b5d58f` 上两项定向测试均失败。取消测试记录的是沙箱内部 PID `2`，宿主机的同号进程是 `kthreadd`；文件测试成功写入的是未挂载的 `secret.txt` 路径，宿主机的原始秘密文件和只读输入都未改变。
+- **取消测试：**记录真正启动目标脚本的宿主机 launcher，先确认其进程组存在，取消后确认整个进程组消失且 launcher 已退出。不捕获 `PermissionError` 来伪装通过，不用沙箱内部 PID 检查宿主机；断言失败时也取消测试任务。
+- **文件测试：**先验证宿主机秘密文件不可读，仍要求只读输入不可写；未挂载路径若能创建沙箱私有临时文件，验证读到的是新内容，并在宿主机再次断言两个原文件未变。保留网络、fork、环境秘密、asyncio 和输出目录检查。
+- **本机验证：**两个相关文件 **79 passed、3 skipped**；最终完整套件 **1111 passed、8 skipped，176.22 秒**（`/private/tmp/oceanx-sandbox-test-fix-local-final.log`）。首次本机验证发现 macOS 的解释器探测也会启动进程，记录器现按目标脚本过滤，不把环境探测当成被取消的任务。
+- **服务器验证：**更新测试先复制到 `/tmp/oceanx-sandbox-tests-2DcDVGXr`，不覆盖项目代码；两个文件 **81 passed、1 skipped**。全量初跑使用绝对 Python 路径但未同步设置 PATH，四项模拟图片子进程误用系统 Python、报 `PIL` 缺失；真实沙箱图片测试和两个修正测试通过。设置 `oceanx-bench/bin` 为 PATH 首项后，最终全量 **1115 passed、4 skipped，203.54 秒**（`/tmp/oceanx-sandbox-test-fix-server-final.log`）。全量使用原 checkout 的生产代码及临时目录里的两份更新测试；原两文件被替换而非跳过，测试总数与本机均为 1119。
+- **静态检查：**`git diff --check` 通过。两个文件的 Ruff 提示与 HEAD 相同（两条旧类型提示、一条旧 import 排序提示），本次没有扩大范围处理。
+- **交付范围：**Owner 明确授权本次三文件提交、推送 origin 并在服务器 `git pull --ff-only`。工作区修改不含任何生产源码或结果文件；测试的旧失败豁免已撤销。
 
 ### 2026-10-04 — 后台委派：Coordinator 不再等一批里最慢的 Expert；并行数成为设置（Claude，待提交）
 
