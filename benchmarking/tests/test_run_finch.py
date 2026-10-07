@@ -14,6 +14,7 @@ from finch_sandbox import BACKEND, notebook_command, sandbox_command
 from oceanx.batch import QueryCase
 from benchmark_config import load_config
 from test_prepare_queries import archive as archive
+from test_run_claude import exited_group as exited_group
 
 
 @pytest.fixture
@@ -162,6 +163,15 @@ def test_timeout_partial_delivery_children_and_retry(setup):
     assert removed == []
     assert runner.main([*args, "--resume"]) == 1
     assert len(results(output)) == 3  # Failed case gets a new attempt, completed case is skipped.
+
+
+def test_timeout_recorded_when_stopped_group_holds_only_exited_processes(setup, exited_group):
+    _, output, invoke, _ = setup
+    assert runner.main(invoke([("TIMEOUT", .3)])) == 1
+    [record] = results(output)
+    assert (record["status"], record["stop_reason"], record["runner_error"]) == (
+        "timed_out", "timed_out", None)
+    assert len(exited_group) >= 4  # refused three times, then asked again
 
 
 def test_step_failure_continues_without_docker(setup):

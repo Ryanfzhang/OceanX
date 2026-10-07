@@ -549,6 +549,10 @@ Owner：评分应当尽量是把原来的整个分数划分成几个方面，每
 - Owner 要求三个 runner 各自读自己的设置文件，已实现（只改 `benchmarking/`，未提交）。`benchmark_config.load_runner_config(method, path)` 的取用顺序：`--config` 指定的文件；环境变量 `OCEAN_BENCH_CONFIG`；该 runner 自己的 `benchmarking/.env.oceanx`、`.env.claude`、`.env.finch`（存在才用）；共用的 `benchmarking/.env`。每个 runner 启动时第一行打印所用的文件。OceanX 的后端和 Agent Server、Finch 的 worker 每道题重读的也是这同一个文件（原有机制，已有测试确认）。没有自己的文件时行为与原来完全一样。`benchmark_run.py --reset` 和 `check_setup.py` 仍默认读 `.env`，要用 `--config` 指向某个方法的文件。`RUNNING.md` 和 `.env.example` 已说明。测试：`test_benchmark_run.py` 新增 4 项（含 OceanX 经真实入口启动），Claude、Finch 各 1 项；本机全量 1139 passed、8 skipped；九处故意改坏均被发现。
 - 注意：这个改动（以及整个 H 包）一旦更新到服务器，`benchmarking/server/*.py` 的哈希就变了，已有的实验不能再续跑。OceanX 的 Q25、Q27 如果要在原实验里续跑，要在更新代码之前做，现有代码已经支持 `--config`。
 - 测试时发现一个与本次改动无关的本机偶发失败：Claude 和 Finch 的超时测试约二十次里有一次把状态记成 `failed`。原因是 macOS 上对只剩僵尸进程的进程组发信号会报 `PermissionError`，而 `run_claude.py` 的 `stop_group` 只处理 `ProcessLookupError`；Linux 上是后者，服务器运行不受影响。没有修，已单独标记为待办。
+- 2026-10-07 补记（Claude）：上一条的偶发失败已按 Owner 的要求修好。`run_claude.py` 的 `stop_group` 改为经 `signal_group` 发信号：收到 `PermissionError` 时先回收自己的子进程，每 5 毫秒再问一次，最多 1 秒；进程组消失就结束，一直被拒绝才照原样抛错，所以真的无权发信号的进程不会被当成已退出。Finch 的 runner 通过 `supervise` 用的是同一段代码。Linux 的正常路径不变，唯一差别是这种真实的报错最多晚 1 秒。上一条里“Linux 上是后者”不准确：Linux 对只剩僵尸进程的组是发送成功，回收之后才是 `ProcessLookupError`，两种都不会触发这个失败。
+  - 修复的代码在 Owner 当天 11:36 的提交 `a208856` 里（提交时测试还没写）。之后只在 `benchmarking/tests` 加了 5 个测试：两个 runner 各一个“组里只剩已退出进程时，超时仍记为 `timed_out`”；一个“一直拒绝时仍记为错误”；一个真实子进程自行退出后的清理；一个“先回收再重问”。
+  - 只在本机 macOS 验证：两个原有的超时测试，旧代码重复 200 次失败 4 次，新代码重复 600 次没有失败；5 个新测试各重复 100 次没有失败；`benchmarking/tests` 354 passed、5 skipped；在临时副本里故意改坏 10 处，9 处被测试发现，剩下 1 处是等价改动。没有在 Linux 上跑。
+  - 待 Owner 定：工作区的 `run_claude.py` 里还有 6 行注释措辞的改动（把 `a208856` 里“Linux 答 no such process”改准确，无行为变化）。`benchmarking/server` 下任何改动，包括注释，都会改变实验记录的 runner 哈希，用 `a208856` 启动的实验在更新到含这处改动的代码后不能续跑；所以要么现在丢弃，要么留到下次改 server 代码时一起提交。
 - 另一件独立的事：三十个 rubric 现在都是草稿（`status: draft`），里面有 215 处参考值和容差写着 “to freeze before judging”。正式评分之前要按 `EVALUATION.md` 的第 0 阶段把参考值算出来填进副本并锁定；这一步还没有做，和六个指标无关，但“正确性”和“判定正确”两个指标要等它做完才有区分度。
 
 

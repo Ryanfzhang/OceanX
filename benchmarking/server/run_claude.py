@@ -78,18 +78,18 @@ def command_for(executable, case, args):
     return command
 
 
-# How long a group in which only finished processes are left may go on answering "not permitted".
+# How long a group that holds only exited processes may go on answering "not permitted".
 GROUP_REAP_SECONDS = 1.0
 
 
 def signal_group(process, signum):
     """Signal the process group we created; False when the group no longer exists.
 
-    For a group in which only zombies are left, macOS answers "not permitted" where Linux answers
-    "no such process": our own child not yet reaped, or its orphans in the instant before the system
-    reaps them (measured here: gone within 2 ms). Such a group has ended. Reap the child and ask again
-    for a moment. A group that still refuses after that holds a process we really may not signal, and
-    the error is raised as it always was.
+    macOS answers "not permitted" for a group that still exists but holds only exited processes:
+    our own child before it is reaped, or its orphans in the instant before the system reaps them
+    (measured: gone within 2 ms). Linux does not. Such a group has ended, so reap the child and ask
+    again for a moment. A group that still refuses after that holds a process we really may not
+    signal, and the error is raised as it was before.
     """
     deadline = time.monotonic() + GROUP_REAP_SECONDS
     while True:

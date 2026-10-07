@@ -1,5 +1,7 @@
 """Real subprocess supervision with a fake CLI; no model calls or server access."""
+import errno
 import json
+import os
 from pathlib import Path
 import signal
 import subprocess
@@ -66,6 +68,27 @@ sys.exit(4 if "NONZERO" in prompt else 0)
 
 def results(output):
     return [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+
+
+def refused():
+    return PermissionError(errno.EPERM, "Operation not permitted")
+
+
+@pytest.fixture
+def exited_group(monkeypatch):
+    """os.killpg as macOS answers while a stopped group still holds exited processes nobody has
+    reaped: "not permitted" to the first three kill signals, then whatever the system says."""
+    real, kills = os.killpg, []
+
+    def killpg(pgid, signum):
+        if signum == signal.SIGKILL:
+            kills.append(pgid)
+            if len(kills) <= 3:
+                raise refused()
+        real(pgid, signum)
+
+    monkeypatch.setattr(os, "killpg", killpg)
+    return kills
 
 
 def test_success_files_model_config_and_resume(setup):
@@ -175,6 +198,63 @@ def test_timeout_kills_children_retains_outputs(setup):
     time.sleep(1.1)
     assert not list(output.rglob("escaped.txt"))
     assert list(output.rglob("figure.png"))
+
+
+def test_timeout_recorded_when_stopped_group_holds_only_exited_processes(setup, exited_group):
+    _, output, invoke = setup
+    assert runner.main(invoke([("TIMEOUT", 0.3)])) == 1
+    [record] = results(output)
+    assert (record["status"], record["stop_reason"], record["runner_error"]) == (
+        "timed_out", "timed_out", None)
+    assert len(exited_group) >= 4  # refused three times, then asked again
+
+
+def test_group_that_keeps_refusing_is_recorded_as_an_error(setup, monkeypatch):
+    """A process the runner may not signal is not taken for one that has exited."""
+    _, output, invoke = setup
+    real = os.killpg
+
+    def killpg(pgid, signum):
+        try:
+            real(pgid, signum)  # the fake CLI is stopped all the same, so nothing outlives the test
+        except ProcessLookupError:
+            pass
+        raise refused()
+
+    monkeypatch.setattr(os, "killpg", killpg)
+    monkeypatch.setattr(runner, "GROUP_REAP_SECONDS", 0.05)
+    assert runner.main(invoke([("TIMEOUT", 0.3)])) == 1
+    [record] = results(output)
+    assert record["status"] == "failed" and record["stop_reason"] == "launch_or_io_error"
+    assert "Operation not permitted" in record["runner_error"]
+
+
+def test_stop_group_accepts_child_that_exited_by_itself():
+    """Not reaped yet, it is the only member of its group: the case macOS answers "not permitted"."""
+    process = subprocess.Popen([sys.executable, "-c", "pass"], stdout=subprocess.PIPE,
+                               start_new_session=True)
+    assert process.stdout.read() == b""  # end of file: it has exited; nothing has waited for it
+    process.stdout.close()
+    time.sleep(0.1)
+    runner.stop_group(process)
+    assert process.wait() == 0
+
+
+def test_group_signal_reaps_child_before_asking_again(monkeypatch):
+    class Exited:  # our child after it exited: its group refuses until the child is reaped
+        pid, reaped = 4242, False
+
+        def poll(self):
+            self.reaped = True
+            return 0
+
+    child = Exited()
+
+    def killpg(pgid, signum):
+        raise ProcessLookupError(errno.ESRCH, "No such process") if child.reaped else refused()
+
+    monkeypatch.setattr(os, "killpg", killpg)
+    assert runner.signal_group(child, signal.SIGTERM) is False
 
 
 def test_sigterm_records_cancelled_and_stops_batch(setup):
