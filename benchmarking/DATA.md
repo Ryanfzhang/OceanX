@@ -85,11 +85,10 @@ set has been downloaded yet, so the first transfer checks them.
 
 ## Staging CMOMS (owner)
 
-For the owner's existing flat annual archive at `/import/home4/share/PRE_wavyocean`,
-see [SERVER_DATA.md](SERVER_DATA.md#original-cmoms-do-not-copy-the-entire-2011-2022-archive).
-It describes no-copy hard-link staging, the shared-inode caveat, and missing grid metadata.
-Current completion reports are also summarized there; the acquisition notes below describe the plan,
-not a live download status. All public groups now report complete (2026-10-02).
+The acquisition notes below describe the plan, not a live download status; the live status is
+`$DATA_ROOT/_download_all/coverage.json`. For the owner's existing flat annual archive, see
+"The original CMOMS archive" below: hard-link staging without a copy, its shared-inode caveat, and the
+grid metadata that is still missing.
 
 1. One folder per variable and year: `$DATA_ROOT/CMOMS/<variable>/<year>/*.nc`. The NetCDF variable must
    have the folder's name (`temp`, `salt`, `u`, `v`, `oxygen`, `chlorophyll`). Years 2011-2020.
@@ -114,6 +113,101 @@ not a live download status. All public groups now report complete (2026-10-02).
 The OceanX sandbox only lets an agent read the folders bound to its question, so it never sees
 `_evaluator_only`. Query preparation also refuses any path containing `_evaluator_only`, `evaluator` or
 `rubric.json`.
+
+### The original CMOMS archive: do not copy the entire 2011-2022 archive
+
+Source: `/import/home4/share/PRE_wavyocean`. The six requested variables are already
+separate annual NetCDF files named `CMOMS_<variable>_Zlev_<year>.nc`. The benchmark
+only needs 2011-2020 (60 files, about 2.65 TB of logical file sizes).
+
+Both directories were on the same filesystem at audit time. **Hard links** are the
+simple zero-extra-data-copy staging option, and unlike symlinks they work with the
+current input validator. They add directory entries, not another 2.65 TB copy.
+However, they share file contents and permissions: writing either path changes the
+same file. They are **not** a backup or a read-only boundary. OceanX/Finch mount inputs
+read-only; the current Claude runner has no equivalent OS boundary. Do not run
+unrestricted Claude Bash against private hard-linked inputs. Never `chmod` the linked
+files to “protect the copy”; that changes the original inode too.
+
+The following owner-run staging command refuses conflicts, skips existing identical
+links, limits the years/variables explicitly and never moves/deletes original files:
+
+```bash
+(
+  set -euo pipefail
+  cmoms_source=/import/home4/share/PRE_wavyocean
+  cmoms_target=/import/home4/share/mafzhang/CMOMS
+  for cmoms_var in temp salt u v oxygen chlorophyll; do
+    for cmoms_year in 2011 2012 2013 2014 2015 2016 2017 2018 2019 2020; do
+      cmoms_file=CMOMS_${cmoms_var}_Zlev_${cmoms_year}.nc
+      cmoms_from=$cmoms_source/$cmoms_file
+      cmoms_to=$cmoms_target/$cmoms_var/$cmoms_year/$cmoms_file
+      test -f "$cmoms_from"
+      if test -e "$cmoms_to" || test -L "$cmoms_to"; then
+        test ! -L "$cmoms_to" && test "$cmoms_from" -ef "$cmoms_to" || exit 1
+      else
+        mkdir -p -m 700 "$cmoms_target/$cmoms_var/$cmoms_year"
+        ln "$cmoms_from" "$cmoms_to"
+      fi
+    done
+  done
+)
+```
+
+No hard links have been created by this audit. Use a separate copy (or filesystem
+reflink if supported) if independent mutability is required; do not silently fall
+back to a multi-terabyte copy. Do not use symlinks: preparation and Finch intentionally
+reject them. Existing parent-directory permissions should be reviewed separately;
+do not recursively change the shared source's permissions.
+
+### Grid and conventions are still required
+
+Header samples have 1-D lon/lat, daily-length time axes and fixed-depth `z` coordinates.
+The depth list includes `9999`, described as a bottom marker: it is **not** a normal
+physical depth level. Sample headers do not establish the entire ten-year archive's
+time continuity, wet-mask convention or velocity orientation.
+
+There was no separate grid file in the original source directory. Obtain the real
+grid/mask/bathymetry metadata and stage it in `CMOMS/grid/`, with a conventions README
+as described above. Do not add a dummy `.nc` just to
+make the presence checker green. Coordinates alone are not verified bathymetry or
+cell areas, and missing scientific metadata must not be invented.
+
+After staging the real grid and checking conventions:
+
+```bash
+python benchmarking/download/download_all.py private \
+  --output /import/home4/share/mafzhang --groups C_CORE
+```
+
+After staging the real grid and checking conventions:
+
+```bash
+python benchmarking/download/download_all.py private \
+  --output /import/home4/share/mafzhang --groups C_CORE
+```
+
+This records core staging readiness without declaring the requested diagnostic
+groups complete. It checks folder/file/variable presence, not all scientific
+conventions or a whole-archive hash. Keep CMOMS questions out of a run until those
+checks are satisfied. Once a question's data are complete, `BENCH_TASKS=available` picks it up
+at the next launch of the same experiment ([RUNNING.md](RUNNING.md)).
+
+### What is in the server's data root (audit of 2026-10-02)
+
+Keep the archive paths stable. Put new run and evaluation folders outside this root. Renaming data
+folders while a download runs breaks the saved plans.
+
+| Category | Directories | Treatment |
+|---|---|---|
+| Active public inputs | `CMEMS_Gulf`, `CMEMS_ECS`, `CMEMS_ARABIAN_*`, `CMEMS_CCS_*`, `CMEMS_TASMAN_*`, `ERA5`, `MODIS_Aqua`, `OISST` | Keep existing names. Download receipts and runner bindings depend on them. |
+| Download control | `_download_all`, `.download*.lock` | Keep. They track request identities, file hashes and group completion. Lock-file existence alone does not mean a lock is held. |
+| Legacy data | `NOAA_Blended_Wind` | Not used by the current catalogue; retain until its use by other projects is confirmed. |
+| Historical outputs | `oceanmind-agent-runs`, `oceanmind-backend-8002.log`, `oceanmind-frontend-3002.log` | Existing analysis history, not benchmark inputs; do not delete or move without checking stored path references. |
+| Old acquisition metadata | `_download_all.backup-20260909T125735Z` | Retain as recovery metadata; not current input bindings. |
+| Current inventory | `_inventory/` | Human-readable status only; never bind the whole data root to an agent. |
+| Private input staging | `CMOMS/<variable>/<year>/*.nc`, `CMOMS/grid/` | Stage only the required years; never mix evaluator references or results here. |
+| Requested diagnostics | `CMOMS_DIA/P_Production`, `NO3_uptake`, `CO2_airsea`, `pCO2` | Keep Q14/Q16 excluded until received and checked. |
 
 ## Requesting extra CMOMS variables
 

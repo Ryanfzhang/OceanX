@@ -87,6 +87,6 @@ The remaining 13 questions need CMOMS staging; Q14/Q16 also need requested diagn
 This is completion-report readiness, not new whole-archive hash verification or scientific grading.
 
 Keep the current layout and control files intact. For the directory inventory and original CMOMS
-staging options, see [SERVER_DATA.md](../SERVER_DATA.md). For partial-data selection and three-method
+staging options, see [DATA.md](../DATA.md#staging-cmoms-owner). For partial-data selection and three-method
 runs, see [RUNNING.md](../RUNNING.md). Those are the single operational entry points; do not use older
 "missing public data" planning notes as the live download status.

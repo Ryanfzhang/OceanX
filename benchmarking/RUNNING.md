@@ -1,9 +1,9 @@
-# Run OceanX, Claude Code and Finch from one .env
+# Run OceanX, Claude Code and Finch from one settings file
 
-All commands run on the Linux server from `/home/mafzhang/code/OceanX`, with
-`oceanx-bench` active. No Docker is used. Finish [INSTALL.md](INSTALL.md), install
-Claude Code, and finish the separate [Finch setup](finch/README.md) first.
-The three commands do not install dependencies, download data or start learning.
+All commands run on the Linux server from the OceanX checkout, with `oceanx-bench` active. No Docker is
+used. Finish [INSTALL.md](INSTALL.md), install Claude Code, and finish the separate
+[Finch setup](finch/README.md) first. The three commands do not install dependencies, download data or
+start learning.
 
 ## 1. Configure once
 
@@ -12,8 +12,8 @@ cp -n benchmarking/.env.example benchmarking/.env
 chmod 600 benchmarking/.env
 ```
 
-Edit the ignored `.env`; do **not** source it. The key is never written to manifests.
-The template includes every setting needed by the three commands. The main choices are:
+Edit the ignored `.env`; do **not** source it. The key is never written to a record. The template
+includes every setting the three commands need. The main choices:
 
 ```dotenv
 DEEPSEEK_API_KEY=<your key>
@@ -25,15 +25,20 @@ BENCH_SUITE=test
 BENCH_EVOLUTION_SET=
 BENCH_TASKS=available
 BENCH_TIMEOUT_SECONDS=10800
-BENCH_RESUME=false
+BENCH_RESUME=true
 ```
 
-- `BENCH_TASKS=available`: select all numerically complete questions once; print exclusions.
-- `BENCH_TASKS=all`: require every question in the selected suite/set to have complete data.
-- `BENCH_TASKS=Q07,Q08,Q09`: require exactly these questions; commas or spaces are accepted.
+- `BENCH_EXPERIMENT`: the name of the results folder. It can stay the same after the code, the settings
+  or the data change.
+- `BENCH_TASKS=available`: every question whose data are complete now. A question without data is
+  printed and left out; it runs at a later launch, once its data are there.
+- `BENCH_TASKS=all`: every question of the suite or set; the launch stops if one lacks data.
+- `BENCH_TASKS=Q07,Q08,Q09`: exactly these questions; commas or spaces are accepted.
+- `BENCH_RESUME=true`: skip the questions already completed and run the rest. `false`: run every chosen
+  question again.
 - `BENCH_OCEANX_EXPERT_CALL_LIMIT=40`: model calls one Expert may use (10 to 60; 60 is the desktop's
-  limit). Compare runs only at the same value, and give a run with another value a new `BENCH_EXPERIMENT`.
-- For an unscored smoke run: `BENCH_SUITE=evolution`, `BENCH_TASKS=E10` and a new experiment name.
+  limit). Compare runs only at the same value.
+- For an unscored smoke run: `BENCH_SUITE=evolution`, `BENCH_TASKS=E10` and an experiment name of its own.
 - Evolution round A/B: `BENCH_SUITE=evolution`, `BENCH_EVOLUTION_SET=A` or `B`.
   All 24 evolution questions are selected when that field is empty and tasks are `all`/`available`.
 - Optional OceanX library: `BENCH_OCEANX_LIBRARY=/absolute/path/to/frozen/L1` or L2.
@@ -47,7 +52,6 @@ BENCH_RESUME=false
 
 Relative paths resolve from the OceanX checkout, not the shell's working directory.
 The data root must already contain the downloaded/staged data **and** `_download_all/`.
-Moving data does not migrate old JSONLs; a new experiment generates new absolute bindings.
 `BENCH_OUTPUT_ROOT` must be separate from data and source repositories.
 
 OceanX Coordinator/Experts, offline meta-agent/node labels, Claude (including subagents)
@@ -79,32 +83,48 @@ python benchmarking/server/run_finch.py
 ```
 
 Finch's controller starts in `oceanx-bench`; `BENCH_FINCH_PYTHON` points to its separate
-Python 3.12 environment. Each method runs its selected questions sequentially.
-`BENCH_FINCH_EXECUTION_TIMEOUT` defaults to 1200 seconds (20 minutes), matching
-upstream Finch. It limits each full notebook replay; `edit_cell` re-executes all
-cells. The separate case timeout remains `BENCH_TIMEOUT_SECONDS` (10800 seconds
-by default). Existing `.env` files with an explicit value of 300 must be updated
-to 1200; changes take effect on newly launched attempts.
+Python 3.12 environment. `BENCH_FINCH_EXECUTION_TIMEOUT` defaults to 1200 seconds (20 minutes),
+matching upstream Finch. It limits each full notebook replay; `edit_cell` re-executes all
+cells. The separate case timeout remains `BENCH_TIMEOUT_SECONDS` (10800 seconds by default).
 No `--queries`, `--output`, model flags or exported path variables are needed.
 
-The first command freezes the selection; the others reuse exactly the same JSONL.
-An OS lock protects simultaneous starts. Its lock file is opened read/write so shared
-locks also work on Linux NFS output directories. Later downloads do not expand that selection.
-Changed settings or a damaged selection require an explicit reset or a new
-`BENCH_EXPERIMENT`; the runner stops instead of silently overwriting the experiment. API key rotation and
-changing `BENCH_RESUME` do not change the selection.
+Each method runs its questions one after another, into a folder of its own. Run under `tmux` to survive
+an SSH disconnection.
 
 ```text
-BENCH_OUTPUT_ROOT/BENCH_EXPERIMENT/
-  inputs/queries.jsonl              shared immutable task input
-  inputs/selection.json             task IDs, settings and input hash; no key
-  runs/OceanX/                      OceanX attempts
-  runs/Claude/                      Claude attempts
-  runs/Finch/                       Finch attempts
+BENCH_OUTPUT_ROOT/BENCH_EXPERIMENT/runs/
+  OceanX/<question>/attempt-*/      one folder per attempt; nothing is ever overwritten
+  OceanX/results.jsonl              one line per finished attempt
+  OceanX/launches.jsonl             one line per launch: when, commit, settings, questions
+  OceanX/arm.json                   what the method folder is; written at the first launch
+  Claude/...    Finch/...           the same
 ```
 
-The last folder names follow `BENCH_OCEANX_ARM`, `BENCH_CLAUDE_ARM`, `BENCH_FINCH_ARM`.
-Choose distinct names. Each method retains its original output-writer lock and resume checks.
+The folder names follow `BENCH_OCEANX_ARM`, `BENCH_CLAUDE_ARM`, `BENCH_FINCH_ARM`; choose distinct names.
+
+### Running again
+
+An experiment is only this folder. Nothing in it is frozen, and a launch compares nothing with an
+earlier one. Every launch chooses its questions again from the settings and the data present.
+
+| You want to | Do this |
+|---|---|
+| Continue after an interruption, or retry what failed | Run the same command again. Completed questions are skipped; a question that failed, timed out or never started gets a new attempt. It is not a resume of a conversation in flight. |
+| Run the questions whose data have arrived since | Run the same command again with `BENCH_TASKS=available`. |
+| Run a completed question again | Set `BENCH_TASKS` to those questions and `BENCH_RESUME=false` (or pass `--no-resume`). The new attempt is stored beside the earlier one, and the evaluation reads each question's latest attempt. |
+| Go on after updating the code or changing a setting | Keep the experiment name and run the command. |
+
+`launches.jsonl` is what tells runs apart afterwards. Every launch adds a line with the commit, one hash
+of the runner code, all settings (never the key) and its questions; an attempt belongs to the last launch
+that started before it.
+
+This leaves one thing to you: attempts made with different code or settings can sit in one folder. For a
+comparison you report, run every method on one commit and one set of settings, and do not rerun a
+question to get a better score. Use another `BENCH_EXPERIMENT` when results should be kept apart, for
+example for a second repeat.
+
+One runner writes a method folder at a time; a second one stops with "Another runner is writing". The
+system drops that lock when the runner ends, however it ends.
 
 **One settings file per runner.** By default all three commands read `benchmarking/.env`. A runner that
 finds a file of its own next to it loads that one instead: `run_oceanx.py` reads `.env.oceanx`,
@@ -112,68 +132,17 @@ finds a file of its own next to it loads that one instead: `run_oceanx.py` reads
 still come first, and each runner prints the file it uses as its first line.
 
 ```bash
-cp benchmarking/.env benchmarking/.env.oceanx   # then set its own BENCH_EXPERIMENT, BENCH_RESUME, ...
+cp benchmarking/.env benchmarking/.env.oceanx   # then set its own BENCH_TASKS, BENCH_RESUME, ...
 ```
 
-Use this when the methods run in different experiments, or to resume one method while another starts
-fresh. Do not edit a settings file that a running batch uses: a runner fixes its experiment, questions and
-resume flag at start, but OceanX's server process and Finch's worker read the same file again at the start
-of every case for the model, endpoint, key and token limit. Files that name the same `BENCH_EXPERIMENT`
-must agree in every setting except `BENCH_RESUME`, or the second runner stops with "Experiment
-inputs/config changed". `benchmark_run.py --reset` and `check_setup.py` read `benchmarking/.env` unless
+Use this to give the methods different questions or resume flags, or different experiments. Do not edit
+a settings file that a running batch uses: a runner fixes its experiment, questions and resume flag at
+start, but OceanX's server process and Finch's worker read the same file again at the start of every
+case for the model, endpoint, key and token limit. `check_setup.py` reads `benchmarking/.env` unless
 given `--config`.
 
-An existing method output is not overwritten. For a new repeat, change the experiment name,
-e.g. `methods-public-r2`. For an interrupted batch, set `BENCH_RESUME=true` and rerun the
-same command. It skips completed cases and creates new attempts for unfinished ones;
-methods without an output folder start fresh. It does not resume an in-flight conversation.
-Prespecify retries; do not selectively
-retry scored failures. Run under `tmux` to survive SSH disconnection.
-
-During debugging, reuse the same `BENCH_EXPERIMENT` after a clean reset:
-
-```bash
-python benchmarking/server/benchmark_run.py --reset
-python benchmarking/server/run_finch.py
-```
-
-Reset uses the current `.env` and moves the **entire experiment**, including shared
-inputs and every method's runs, to
-`BENCH_OUTPUT_ROOT/.archive/BENCH_EXPERIMENT-<timestamp>-<id>/`. Then the ordinary
-commands create fresh inputs and outputs under the same name, including after code
-or configuration fixes. Existing archive folders may be deleted manually when no
-longer needed. No model runs or input datasets are changed by reset.
-
-The three runners can run together, but reset refuses while any is active. Older
-OceanX runs may leave a PID lock after a crash; stop the old runner and clear that
-stale lock before reset. If you manually remove the entire experiment directory
-instead, its name can also be reused. `BENCH_RESUME=true` starts fresh when the method
-output no longer exists.
-
-Advanced CLI flags still override individual launch defaults. Explicit `--queries`
-or `--query` requires explicit `--output` and bypasses automatic selection; do not
-mix that workflow with the three-command comparison.
-
-### Repeat OceanX after the model-configuration fix
-
-Earlier OceanX attempts can say Flash in `model_protocol.json` while their returned-model
-ledger says Pro: that record used to be written by the gateway, whose in-memory override
-did not reach the actual server child. Those attempts cannot serve as Flash results.
-
-After updating the server checkout, keep the same data, suite, task IDs and other scientific
-settings, but use a **new** `BENCH_EXPERIMENT` (for example `methods-oceanx-flash-r1`) and
-`BENCH_RESUME=false`, then run only:
-
-```bash
-python benchmarking/server/run_oceanx.py
-```
-
-For the E10 smoke comparison, keep `BENCH_SUITE=evolution`, `BENCH_EVOLUTION_SET=` and
-`BENCH_TASKS=E10`, with `BENCH_MODEL=deepseek-flash`. Do not delete or overwrite the earlier
-OceanX, Claude or Finch attempts. Changing runner source files invalidates the old automatic
-experiment selection, so a new arm name alone is not sufficient. The new query bindings
-must match the old query text and datasets before using the earlier baselines as comparators.
-This smoke repeat diagnoses the corrected model routing; it is not a new formal A/B claim.
+Command-line flags still override single settings. Explicit `--queries` or `--query` requires explicit
+`--output` and takes the questions from that file instead of the settings.
 
 ## Run settings and comparison limits
 
@@ -303,9 +272,10 @@ formats remain readable only when no current task-result index is present.
 - Run the three methods on an **evolution** smoke question, in a separate experiment;
   check reports, figures, token/time records and conversations. Smoke records do not
   enter the evolution project's lesson review.
-- Record and freeze the commit, selection SHA-256, actual task IDs, model, dependency
-  versions, budgets, repeats and retry rule. Use [methods.example.yaml](experiments/methods.example.yaml)
-  for the external-method comparison, not the B/C1/C2 library experiment template.
+- Record the commit, actual task IDs, model, dependency versions, budgets, repeats and retry rule
+  (each launch's line in `launches.jsonl` has the commit, settings and task IDs). Use
+  [methods.example.yaml](experiments/methods.example.yaml) for the external-method comparison, not the
+  B/C1/C2 library experiment template.
 - Compute independent references and freeze rubrics before scored runs. Repository
   rubrics are drafts; data completeness is not scientific-reference readiness.
 - Do not update code/config while any method is running. Three concurrent methods

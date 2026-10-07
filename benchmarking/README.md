@@ -21,17 +21,17 @@ only the example is committed. Then launch each method with no arguments (RUNNIN
 
 | Read | For |
 |---|---|
+| [RUNNING.md](RUNNING.md) | Start here: one settings file, three launch commands, how an experiment continues |
 | [summary.md](summary.md) | All 54 questions, required data (type, time, space, variables), and brief assessment criteria |
-| [RUNNING.md](RUNNING.md) | Start here: one .env, automatic shared selection, three no-argument launch commands |
-| [METHODS_REVIEW.md](METHODS_REVIEW.md) | E10 diagnostic comparison, delivery audit and the historical model mismatch/benchmark bootstrap fix; not a formal score |
-| [SERVER_DATA.md](SERVER_DATA.md) | Server data audit, unchanged archive layout and safe CMOMS staging |
 | [DESIGN.md](DESIGN.md) | What is tested: allocation, the 30 + 24 questions, verified papers, design rules |
 | [DATA.md](DATA.md) | Data groups, server layout, CMOMS staging, the extra CMOMS variables to request, download commands |
-| [EVALUATION.md](EVALUATION.md) | How runs are made, stored and judged; the research policy; labels, how lessons and tools are learned in two rounds, and the process measures |
-| [CODEX_TEST_PLAN.md](CODEX_TEST_PLAN.md) | The step-by-step tests Codex executes (T0-T13) |
+| [EVALUATION.md](EVALUATION.md) | How runs are stored and judged; the research policy; labels, how lessons and tools are learned in two rounds, and the process measures |
 | [evaluation/CODEX_JUDGE.md](evaluation/CODEX_JUDGE.md) | How Codex scores one answer, and the score-file format |
+| [evaluation/ASPECT_SCORES.md](evaluation/ASPECT_SCORES.md) | The six indicators per task type that the rubric total is divided into |
+| [CODEX_TEST_PLAN.md](CODEX_TEST_PLAN.md) | The step-by-step tests Codex executes for the library experiment (T0-T13) |
 | [INSTALL.md](INSTALL.md) | One-time server setup |
-| [finch/README.md](finch/README.md) | Optional local Finch external baseline: isolated runtime, same inputs, saved evidence and evaluation |
+| [finch/README.md](finch/README.md) | The local Finch baseline: isolated runtime, same inputs, saved evidence |
+| [download/README.md](download/README.md) | The download phases and how to recover a partial download |
 
 ## Layout
 
@@ -40,11 +40,24 @@ tasks/Q01..Q30/task_info.json            agent-facing query, data groups, paper 
 tasks/Q01..Q30/evaluator/rubric.json     evaluator only: criteria, findings, answer key, probes (draft)
 evolution/E01..E24/task_info.json        evolution questions in two sets, A and B (no rubric)
 download/                                data_manifest.json and download_all.py
-server/                                  prepare_queries.py, run_oceanx.py (arms), research_cli.py, run_claude.py
-evaluation/                              evaluate.py (blind, validate, freeze, summarize, process, inventory, library-check), CODEX_JUDGE.md
-experiments/                             pre-registration template
+server/                                  the three runners and what they share (below)
+skills/                                  the one skill only benchmark runs of OceanX get (figure style)
+evaluation/                              evaluate.py (blind, validate, freeze, summarize, process, inventory, library-check)
+experiments/                             pre-registration templates
+reviews/                                 dated reviews of finished runs
 tests/                                   python -m pytest benchmarking/tests
 ```
+
+| Script in `server/` | Purpose |
+|---|---|
+| `run_oceanx.py`, `run_claude.py`, `run_finch.py` | Run the chosen questions with one method. With no arguments everything comes from the settings file. |
+| `benchmark_config.py`, `benchmark_run.py` | Read the settings file; choose the questions of a launch, skip the completed ones, record the launch. |
+| `prepare_queries.py` | Turn questions and the data root into runner cases. As a command it writes a JSONL for the explicit `--queries` workflow. It refuses incomplete downloads and any evaluator material. |
+| `collect_oceanx.py` | Collect finished OceanX attempts into `collected/` for reading (runs by itself after a batch). |
+| `benchmark_agent_server.py`, `benchmark_models.py`, `benchmark_skills.py` | Give OceanX's own server process the benchmark's model settings and its one extra skill. |
+| `finch_worker.py`, `finch_sandbox.py` | The Finch agent loop and its network-disabled notebook sandbox. |
+| `check_setup.py` | Check the settings and the sandbox without a model call. |
+| `research_cli.py` | Offline tree labels and library review for the evolution rounds. |
 
 ## The short version
 
@@ -57,6 +70,9 @@ python benchmarking/server/run_oceanx.py
 python benchmarking/server/run_claude.py
 python benchmarking/server/run_finch.py
 ```
+
+Run the same three commands again whenever more data have arrived, a run was interrupted or the code
+changed: completed questions are skipped and the rest run, in the same experiment folder.
 
 Never mount the repository, `evaluator/` folders or `_evaluator_only/` data into an agent run, and never
 commit CMOMS data or anything computed from it.

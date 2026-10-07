@@ -77,6 +77,11 @@ def results(output):
     return [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
 
 
+def launches(output):
+    """What each launch into this method folder ran with, oldest first."""
+    return [json.loads(line) for line in (output / "launches.jsonl").read_text().splitlines()]
+
+
 def test_success_resume_and_artifacts(setup):
     root, output, invoke, removed = setup
     args = invoke([("Analyze data", 5)])
@@ -94,16 +99,21 @@ def test_success_resume_and_artifacts(setup):
     assert "workspace/notebook.ipynb" in evidence
     assert "workspace/outputs/map.png" in evidence
     assert "input.nc" not in str(evidence)
-    identity = (output / "manifest.json").read_text()
-    assert "secret-test-key" not in identity
-    mode = json.loads(identity)["identity"]["model_compatibility"]
+    assert "secret-test-key" not in (output / "launches.jsonl").read_text()
+    mode = launches(output)[0]["model_compatibility"]
     assert mode["agent_reasoning"] == "upstream_two_call_react"
     assert mode["tool_choice"] == "upstream_required"
     assert json.loads((output / "arm.json").read_text())["model_compatibility"] == mode
     assert runner.main([*args, "--resume"]) == 0
     assert len(results(output)) == 1 and removed == []
-    with pytest.raises(ValueError, match="Resume"):
-        runner.main([*args, "--resume", "--max-steps", "30"])
+    # A launch with other limits continues the same folder; the record says what each launch ran with.
+    assert runner.main([*args, "--resume", "--max-steps", "30"]) == 0
+    assert len(results(output)) == 1
+    assert [launch["max_steps"] for launch in launches(output)] == [60, 60, 30]
+    # Without resume the completed question runs again, as a second attempt beside the first.
+    assert runner.main([*args, "--no-resume", "--max-steps", "30"]) == 0
+    assert len(results(output)) == 2 and len(list((output / "Q01").glob("attempt-*"))) == 2
+    assert attempt.is_dir()
 
 
 def test_no_argument_launch_from_env(setup, archive, monkeypatch):
@@ -116,12 +126,13 @@ def test_no_argument_launch_from_env(setup, archive, monkeypatch):
     assert runner.main([]) == 0
     output = root / 'automatic/methods-public-r1/runs/Finch'
     assert results(output)[0]['id'] == 'Q07'
-    identity = json.loads((output / 'manifest.json').read_text())['identity']
-    assert identity['max_steps'] == 17
-    assert identity['execution_timeout'] == 1200
+    [launch] = launches(output)
+    assert launch['max_steps'] == 17
+    assert launch['execution_timeout'] == 1200
+    assert launch['method'] == 'Finch' and launch['tasks'] == ['Q07']
     attempt = Path(results(output)[0]['attempt_dir'])
     assert json.loads((attempt / 'worker.json').read_text())['execution_timeout'] == 1200
-    assert 'secret-test-key' not in json.dumps(identity)
+    assert 'secret-test-key' not in json.dumps(launch)
 
 
 def test_finch_loads_its_own_settings_file_and_gives_it_to_its_worker(setup, archive, monkeypatch):
@@ -146,7 +157,7 @@ def test_finch_loads_its_own_settings_file_and_gives_it_to_its_worker(setup, arc
     assert runner.main([]) == 0
     output = root / 'automatic/finch-own/runs/Finch'
     assert results(output)[0]['id'] == 'Q07'
-    assert json.loads((output / 'manifest.json').read_text())['identity']['max_steps'] == 17
+    assert launches(output)[0]['max_steps'] == 17
     # The worker of every case reads the model settings from the same file.
     assert seen[0][seen[0].index('--config') + 1] == str(own.resolve())
 
@@ -292,7 +303,7 @@ def test_deepseek_mode_is_explicit_and_other_models_are_unchanged(tmp_path):
     assert worker.model_compatibility(load_config(path))["request_extra_body"] == {}
 
 
-def test_deepseek_mode_is_saved_and_old_mode_cannot_resume(setup):
+def test_deepseek_mode_is_saved_with_the_arm_and_with_every_launch(setup):
     root, output, invoke, _ = setup
     config = root / ".env"
     config.write_text(config.read_text().replace("test-model", "deepseek-flash"))
@@ -300,12 +311,7 @@ def test_deepseek_mode_is_saved_and_old_mode_cannot_resume(setup):
     assert runner.main(args) == 0
     arm = json.loads((output / "arm.json").read_text())
     assert arm["model_compatibility"]["provider_thinking"] == "disabled"
-    manifest = output / "manifest.json"
-    old = json.loads(manifest.read_text())
-    del old["identity"]["model_compatibility"]
-    manifest.write_text(json.dumps(old))
-    with pytest.raises(ValueError, match="Resume"):
-        runner.main([*args, "--resume"])
+    assert launches(output)[0]["model_compatibility"] == arm["model_compatibility"]
 
 
 def test_namespace_boundary():

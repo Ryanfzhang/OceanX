@@ -126,17 +126,20 @@ def test_no_argument_launch_from_env(setup, archive, monkeypatch):
     assert runner.main([]) == 0
     output = root / 'automatic/methods-public-r1/runs/Claude'
     assert results(output)[0]['id'] == 'Q07'
-    identity = json.loads((output / 'manifest.json').read_text())['identity']
-    assert identity['allow_tools'] == ['Read', 'Bash', 'Write']
-    assert 'test-key' not in json.dumps(identity)
-    # The real entrypoint releases its experiment lease after the batch. Reset
-    # archives both selection and method output, then the same .env launches fresh.
-    from benchmark_run import reset_experiment
-    from benchmark_config import load_config
-    old = reset_experiment(load_config(file))
-    assert (old / 'runs/Claude/results.jsonl').is_file()
+    launches = lambda: [json.loads(line) for line in (output / 'launches.jsonl').read_text().splitlines()]
+    [launch] = launches()
+    assert launch['allow_tools'] == ['Read', 'Bash', 'Write'] and launch['cli_version'] == 'fake-claude 1.0'
+    assert (launch['method'], launch['tasks'], launch['resume']) == ('Claude', ['Q07'], True)
+    assert 'test-key' not in json.dumps(launch)
+    # The same command again continues the same experiment: the completed question is skipped.
     assert runner.main([]) == 0
-    assert len(results(output)) == 1
+    assert len(results(output)) == 1 and len(launches()) == 2
+    # With BENCH_RESUME=false the chosen question runs again, as a new attempt beside the first.
+    file.write_text(file.read_text() + 'BENCH_RESUME=false\n')
+    assert runner.main([]) == 0
+    first, second = results(output)
+    assert first['attempt_dir'] != second['attempt_dir'] and Path(first['attempt_dir']).is_dir()
+    assert sorted(p.name for p in (output / 'Q07').iterdir())[-1] == Path(second['attempt_dir']).name
 
 
 def test_claude_loads_its_own_settings_file_when_no_file_is_named(setup, archive, monkeypatch):
@@ -289,14 +292,15 @@ def test_log_limit(setup, monkeypatch):
     assert (Path(result["attempt_dir"]) / "events.jsonl").stat().st_size <= 20
 
 
-def test_refuse_existing_output_and_source_overlap(setup):
+def test_output_apart_from_the_sources_and_an_existing_folder_is_continued(setup):
     root, output, invoke = setup
     args = invoke([("OK", 5)])
     with pytest.raises(ValueError, match="separate"):
         runner.main([*args, "--output", str(root / "data/results")])
+    assert not (root / "data/results").exists()
     output.mkdir()
-    with pytest.raises(FileExistsError):
-        runner.main(args)
+    assert runner.main(args) == 0
+    assert [r["status"] for r in results(output)] == ["completed"]
 
 
 def test_inventory_does_not_follow_symlinks(tmp_path):

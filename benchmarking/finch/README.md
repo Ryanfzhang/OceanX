@@ -69,8 +69,8 @@ the whole repository/data root in place of a narrower dataset reference.
 
 Normal launch: set `BENCH_FINCH_ROOT`, `BENCH_FINCH_PYTHON`, dataset/task/output
 settings and resource limits in `benchmarking/.env`, then run
-`python benchmarking/server/run_finch.py` in `oceanx-bench`. It uses the same frozen
-input selection as OceanX and Claude; see [RUNNING.md](../RUNNING.md).
+`python benchmarking/server/run_finch.py` in `oceanx-bench`. It chooses its questions from
+the same settings as OceanX and Claude; see [RUNNING.md](../RUNNING.md).
 The command below is the optional explicit-CLI workflow.
 
 Run the supervisor in oceanx-bench; `--python` selects the separate Finch worker:
@@ -93,8 +93,8 @@ tool selection). For DeepSeek's OpenAI-compatible endpoint the adapter explicitl
 sends `thinking.type=disabled` on every request: provider thinking rejects
 `tool_choice=required`, and the pinned interfaces do not replay `reasoning_content`.
 This does **not** remove Finch's own reasoning step or replace required tool calls
-with auto selection. It is not a retry/fallback. `arm.json` and `manifest.json`
-record `model_compatibility`; report this mode difference in comparisons with
+with auto selection. It is not a retry/fallback. `arm.json` and every line of
+`launches.jsonl` record `model_compatibility`; report this mode difference in comparisons with
 OceanX/Claude, rather than claiming identical provider reasoning settings.
 See [DeepSeek's API contract](https://api-docs.deepseek.com/api/create-chat-completion/).
 
@@ -105,16 +105,16 @@ Finch worker environment too:
 /home/mafzhang/miniconda3/envs/finch-bench/bin/python -m pip install 'httpx[socks]>=0.27,<1'
 ```
 
-After updating the adapter or dependencies, use a **new** `BENCH_EXPERIMENT` for
-the smoke run. Old failed attempt folders remain intact; resume intentionally
-rejects changed code/runtime. Do not edit the shared config while another method
-is still running. No live API smoke run is performed by the installation tests.
+After updating the adapter or dependencies the same experiment can continue: old
+attempt folders remain intact, and `launches.jsonl` in the method folder records the
+code, runtime and limits of every launch. Do not edit a settings file while a runner
+that uses it is still running. No live API smoke run is performed by the installation tests.
 No Edison/FutureHouse account is required and no files are uploaded to its platform.
 **Notebook content, plots and tool observations are still sent to the configured
 LLM provider.** Local execution is not a guarantee that private derived data never
 leave the server. Use an endpoint approved for CMOMS confidentiality.
 
-Default limits are a 3-hour attempt, 60 agent steps, 300 seconds per notebook
+Default limits are a 3-hour attempt, 60 agent steps, 1200 seconds per notebook
 execution, 8 GiB address space per calculation process and affinity to 2 available
 CPUs (fractional values round up). These are native process limits, not Docker
 aggregate-memory limits or CPU quotas. A case's `timeout_seconds` overrides the default
@@ -133,7 +133,7 @@ cell. The batch proceeds to the next query. `result.json` includes `worker_error
 The execution log keeps available process output, not guaranteed cell-level progress.
 Existing notebook code, previously saved outputs and workspace files remain intact;
 outputs still buffered in a killed kernel are not guaranteed to survive. This neither
-raises the 300-second budget nor changes Finch to incremental cell execution.
+raises the execution budget nor changes Finch to incremental cell execution.
 
 Datasets appear at `/inputs/<index>/<name>` as read-only mounts, without copies.
 The notebook writes under `/workspace`; published figures/tables go in `outputs/`,
@@ -145,11 +145,12 @@ Every complete notebook replay starts a fresh sandbox and kernel. Its PID namesp
 and `--die-with-parent` tear down calculation descendants when the launcher or
 controller dies, including descendants that created another process group.
 
-Add `--resume` to the exact same command. Completed tasks are skipped; other tasks
-receive new attempt folders. A running writer owns an OS lock. Changes to the
-queries, model, limits, source commit, dependency versions, runtime or adapter
-hash are rejected on resume. Run repeats into distinct output directories and
-interleave arm order using the same experimental plan as OceanX.
+Run the same command again to continue: completed tasks are skipped and the other
+tasks receive new attempt folders (`--no-resume` runs every task again). A running
+writer owns an OS lock. The queries, model, limits, commit, dependency versions and
+runtime of each launch are recorded in `launches.jsonl`; nothing compares them, so
+keep them the same within a comparison yourself. Run repeats into distinct output
+directories and interleave arm order using the same experimental plan as OceanX.
 
 ## Saved per attempt
 

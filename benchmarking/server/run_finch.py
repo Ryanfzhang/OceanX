@@ -7,7 +7,6 @@ external checkout/environment, not a dependency of the OceanX application.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import os
@@ -20,19 +19,15 @@ import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import uuid4
 
 from benchmark_config import load_runner_config
 from finch_sandbox import BACKEND, cpu_ids, sandbox_command
 from finch_worker import model_compatibility
 from run_claude import inventory, supervise, write_json
 
-from oceanx.batch import load_queries
-
 FINCH_COMMIT = "aea66fdf2dd2be827727de50a73cae60dff59972"
 REPO = Path(__file__).resolve().parents[2]
 WORKER = Path(__file__).with_name("finch_worker.py")
-SANDBOX = Path(__file__).with_name("finch_sandbox.py")
 FORBIDDEN = {"evaluator", "_evaluator_only", ".git", ".oceanx", ".oceanmind"}
 
 
@@ -272,12 +267,6 @@ def run_case(case, directory, args, env, cancelled):
 
 
 def main(argv=None):
-    from contextlib import ExitStack
-    with ExitStack() as stack:
-        return _main(argv, stack)
-
-
-def _main(argv, stack):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--queries", type=Path)
     parser.add_argument("--output", type=Path)
@@ -295,12 +284,20 @@ def _main(argv, stack):
     parser.add_argument("--execution-timeout", type=float)
     parser.add_argument("--memory-mb", type=int)
     parser.add_argument("--cpus", type=float)
-    parser.add_argument("--resume", action="store_true", default=None)
+    parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=None,
+                        help="Skip questions already completed (BENCH_RESUME); --no-resume runs them again")
     args = parser.parse_args(argv)
     config = load_runner_config('Finch', args.config)
     config.endpoint(config.oceanx_api)
-    from benchmark_run import configure_run
-    configure_run(args, config, 'Finch', stack=stack)
+    from benchmark_run import (
+        append_result,
+        attempts,
+        configure_run,
+        load_cases,
+        record_launch,
+        runner_lock,
+    )
+    configure_run(args, config, 'Finch')
     if sys.platform != "linux":
         raise ValueError("Finch runner requires Linux Bubblewrap; no Docker or unsandboxed fallback")
     if os.getuid() == 0:
@@ -317,39 +314,26 @@ def _main(argv, stack):
     args.prlimit, args.taskset = shutil.which("prlimit"), shutil.which("taskset")
     if not all((args.python, args.kernel_python, args.bwrap, args.prlimit, args.taskset)):
         raise ValueError("Finch/kernel Python, bwrap, prlimit and taskset must exist")
-    cases = load_queries(args.queries)
+    cases = load_cases(args)
     validate_datasets(cases)
     output = args.output.expanduser().resolve()
     if any(c in str(output) for c in (":", "\n", "\r")):
         raise ValueError("Workspace paths cannot contain colons or newlines")
-    for protected in (REPO, args.finch_root, args.queries.resolve(), args.config,
-                      *(p for case in cases for p in case.datasets)):
+    sources = [REPO, args.finch_root, args.config, *(p for case in cases for p in case.datasets)]
+    for protected in sources + ([args.queries.resolve()] if args.queries else []):
         if output.is_relative_to(protected) or protected.is_relative_to(output):
             raise ValueError("Output must be separate from repositories, config, queries and data")
     env = worker_environment(args.finch_root)
     runtime = preflight(args, env)
     args.runtime = runtime
-    identity = {"agent": "finch-local", "arm": args.arm, "finch_commit": args.finch_commit,
-                "finch_root": str(args.finch_root), "python": args.python,
-                "runtime": runtime, "model_protocol": config.public(),
-                "model_compatibility": model_compatibility(config),
-                "max_steps": args.max_steps, "temperature": args.temperature,
-                "timeout": args.timeout, "execution_timeout": args.execution_timeout,
-                "memory_mb": args.memory_mb, "cpus": args.cpus,
-                "cases": [c.model_dump(mode="json") for c in cases],
-                "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                "worker_sha256": hashlib.sha256(WORKER.read_bytes()).hexdigest(),
-                "sandbox_sha256": hashlib.sha256(SANDBOX.read_bytes()).hexdigest()}
-    if args.resume:
-        if json.loads((output / "manifest.json").read_text())["identity"] != identity:
-            raise ValueError("Resume inputs, model, Finch version, runtime or runner changed")
-    else:
-        output.mkdir(parents=True, exist_ok=False, mode=0o700)
-    import fcntl
-    with (output / ".runner.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if not args.resume:
-            write_json(output / "manifest.json", {"identity": identity})
+    output.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with runner_lock(output):
+        record_launch(output, 'Finch', config, cases, args.resume, finch_commit=args.finch_commit,
+                      finch_root=str(args.finch_root), python=args.python, runtime=runtime,
+                      model_compatibility=model_compatibility(config), max_steps=args.max_steps,
+                      temperature=args.temperature, timeout=args.timeout,
+                      execution_timeout=args.execution_timeout, memory_mb=args.memory_mb, cpus=args.cpus)
+        if not (output / "arm.json").exists():
             write_json(output / "arm.json", {"arm": args.arm, "agent": "finch-local",
                 "policy": None, "lessons": None, "model": config.model, "runtime": runtime,
                 "model_compatibility": model_compatibility(config),
@@ -359,22 +343,16 @@ def _main(argv, stack):
                     for s in (signal.SIGTERM, signal.SIGINT)}
         failed = False
         try:
-            for case in cases:
-                if stopped[0]:
-                    break
-                prior = sorted((output / case.id).glob("attempt-*/result.json"))
-                if args.resume and prior and json.loads(prior[-1].read_text())["status"] == "completed":
-                    print(f"[{case.id}] skipped (completed)", flush=True)
-                    continue
-                directory = output / case.id / f"attempt-{time.time_ns()}-{uuid4().hex[:8]}"
+            for case, directory in attempts(cases, output, args.resume):
                 print(f"[{case.id}] running Finch", flush=True)
                 result = run_case(case, directory, args, env, lambda: stopped[0])
-                with (output / "results.jsonl").open("a", encoding="utf-8") as stream:
-                    stream.write(json.dumps(result, ensure_ascii=False) + "\n")
+                append_result(output, result)
                 delivery = result["delivery_check"]
                 print(f"[{case.id}] runtime={result['status']} delivery={delivery['status']} "
                       f"notebook_executions={delivery['successful_notebook_executions']}", flush=True)
                 failed |= result["status"] != "completed"
+                if stopped[0]:
+                    break
         finally:
             for sig, handler in previous.items():
                 signal.signal(sig, handler)

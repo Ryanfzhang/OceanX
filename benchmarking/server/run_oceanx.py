@@ -13,16 +13,17 @@ import datetime as dt
 import hashlib
 import json
 import os
-import subprocess
+import signal
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
+from benchmark_run import git_identity
+
 from oceanx import __version__, batch
 
 _original_interaction_answer = batch.interaction_answer
-REPO = Path(__file__).resolve().parents[2]
 # Set by main() for this process: the frozen library snapshot copied into every attempt, if any.
 LIBRARY: Path | None = None
 # How every backend subprocess delivers figures: image files, as the other arms do.
@@ -31,14 +32,6 @@ FIGURE_DELIVERY = "static"
 
 def file_sha256(path: Path) -> str | None:
     return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
-
-
-def git_identity() -> dict:
-    def git(*args):
-        result = subprocess.run(["git", "-C", str(REPO), *args], capture_output=True, text=True, check=False)
-        return result.stdout.strip() if result.returncode == 0 else None
-    status = git("status", "--porcelain", "--untracked-files=no")
-    return {"commit": git("rev-parse", "HEAD"), "dirty": bool(status) if status is not None else None}
 
 
 def project_library(state: Path):
@@ -171,7 +164,7 @@ def arm_record(args) -> dict:
 
 
 def check_arm(output: Path) -> None:
-    """A resumed output folder must belong to the same arm."""
+    """An output folder holds one arm: its label, policy and library never change."""
     path = output / "arm.json"
     if path.exists():
         prior = json.loads(path.read_text())
@@ -185,13 +178,26 @@ def write_arm(attempt: Path) -> None:
         batch._write_json(path, {**ARM, "started_utc": dt.datetime.now(dt.UTC).isoformat()})
 
 
+async def run_cases(todo, output: Path) -> list[dict]:
+    """Run the questions one after another. SIGTERM ends the running one as Ctrl+C does."""
+    from benchmark_run import append_result
+
+    results = []
+    loop, current = asyncio.get_running_loop(), asyncio.current_task()
+    loop.add_signal_handler(signal.SIGTERM, current.cancel)
+    try:
+        for case, directory in todo:
+            print(f"[{case.id}] running", file=sys.stderr, flush=True)
+            result = await batch.run_case(case, directory)
+            results.append(result)
+            append_result(output, result)
+            print(f"[{case.id}] {result['status']}", file=sys.stderr, flush=True)
+    finally:
+        loop.remove_signal_handler(signal.SIGTERM)
+    return results
+
+
 def main(argv=None):
-    from contextlib import ExitStack
-    with ExitStack() as stack:
-        return _main(argv, stack)
-
-
-def _main(argv, stack):
     if argv is None and len(sys.argv) == 3 and sys.argv[1] == "--backend":
         from benchmark_models import run_oceanx_gateway
 
@@ -205,7 +211,8 @@ def _main(argv, stack):
     parser.add_argument("--dataset", action="append", default=[], type=Path)
     parser.add_argument("--timeout", type=float, default=None)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--resume", action="store_true", default=None)
+    parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=None,
+                        help="Skip questions already completed (BENCH_RESUME); --no-resume runs them again")
     parser.add_argument("--config", type=Path,
                         help="Settings file; by default benchmarking/.env.oceanx if it exists, else benchmarking/.env")
     parser.add_argument("--arm", help="Arm label recorded in arm.json, e.g. B or C1")
@@ -215,12 +222,12 @@ def _main(argv, stack):
                              "research_cli.py snapshot); copied into every attempt")
     args = parser.parse_args(argv)
     from benchmark_config import load_runner_config, preflight
-    from benchmark_run import configure_run
+    from benchmark_run import attempts, configure_run, load_cases, record_launch, runner_lock
     config = load_runner_config('OceanX', args.config)
     config.endpoint(config.oceanx_api)
     args.config = config.source
     os.environ["OCEAN_BENCH_CONFIG"] = str(config.source)
-    configure_run(args, config, 'OceanX', stack=stack)
+    configure_run(args, config, 'OceanX')
     from oceanx.research.review import LIBRARY_FILES, LIBRARY_FROZEN_ENV
     global LIBRARY
     LIBRARY = None
@@ -236,30 +243,33 @@ def _main(argv, stack):
         if not any((LIBRARY / name).is_file() for name in LIBRARY_FILES):
             parser.error("--library must be a folder containing lessons.json or tools.json")
     ARM.update(arm_record(args))
-    check_arm(args.output.expanduser().resolve())
+    output = args.output.expanduser().resolve()
+    check_arm(output)
     preflight(require_sandbox=True)
     if args.queries and args.dataset:
         parser.error("Use --dataset with --query; JSONL cases contain their own datasets")
-    cases = batch.load_queries(args.queries) if args.queries else [
-        batch.resolve_datasets(batch.QueryCase(
-            id="QUERY", query=args.query, datasets=args.dataset, timeout_seconds=args.timeout,
-        ), Path.cwd())
-    ]
+    cases = [batch.resolve_datasets(batch.QueryCase(
+        id="QUERY", query=args.query, datasets=args.dataset, timeout_seconds=args.timeout,
+    ), Path.cwd())] if args.query else load_cases(args)
+    for source in (path for case in cases for path in case.datasets):
+        if output == source or output.is_relative_to(source) or source.is_relative_to(output):
+            raise ValueError("Output and source data must be separate, non-overlapping paths")
     # This process and its dedicated children only; the installed OceanX entrypoint is untouched.
     batch.BatchClient = BenchmarkClient
     batch.interaction_answer = benchmark_interaction_answer
-    try:
-        results = asyncio.run(batch.run_batch(
-            cases, args.output, resume=args.resume
-        ))
-    finally:
-        from collect_oceanx import collect_run
+    output.mkdir(parents=True, exist_ok=True)
+    with runner_lock(output):  # held while collecting too: the collector reads and tidies this folder
+        record_launch(output, 'OceanX', config, cases, args.resume, arm=ARM)
+        try:
+            results = asyncio.run(run_cases(attempts(cases, output, args.resume), output))
+        finally:
+            from collect_oceanx import collect_run
 
-        if args.output.exists() and any(args.output.glob("*/attempt-*/result.json")):
-            try:
-                print(f"Collected results: {collect_run(args.output)}", file=sys.stderr)
-            except (OSError, ValueError, KeyError) as exc:
-                print(f"Result collection failed: {exc}", file=sys.stderr)
+            if any(output.glob("*/attempt-*/result.json")):
+                try:
+                    print(f"Collected results: {collect_run(output)}", file=sys.stderr)
+                except (OSError, ValueError, KeyError) as exc:
+                    print(f"Result collection failed: {exc}", file=sys.stderr)
     raise SystemExit(0 if all(item["status"] == "completed" for item in results) else 1)
 
 

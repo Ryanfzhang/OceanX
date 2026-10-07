@@ -1,4 +1,10 @@
-"""Shared benchmark selection and explicit reset for reuse of an experiment name."""
+"""What one launch runs: the questions chosen from the settings file and the data present now.
+
+An experiment is a results folder: BENCH_OUTPUT_ROOT/BENCH_EXPERIMENT/runs/<method>/<question>/attempt-*.
+Nothing about it is frozen. Every launch chooses its questions again, so a question whose data arrived
+later runs on the next launch, and an experiment continues after the code or the settings change.
+Each launch adds one line to its method folder's launches.jsonl saying what it ran with.
+"""
 from __future__ import annotations
 
 import fcntl
@@ -10,7 +16,9 @@ import math
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
+import time
 from uuid import uuid4
 
 from benchmark_config import ROOT, RUN_DEFAULTS
@@ -55,7 +63,7 @@ def label(value, name):
 
 
 def experiment_paths(config):
-    """Resolve and validate shared paths for both launches and reset."""
+    """The data root and the experiment folder, checked to be apart from code, settings and data."""
     data = setting(config, 'BENCH_DATA_ROOT')
     output = setting(config, 'BENCH_OUTPUT_ROOT')
     if not data or not output:
@@ -81,60 +89,12 @@ def experiment_paths(config):
     return data, output / experiment
 
 
-@contextmanager
-def experiment_guard(config, *, reset=False):
-    """Keep the lock outside the directory moved by reset; hold during whole runs."""
-    _, experiment = experiment_paths(config)
-    locks = experiment.parent / '.experiment-locks'
-    locks.mkdir(parents=True, exist_ok=True, mode=0o700)
-    # NFS shared locks require a readable FD; reset's exclusive lock needs writing.
-    with (locks / (experiment.name + '.lock')).open('a+') as lock:
-        try:
-            fcntl.flock(lock, (fcntl.LOCK_EX if reset else fcntl.LOCK_SH) | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise ValueError('Experiment is running or being reset; stop its runners before reset') from None
-        yield experiment
+def select_cases(config, data):
+    """The questions of this launch, from the settings and the data now present.
 
-
-def reset_experiment(config):
-    """Archive the entire inactive experiment, releasing its name for a fresh run."""
-    from contextlib import ExitStack
-
-    with experiment_guard(config, reset=True) as experiment, ExitStack() as locks:
-        if not experiment.exists():
-            print(f'Experiment already clear: {experiment}', flush=True)
-            return None
-        if experiment.is_symlink() or not experiment.is_dir():
-            raise ValueError('Experiment must be a regular directory, not a symlink')
-        # Also protect runs started by older runners without the experiment guard.
-        for path in sorted((experiment / 'runs').glob('*/.runner.lock')):
-            lock = locks.enter_context(path.open('r+'))
-            if lock.read().strip():
-                # Older OceanX uses an exclusive PID file, not flock. Its existence
-                # cannot establish whether the process on another server is dead.
-                raise ValueError(f'Runner lock exists: {path}; stop the runner and clear a stale lock first')
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise ValueError(f'Experiment is running: {path}; stop the runner before reset') from None
-        archive = experiment.parent / '.archive'
-        archive.mkdir(exist_ok=True, mode=0o700)
-        destination = archive / (experiment.name + '-' + datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')
-                                 + '-' + uuid4().hex[:8])
-        experiment.rename(destination)
-        print(f'Archived previous experiment: {destination}', flush=True)
-        print(f'Reuse BENCH_EXPERIMENT={experiment.name} and run the usual commands.', flush=True)
-        return destination
-
-
-def shared_queries(config):
-    """First runner selects once; later runners reuse the same frozen selection."""
-    with experiment_guard(config):
-        return _shared_queries(config)
-
-
-def _shared_queries(config):
-    data, experiment = experiment_paths(config)
+    BENCH_TASKS=available takes every question of the suite whose data are complete and prints the
+    others; they run on a later launch, once their data are there.
+    """
     suite, subset = setting(config, 'BENCH_SUITE'), setting(config, 'BENCH_EVOLUTION_SET')
     if suite not in {'test', 'evolution'} or subset not in {'', 'A', 'B'} or (subset and suite != 'evolution'):
         raise ValueError('Use BENCH_SUITE=test or evolution; BENCH_EVOLUTION_SET=A/B only for evolution')
@@ -146,44 +106,83 @@ def _shared_queries(config):
     literature = setting(config, 'BENCH_LITERATURE_MODE')
     if literature not in {'search_only', 'ask_before_download', 'auto_download_open_access'}:
         raise ValueError('BENCH_LITERATURE_MODE: unknown mode')
-    # Resume is operational; changing it must not change the frozen inputs.
-    identity = {'model': config.public(), 'settings': {
-        name: setting(config, name) for name in RUN_DEFAULTS if name != 'BENCH_RESUME'},
-        'catalogue_sha256': hashlib.sha256(prepare_queries.MANIFEST.read_bytes()).hexdigest(),
-        'runner_sources_sha256': {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-                                 for path in sorted(Path(__file__).parent.glob('*.py'))},
-        'queries_sha256': {task: hashlib.sha256(prepare_queries.task_file(task).read_bytes()).hexdigest()
-                          for task in prepare_queries.suite_tasks(suite, subset or None)}}
-    directory = experiment / 'inputs'
-    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    queries, manifest = directory / 'queries.jsonl', directory / 'selection.json'
-    with (directory / '.selection.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        if queries.exists() or manifest.exists():
-            if not queries.is_file() or not manifest.is_file():
-                raise ValueError('Incomplete input selection; reset this experiment or use a new BENCH_EXPERIMENT')
-            saved = json.loads(manifest.read_text())
-            digest = hashlib.sha256(queries.read_bytes()).hexdigest()
-            if saved.get('identity') != identity or saved.get('sha256') != digest:
-                raise ValueError('Experiment inputs/config changed; reset this experiment or use a new BENCH_EXPERIMENT')
-        else:
-            cases = prepare_queries.prepare_selection(
-                data, suite, tasks=tasks, evolution_set=subset or None,
-                available_only=selector == 'available', timeout=timeout, literature_mode=literature)
-            content = ''.join(json.dumps(case, ensure_ascii=False) + '\n' for case in cases)
-            with queries.open('x', encoding='utf-8') as stream:
-                stream.write(content)
-            with manifest.open('x', encoding='utf-8') as stream:
-                json.dump({'identity': identity, 'task_ids': [c['id'] for c in cases],
-                           'sha256': hashlib.sha256(content.encode()).hexdigest()}, stream, indent=2)
-        saved = json.loads(manifest.read_text())
-    print(f"Shared tasks ({len(saved['task_ids'])}): {', '.join(saved['task_ids'])}", flush=True)
-    print(f'Inputs: {queries}', flush=True)
-    return queries, experiment / 'runs'
+    cases = prepare_queries.prepare_selection(
+        data, suite, tasks=tasks, evolution_set=subset or None,
+        available_only=selector == 'available', timeout=timeout, literature_mode=literature)
+    print(f"Questions ({len(cases)}): {', '.join(case['id'] for case in cases)}", flush=True)
+    return cases
 
 
-def configure_run(args, config, method, *, stack=None):
-    """CLI remains available, but omission means the explicit .env setting."""
+def load_cases(args):
+    """The launch's questions as runner cases: an explicit --queries file, or the selection."""
+    from oceanx.batch import QueryCase, load_queries, resolve_datasets
+    if args.queries:
+        return load_queries(args.queries)
+    return [resolve_datasets(QueryCase.model_validate(case), ROOT) for case in args.cases]
+
+
+def attempts(cases, output, resume):
+    """Each question this launch runs, with the folder of its new attempt.
+
+    With resume, a question whose latest attempt completed is skipped. Without it every chosen
+    question runs again. Earlier attempts are never removed; the evaluation reads the latest one.
+    """
+    for case in cases:
+        prior = sorted((output / case.id).glob('attempt-*/result.json'))
+        if resume and prior and json.loads(prior[-1].read_text(encoding='utf-8')).get('status') == 'completed':
+            print(f'[{case.id}] skipped (completed)', flush=True)
+            continue
+        yield case, output / case.id / f'attempt-{time.time_ns()}-{uuid4().hex[:8]}'
+
+
+def append_result(output, result):
+    with (output / 'results.jsonl').open('a', encoding='utf-8') as stream:
+        stream.write(json.dumps(result, ensure_ascii=False) + '\n')
+
+
+@contextmanager
+def runner_lock(output):
+    """One runner per method folder at a time. The system drops the lock when the process ends."""
+    with (output / '.runner.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError(f'Another runner is writing {output}; wait for it or stop it') from None
+        yield
+
+
+def git_identity() -> dict:
+    def git(*args):
+        result = subprocess.run(['git', '-C', str(ROOT), *args], capture_output=True, text=True, check=False)
+        return result.stdout.strip() if result.returncode == 0 else None
+    status = git('status', '--porcelain', '--untracked-files=no')
+    return {'commit': git('rev-parse', 'HEAD'), 'dirty': bool(status) if status is not None else None}
+
+
+def sources_sha256() -> str:
+    """One hash of the benchmark's runner code: the same value means the same code."""
+    digest = hashlib.sha256()
+    for path in sorted(Path(__file__).parent.glob('*.py')):
+        digest.update(path.name.encode() + b'\0' + path.read_bytes() + b'\0')
+    return digest.hexdigest()
+
+
+def record_launch(output, method, config, cases, resume, **details):
+    """Add this launch to <output>/launches.jsonl: when, which code, which settings, which questions.
+
+    Nothing compares these. The record is how a reader tells afterwards what an attempt ran with:
+    an attempt belongs to the last launch that started before it.
+    """
+    record = {'started_utc': datetime.now(UTC).isoformat(), 'method': method, **git_identity(),
+              'sources_sha256': sources_sha256(), 'resume': resume, 'tasks': [case.id for case in cases],
+              'model': config.public(),
+              'settings': {name: setting(config, name) for name in RUN_DEFAULTS}, **details}
+    with (output / 'launches.jsonl').open('a', encoding='utf-8') as stream:
+        stream.write(json.dumps(record, ensure_ascii=False) + '\n')
+
+
+def configure_run(args, config, method):
+    """Fill what the command line left out from the settings file, and choose the questions."""
     automatic = not args.queries and not getattr(args, 'query', None)
     if args.resume is None:
         args.resume = boolean(config, 'BENCH_RESUME')
@@ -233,34 +232,9 @@ def configure_run(args, config, method, *, stack=None):
     if automatic:
         if getattr(args, 'dataset', []):
             raise ValueError('Use --dataset only with --query')
-        if stack is not None:
-            stack.enter_context(experiment_guard(config))
-        args.queries, output = shared_queries(config)
-        args.output = args.output or output / args.arm
-        # A shared resume flag can continue one method while starting an unstarted one.
-        if args.resume and not args.output.exists():
-            args.resume = False
+        data, experiment = experiment_paths(config)
+        args.cases = select_cases(config, data)
+        args.output = args.output or experiment / 'runs' / args.arm
     if not args.output:
         raise ValueError('With explicit --queries/--query, supply --output; otherwise configure benchmarking/.env')
     print(f'{method} output: {args.output}', flush=True)
-
-
-def main(argv=None):
-    import argparse
-    from benchmark_config import load_config
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--config', type=Path, help='benchmarking/.env by default')
-    parser.add_argument('--reset', required=True, action='store_true',
-                        help='Archive the inactive experiment so its name can be reused')
-    args = parser.parse_args(argv)
-    reset_experiment(load_config(args.config))
-    return 0
-
-
-if __name__ == '__main__':
-    try:
-        sys.exit(main())
-    except (ValueError, OSError) as exc:
-        print(f'Experiment reset stopped: {exc}', file=sys.stderr)
-        sys.exit(1)

@@ -17,42 +17,9 @@ helped can only be read from the process measures (lessons named, helper calls, 
 
 ## Run settings and comparison limits
 
-- OceanX benchmark runs use `OCEANX_FIGURE_DELIVERY=static`: when the researcher requested a
-  visual, or a figure is necessary scientific evidence, Experts save it as an ordinary PNG image.
-  OceanX's interactive plotting interface is not exposed to the models; the desktop's interactive
-  mode is unchanged. Image reads give the model a JPEG preview bounded to 1024 px on its longest
-  edge while preserving the full-resolution result on disk. In these runs the Coordinator cannot
-  re-delegate a node that already has a result only to publish a figure the question did not ask for.
-- OceanX benchmark runs have one skill that the desktop does not have:
-  `benchmarking/skills/scientific-figure-style`, which says how to choose and draw a figure saved as an
-  image file and names no plotting interface. The two data Experts get it, and one sentence added to their
-  policy points to it. `benchmark_agent_server.py` installs both in the benchmark's own Agent Server
-  process; OceanX's code and packaged skills are unchanged. `arm.json` and each attempt's
-  `model_protocol.json` list it under `benchmark_skills`.
-- Each arm's agent is told to report what it has before it runs out. OceanX: the research time budget
-  below. Claude Code: its prompt says the run is one turn and nothing resumes after the final response.
-  Finch: its prompt states the runner's tools, inputs and limits, and the worker says when 10, 5, 3, 2 and
-  1 steps remain. An attempt that still ends without a final answer is judged on what it kept
-  (`evaluation/CODEX_JUDGE.md`); no substitute answer is written for it.
-- The Expert's last, tool-free delivery call may issue an extra provider request if its first
-  reply contains tool markers rather than a report. Context compaction requests are counted
-  separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
-  the Expert call limit (60 on the desktop; `BENCH_OCEANX_EXPERT_CALL_LIMIT`, 10 to 60, in benchmark runs
-  and recorded in `arm.json`) is not an exact count of all provider requests. At a lower limit the report
-  checkpoint falls at half of it and the wind-down at four fifths, as at 30 and 48 of 60.
-  Each Expert is told the budget in its instructions and, from the second call, in a line at the end of the
-  last tool result with the calls that remain; the line is not saved in the conversation.
-- `BENCH_TIMEOUT_SECONDS` supplies OceanX's research budget: after 75% no new Expert assignment
-  starts. This is a run setting that changes Coordinator behavior, not merely an external timeout;
-  disclose it alongside the commit, model, delivery mode and other run settings.
-- Finch-local has no literature-search agent; it is not the full Robin system.
-  Claude Code's search depends on its configured tools. OceanX consults Search Expert on demand
-  for definitions, methods or published mechanisms the data context does not settle. These search
-  capabilities are not identical; report them when comparing methods. Its single independent
-  search slot does not occupy either data-analysis slot.
-- Failure categories describe observed messages, not blame. A read-only refusal may correctly
-  protect another node's evidence, and a timeout may reflect slow computation. Inspect logs before
-  assigning a cause; collection completeness and a successful run do not establish scientific correctness.
+The settings that change how a method behaves in a benchmark run, and the limits of comparing the
+methods, are listed once, in [RUNNING.md](RUNNING.md#run-settings-and-comparison-limits). Disclose them
+with every result.
 
 ## The process
 
@@ -197,7 +164,9 @@ No `--policy` is passed: every arm runs the default, `v2-nested`, and `arm.json`
 - Use the same commit, policy, `benchmarking/.env` model and literature mode (`search_only`) for every arm. No merges
   or setting changes until the test phase ends.
 - A failed, timed-out or empty attempt scores 0 and is reported separately. Do not re-run a failed
-  attempt for a better score. `--resume` only completes attempts that never finished.
+  attempt for a better score. The runner would let you: with `--resume` (the default) it gives a new
+  attempt to every question whose latest attempt did not complete, and `--no-resume` runs completed
+  questions again. Which attempts count is fixed in the pre-registration, not by the runner.
 
 ### Nothing is learned during benchmarking
 

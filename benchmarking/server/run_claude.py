@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,9 +17,6 @@ import signal
 import subprocess
 import sys
 import time
-from uuid import uuid4
-
-from oceanx.batch import load_queries
 
 REPO = Path(__file__).resolve().parents[2]
 LOG_LIMIT = 64 * 1024 * 1024
@@ -374,12 +370,6 @@ def export_delivery(workspace, directory):
 
 
 def main(argv=None):
-    from contextlib import ExitStack
-    with ExitStack() as stack:
-        return _main(argv, stack)
-
-
-def _main(argv, stack):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--queries", type=Path)
     parser.add_argument("--output", type=Path)
@@ -391,13 +381,14 @@ def _main(argv, stack):
     parser.add_argument("--arm", help="External comparison label recorded in arm.json")
     parser.add_argument("--allow-tools", nargs="+",
                         help="Explicit tool approvals, e.g. Read Glob Grep Bash Write Edit NotebookEdit")
-    parser.add_argument("--resume", action="store_true", default=None, help="Skip completed; new attempts for other tasks")
+    parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=None,
+                        help="Skip questions already completed (BENCH_RESUME); --no-resume runs them again")
     args = parser.parse_args(argv)
     from benchmark_config import load_runner_config, preflight, claude_environment
+    from benchmark_run import append_result, attempts, configure_run, load_cases, record_launch, runner_lock
     config = load_runner_config('Claude', args.config)
     config.endpoint('anthropic')
-    from benchmark_run import configure_run
-    configure_run(args, config, 'Claude', stack=stack)
+    configure_run(args, config, 'Claude')
     if args.model and args.model != config.model:
         raise ValueError("Model differs from benchmarking/.env; change BENCH_MODEL there for all agents")
     args.model = config.model
@@ -405,7 +396,7 @@ def _main(argv, stack):
     environment = claude_environment(config)
     if os.name != "posix":
         raise ValueError("This runner requires Linux/macOS process groups")
-    cases = load_queries(args.queries)
+    cases = load_cases(args)
     if any(case.permission_tools for case in cases):
         raise ValueError("OceanX permission_tools cannot be mapped to Claude; use a JSONL without those approvals and explicit --allow-tools")
     executable = shutil.which(args.claude)
@@ -413,32 +404,17 @@ def _main(argv, stack):
         raise ValueError("Claude executable not found; activate the server environment or supply --claude")
     executable = str(Path(executable).absolute())
     output = args.output.expanduser().resolve()
-    for protected in [REPO, args.queries.resolve(), *[p for c in cases for p in c.datasets]]:
+    sources = [REPO, *[p for c in cases for p in c.datasets]] + ([args.queries.resolve()] if args.queries else [])
+    for protected in sources:
         if output.is_relative_to(protected) or protected.is_relative_to(output):
             raise ValueError("Output must be separate from repository, input JSONL and source data")
-    identity = {
-        "schema_version": 1, "agent": "claude-code", "claude": executable,
-        "cases": [c.model_dump(mode="json") for c in cases],
-        "model": args.model, "model_label": args.model_label, "allow_tools": args.allow_tools,
-        "arm": args.arm,
-        "model_protocol": config.public(),
-        "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-    }
-    if args.resume:
-        if json.loads((output / "manifest.json").read_text())["identity"] != identity:
-            raise ValueError("Resume inputs/model/tools/runner differ from the original batch")
-    else:
-        output.mkdir(parents=True, exist_ok=False, mode=0o700)
-    # OS lock is automatically released on crashes; never clear another active writer's lock.
-    import fcntl
-    with (output / ".runner.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if not args.resume:
-            version = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=15)
-            write_json(output / "manifest.json", {
-                "identity": identity, "cli_version": version.stdout.strip()[:1000],
-                "note": "API routing and model come from benchmarking/.env; credentials are omitted. No OS sandbox is added.",
-            })
+    output.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with runner_lock(output):
+        version = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=15)
+        record_launch(output, 'Claude', config, cases, args.resume, claude=executable,
+                      cli_version=version.stdout.strip()[:1000], allow_tools=args.allow_tools,
+                      model_label=args.model_label)
+        if not (output / 'arm.json').exists():
             write_json(output / 'arm.json', {'arm': args.arm, 'agent': 'claude-code',
                 'model_protocol': config.public(), 'policy': None, 'library': None})
         stopped = [False]
@@ -446,20 +422,14 @@ def _main(argv, stack):
                     for sig in (signal.SIGINT, signal.SIGTERM)}
         failed = False
         try:
-            for case in cases:
-                if stopped[0]:
-                    break
-                prior = sorted((output / case.id).glob("attempt-*/result.json"))
-                if args.resume and prior and json.loads(prior[-1].read_text()).get("status") == "completed":
-                    print(f"[{case.id}] skipped (completed)", flush=True)
-                    continue
-                directory = output / case.id / f"attempt-{time.time_ns()}-{uuid4().hex[:8]}"
+            for case, directory in attempts(cases, output, args.resume):
                 print(f"[{case.id}] running", flush=True)
                 result = run_case(case, directory, command_for(executable, case, args), lambda: stopped[0], env=environment)
-                with (output / "results.jsonl").open("a", encoding="utf-8") as stream:
-                    stream.write(json.dumps(result, ensure_ascii=False) + "\n")
+                append_result(output, result)
                 print(f"[{case.id}] {result['status']}", flush=True)
                 failed |= result["status"] != "completed"
+                if stopped[0]:
+                    break
         finally:
             for sig, handler in previous.items():
                 signal.signal(sig, handler)

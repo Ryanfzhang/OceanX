@@ -324,10 +324,11 @@ def test_code_failure_descriptions_do_not_assign_fault():
     assert "slow computation" in description
 
 
-@pytest.mark.parametrize("name", ["RUNNING.md", "EVALUATION.md"])
-def test_run_disclosures_cover_delivery_requests_budgets_and_search(name):
-    text = (evaluate.TASKS.parent / name).read_text()
+def test_run_disclosures_cover_delivery_requests_budgets_and_search():
+    text = (evaluate.TASKS.parent / "RUNNING.md").read_text()
     section = text.split("## Run settings and comparison limits", 1)[1].split("\n## ", 1)[0]
+    # Listed once; the evaluation document points here.
+    assert "RUNNING.md#run-settings-and-comparison-limits" in (evaluate.TASKS.parent / "EVALUATION.md").read_text()
     assert "OCEANX_FIGURE_DELIVERY=static" in section
     assert "not exposed" in section
     assert "extra provider request" in section and "compaction" in section and "ledger" in section
