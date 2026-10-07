@@ -42,6 +42,7 @@
 | G | 大文件编辑路径缺少 `EditResult` 导入（方案外缺口，v1.4 新增） | Owner 已批准并完成；全量测试通过，待审核与 Owner 提交 | | 通过，可以提交。见 Log。 |
 | R3 | 服务器开跑前检查，然后重跑 E10（`methods-oceanx-flash-r3`） | 已完成并分析，见 Log | | |
 | R3 follow-up | R3 的六项耗时、token 与存储优化 | v1.8 已提交（`b0a2618`）；v1.9 的上限 40 在工作区待提交；服务器全量 1020 passed、4 failed：两个已知旧沙箱测试，加两个此前从未在服务器上跑过的 Finch 沙箱测试（已改，待复跑） | | |
+| H | 只在 `benchmarking/` 里：三个 agent 留下多少就交付多少、benchmark 专用的作图指引、对应的评分规则。不改 `src/oceanx` | Claude 已实现；本机全量测试见最新 Log；Finch worker 的一处改动要在服务器 finch-bench 环境验证；待 Codex 复核与 Owner 提交 | | |
 | Linux 测试修正 | 修正取消测试的进程号及文件隔离测试的预期，不改沙箱 | 本机与服务器全量通过；Owner 已授权提交和服务器同步，见最新 Log | | |
 
 执行顺序：A1 → A2 → A3 → A4 → B → E → D → C → F → G → R3。A1 没合入之前不要启动任何运行。
@@ -64,6 +65,7 @@
 | v1.11 | 2026-10-04 | Owner 对 Q08 的暂定审阅分：上限 40 的版本 76.25，上限 60 的版本 72.50（评分标准仍是草稿，不是正式得分）。40 次版的主要扣分是最终答案没有吸收后来节点的修正（平均流速 0.879 改成 0.778 m/s，答案仍写 0.88）、对温度差异的解释过于确定、把 Argo 称为独立验证。原因查明：Coordinator 的树视图把每个节点的 Result 截成 320 字、限制只留第一句，修正埋在长摘要里它根本看不到。修改：新增 `update_research_tree` 的 `results` 视图，列出每个已返回节点完整的 Result 和限制，最终综合前读取；Expert 的摘要规则要求修正写在 Result 最前面、第一句限制写最影响结果的那条；Coordinator 的最终综合规则增加“修正过的值取代旧值”和“结论不超过证据、没有证据不称独立”。其余各项不变。 |
 | v1.12 | 2026-10-04 | Owner 决定把 benchmark 的数据 Expert 空位由 2 改到 3（`BENCH_OCEANX_MAX_PARALLEL_EXPERTS=3`，`.env.example` 和默认值；桌面端仍是 2）。Q08 在上限 40 下用时分析：最长依赖链 51 分钟，Coordinator 分批启动造成约 25 分钟，空位等待约 9 分钟。其余各项不变。 |
 | v1.13 | 2026-10-04 | Owner 要求实现 `task` 的异步，并定了规则：一条委派自己的后续，结果一到就直接委派；需要几条已派出的结果共同决定的新子问题，要等，由 Coordinator 决定。实现：每个 `task` 在 Coordinator 这次运行的后台启动 Expert，下一个 Expert 一返回就把这一轮交还给 Coordinator；新工具 `await_experts` 用来等（等下一个、等指定节点、等全部）；有 Expert 未返回时 Coordinator 不能结束。并行数：benchmark 仍用 `.env` 的 `BENCH_OCEANX_MAX_PARALLEL_EXPERTS`，桌面端新增设置（1 到 4，默认 2），随每次请求发送。其余各项不变。 |
+| v1.14 | 2026-10-06 | 依据三方法对比报告和 Owner 当天的决定新增 H 包，范围限定在 `benchmarking/`，不改桌面端后端。（1）三个 agent 留下多少就按多少交付和评分：不生成任何替代答案，评分规则改为“没有最终答案的尝试按它留下的已执行产物评”；Claude 和 Finch 的 runner 去掉几处可避免的失败原因，并在最后提醒 agent 交报告。（2）benchmark 专用的作图指引 skill 放在 `benchmarking/skills/`，由 benchmark 自己的 Agent Server 进程装入。（3）分方面评分草案改为 v0.3：只展开有差异的方面，其余一行报告。Claude 第一版把（1）做成了后端里的“阶段报告”，Owner 指出理解过度并要求不动后端，已全部撤回。做法和验证见 Log。 |
 
 ## 4. Owner 的决定
 
@@ -458,6 +460,170 @@ R3 只在 A 到 G 全部提交、通过 Claude 审核，并且 Owner 通知之�
 ## 8. Log
 
 Codex 在这里追加记录，最新的放在最上面。每条写：日期、做了哪个包或遇到什么情况、证据、改动、测试结果。
+
+### 2026-10-06 — 三方法对比报告（`reviews/2026-10-06-three-methods`）：交付失败的原因、图的类型、分方面评分草案（Claude，未批准）
+
+Owner 问了三件事。运行目录在服务器上，本机没有；下面“报告写的”来自 Codex 的审阅页，“代码里核对的”是我读本仓库和已安装库得到的。本条没有改分析代码。
+
+**一、10 次没有交付的尝试**
+
+| 尝试 | 报告写的 | 代码里核对的 | 归类 |
+|---|---|---|---|
+| OceanX Q27 | `request.failed`，`provider_unavailable`，“An internal error occurred”，9 份 Expert 报告已保存 | 这句话是 Agent Server 对“不在放行名单里的异常类型”的统一替换（`langgraph_api/serde.py:110`）；`research/gateway.py` 只保留这句话，`model_recovery.py:69` 再按这句话标成 `provider_unavailable`。所以真实异常类型没有留下，不能认定是服务商故障；可重试的服务商错误在图内会无限重试（`provider_retry.py`） | 原因未知，要看该次尝试的 `state/agent-server.log` |
+| Claude Q15 | 报告完整，状态 `needs_interaction` | `run_claude.py:175`：结果事件里只要有一条权限拒绝就判 `needs_interaction` | 判定规则，不是没交付 |
+| Claude Q25 | 状态 `completed`，最后一句是“预处理还在 2015 年……等后台完成后继续” | `claude -p` 一轮结束进程就退出，`stop_group` 随即结束后台任务；`classify` 只检查答案非空 | 后台任务加单轮运行 |
+| Finch Q08、Q20 | `step_limit`，各 120 次模型调用 | `BENCH_FINCH_MAX_STEPS` 默认 60，每步两次模型调用；到上限前没有任何提示 | 步数上限 |
+| Finch Q23 | `notebook_execution_timeout` | 每次改单元格都在新内核里重放整本 notebook，整次重放上限 `BENCH_FINCH_EXECUTION_TIMEOUT`=1200 秒 | 重放超时 |
+| Finch Q09、Q15、Q24、Q27 | 状态 `completed`，notebook 里 0 个代码单元 | `list_workdir` 只列宿主机上的工作目录，输入只挂在沙箱里的 `/inputs`；Finch 一侧没有工具调用修复 | 模型没有成功调用过 `edit_cell`（待用 `transcript.jsonl` 核对） |
+
+Finch Q24 在没有执行的情况下给出了具体数字，Q09 称输入目录为空；同一份数据在前一题 Q08 可以读。
+
+**二、图的类型**
+
+审阅页收录的图：OceanX 254 张，Claude 140 张，Finch 79 张。按颜色自动判断“含填色场”的比例是 27%、39%、42%（对浅色图会漏判，三种方法都偏低）；随机抽 40 张人工看，图面一半以上是地图、断面或时空图的比例是 5/16、7/14、7/10。OceanX 的场图张数并不少，多出来的是折线、柱状和散点图。
+代码里能对上的原因：每个 Expert 回答一个很窄的检验问题，各自出图，没有谁负责一套整体的图；benchmark 的静态出图模式不发 `scientific-figure-design`；Expert 守则只说“需要时出图”，没有说空间结论要用场图；Coordinator 不能在委派里要求图，纯补图的后续委派会被拒绝；runner 给 Claude 和 Finch 的提示里要求写最终图，给 OceanX 的只有原题。
+
+**三、分方面评分**
+
+草案在 `benchmarking/evaluation/ASPECT_SCORES.md`，当天改了三版。v0.1 是七个新评的方面，Owner 认为太多。v0.2 是四个方面（正确性、深度、广度、严谨），其中两个与 Claude 持平，Owner 不希望把持平的方面单列。v0.3：每个方面都是 rubric 现有指标的固定分组，不重评；只展开有差异的方面，其余指标合成一行。Owner 随后否定了 v0.3，见“三之二”。
+
+用这次审阅已有的逐项分计算（占该方面满分的百分比）：
+
+| 开放题，双方都交付的 10 题 | 指标 | OceanX | Claude | OceanX 胜/平/负 |
+|---|---|---|---|---|
+| 广度 | `F` + `B` | 85.0 | 70.5 | 10/0/0 |
+| 机制检验 | `M` | 67.5 | 52.5 | 6/4/0 |
+| 稳健性 | `R` | 75.0 | 57.5 | 7/3/0 |
+| 其余 | `Q` + `A` + `I` | 71.9 | 71.9 | 4/4/2 |
+
+论文题 4 题：命题检验（`K1`–`K5`）70.5 对 64.7（OceanX 3 胜 1 平），其余（`M` + `D` + `R`）66.7 对 64.6（2 胜 1 平 1 负）。
+
+必须同时写明的限制，已写进草案的规则：这份方面清单是看了这批结果之后选的，这批结果只能用来描述差异，不能用来证明；要在正式盲评之前把清单定死。总分和“其余”一行始终保留。广度的 14.5 分里有 10 分来自 `F`（每题都是 4 对 3），评审知道方法身份。没有冻结参考时多数指标最高给 3，OceanX 的 `R` 和 `B` 在这些题里全是 3，所以草案要求同时列出探针覆盖数。OceanX 总用时 20.7 小时，Claude 8.3 小时，用时和 token 列在同一张表。“其余”里 OceanX 输的两题和 `I` 上输的三题（Q21、Q23、Q24）都是最终摘要与修正后的结果不一致。
+
+**三之二、Owner 否定 v0.3，新方案待定（Claude，未批准）**
+
+Owner：评分应当尽量是把原来的整个分数划分成几个方面，每个方面可以由几种分数构成，比如稳健性可以按交付成功次数、是否重复无用的重试来算；先给方案，再定稿。`ASPECT_SCORES.md` 顶部已标明 v0.3 作废，方案定下来再重写。
+
+第一版方案是四个方面（正确性、深度、广度、稳健性）。Owner 认可开放题这四个，但要求论文题另定规则，随后又明确：为了画图，开放题要六个综合指标，论文题也要六个。下面是第二版，待 Owner 定。
+
+每个指标最多由三种分数合成：Codex 按 rubric 指标的判分、Codex 从同一证据数出来的计数、脚本从运行记录算出的指标。各指标的判分部分加起来等于原来的 rubric 总分（100）。试算只有判分部分，来自这次审阅已有的分数。
+
+开放题（OceanX 和 Claude 是双方都交付的 10 题，Finch 是其中有执行产物的 7 题）：
+
+| 指标 | 判分（分值） | 计数 | 运行记录 | OceanX | Claude | Finch |
+|---|---|---|---|---|---|---|
+| 问题拆解 | `F`（10） | 无 | 无 | 100.0 | 75.0 | 60.7 |
+| 正确性 | `Q`（20） | 答案要点通过数 | 无 | 72.5 | 72.5 | 53.6 |
+| 深度 | `M`（20） | 深度探针覆盖数；争议题另加被检验的竞争解释数 | 无 | 67.5 | 52.5 | 28.6 |
+| 广度 | `B`（15） | 广度探针覆盖数 | 无 | 75.0 | 67.5 | 42.9 |
+| 稳健性 | `R`（15） | 无 | 交付成功次数、无效重试 | 75.0 | 57.5 | 39.3 |
+| 严谨性 | `A` + `I`（20） | 无来源的数字个数 | 无 | 71.3 | 71.3 | 50.0 |
+
+论文题（OceanX 和 Claude 4 题，Finch 是交付的 2 题）。每条命题的等级拆成两段：到 2 级为止算“命题检验”（有没有用已执行的诊断真正去检验这条命题；2 级本身表示检验了但定义、掩码或统计有实质缺陷），2 级以上算“判定正确”（检验是否得当、判定是否与参考一致、有没有和论文数字定量对比）：
+
+| 指标 | 判分（分值） | 计数 | 运行记录 | OceanX | Claude | Finch |
+|---|---|---|---|---|---|---|
+| 命题检验 | `K1`–`K5` 的前半（35） | 做了有效检验的命题数 | 无 | 98.2 | 94.6 | 96.4 |
+| 判定正确 | `K1`–`K5` 的后半（35） | 判定与参考一致的命题数 | 无 | 42.9 | 34.8 | 17.9 |
+| 方法忠实 | `M`（10） | 论文关键定义被复现或说明改动的个数 | 无 | 68.8 | 62.5 | 50.0 |
+| 差异归因 | `D`（10） | 列出的差异里被联系到命题并检验的个数 | 无 | 56.3 | 56.3 | 50.0 |
+| 可追溯 | `R`（10） | 有证据指针的命题数 | 无 | 75.0 | 75.0 | 75.0 |
+| 稳健性 | 无 | 无 | 交付成功次数、无效重试 | 待算 | 待算 | 待算 |
+
+- 交付成功：开放题 13 题里 OceanX 12、Claude 11（Q15 的完整报告算交付则 12）、Finch 8；论文题 4 题里 4、4、2。
+- 要如实说明的地方：开放题的正确性和严谨性两项 OceanX 与 Claude 持平；论文题只有判定正确和方法忠实两项领先，其余持平或接近，而且只有 4 题。“判定正确”三家都低，是因为没有冻结参考时最高只给 3 级。无效重试还没有数据，OceanX 之前的代码执行失败率是 21% 到 27%，这一项不一定有利。
+- 待 Owner 定：两组六个指标是否就这样；每种分数在指标里的比例（建议判分 50%、计数 25%、运行记录 25%，缺哪种归判分）；无效重试的定义（建议：同一个 agent 连续两次以同样的错误失败，从第二次起算一次，除以执行次数）；耗时和 token 是否只列不计分。
+- Owner 认为这两组指标合理，并问规则放在哪里、要不要改每道题下面的 rubric。答复：不用改 `benchmarking/tasks/Q*/evaluator/rubric.json`。六个指标只用到这些文件里已有的内容：开放题的七个指标、答案要点（每题 2 到 3 条）、深度探针（1 到 4 条）、广度探针（1 到 2 条）、五道争议题的候选原因；论文题的命题（每题 4 到 5 条，带可检验性）和 `M`、`D`、`R`。指标的定义放在 `evaluation/ASPECT_SCORES.md`（开放题和论文题各一节），计算放在 `evaluation/evaluate.py`，结果写到报告目录的新文件。`CODEX_JUDGE.md` 本来就要求评审记录这些计数（`answer_key`、`causes`、`findings`、`probes`），只是 `validate` 不检查，定稿时改成必填并检查。
+- 对上面表格的两处更正已改入：被检验的竞争解释数在 rubric 里是 `M` 用的，所以归深度，而且只有五道争议题有；“命题检验”的说明按锚点原文改准。
+- 还有一处待 Owner 选：论文题“方法忠实”“差异归因”的计数。rubric 里这两项的要点（`focus`）是一段文字，里面的分号有嵌套，数不准。建议这两项不设计数、只用判分；要计数就得把十道论文题 rubric 的这两段改成列表（只改格式、不改内容）。
+- Owner 的选择：论文题“方法忠实”“差异归因”不设计数，只用判分，rubric 不改。
+- 已定稿：`benchmarking/evaluation/ASPECT_SCORES.md` v1.0（两组六个指标、每个指标的构成、各部分的算法、运行指标的定义、评审要记录的计数、报告的形式）。与上表相比有一处调整：严谨性不设“无来源的数字个数”这项计数，因为 rubric 的门槛规则已经会压低对应指标，一个错误只扣一次。`CODEX_JUDGE.md` 和 `EVALUATION.md` 各加了一句指向它。没有改代码，没有改任何 rubric。
+- 仍是暂定、试算后由 Owner 定的两项：指标内部三种分数的比例（现为判分 50%、计数 25%、运行记录 25%，缺哪种归判分）；“重复失败”这项运行指标是否保留（Finch 每次改单元格都整本重放，留在前面单元格里的错误会重复出现，算不算重试要看数据）。
+- 下一步（待 Owner 交给 Codex）：按 `ASPECT_SCORES.md` 最后一节，对 2026-10-06 这批 51 次尝试做试算：判分部分直接用已有分数；补不需要参考答案的计数；从运行目录只读算出交付和重复失败；给出开放题、论文题各一张表。Claude 据此画两张六轴图。计算进 `evaluate.py`（含 `validate` 检查计数字段）在试算之后再做。
+- 试算已由 Codex 完成（只读，未重评）：`benchmarking/reviews/2026-10-06-three-methods/aspect-trial/`（`summary.md`、`results.json`、`run-measures.json` 和它的脚本）。Claude 按 `results.json` 画了两张六轴图：同一目录下的 `six-indicators.png`、`six-indicators.svg`，脚本是 `plot_indicators.py`（只读取 `results.json`，不重新计算）。有上下界的值取中点。
+- 读图要注意的三点，均来自 Codex 的试算说明：（1）沿用了原审阅对失败尝试的处理，OceanX 的 Q27 按全零计，而 Claude 的 Q15 用的是它 52.5 分的逐项档位，两者不对称，开放题里 OceanX 的各项判分因此偏低，正确性一项落在 Claude 之后（65.4 对 67.3）；（2）“交付”按形式算，Finch 的阻塞或计划报告、Claude Q25 的“预处理未完成”也算交付；（3）“重复失败”的分母三家不可比（OceanX 含 shell 和内核命令，Claude 是命令工具的返回，Finch 是整本重放且旧错误会重复），Codex 建议只作诊断表。
+- 仍待 Owner 定：指标内部的比例；“重复失败”是否留在稳健性里（Claude 的建议与 Codex 相同：不进指标，只列诊断表）；“交付”是否改为只算有已执行产物的交付。
+- Owner 问要重跑哪些题，并想直接覆盖原记录（提到 OceanX 失败的一题和 Q25 的错误）。Claude 的答复：按结束的原因决定，不按分数。重跑的是“没有交付出科学产物、且原因在运行环境”的尝试：OceanX 的 Q27；Claude 的 Q25（Q15 的报告是完整的，只是状态标错，按已交付计分，不重跑）；Finch 的 Q08、Q09、Q15、Q20、Q23、Q24、Q27。OceanX 的 Q25 正常完成并已评分，标题里 1000 倍的单位错误是答案本身的问题，不重跑覆盖；`RUNNING.md` 原本就写着“重试要事先规定，不要挑已评分的失败去重试”。要改善它，只能所有方法整轮再跑一遍并按轮平均。
+- 机制：不删旧记录。续跑（`BENCH_RESUME=true`）跳过已完成的题，给未完成的题新建 attempt，评审取每题最新的一次。实验目录的 `inputs/selection.json` 记录了 `benchmarking/server/*.py` 每个文件的哈希和全部运行设置，代码或设置一变就不能续跑，只能换新的 `BENCH_EXPERIMENT`。所以 OceanX 的 Q27 要在更新服务器代码之前续跑；Claude 的 Q25 和 Finch 那四题的状态是 `completed`，续跑不会重跑它们，而且要用上 H 包的 runner，只能在更新代码后用新的实验名跑。
+- Owner 随后决定 OceanX 的 Q25 也重跑，并问三个 runner 能否同时跑、中途改 `.env`，以及不指定题号时怎么确定跑哪些。核对代码后的答复：（1）runner 启动时读一次设置并把实验、题目清单、输出目录、是否续跑定下来；但 OceanX 的后端和 Agent Server 子进程、Finch 的 worker 在每道题开始时会再读同一个文件取模型设置（模型、接口地址、key、max tokens），所以运行中不要改这几行，保存瞬间启动的题可能读到半截文件而失败；Claude 不重读。稳妥做法是每个方法一份设置文件，用 `--config` 指定（三个 runner 都支持，`.env.*` 已被 git 忽略）。（2）续跑按冻结的题目清单逐题看最新一次尝试的 `status`：`completed` 跳过，其余或没有尝试的新建一次。按现在的记录，OceanX 只会跑 Q27；Claude 会跑 Q15，不会跑 Q25；Finch 会跑 Q08、Q20、Q23，不会跑 Q09、Q15、Q24、Q27。（3）要重跑状态为 `completed` 的题，把它旧的 attempt 目录移到 `runs/` 之外（不删），续跑就会把它当成没跑过。收集器和评审只扫 `runs/<方法>/<题>/attempt-*`，不读 `results.jsonl`。
+- Owner 要求三个 runner 各自读自己的设置文件，已实现（只改 `benchmarking/`，未提交）。`benchmark_config.load_runner_config(method, path)` 的取用顺序：`--config` 指定的文件；环境变量 `OCEAN_BENCH_CONFIG`；该 runner 自己的 `benchmarking/.env.oceanx`、`.env.claude`、`.env.finch`（存在才用）；共用的 `benchmarking/.env`。每个 runner 启动时第一行打印所用的文件。OceanX 的后端和 Agent Server、Finch 的 worker 每道题重读的也是这同一个文件（原有机制，已有测试确认）。没有自己的文件时行为与原来完全一样。`benchmark_run.py --reset` 和 `check_setup.py` 仍默认读 `.env`，要用 `--config` 指向某个方法的文件。`RUNNING.md` 和 `.env.example` 已说明。测试：`test_benchmark_run.py` 新增 4 项（含 OceanX 经真实入口启动），Claude、Finch 各 1 项；本机全量 1139 passed、8 skipped；九处故意改坏均被发现。
+- 注意：这个改动（以及整个 H 包）一旦更新到服务器，`benchmarking/server/*.py` 的哈希就变了，已有的实验不能再续跑。OceanX 的 Q25、Q27 如果要在原实验里续跑，要在更新代码之前做，现有代码已经支持 `--config`。
+- 测试时发现一个与本次改动无关的本机偶发失败：Claude 和 Finch 的超时测试约二十次里有一次把状态记成 `failed`。原因是 macOS 上对只剩僵尸进程的进程组发信号会报 `PermissionError`，而 `run_claude.py` 的 `stop_group` 只处理 `ProcessLookupError`；Linux 上是后者，服务器运行不受影响。没有修，已单独标记为待办。
+- 另一件独立的事：三十个 rubric 现在都是草稿（`status: draft`），里面有 215 处参考值和容差写着 “to freeze before judging”。正式评分之前要按 `EVALUATION.md` 的第 0 阶段把参考值算出来填进副本并锁定；这一步还没有做，和六个指标无关，但“正确性”和“判定正确”两个指标要等它做完才有区分度。
+
+
+**四、H 包：Owner 当天的决定和实现（Claude 实现，未提交）**
+
+Owner 的决定，按先后：
+
+1. 没做完、不是最终结果也要交付，Claude 和 Finch 也要尽量能交付。
+2. `scientific-figure-design` 里与前端接口无关的作图内容可以给 benchmark，让图好看一点。
+3. 评分只展开我们有优势的方面（见上）。
+4. 对第 1 条的更正：不需要“阶段报告”；在最后强制报告的阶段，保留多少都算交付的一部分；不要修改原本桌面端的后端代码；只是在 benchmarking 里保证三个 agent 能交付，不管交付多少。
+
+**我的一次过度理解和撤回。** 我先把第 1 条做成了后端功能：新模块 `research/interim.py` 由研究树拼出阶段报告，接进 `coordinate`、`router` 和 `batch.py`，并在 Claude、Finch 的 runner 里各自拼一份替代的 `answer.md`、在 `result.json` 里加 `delivery` 字段。Owner 的第 4 条否定了这个做法。这些改动已全部撤回：`src/oceanx/` 和 `tests/test_oceanx/` 与 `a85402b` 完全一致（`git status -- src tests` 为空），`result.json` 的格式没有变化。静态版作图指引原先也放在包内（改了 `native_skills.py`、`figure_delivery.py`、`runtime.py`），同样撤回，改为下面 H3 的做法。
+
+*H1 留下多少就交付多少（评分一侧）*
+
+- `evaluation/CODEX_JUDGE.md`：“失败的尝试不写评分文件”改为：没有最终答案的尝试，留下什么就算交付了什么，按盲评目录里已执行的产物评（Expert 报告、已执行的 notebook、表、图，没有 `answer.md` 时还有 agent 自己的消息 `partial_answer.md`）；没回答的部分按没回答计；什么都没执行的才不写评分文件、记 0。计划、预期值、没有代码支撑的数字不算已执行的产物。
+- `evaluation/evaluate.py`：`blind` 在没有最终答案时把 `partial_answer.md` 一并导出（Claude 的中途消息原来不会到评审手里；OceanX 的 Expert 报告和 Finch 的 notebook 原来就导出）。`validate` 对所有评分文件都检查 rubric 是否冻结（原来只查 `completed` 的）。`summarize` 的每组增加“未完成但已评分”的数量；它原本就会采用非 `completed` 尝试的评分文件，总分算法没有变。
+- 不生成任何替代答案，不改任何状态，不新增结果字段。
+
+*H2 最后让 agent 交报告（runner 一侧）*
+
+- OceanX：不改。runner 原本就把研究时间预算设成该题的时限，预算用掉四分之三后 Coordinator 不再派新任务并被要求写最终报告；Expert 自己的调用上限末尾也是强制写报告。
+- `run_claude.py`：提示里说明这是一次性运行，最终回复之后不会再继续，后台任务要等完再结束，时间不够就按已有的写报告。有完整报告的尝试即使有权限拒绝也记 `completed`（拒绝仍记在 `permission_denials`）；没有报告只有拒绝时仍是 `needs_interaction`。
+- `run_finch.py`：提示里写明本 runner 的事实：只有 `edit_cell` 能运行代码、没有 shell 工具、输入只在 notebook 代码里可见、`list_workdir` 看不到输入、整本重放的时限和步数上限。
+- `finch_worker.py`：剩 10、5、3、2、1 步时在观察里加一句提醒，最后一步要求立刻 `submit_answer`。
+- 没有做的：Finch 整本重放超时后再给几步提交的机会（要改它与上游一致的终止方式，本机也无法验证）；步数和时限本身（`BENCH_FINCH_MAX_STEPS`、`BENCH_FINCH_EXECUTION_TIMEOUT`）没有动。
+
+*H3 benchmark 专用的作图指引*
+
+- 新 skill `benchmarking/skills/scientific-figure-style/SKILL.md`：按结论选图型（讲位置、形态、路径的结论要用场本身的地图或断面）、按变量含义选色标、地图与断面的画法、版式与文字、一个可直接运行的 matplotlib 例子。不含任何绘图接口的名字，也不出现 OceanX。
+- 新文件 `benchmarking/server/benchmark_skills.py`：在 benchmark 自己的 Agent Server 进程里（`benchmark_agent_server.py`，和已有的 `install_oceanx_models` 同一个位置）把 `benchmarking/skills` 加到 skill 目录列表的末尾，并在静态版 Expert 守则末尾加一句“画第一张最终图之前读这个 skill；讲位置的结论要用场本身的地图或断面”。不是静态出图时什么都不装。OceanX 的加载方式变了会直接报错，不会悄悄失效。
+- 物理和统计 Expert 能读到，Coordinator 和 Search Expert 读不到。`arm.json` 和每次尝试的 `model_protocol.json` 增加 `benchmark_skills`。
+- 桌面端不运行这段代码，包内的 skill 和守则没有改动。
+
+*验证（只在本机）*
+
+- 新增和修改的测试都在 `benchmarking/tests/`：`test_benchmark_skills.py`（14 项，其中两项经真实链路：runner → 正式网关 → 真实的 Agent Server 子进程，只替换掉 HTTP 服务本身，记录该进程里物理 Expert 实际拿到的 skill 和守则；静态时有、非静态时没有）、`test_run_claude.py`、`test_run_finch.py`、`test_evaluate.py`。
+- 结果：本机全量 1133 passed、8 skipped；其中 `benchmarking/tests` 343 passed、5 skipped。把这次的改动逐处故意改坏 26 次，每次都有测试失败。新改动没有新增 lint 问题。
+- 没有验证的：`finch_worker.py` 的提醒要用到 Finch 环境里的 `aviary.core.Message`，本机没有 Finch 环境，`test_finch_upstream.py` 在本机是跳过的，必须在服务器的 finch-bench 环境跑一遍。真实模型下 Claude 和 Finch 是否因此交付、OceanX 的图是否变成更多场图，都要等下一次运行。
+- 重跑要注意：Claude 和 Finch 的 runner 文件变了，旧输出目录不能用 `--resume` 接着跑，要用新的输出目录；OceanX 的输出目录只比较 arm、policy 和 library，可以接着跑。批次运行中途不要更新代码，后面的题会用上新代码。
+
+### 2026-10-05 — 第二轮（`benchmarking_oceanx_40_r2`）复核：成本降了，用时基本没变；候选下一步（Claude，未批准）
+
+Owner 转来 Codex 对服务器日志的只读检查。r2 的数据不在本机，下面 r2 的数字都来自 Codex，我没有独立核对；第一轮上限 40 的数字与我当时自己算的一致。本条没有改代码。
+
+**三次 Q08 放在一起看**
+
+| | 上限 60、整批等待（`benchmarking_oceanx`） | 上限 40、整批等待（`_40`） | 上限 40、后台委派（`_40_r2`） |
+|---|---|---|---|
+| 用时 | 79 分 20 秒 | 87 分 11 秒 | 79 分 3 秒 |
+| Expert 尝试 | 12 | 16 | 12 |
+| 模型调用 | 653 | 605 | 438 |
+| token（含缓存输入） | 5,189 万 | 4,235 万 | 3,379 万 |
+
+相对最初那次：用时持平，模型调用少 33%，token 少 35%。Q07 相对最初那次（2 小时 27 分 59 秒、929 次调用）是 91 分 37 秒、657 次调用，用时少 38%；但每次都是单次运行，而且中间改了不止一处。
+r2 还没有评分，所以现在只能说成本降了，质量未知。
+
+**对 Codex 各点的判断**
+
+- “调用少了 28%，只快 8 分钟”：同意。用时由最长的依赖链决定，不由总调用数决定；r2 最后约 29 分钟是一条四步相互依赖的速度结构验证链，增加并行位也无法同时做。
+- “执行失败比例没有改善”：实际是变差了，失败加超时由约 21%（70/330）升到约 27%（57/215）；只有代码在跑的墙钟时间由 11.2 分钟升到 17.1 分钟，仍有一次 300 秒超时。
+- “并行仍是 2”：属实，是我的错。我在 v1.13 的说明里写了“`.env` 不用改”，但服务器的 `.env` 明确写着 `BENCH_OCEANX_MAX_PARALLEL_EXPERTS=2`，默认值只在没有这一行时才生效。这一轮因此没有测到 3 个空位。
+- “不建议继续下调调用上限”：同意，保持 40。
+- 后台委派第一次在真实模型下运行，按 Codex 看到的事件是起作用的。还不知道的：`await_experts` 被调用了几次、有没有被自动接上等待、有没有重复委派被拒绝。
+- 文献调用从 140 降到 22 与“只有用户能授权获取数据”一致（上一轮的三个外部数据节点没有了）。因此 r2 的分数不能直接和上一轮的 76.25 比，那一轮把 Argo、WOA 对照算作了优点。
+- 我之前给的“87 降到约 55 分钟”是同一棵树、3 个空位下的上限；2 个空位时同一模拟是约 71 分钟，实际 79 分钟，而且这次的树不同。
+
+**候选下一步（等 Owner 决定）**
+
+1. 服务器 `benchmarking/.env` 改成 `BENCH_OCEANX_MAX_PARALLEL_EXPERTS=3`（Owner 已同意过）。预期收益小：只在同时有 3 个以上数据节点时有用，对最后那条串行链没用。
+2. 减少白跑的计算：让 Expert 先在小样本上把算法跑通再跑整场数据；kernel 工具说明写明变量会保留（现在仍写“用于可复用的中间文件”）。这是四次运行里证据最一致的一项，不涉及研究深度。
+3. 先拿证据再动“深度”：请 Codex 给 r2 的 Q08 按同一份暂定标准评分，并回答一个问题——最后那条 29 分钟的链结束前后，第 5 项发现的判定和主要数字有没有变。没变，说明它买到的只是稳健性表述。
+4. 如果第 3 步表明后段没有改变判定，再用现成的研究时间预算做一次对照（例如 60 分钟，45 分钟后不再开新委派），需要把它和进程超时分开成两个设置。不建议再往 Coordinator 提示里加“值不值得”的规则：同类规则此前（补图）没有约束住模型。
+
 
 ### 2026-10-05 — Owner 批准修正两个旧沙箱测试，并提交 origin、同步服务器（Codex）
 

@@ -45,6 +45,8 @@ if "API_ERROR" in prompt:
     result.update(subtype="error_during_execution", is_error=True, result="API failed")
 if "DENIED" in prompt:
     result["permission_denials"] = [{"tool_name":"Bash"}]
+if "NOREPORT" in prompt:
+    result["result"] = " \\n"
 print(json.dumps(result), flush=True)
 sys.exit(4 if "NONZERO" in prompt else 0)
 ''')
@@ -114,8 +116,24 @@ def test_no_argument_launch_from_env(setup, archive, monkeypatch):
     assert len(results(output)) == 1
 
 
+def test_claude_loads_its_own_settings_file_when_no_file_is_named(setup, archive, monkeypatch):
+    import benchmark_config
+    root, _, _ = setup
+    shared = root / '.env'   # as written by the fixture: no data root, so a launch from it would stop
+    own = root / '.env.claude'
+    own.write_text(shared.read_text() + f'BENCH_DATA_ROOT={archive}\nBENCH_OUTPUT_ROOT={root / "automatic"}\n'
+                   f'BENCH_CLAUDE_EXECUTABLE={root / "fake-claude"}\nBENCH_TASKS=Q07\n'
+                   'BENCH_EXPERIMENT=claude-own\nBENCH_CLAUDE_ALLOW_TOOLS=Read,Bash,Write\n')
+    monkeypatch.setattr(benchmark_config, 'DEFAULT_CONFIG', shared)
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', 'restored after the test')
+    monkeypatch.delenv('OCEAN_BENCH_CONFIG')
+    assert runner.main([]) == 0
+    assert results(root / 'automatic/claude-own/runs/Claude')[0]['id'] == 'Q07'
+
+
 @pytest.mark.parametrize("query,status", [("API_ERROR", "failed"), ("MALFORMED", "failed"),
-                                           ("NONZERO", "failed"), ("DENIED", "needs_interaction")])
+                                           ("NONZERO", "failed"), ("DENIED NOREPORT", "needs_interaction"),
+                                           ("NOREPORT", "failed")])
 def test_failures_continue_and_preserve_partial(setup, query, status):
     _, output, invoke = setup
     assert runner.main(invoke([(query, 5), ("OK", 5)])) == 1
@@ -125,10 +143,35 @@ def test_failures_continue_and_preserve_partial(setup, query, status):
     assert (Path(first["attempt_dir"]) / "partial_answer.md").read_text() == "partial work"
 
 
+def test_a_report_delivered_despite_a_refused_tool_call_is_a_completed_attempt(setup):
+    """Claude's Q15 of the three-method batch was a full report scored as nothing for one refusal."""
+    _, output, invoke = setup
+    assert runner.main(invoke([("DENIED", 5)])) == 0
+    (only,) = results(output)
+    assert only["status"] == "completed"
+    assert only["permission_denials"] == [{"tool_name": "Bash"}]
+    assert (Path(only["attempt_dir"]) / "answer.md").read_text() == "Research answer"
+
+
+def test_the_prompt_says_the_run_is_one_turn_and_nothing_resumes(setup):
+    """Claude's Q25 ended its turn waiting for a background job that could never report back."""
+    from oceanx.batch import QueryCase
+    prompt = runner.prompt_for(QueryCase(id="Q25", query="How much heat?"))
+    assert "nothing runs or resumes after your final response" in prompt
+    assert "Wait for background work to finish before you end" in prompt
+    assert "if time is short, report what you have" in prompt
+    assert prompt.endswith("Research query (unchanged):\nHow much heat?\n")
+
+
 def test_timeout_kills_children_retains_outputs(setup):
     _, output, invoke = setup
     assert runner.main(invoke([("TIMEOUT", 0.3), ("OK", 5)])) == 1
     assert [r["status"] for r in results(output)] == ["timed_out", "completed"]
+    # No answer is made up for it; what the agent wrote on the way is kept as it was.
+    timed_out = Path(results(output)[0]["attempt_dir"])
+    assert not (timed_out / "answer.md").exists()
+    partial = timed_out / "partial_answer.md"  # absent when the time limit came before the first message
+    assert not partial.exists() or partial.read_text() == "partial work"
     time.sleep(1.1)
     assert not list(output.rglob("escaped.txt"))
     assert list(output.rglob("figure.png"))

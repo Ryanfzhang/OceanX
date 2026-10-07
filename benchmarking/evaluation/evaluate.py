@@ -73,8 +73,16 @@ def latest_attempts(arm_dir: Path):
 
 
 def evidence_files(attempt: Path):
-    """Answer, Agent reports, published outputs and small code/tables; never state, logs or the tree."""
-    yield attempt / "answer.md"
+    """Answer, Agent reports, published outputs and small code/tables; never state, logs or the tree.
+
+    An attempt without a final answer delivered whatever it kept. For OceanX and Finch that is already
+    below (the Experts' reports, the notebook, the outputs); for Claude Code it is also the messages the
+    agent wrote on the way.
+    """
+    answer = attempt / "answer.md"
+    yield answer
+    if not (answer.is_file() and answer.read_text(encoding="utf-8", errors="replace").strip()):
+        yield attempt / "partial_answer.md"
     manifest = attempt / "evidence_manifest.json"
     if manifest.is_file():
         # External baselines export an explicit allowlist, not an OceanX workspace.
@@ -237,7 +245,8 @@ def validate_score(score: dict) -> list[str]:
         total = sum(weights[cid] * given[cid]["score"] / 4 for cid in weights)
         if abs(total - float(score.get("total", -1))) > 0.01:
             errors.append(f"total {score.get('total')} != weighted sum {total:.2f}")
-    if score.get("rubric_status") != "frozen" and score.get("status") == "completed":
+    # Every score file, also that of an attempt without a final answer, judged on what it kept.
+    if score.get("rubric_status") != "frozen":
         errors.append("rubric was not frozen when judged (references and tolerances must be frozen first)")
     for key in ("blind_id", "judge"):
         if not score.get(key):
@@ -304,8 +313,10 @@ def summarize(args) -> dict:
         score = scores.get(blind_id)
         if score is None and entry["status"] == "completed":
             raise SystemExit(f"ERROR: completed attempt {blind_id} has no score")
+        # An attempt without a final answer has a score file when it kept executed work to judge
+        # (CODEX_JUDGE.md, "Attempts that end without a final answer"); otherwise it scores as failed.
         total = float(score["total"]) if score else failed_score
-        rows.append({**entry, "blind_id": blind_id, "total": total,
+        rows.append({**entry, "blind_id": blind_id, "total": total, "scored": score is not None,
                      "type": rubric(entry["task_id"])["type"]})
     by = {}
     for row in rows:
@@ -321,11 +332,14 @@ def summarize(args) -> dict:
     cell = {key: {"score": statistics.fmean(r["total"] for r in group),
                   "tokens": known_mean(r["tokens"] for r in group),
                   "elapsed": statistics.fmean(r["elapsed_seconds"] or 0 for r in group),
-                  "failures": sum(r["status"] != "completed" for r in group), "n": len(group)}
+                  "failures": sum(r["status"] != "completed" for r in group),
+                  "failures_scored": sum(r["status"] != "completed" and r["scored"] for r in group),
+                  "n": len(group)}
             for key, group in by.items()}
     arms = sorted({arm for arm, _ in cell})
     per_arm = {arm: {"mean_score": statistics.fmean(v["score"] for (a, _), v in cell.items() if a == arm),
                      "failures": sum(v["failures"] for (a, _), v in cell.items() if a == arm),
+                     "failures_scored": sum(v["failures_scored"] for (a, _), v in cell.items() if a == arm),
                      "tokens": known_sum(v["tokens"] for (a, _), v in cell.items() if a == arm),
                      "elapsed_hours": sum(v["elapsed"] for (a, _), v in cell.items() if a == arm) / 3600}
                for arm in arms}
@@ -356,8 +370,10 @@ def summarize(args) -> dict:
                "cells": {f"{a}|{t}": v for (a, t), v in sorted(cell.items())}}
     out = args.out.expanduser().resolve()
     write_json(out / "summary.json", summary)
-    lines = [f"# {prereg['experiment']}", "", "| Arm | Mean score | Failures | Tokens | Hours |", "|---|---|---|---|---|"]
-    lines += [f"| {a} | {v['mean_score']:.1f} | {v['failures']} | "
+    lines = [f"# {prereg['experiment']}", "",
+             "| Arm | Mean score | Attempts not completed (judged on what they kept) | Tokens | Hours |",
+             "|---|---|---|---|---|"]
+    lines += [f"| {a} | {v['mean_score']:.1f} | {v['failures']} ({v['failures_scored']}) | "
               f"{format(v['tokens'], '.3g') if v['tokens'] is not None else 'n/a'} | {v['elapsed_hours']:.1f} |"
               for a, v in per_arm.items()]
     lines += ["", "| Comparison | Tasks | Mean diff | 95% CI | Wins/losses | Token cut | Time cut | Decision |",

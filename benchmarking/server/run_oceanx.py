@@ -151,10 +151,13 @@ def library_versions() -> dict:
 
 
 def arm_record(args) -> dict:
+    from benchmark_skills import benchmark_skill_names
+
     from oceanx.research.policy import active_policy
     from oceanx.research.review import LIBRARY_FILES
     # The policy every backend subprocess will run: --policy if given, otherwise the default.
     return {"arm": args.arm, "policy": active_policy().name, "figure_delivery": FIGURE_DELIVERY,
+            "benchmark_skills": benchmark_skill_names(),
             "oceanx_version": __version__, **git_identity(),
             "libraries": library_versions(),
             "library": None if LIBRARY is None else {
@@ -203,16 +206,17 @@ def _main(argv, stack):
     parser.add_argument("--timeout", type=float, default=None)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--resume", action="store_true", default=None)
-    parser.add_argument("--config", type=Path, help="benchmarking/.env by default")
+    parser.add_argument("--config", type=Path,
+                        help="Settings file; by default benchmarking/.env.oceanx if it exists, else benchmarking/.env")
     parser.add_argument("--arm", help="Arm label recorded in arm.json, e.g. B or C1")
     parser.add_argument("--policy", help="Research policy for every case; the default (v2-nested) when omitted")
     parser.add_argument("--library", "--lessons", dest="library", type=Path,
                         help="Frozen library snapshot (lessons.json and tools.json, made by "
                              "research_cli.py snapshot); copied into every attempt")
     args = parser.parse_args(argv)
-    from benchmark_config import load_config, preflight
+    from benchmark_config import load_runner_config, preflight
     from benchmark_run import configure_run
-    config = load_config(args.config)
+    config = load_runner_config('OceanX', args.config)
     config.endpoint(config.oceanx_api)
     args.config = config.source
     os.environ["OCEAN_BENCH_CONFIG"] = str(config.source)

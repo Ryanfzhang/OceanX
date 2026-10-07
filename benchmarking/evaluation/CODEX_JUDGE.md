@@ -65,8 +65,14 @@ it lies between its neighbours.
   causes without tests caps `M` at 1.
 - **One error, one deduction.** Do not deduct the same root error under several criteria; score its distinct
   consequences only.
-- **Failed attempts.** For a failed, timed-out or empty attempt, write no score file. The summary scores it
-  0 and counts it.
+- **Attempts that end without a final answer** (Owner's decision of 2026-10-06). Whatever the attempt
+  kept is what it delivered, however little. Judge the executed work in the blind folder with the rubric as
+  it stands: Expert reports, an executed notebook, tables, figures, and, where there is no `answer.md`, the
+  agent's own messages in `partial_answer.md`. A part of the question that the kept work does not answer
+  scores as unanswered, and nothing is added for what a finished run might have found. Copy `status` from
+  `task.json` into the score file. Write no score file only when nothing was executed; the summary then
+  scores the attempt 0 and counts it. A plan, expected values, or numbers with no executed code behind them
+  are not executed work.
 - **Consistency.** Judge all attempts of one task in one sitting, in blind-ID order.
 
 ## Score file
@@ -111,8 +117,11 @@ One file per attempt: `$EVAL_ROOT/<experiment>/scores/<blind_id>.json`.
   that cannot be verified, or a reference that looks wrong.
 
 `evaluate.py validate` checks the criterion IDs, the 0-4 scores, the evidence fields, the total, the
-frozen status, the blind ID and the judge. It does not check the other fields; fill them anyway, because the
-owner reads them when a score is disputed.
+frozen status (for every score file, also one of an attempt without a final answer), the blind ID
+and the judge. It does not check the other fields; fill them anyway, because the
+owner reads them when a score is disputed, and because the six indicators per task type
+(`ASPECT_SCORES.md`) are computed from `answer_key`, `causes`, `findings` and `probes`: an entry left out
+is a hole in an indicator.
 
 ## Calibration before the main judging
 

@@ -66,6 +66,9 @@ def test_validate_catches_bad_scores():
     assert evaluate.validate_score(good) == []
     assert evaluate.validate_score({**good, "total": 50})
     assert evaluate.validate_score({**good, "rubric_status": "draft"})
+    # An attempt without a final answer, judged on what it kept, needs the frozen rubric like any other.
+    assert evaluate.validate_score({**good, "status": "failed", "rubric_status": "draft"})
+    assert evaluate.validate_score({**good, "status": "failed"}) == []
     missing = json.loads(json.dumps(good))
     missing["criteria"][0]["evidence"] = ""
     assert evaluate.validate_score(missing)
@@ -374,3 +377,54 @@ def test_inventory_accounts_for_scratch_released_by_collection(tmp_path, status,
     assert size["scratch"] == 0
     assert size["scratch_released"] == released
     assert size["total"] < 5_400_000_000
+
+
+def test_an_attempt_without_a_final_answer_is_scored_on_what_it_kept(tmp_path):
+    """OceanX's Q27 of the three-method batch: nine Expert reports, an error, and a score of 0."""
+    runs = [make_arm(tmp_path / "runs", "A", "v2-nested", {"Q07": 2, "Q17": 2, "Q25": None}),
+            make_arm(tmp_path / "runs", "B", "v2-nested", {"Q07": 2, "Q17": 2, "Q25": None})]
+    for arm_dir in runs:  # Q17 ended on an error in both arms; only arm A kept executed work the judge scored
+        result = arm_dir / "Q17" / "attempt-1" / "result.json"
+        result.write_text(json.dumps({**json.loads(result.read_text()), "status": "failed"}))
+        (arm_dir / "Q17" / "attempt-1" / "answer.md").write_text("")
+    eval_root = tmp_path / "eval"
+    mapping = eval_root / "blind_map.json"
+    evaluate.main(["blind", "--runs", *map(str, runs), "--out", str(eval_root / "blind"), "--map", str(mapping)])
+    entries = json.loads(mapping.read_text())
+    scores = eval_root / "scores"
+    scores.mkdir()
+    for blind_id, entry in entries.items():
+        # What the failed attempt kept reached the judge: the Expert's report and its figure.
+        if entry["task_id"] == "Q17":
+            assert list((eval_root / "blind" / blind_id).rglob("report.md"))
+            assert list((eval_root / "blind" / blind_id).rglob("map.preview.png"))
+        if entry["status"] == "completed" or (entry["task_id"], entry["arm"]) == ("Q17", "A"):
+            (scores / f"{blind_id}.json").write_text(json.dumps(
+                {**score_file(blind_id, entry["task_id"], 2), "status": entry["status"]}))
+    prereg = eval_root / "preregistration.yaml"
+    prereg.write_text("experiment: unit\nfailed_attempt_score: 0\nbootstrap: {resamples: 200, seed: 1}\n"
+                      "comparisons:\n  - name: kept\n    treatment: A\n    control: B\n"
+                      "    rule: {type: superior, margin: 0}\n")
+    evaluate.main(["freeze", "--prereg", str(prereg)])
+    assert evaluate.main(["validate", "--scores", str(scores)]) == 0
+    evaluate.main(["summarize", "--prereg", str(prereg), "--map", str(mapping), "--scores", str(scores),
+                   "--out", str(eval_root / "report")])
+    summary = json.loads((eval_root / "report" / "summary.json").read_text())
+    assert summary["cells"]["A|Q17"]["score"] == 50 and summary["cells"]["B|Q17"]["score"] == 0
+    assert summary["arms"]["A"]["failures"] == 2 and summary["arms"]["A"]["failures_scored"] == 1
+    assert summary["arms"]["B"]["failures"] == 2 and summary["arms"]["B"]["failures_scored"] == 0
+    report = (eval_root / "report" / "report.md").read_text()
+    assert "Attempts not completed (judged on what they kept)" in report and "| 2 (1) |" in report
+
+
+def test_the_messages_of_an_attempt_without_a_final_answer_reach_the_judge(tmp_path):
+    """Claude Code writes its narrative to partial_answer.md; without an answer it is what was delivered."""
+    attempt = tmp_path / "attempt"
+    attempt.mkdir()
+    (attempt / "partial_answer.md").write_text("Loaded 2011-2015; the mixed layer deepens to 58 m in January.")
+    assert [p.name for p in evaluate.evidence_files(attempt) if p.is_file()] == ["partial_answer.md"]
+    (attempt / "answer.md").write_text("   \n")  # an empty answer is no answer
+    assert [p.name for p in evaluate.evidence_files(attempt) if p.is_file()] == ["answer.md", "partial_answer.md"]
+    (attempt / "answer.md").write_text("# Final report")
+    # With a final answer the judge reads that, as before.
+    assert [p.name for p in evaluate.evidence_files(attempt) if p.is_file()] == ["answer.md"]

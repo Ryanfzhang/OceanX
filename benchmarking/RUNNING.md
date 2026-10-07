@@ -106,6 +106,23 @@ BENCH_OUTPUT_ROOT/BENCH_EXPERIMENT/
 The last folder names follow `BENCH_OCEANX_ARM`, `BENCH_CLAUDE_ARM`, `BENCH_FINCH_ARM`.
 Choose distinct names. Each method retains its original output-writer lock and resume checks.
 
+**One settings file per runner.** By default all three commands read `benchmarking/.env`. A runner that
+finds a file of its own next to it loads that one instead: `run_oceanx.py` reads `.env.oceanx`,
+`run_claude.py` `.env.claude`, `run_finch.py` `.env.finch`. `--config <file>` and `OCEAN_BENCH_CONFIG`
+still come first, and each runner prints the file it uses as its first line.
+
+```bash
+cp benchmarking/.env benchmarking/.env.oceanx   # then set its own BENCH_EXPERIMENT, BENCH_RESUME, ...
+```
+
+Use this when the methods run in different experiments, or to resume one method while another starts
+fresh. Do not edit a settings file that a running batch uses: a runner fixes its experiment, questions and
+resume flag at start, but OceanX's server process and Finch's worker read the same file again at the start
+of every case for the model, endpoint, key and token limit. Files that name the same `BENCH_EXPERIMENT`
+must agree in every setting except `BENCH_RESUME`, or the second runner stops with "Experiment
+inputs/config changed". `benchmark_run.py --reset` and `check_setup.py` read `benchmarking/.env` unless
+given `--config`.
+
 An existing method output is not overwritten. For a new repeat, change the experiment name,
 e.g. `methods-public-r2`. For an interrupted batch, set `BENCH_RESUME=true` and rerun the
 same command. It skips completed cases and creates new attempts for unfinished ones;
@@ -168,6 +185,17 @@ This smoke repeat diagnoses the corrected model routing; it is not a new formal 
   made (a missing or corrupt file) is an ordinary error message, as for any other file. In these runs
   the Coordinator also cannot re-delegate a node that already has a result just to publish a figure
   the researcher's question did not ask for; the desktop keeps the prompt rule alone.
+- OceanX benchmark runs have one skill that the desktop does not have:
+  `benchmarking/skills/scientific-figure-style`, which says how to choose and draw a figure saved as an
+  image file and names no plotting interface. The two data Experts get it, and one sentence added to their
+  policy points to it. `benchmark_agent_server.py` installs both in the benchmark's own Agent Server
+  process; OceanX's code and packaged skills are unchanged. `arm.json` and each attempt's
+  `model_protocol.json` list it under `benchmark_skills`.
+- Each arm's agent is told to report what it has before it runs out. OceanX: the research time budget
+  below. Claude Code: its prompt says the run is one turn and nothing resumes after the final response.
+  Finch: its prompt states the runner's tools, inputs and limits, and the worker says when 10, 5, 3, 2 and
+  1 steps remain. An attempt that still ends without a final answer is judged on what it kept
+  (`evaluation/CODEX_JUDGE.md`); no substitute answer is written for it.
 - The Expert's last, tool-free delivery call may issue an extra provider request if its first
   reply contains tool markers rather than a report. Context compaction requests are counted
   separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;

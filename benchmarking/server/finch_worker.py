@@ -65,6 +65,21 @@ def dependency_check():
     return {"python": sys.version.split()[0], "libraries": dict(sorted(versions.items()))}
 
 
+def step_notice(step, max_steps):
+    """What the agent is told about its step budget near the end; the upstream loop never says.
+
+    Two attempts of the three-method batch used all their steps without calling submit_answer.
+    """
+    left = max_steps - step + 1  # steps left, this one included
+    if left == 1:
+        return ("[Runner] This is your last step. Call submit_answer now with your final report: what you "
+                "found, with numbers, and what is missing. Work that is not submitted is not delivered.")
+    if left in (10, 5, 3, 2):
+        return (f"[Runner] {left} steps remain. Finish the one cell you need most, then call submit_answer "
+                "with your final report. Work that is not submitted is not delivered.")
+    return None
+
+
 def workspace_file(path, workspace):
     """Finch's host-side notebook IO must not follow model-created symlinks."""
     path, workspace = Path(path), Path(workspace)
@@ -272,6 +287,10 @@ async def episode(attempt, config):
                 "num_retries": 3}, "hide_old_env_states": True}).construct_agent()
         state = await agent.init_state(tools)
         for steps in range(1, spec["max_steps"] + 1):
+            notice = step_notice(steps, spec["max_steps"])
+            if notice:
+                from aviary.core import Message
+                observations = [*observations, Message(content=notice)]
             append_json(attempt / "transcript.jsonl", {"type": "observations", "step": steps,
                                                       "messages": observations})
             action, state, _ = await agent.get_asv(state, observations)

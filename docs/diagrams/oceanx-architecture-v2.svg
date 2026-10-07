@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1280" viewBox="0 0 1680 1280" role="img" aria-labelledby="title desc">
+  <title id="title">OceanX: research execution and cross-task improvement</title>
+  <desc id="desc">The Coordinator maintains a research tree, delegates to Ocean, Statistics and Search Experts, and consults a Discussion Partner. Data Experts use isolated workspaces and persistent Python kernels. Role-scoped skills and Python helper functions support execution. Saved evidence returns to the Coordinator for decisions and final synthesis. Completed records feed an offline meta-agent, which updates lessons and tested helper functions for subsequent tasks. Benchmark libraries remain frozen.</desc>
+  <defs>
+    <style>
+      text {font-family:Helvetica,Arial,sans-serif; fill:#183143}
+      .title {font-size:44px; font-weight:700; letter-spacing:-1.5px}
+      .subtitle {font-size:21px; fill:#61717d}
+      .panel {font-size:25px; font-weight:700; letter-spacing:-.5px}
+      .kicker {font-size:14px; font-weight:700; letter-spacing:2px; fill:#607484}
+      .node {font-size:24px; font-weight:700; letter-spacing:-.4px}
+      .body {font-size:18px; fill:#506472}
+      .small {font-size:16px; fill:#657784}
+      .white {fill:#fff}
+      .onblue {fill:#dce8f0}
+      .inkline {fill:none;stroke:#37576d;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+      .guidance {fill:none;stroke:#ba904d;stroke-width:2;stroke-dasharray:5 6;stroke-linejoin:round}
+      .archive {fill:none;stroke:#93a2ab;stroke-width:1.8;stroke-dasharray:5 6;stroke-linejoin:round}
+      .feedback {fill:none;stroke:#ba904d;stroke-width:2;stroke-dasharray:6 7;stroke-linejoin:round}
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#37576d"/></marker>
+    <marker id="gold" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#ba904d"/></marker>
+    <marker id="gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#93a2ab"/></marker>
+  </defs>
+  <rect width="1680" height="1280" fill="#fff"/>
+  <text x="64" y="78" class="title">OceanX</text>
+  <text x="64" y="113" class="subtitle">Evidence-driven research · reusable methods · cross-task learning</text>
+  <g class="small">
+    <rect x="1240" y="47" width="14" height="14" rx="3" fill="#204c68"/><text x="1266" y="60">Orchestration</text>
+    <rect x="1240" y="73" width="14" height="14" rx="3" fill="#65a69d"/><text x="1266" y="86">Scientific work</text>
+    <rect x="1440" y="73" width="14" height="14" rx="3" fill="#cba45e"/><text x="1466" y="86">Learning</text>
+  </g>
+  <path d="M64 140 H1610" stroke="#dce4e9"/>
+  <text x="64" y="175" class="panel">a</text><text x="100" y="175" class="kicker">RESEARCH EXECUTION</text>
+
+  <!-- Fixed connectors: reports return to the Coordinator, not to the tree. -->
+  <path class="inkline" d="M775 226 V248" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M334 294 H450" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M775 344 V380 H560 V413 M775 380 V413 M775 380 H1030 V413" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M560 380 V413" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M775 380 V413" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M334 507 H378 V316 H450" stroke-dasharray="5 6" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M560 503 V554" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M775 503 V554" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M334 620 H392 V602 H450" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M675 654 V689" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M1030 503 V689" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M1135 728 H1168 V316 H1100" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M1100 271 H1194 V653 H1408 V689" marker-end="url(#arrow)"/>
+  <path class="guidance" d="M1220 316 H1100" marker-end="url(#gold)"/>
+  <path class="guidance" d="M1220 302 H1145 V398 H590 V413" marker-end="url(#gold)"/>
+  <path class="guidance" d="M1145 398 H805 V413" marker-end="url(#gold)"/>
+  <path class="guidance" d="M1145 398 H1060 V413" marker-end="url(#gold)"/>
+  <path class="inkline" d="M1408 526 V540 H850 V554" stroke="#ba904d" marker-end="url(#gold)"/>
+
+  <rect x="64" y="226" width="270" height="217" rx="12" fill="#f2f6f9"/>
+  <text x="84" y="262" class="node">Research tree</text>
+  <text x="84" y="286" class="small">Questions &amp; dependencies</text>
+  <path d="M198 322 V341 H135 V355 M198 341 H259 V355 M135 377 V399" class="inkline"/>
+  <rect x="168" y="305" width="61" height="29" rx="6" fill="#dde8ef"/>
+  <text x="198" y="325" font-size="17" text-anchor="middle">B1</text>
+  <rect x="104" y="353" width="64" height="29" rx="6" fill="#dde8ef"/><text x="136" y="373" font-size="17" text-anchor="middle">B1.1</text>
+  <rect x="228" y="353" width="64" height="29" rx="6" fill="#dde8ef"/><text x="260" y="373" font-size="17" text-anchor="middle">B1.2</text>
+  <rect x="89" y="399" width="94" height="29" rx="6" fill="#e2eeea"/><text x="136" y="419" font-size="17" text-anchor="middle">B1.1.1</text>
+
+  <rect x="625" y="193" width="300" height="36" rx="18" fill="#f1f5f8"/><text x="775" y="218" font-size="19" text-anchor="middle">Research question</text>
+  <rect x="450" y="248" width="650" height="96" rx="12" fill="#204c68"/>
+  <text x="775" y="288" class="node white" text-anchor="middle">Coordinator</text>
+  <text x="775" y="320" class="body onblue" text-anchor="middle">Select · Delegate · Adjudicate · Synthesize</text>
+  <text x="450" y="369" class="small">Background delegation · follow up as results return</text>
+
+  <rect x="64" y="466" width="270" height="81" rx="10" fill="#f2f6f9"/>
+  <text x="84" y="500" font-size="22" font-weight="700">Discussion Partner</text><text x="84" y="527" class="body">Challenge assumptions</text>
+  <text x="65" y="573" class="small">Advisory, not an acceptance gate</text>
+
+  <g>
+    <rect x="450" y="413" width="220" height="90" rx="10" fill="#eaf3ef"/><rect x="450" y="428" width="4" height="59" rx="2" fill="#65a69d"/>
+    <text x="470" y="449" class="node">Ocean Expert</text><text x="470" y="479" class="body">Physical diagnostics</text>
+    <rect x="685" y="413" width="220" height="90" rx="10" fill="#eaf3ef"/><rect x="685" y="428" width="4" height="59" rx="2" fill="#65a69d"/>
+    <text x="705" y="449" class="node">Statistics Expert</text><text x="705" y="479" class="body">Uncertainty · robustness</text>
+    <rect x="920" y="413" width="220" height="90" rx="10" fill="#eaf3ef"/><rect x="920" y="428" width="4" height="59" rx="2" fill="#65a69d"/>
+    <text x="940" y="449" class="node">Search Expert</text><text x="940" y="479" class="body">Literature &amp; sources</text>
+  </g>
+  <rect x="64" y="589" width="270" height="72" rx="10" fill="#f2f6f9"/><text x="84" y="618" font-size="21" font-weight="700">Read-only source data</text><text x="84" y="644" class="small">Variables · units · coverage</text>
+  <rect x="450" y="554" width="455" height="100" rx="10" fill="#f0f6f3"/>
+  <text x="470" y="586" font-size="22" font-weight="700">Analysis environment</text>
+  <text x="470" y="614" class="body">Isolated workspace + Python kernel per attempt</text>
+  <text x="470" y="639" class="small">File tools · execute · ocean_expert_run_code</text>
+
+  <text x="1220" y="230" class="kicker">REUSABLE KNOWLEDGE</text>
+  <rect x="1220" y="248" width="376" height="113" rx="10" fill="#fbf5e9"/>
+  <text x="1242" y="284" class="node">Skill library</text><text x="1242" y="313" class="body">Role-scoped methods + learned lessons</text><text x="1242" y="340" class="small">Coordinator and relevant Experts</text>
+  <rect x="1220" y="413" width="376" height="113" rx="10" fill="#fbf5e9"/>
+  <text x="1242" y="449" class="node">Python tool library</text><text x="1242" y="479" class="body">Built-in + learned pure functions</text><text x="1242" y="506" class="small">Imported as ao in data analysis</text>
+  <text x="1232" y="569" class="small">Guidance is read; functions are executed.</text>
+  <text x="1232" y="627" class="small">Coordinator decides when to finish</text>
+
+  <rect x="450" y="689" width="685" height="77" rx="10" fill="#f0f6f3"/>
+  <text x="474" y="722" class="node">Saved evidence</text><text x="474" y="749" class="body">Reports · code · results · figures · follow-up proposals</text>
+  <rect x="1220" y="689" width="376" height="94" rx="10" fill="#204c68"/>
+  <text x="1242" y="728" class="node white">Coordinator synthesis</text><text x="1242" y="759" class="body onblue">Conclusions · citations · tree · figures</text>
+  <text x="1220" y="811" class="small">Interactive desktop / static benchmark delivery</text>
+  <text x="474" y="795" class="small">Evidence returns to the Coordinator; proposals do not edit the tree.</text>
+
+  <path d="M64 834 H1610" stroke="#dce4e9"/>
+  <text x="64" y="874" class="panel">b</text><text x="100" y="874" class="kicker">CROSS-TASK IMPROVEMENT (RSI)</text>
+  <path class="archive" d="M1120 766 V910 H189 V1020" marker-end="url(#gray)"/>
+  <text x="589" y="898" class="small">Archive completed research executions</text>
+  <path class="inkline" d="M314 1083 H370" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M615 1083 H651 V991 H685" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M651 1083 V1148 H685" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M1095 991 H1160 V1070 H1220" marker-end="url(#arrow)"/>
+  <path class="inkline" d="M1095 1148 H1160 V1120 H1220" marker-end="url(#arrow)"/>
+  <path class="feedback" d="M1596 1060 H1634 V304 H1596" marker-end="url(#gold)"/>
+  <path class="feedback" d="M1596 1130 H1656 V470 H1596" marker-end="url(#gold)"/>
+  <text x="1220" y="971" class="small">Used by subsequent tasks</text>
+
+  <rect x="64" y="1020" width="250" height="129" rx="10" fill="#f2f6f9"/>
+  <text x="85" y="1055" font-size="20" font-weight="700">Completed task records</text><text x="85" y="1085" class="body">Decisions · reports · costs</text><text x="85" y="1112" class="body">Repeated analysis code</text>
+  <rect x="370" y="1038" width="245" height="92" rx="10" fill="#204c68"/>
+  <text x="392" y="1075" class="node white">Meta-agent</text><text x="392" y="1105" class="body onblue">Review across tasks</text>
+  <rect x="685" y="937" width="410" height="110" rx="10" fill="#fbf5e9"/>
+  <text x="707" y="971" class="node">Lessons</text><text x="707" y="1000" class="body">Support across ≥3 distinct questions</text><text x="707" y="1027" class="small">Revise reserved Skill regions; keep or retire</text>
+  <rect x="685" y="1083" width="410" height="129" rx="10" fill="#fbf5e9"/>
+  <text x="707" y="1118" class="node">Learned functions</text><text x="707" y="1147" class="body">Repeated code across ≥3 distinct questions</text><text x="707" y="1174" class="small">Static checks · sandbox tests · separate review</text><text x="707" y="1198" class="small">Add tested functions to the Python tool library</text>
+  <rect x="1220" y="1020" width="376" height="170" rx="10" fill="#f7eedb"/>
+  <text x="1242" y="1057" font-size="23" font-weight="700">Versioned project library</text><text x="1242" y="1089" class="body">Owner right / wrong marks</text><text x="1242" y="1118" class="body">Evidence · change log · content hashes</text><text x="1242" y="1159" font-size="18" font-weight="700">Frozen snapshots for evaluation</text>
+  <text x="64" y="1252" class="small">Learning updates skills and helper functions, not model weights. Frozen benchmark libraries are not updated during evaluation.</text>
+</svg>

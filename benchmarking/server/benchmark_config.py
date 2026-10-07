@@ -92,6 +92,26 @@ def load_config(path=None):
                   {k: raw.get(k, v).strip() for k, v in RUN_DEFAULTS.items()}, path)
 
 
+def load_runner_config(method, path=None):
+    """Settings for one runner, which may have a file of its own.
+
+    In order: the named file; `OCEAN_BENCH_CONFIG`; the runner's own `benchmarking/.env.<method>`
+    (`.env.oceanx`, `.env.claude`, `.env.finch`) when that file exists; the shared `benchmarking/.env`.
+
+    A runner reads its experiment, questions and resume flag once, but OceanX's server process and
+    Finch's worker read the same file again at the start of every case for the model settings. With
+    a file per method, three runners can run at the same time and nobody edits a file in use.
+    """
+    if path is None and not os.environ.get('OCEAN_BENCH_CONFIG'):
+        own = DEFAULT_CONFIG.with_name(f'{DEFAULT_CONFIG.name}.{method.lower()}')
+        if own.is_file():
+            path = own
+    resolved = Path(path or os.environ.get('OCEAN_BENCH_CONFIG') or DEFAULT_CONFIG).expanduser().resolve()
+    # Said before the file is parsed, so an error about a setting names the file it was read from.
+    print(f'{method} settings: {resolved}', flush=True)
+    return load_config(resolved)
+
+
 def configure_runtime():
     """The benchmark's active interpreter is also its scientific runtime."""
     import sys

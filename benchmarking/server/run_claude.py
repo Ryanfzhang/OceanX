@@ -48,6 +48,9 @@ def prompt_for(case):
         "when revising it. Do not copy original datasets. Use the supplied Python environment. "
         "Keep reusable calculation code and save generated figures as files. Return your "
         "final research report in your final response; describe any blockers honestly. "
+        "This is one non-interactive run: nobody answers questions, and nothing runs or resumes "
+        "after your final response. Wait for background work to finish before you end, and end "
+        "only with the report; if time is short, report what you have. "
         "Do not inspect evaluator files, benchmark source code, other attempts or hidden "
         "reference answers. Do not read credentials or send local data to external services. "
         "Follow the stated literature policy: search_only allows search/public snippets, "
@@ -75,20 +78,42 @@ def command_for(executable, case, args):
     return command
 
 
+# How long a group in which only finished processes are left may go on answering "not permitted".
+GROUP_REAP_SECONDS = 1.0
+
+
+def signal_group(process, signum):
+    """Signal the process group we created; False when the group no longer exists.
+
+    For a group in which only zombies are left, macOS answers "not permitted" where Linux answers
+    "no such process": our own child not yet reaped, or its orphans in the instant before the system
+    reaps them (measured here: gone within 2 ms). Such a group has ended. Reap the child and ask again
+    for a moment. A group that still refuses after that holds a process we really may not signal, and
+    the error is raised as it always was.
+    """
+    deadline = time.monotonic() + GROUP_REAP_SECONDS
+    while True:
+        try:
+            os.killpg(process.pid, signum)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            process.poll()
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.005)
+
+
 def stop_group(process):
     """Stop the process group we created, including ordinary Bash descendants."""
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
+    if not signal_group(process, signal.SIGTERM):
         return
     try:
         process.wait(timeout=0.2)
     except subprocess.TimeoutExpired:
         pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+    signal_group(process, signal.SIGKILL)
     process.wait()
 
 
@@ -172,13 +197,19 @@ def classify(code, reason, terminal):
         return reason
     if reason or code != 0 or not terminal:
         return "failed"
-    if terminal.get("permission_denials"):
-        return "needs_interaction"
-    if terminal.get("is_error") or terminal.get("subtype") != "success":
-        return "failed"
-    if not isinstance(terminal.get("result"), str) or not terminal["result"].strip():
-        return "failed"
-    return "completed"
+    if final_report(terminal):
+        # A tool call the runner refused did not keep the report from being delivered. The refusals
+        # stay in result.json (permission_denials) for whoever reads the attempt.
+        return "completed"
+    return "needs_interaction" if terminal.get("permission_denials") else "failed"
+
+
+def final_report(terminal):
+    """The agent's final response when the CLI ended its turn normally with one; otherwise None."""
+    if not terminal or terminal.get("is_error") or terminal.get("subtype") != "success":
+        return None
+    text = terminal.get("result")
+    return text if isinstance(text, str) and text.strip() else None
 
 
 def token_accounting(events, terminal):
@@ -353,7 +384,8 @@ def _main(argv, stack):
     parser.add_argument("--queries", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--claude", help="Executable path/name, not a shell command")
-    parser.add_argument("--config", type=Path, help="benchmarking/.env by default")
+    parser.add_argument("--config", type=Path,
+                        help="Settings file; by default benchmarking/.env.claude if it exists, else benchmarking/.env")
     parser.add_argument("--model", help="Compatibility option; must match BENCH_MODEL in benchmarking/.env")
     parser.add_argument("--model-label", default="configured", help="Experiment label, not an API override")
     parser.add_argument("--arm", help="External comparison label recorded in arm.json")
@@ -361,8 +393,8 @@ def _main(argv, stack):
                         help="Explicit tool approvals, e.g. Read Glob Grep Bash Write Edit NotebookEdit")
     parser.add_argument("--resume", action="store_true", default=None, help="Skip completed; new attempts for other tasks")
     args = parser.parse_args(argv)
-    from benchmark_config import load_config, preflight, claude_environment
-    config = load_config(args.config)
+    from benchmark_config import load_runner_config, preflight, claude_environment
+    config = load_runner_config('Claude', args.config)
     config.endpoint('anthropic')
     from benchmark_run import configure_run
     configure_run(args, config, 'Claude', stack=stack)

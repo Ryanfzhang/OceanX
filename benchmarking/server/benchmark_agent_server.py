@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from benchmark_models import install_oceanx_models
+from benchmark_skills import install_benchmark_skills
 
 
 def main():
@@ -18,9 +19,11 @@ def main():
     # This process executes the agents. A gateway's monkeypatch cannot cross
     # the Python subprocess boundary, even though its environment is inherited.
     policy = install_oceanx_models()
+    # Benchmark-only skills, kept outside the OceanX package (benchmark_skills.py).
+    skills = install_benchmark_skills()
     from oceanx.model_config import load_model_profile
     profiles = {role: load_model_profile(role) for role in policy['roles']}
-    record = {**policy, 'scope': 'agent_server_process', 'pid': os.getpid(),
+    record = {**policy, 'scope': 'agent_server_process', 'pid': os.getpid(), 'benchmark_skills': skills,
               'profiles': {role: {'model': profile.model, 'provider': profile.provider,
                                   'base_url': profile.base_url, 'max_tokens': profile.max_tokens}
                            for role, profile in profiles.items()}}

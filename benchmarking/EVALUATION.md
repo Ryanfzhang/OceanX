@@ -23,6 +23,17 @@ helped can only be read from the process measures (lessons named, helper calls, 
   mode is unchanged. Image reads give the model a JPEG preview bounded to 1024 px on its longest
   edge while preserving the full-resolution result on disk. In these runs the Coordinator cannot
   re-delegate a node that already has a result only to publish a figure the question did not ask for.
+- OceanX benchmark runs have one skill that the desktop does not have:
+  `benchmarking/skills/scientific-figure-style`, which says how to choose and draw a figure saved as an
+  image file and names no plotting interface. The two data Experts get it, and one sentence added to their
+  policy points to it. `benchmark_agent_server.py` installs both in the benchmark's own Agent Server
+  process; OceanX's code and packaged skills are unchanged. `arm.json` and each attempt's
+  `model_protocol.json` list it under `benchmark_skills`.
+- Each arm's agent is told to report what it has before it runs out. OceanX: the research time budget
+  below. Claude Code: its prompt says the run is one turn and nothing resumes after the final response.
+  Finch: its prompt states the runner's tools, inputs and limits, and the worker says when 10, 5, 3, 2 and
+  1 steps remain. An attempt that still ends without a final answer is judged on what it kept
+  (`evaluation/CODEX_JUDGE.md`); no substitute answer is written for it.
 - The Expert's last, tool-free delivery call may issue an extra provider request if its first
   reply contains tool markers rather than a report. Context compaction requests are counted
   separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
@@ -125,6 +136,23 @@ python benchmarking/evaluation/evaluate.py inventory --runs <arm folders> --out 
 
 `inventory.md` lists every attempt with these totals. Run it after each phase; a completed attempt with
 something missing is a finding to report before any more runs are made.
+
+**An attempt delivers whatever it kept.** A status other than `completed` does not mean an empty hand.
+The attempt folder keeps the Expert reports, the notebook, the outputs and the agent's messages; the blind
+export copies them (for Claude Code also `partial_answer.md` when there is no `answer.md`); and the judge
+scores them (`evaluation/CODEX_JUDGE.md`, "Attempts that end without a final answer"). No substitute
+answer is assembled, and no status is changed. Each runner also gives its agent a last stage in which it is
+told to report what it has:
+
+- OceanX: the runner sets the research time budget from the case's time limit, so after three quarters of
+  it the Coordinator starts no new assignment and is told to write its final report. OceanX itself is not
+  changed for the benchmark.
+- Claude Code: the prompt says the run is one turn, that nothing resumes after the final response, and to
+  report what it has if time is short. A report delivered despite a refused tool call is a completed
+  attempt; the refusals stay in `permission_denials`.
+- Finch: the prompt states the runner's facts (code runs only through `edit_cell`, there is no shell tool,
+  the inputs are visible only to notebook code, the step and replay limits), and the worker tells the agent
+  when 10, 5, 3, 2 and 1 steps remain and to submit its answer.
 
 Four rules follow:
 - **Keep attempt folders whole.** Do not prune `state/` or `workspace/`: the ledger, the conversations, the
@@ -237,6 +265,10 @@ and whether the pre-registered rule is met. It also gives the difference by ques
 problem) and by data access (private CMOMS, public). Read these rows before concluding:
 - a policy can help open problems and do nothing for paper verification;
 - lessons learned on public reanalyses may help public questions more than the unseen CMOMS questions.
+
+The rubric total is the main result. `evaluation/ASPECT_SCORES.md` divides it into six indicators for
+open problems and six others for paper verification (each made of the judged criteria, counts the judge
+records, and for robustness two run measures), for one six-axis chart per task type.
 
 ### Process measures
 

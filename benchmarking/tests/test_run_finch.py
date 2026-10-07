@@ -123,6 +123,33 @@ def test_no_argument_launch_from_env(setup, archive, monkeypatch):
     assert 'secret-test-key' not in json.dumps(identity)
 
 
+def test_finch_loads_its_own_settings_file_and_gives_it_to_its_worker(setup, archive, monkeypatch):
+    import benchmark_config
+    root, _, _, _ = setup
+    shared = root / '.env'   # as written by the fixture: no data root, so a launch from it would stop
+    own = root / '.env.finch'
+    own.write_text(shared.read_text() + f'BENCH_DATA_ROOT={archive}\nBENCH_OUTPUT_ROOT={root / "automatic"}\n'
+                   f'BENCH_FINCH_ROOT={root / "finch"}\nBENCH_FINCH_PYTHON={sys.executable}\n'
+                   'BENCH_TASKS=Q07\nBENCH_EXPERIMENT=finch-own\nBENCH_FINCH_MAX_STEPS=17\n')
+    monkeypatch.setattr(benchmark_config, 'DEFAULT_CONFIG', shared)
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', 'restored after the test')
+    monkeypatch.delenv('OCEAN_BENCH_CONFIG')
+    seen = []
+    supervise = runner.supervise
+
+    def recording(command, *args, **kwargs):
+        seen.append(command)
+        return supervise(command, *args, **kwargs)
+
+    monkeypatch.setattr(runner, 'supervise', recording)
+    assert runner.main([]) == 0
+    output = root / 'automatic/finch-own/runs/Finch'
+    assert results(output)[0]['id'] == 'Q07'
+    assert json.loads((output / 'manifest.json').read_text())['identity']['max_steps'] == 17
+    # The worker of every case reads the model settings from the same file.
+    assert seen[0][seen[0].index('--config') + 1] == str(own.resolve())
+
+
 def test_timeout_partial_delivery_children_and_retry(setup):
     _, output, invoke, removed = setup
     args = invoke([("TIMEOUT", .3), ("Analyze", 5)])
@@ -157,6 +184,45 @@ def test_notebook_execution_timeout_is_recorded_and_batch_continues(setup):
     assert (attempt / "workspace/notebook.ipynb").is_file()
     assert (attempt / "workspace/outputs/map.png").is_file()
     assert completed["status"] == "completed"
+
+
+def test_the_prompt_states_the_runners_tools_inputs_and_limits(setup):
+    """What seven undelivered attempts of the three-method batch did not know."""
+    _, output, invoke, _ = setup
+    assert runner.main(invoke([("Analyze", 5)])) == 0
+    prompt = (Path(results(output)[0]["attempt_dir"]) / "submitted_prompt.txt").read_text()
+    assert "The only way to run code is the edit_cell tool" in prompt and "there is no shell tool" in prompt
+    assert "list_workdir shows /workspace only and never the inputs" in prompt
+    assert "the whole rerun must finish within 1200 seconds" in prompt       # BENCH_FINCH_EXECUTION_TIMEOUT
+    assert "You have 60 steps, one tool call each." in prompt                 # BENCH_FINCH_MAX_STEPS
+    assert "submit what you have before the steps run out" in prompt
+    assert prompt.endswith("Research query (unchanged):\nAnalyze\n")
+    # Without the limits (another caller), nothing is invented about them.
+    bare = runner.prompt_for(QueryCase(id="Q01", query="Analyze"))
+    assert "steps" not in bare and "seconds" not in bare and "there is no shell tool" in bare
+
+
+def test_an_attempt_that_never_submitted_keeps_its_work_and_gets_no_made_up_answer(setup):
+    _, output, invoke, _ = setup
+    assert runner.main(invoke([("FAIL", 5), ("OK", 5)])) == 1
+    failed, completed = results(output)
+    attempt = Path(failed["attempt_dir"])
+    assert failed["status"] == "failed" and failed["delivery_check"]["status"] == "not_submitted"
+    assert not (attempt / "answer.md").exists()
+    # What it kept is what the judge is given: the notebook and the outputs.
+    kept = json.loads((attempt / "evidence_manifest.json").read_text())["files"]
+    assert "workspace/notebook.ipynb" in kept and "workspace/outputs/values.csv" in kept
+    assert (Path(completed["attempt_dir"]) / "answer.md").read_text() == "Executed answer: 42"
+
+
+def test_step_notices_come_only_near_the_end_of_the_budget():
+    said = {step: worker.step_notice(step, 60) for step in range(1, 61)}
+    assert [step for step, text in said.items() if text] == [51, 56, 58, 59, 60]
+    assert said[51].startswith("[Runner] 10 steps remain.") and "submit_answer" in said[51]
+    assert said[60].startswith("[Runner] This is your last step. Call submit_answer now")
+    # A budget shorter than the first notice starts with one.
+    assert "3 steps remain" in worker.step_notice(1, 3) and "last step" in worker.step_notice(3, 3)
+    assert worker.step_notice(1, 20) is None
 
 
 def test_unavailable_native_sandbox_fails_before_creating_attempt(setup, monkeypatch):

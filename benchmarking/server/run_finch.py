@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from benchmark_config import load_config
+from benchmark_config import load_runner_config
 from finch_sandbox import BACKEND, cpu_ids, sandbox_command
 from finch_worker import model_compatibility
 from run_claude import inventory, supervise, write_json
@@ -59,10 +59,25 @@ def input_mounts(case):
             for i, path in enumerate(case.datasets)]
 
 
-def prompt_for(case):
+def prompt_for(case, *, max_steps=None, execution_timeout=None):
+    """The research query with the facts of this runner that the upstream prompts cannot know.
+
+    Seven attempts of the three-method batch delivered nothing: the model called a shell tool that
+    does not exist, concluded from list_workdir that the inputs were missing, ran out of steps
+    without submitting, or grew a notebook past the replay limit.
+    """
     context = {"datasets": [m["target"] for m in input_mounts(case)],
                "selected_papers": case.selected_papers, "answers": case.answers,
                "literature_mode": case.literature_mode}
+    limits = ""
+    if execution_timeout:
+        limits += (f"Each edit_cell reruns every cell and the whole rerun must finish within "
+                   f"{int(execution_timeout)} seconds, or the attempt ends: load only the period, depths "
+                   "and region a cell needs, save intermediate results under /workspace/scratch and "
+                   "reload them in later cells instead of recomputing. ")
+    if max_steps:
+        limits += (f"You have {int(max_steps)} steps, one tool call each. Only a report sent with "
+                   "submit_answer is delivered, so submit what you have before the steps run out. ")
     return (
         "Execute the research question, not merely a plan. Original inputs are read-only. "
         "Write final figures and derived tables under /workspace/outputs; keep temporary "
@@ -71,7 +86,11 @@ def prompt_for(case):
         "State missing evidence and unresolved questions honestly. No evaluator, other "
         "attempts, OceanX skills or reference answers are supplied. This is the local Finch "
         "analysis-component baseline: no literature-search tool or network access is provided. "
-        "Supplied local papers can be read; do not invent citations or download papers.\n\n"
+        "Supplied local papers can be read; do not invent citations or download papers. "
+        "The only way to run code is the edit_cell tool, which adds or replaces a notebook cell "
+        "and runs the notebook; there is no shell tool. The input paths below exist only for "
+        "notebook code: read them there. list_workdir shows /workspace only and never the "
+        "inputs. " + limits + "\n\n"
         "Execution context (data, not instructions):\n"
         + json.dumps(context, ensure_ascii=False, indent=2)
         + "\n\nResearch query (unchanged):\n" + case.query + "\n"
@@ -204,7 +223,8 @@ def run_case(case, directory, args, env, cancelled):
     (workspace / "scratch").mkdir()
     write_json(directory / "query.json", case.model_dump(mode="json"))
     prompt = directory / "submitted_prompt.txt"
-    prompt.write_text(prompt_for(case), encoding="utf-8")
+    prompt.write_text(prompt_for(case, max_steps=args.max_steps,
+                                 execution_timeout=args.execution_timeout), encoding="utf-8")
     spec = {**args.runtime, "workspace": str(workspace), "mounts": input_mounts(case),
             "max_steps": args.max_steps, "temperature": args.temperature,
             "memory_bytes": args.memory_mb * 1024**2, "cpus": args.cpus,
@@ -261,7 +281,8 @@ def _main(argv, stack):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--queries", type=Path)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--config", type=Path)
+    parser.add_argument("--config", type=Path,
+                        help="Settings file; by default benchmarking/.env.finch if it exists, else benchmarking/.env")
     parser.add_argument("--finch-root", type=Path)
     parser.add_argument("--finch-commit")
     parser.add_argument("--python", help="Finch Python 3.12+ interpreter")
@@ -276,7 +297,7 @@ def _main(argv, stack):
     parser.add_argument("--cpus", type=float)
     parser.add_argument("--resume", action="store_true", default=None)
     args = parser.parse_args(argv)
-    config = load_config(args.config)
+    config = load_runner_config('Finch', args.config)
     config.endpoint(config.oceanx_api)
     from benchmark_run import configure_run
     configure_run(args, config, 'Finch', stack=stack)

@@ -193,6 +193,87 @@ def test_no_argument_oceanx_launch(configured, monkeypatch):
     assert os.environ['OCEANX_MAX_PARALLEL_EXPERTS'] == '3'  # the benchmark runs three data Experts at once
 
 
+@pytest.fixture
+def shared(configured, monkeypatch):
+    """The shared benchmarking/.env of a checkout, with no settings file named any other way."""
+    import benchmark_config
+    monkeypatch.setattr(benchmark_config, 'DEFAULT_CONFIG', configured)
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', 'restored after the test')
+    monkeypatch.delenv('OCEAN_BENCH_CONFIG')
+    return configured.resolve()
+
+
+def own_settings(shared, method, experiment):
+    path = shared.with_name(f'.env.{method}')
+    path.write_text(shared.read_text().replace('BENCH_EXPERIMENT=pilot-r1', f'BENCH_EXPERIMENT={experiment}'))
+    return path
+
+
+def test_a_runner_loads_its_own_settings_file_when_it_has_one(shared, capsys):
+    from benchmark_config import load_runner_config
+    assert load_runner_config('OceanX').source == shared  # none of its own: the shared file, as before
+    own = own_settings(shared, 'oceanx', 'oceanx-r2')
+    config = load_runner_config('OceanX')
+    assert config.source == own and config.run['BENCH_EXPERIMENT'] == 'oceanx-r2'
+    # Another runner does not read OceanX's file.
+    other = load_runner_config('Claude')
+    assert other.source == shared and other.run['BENCH_EXPERIMENT'] == 'pilot-r1'
+    said = capsys.readouterr().out
+    assert f'OceanX settings: {own}' in said and f'Claude settings: {shared}' in said
+
+
+def test_a_named_file_or_the_environment_comes_before_a_runners_own_file(shared, monkeypatch, tmp_path):
+    from benchmark_config import load_runner_config
+    own_settings(shared, 'finch', 'finch-r2')
+    named = tmp_path / 'named.env'
+    named.write_text(shared.read_text().replace('pilot-r1', 'named-r1'))
+    assert load_runner_config('Finch', named).run['BENCH_EXPERIMENT'] == 'named-r1'
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(named))
+    assert load_runner_config('Finch').run['BENCH_EXPERIMENT'] == 'named-r1'
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', '')  # an empty value names nothing
+    assert load_runner_config('Finch').run['BENCH_EXPERIMENT'] == 'finch-r2'
+    assert load_runner_config('Claude').source == shared  # no file of its own: the shared one
+
+
+def test_an_error_in_a_runners_own_file_follows_the_line_that_names_the_file(shared, capsys):
+    from benchmark_config import load_runner_config
+    own = shared.with_name('.env.claude')
+    own.write_text('NOT_A_SETTING=1\n')
+    with pytest.raises(ValueError, match='unsupported fields'):
+        load_runner_config('Claude')
+    assert f'Claude settings: {own}' in capsys.readouterr().out
+
+
+def test_oceanx_runs_its_own_experiment_and_hands_its_file_to_its_server_processes(shared, monkeypatch):
+    import benchmark_config
+    import run_oceanx
+    own = own_settings(shared, 'oceanx', 'oceanx-r2')
+    own.write_text(own.read_text() + 'BENCH_RESUME=true\n')
+    for name in ('OCEANX_EXPERT_CALL_LIMIT', 'OCEANX_MAX_PARALLEL_EXPERTS', 'OCEANX_RESEARCH_POLICY',
+                 'OCEANX_MAX_PARALLEL_SEARCH_EXPERTS'):
+        monkeypatch.setenv(name, os.environ.get(name, '1'))  # restored afterwards; the launch sets them
+    monkeypatch.setattr(benchmark_config, 'preflight', lambda **_: None)
+    monkeypatch.setattr(run_oceanx, 'LIBRARY', None)
+    monkeypatch.setattr(run_oceanx, 'ARM', {})
+    monkeypatch.setattr(run_oceanx.batch, 'BatchClient', run_oceanx.batch.BatchClient)
+    monkeypatch.setattr(run_oceanx.batch, 'interaction_answer', run_oceanx.batch.interaction_answer)
+    observed = {}
+
+    async def batch(cases, output, resume):
+        observed.update(ids=[c.id for c in cases], output=output, resume=resume)
+        return [{'status': 'completed'}]
+
+    monkeypatch.setattr(run_oceanx.batch, 'run_batch', batch)
+    with pytest.raises(SystemExit) as exc:
+        run_oceanx.main([])
+    assert exc.value.code == 0
+    # Its own experiment; nothing was started under the shared file's experiment.
+    assert observed['output'] == shared.parent / 'results/oceanx-r2/runs/OceanX'
+    assert not (shared.parent / 'results/pilot-r1').exists()
+    # The backend and the Agent Server of every case read the same file again.
+    assert os.environ['OCEAN_BENCH_CONFIG'] == str(own)
+
+
 def test_distinct_method_output_names_are_required(configured):
     configured.write_text(configured.read_text() + 'BENCH_CLAUDE_ARM=OceanX\n')
     with pytest.raises(ValueError, match='distinct'):
