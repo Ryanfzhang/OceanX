@@ -385,7 +385,8 @@ total cost. Proposals for a next experiment go in a section of their own.
 
 The rubric total is the main result. `evaluation/ASPECT_SCORES.md` divides it into six indicators for
 open problems and six others for paper verification (each made of the judged criteria, counts the judge
-records, and for robustness two run measures), for one six-axis chart per task type.
+records, and for robustness the share of questions delivered at the first attempt), for one six-axis chart
+per task type.
 
 ### Process measures
 

@@ -4,7 +4,7 @@ All data live on the server under one data root. Nothing is copied into the repo
 downloaded on a laptop.
 
 ```text
-DATA_ROOT=/import/home4/share/mafzhang          # the existing download root
+DATA_ROOT=/import/home3/share/mafzhang          # the download root (BENCH_DATA_ROOT)
 RUNS_ROOT=$HOME/oceanx-bench/runs               # agent runs, never inside DATA_ROOT
 EVAL_ROOT=$HOME/oceanx-bench/eval               # rubrics, references, scores; private
 ```
@@ -120,6 +120,11 @@ Source: `/import/home4/share/PRE_wavyocean`. The six requested variables are alr
 separate annual NetCDF files named `CMOMS_<variable>_Zlev_<year>.nc`. The benchmark
 only needs 2011-2020 (60 files, about 2.65 TB of logical file sizes).
 
+This section was written on 2026-10-02, when the data root was `/import/home4/share/mafzhang`. The data
+root is now `/import/home3/share/mafzhang`. Hard links work only inside one filesystem: check with
+`df` that the source and `$DATA_ROOT/CMOMS` are on the same one before using the recipe below, and confirm
+that the source path still exists.
+
 Both directories were on the same filesystem at audit time. **Hard links** are the
 simple zero-extra-data-copy staging option, and unlike symlinks they work with the
 current input validator. They add directory entries, not another 2.65 TB copy.
@@ -136,7 +141,7 @@ links, limits the years/variables explicitly and never moves/deletes original fi
 (
   set -euo pipefail
   cmoms_source=/import/home4/share/PRE_wavyocean
-  cmoms_target=/import/home4/share/mafzhang/CMOMS
+  cmoms_target=/import/home3/share/mafzhang/CMOMS
   for cmoms_var in temp salt u v oxygen chlorophyll; do
     for cmoms_year in 2011 2012 2013 2014 2015 2016 2017 2018 2019 2020; do
       cmoms_file=CMOMS_${cmoms_var}_Zlev_${cmoms_year}.nc
@@ -177,14 +182,7 @@ After staging the real grid and checking conventions:
 
 ```bash
 python benchmarking/download/download_all.py private \
-  --output /import/home4/share/mafzhang --groups C_CORE
-```
-
-After staging the real grid and checking conventions:
-
-```bash
-python benchmarking/download/download_all.py private \
-  --output /import/home4/share/mafzhang --groups C_CORE
+  --output "$DATA_ROOT" --groups C_CORE
 ```
 
 This records core staging readiness without declaring the requested diagnostic

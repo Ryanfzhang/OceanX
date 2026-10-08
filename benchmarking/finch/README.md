@@ -52,7 +52,7 @@ requires complete, verified data for the selected tasks:
 
 ```bash
 cd /home/mafzhang/code/OceanX
-export DATA_ROOT=/import/home4/share/mafzhang
+export DATA_ROOT=/import/home3/share/mafzhang
 /home/mafzhang/miniconda3/envs/oceanx-bench/bin/python \
   benchmarking/server/prepare_queries.py --data-root "$DATA_ROOT" \
   --suite test --output /home/mafzhang/benchmark-inputs/test.jsonl
@@ -79,7 +79,7 @@ Run the supervisor in oceanx-bench; `--python` selects the separate Finch worker
 /home/mafzhang/miniconda3/envs/oceanx-bench/bin/python \
   /home/mafzhang/code/OceanX/benchmarking/server/run_finch.py \
   --queries /home/mafzhang/benchmark-inputs/test.jsonl \
-  --output /import/home4/share/mafzhang/benchmark-runs/finch/F-repeat1 \
+  --output /import/home3/share/oceanx-bench/finch-explicit/runs/F-repeat1 \
   --config /home/mafzhang/code/OceanX/benchmarking/.env \
   --finch-root /home/mafzhang/code/finch-baseline \
   --python /home/mafzhang/miniconda3/envs/finch-bench/bin/python \

@@ -28,9 +28,14 @@ $EVAL/rubrics/<task>.json                the frozen copy of the repository's rub
 $EVAL/reports/                           your reports
 ```
 
-Agents must not read it. OceanX and Finch run in sandboxes that see only their question's data, but Claude
-Code has host Bash under the same user. While any method is running the folder is closed
-(`chmod 000 "$EVAL"`), and opened again afterwards (`chmod 700 "$EVAL"`).
+Agents must not read it. Its normal state is `chmod 700 "$EVAL"`: open to the owner, who is also the user
+that makes the references and judges, and closed to everyone else on the server. OceanX and Finch run in
+sandboxes that see only their question's data, so their runs need nothing more. Claude Code has host Bash
+under the same user: while it runs, the folder is closed (`chmod 000 "$EVAL"`) and no reference or
+judging work goes on; afterwards it is opened again (`chmod 700 "$EVAL"`). This keeps an agent from
+reading it by accident. It is not a barrier against the same user, so afterwards check that no attempt
+touched it: `grep -lE 'eval/(rubrics|references)' <runs>/Claude/*/attempt-*/events.jsonl` should list
+nothing.
 
 ## Rules
 
@@ -55,6 +60,43 @@ Code has host Bash under the same user. While any method is running the folder i
 6. **A reference says what the supplied data give.** For a paper task this can be "not reproduced" or
    "not testable with the supplied data"; an agent that reports the same earns full marks. Do not bend a
    reference towards the paper.
+
+## Which label a result gets
+
+The pilot (Q08, Q25, Q27) showed that a label needs rules of its own. These hold for every task.
+
+**A paper finding.** Compare what the supplied data give with what the paper states, using the item's own
+tolerance, the same one the judge later uses between an agent and the reference.
+
+| Label | When |
+|---|---|
+| `reproduced` | Every part of the claim holds: the pattern is there, and each number the claim states agrees within the tolerance. |
+| `partly reproduced` | The pattern is there but a stated number is outside the tolerance, or one part of a claim with several parts holds and another does not. |
+| `not reproduced` | The pattern is absent or opposite. |
+| `not testable with the supplied data` | The data cannot decide. |
+
+A finding the rubric marks `partly testable` gets the label of its testable part, and its `expected` names
+what cannot be tested.
+
+**More than one legitimate definition.** The primary definition is the paper's own diagnostic, or the
+closest the supplied data allow (paper tasks), and the reading the rubric's `procedure` names first (open
+problems). `expected` gives the primary value and label first, then the value under each other definition,
+and its label where that differs. A spread between definitions wider than the tolerance is not an open
+point: the judge compares an agent with the reference computed under the definition the agent states
+(`CODEX_JUDGE.md`). It is an open point only when no definition can be called primary.
+
+**A reference is a value, not a bound.** Where a definition leaves a case open, take the reading the
+definition implies, say so, and give the other reading as an alternative. A column warmer than 26 C down
+to the seabed has its heat content above 26 C integrated to the seabed; it is not unknown.
+
+**A candidate cause** (disagreement questions). Judge it by what its test does to the question's main
+answer, on a common footing: a longer season has more days, so compare rates, not totals.
+
+| Label | When |
+|---|---|
+| `supported` | The choice changes the conclusion: the sign of the result, or whether it differs from zero under statistics that allow for autocorrelation. |
+| `partly supported` | The conclusion stands, but the size changes by more than the tolerance of the answer-key item it bears on. |
+| `not supported` | The test shows no such change, or the supplied data cannot show the cause at work. The `why` says which. |
 
 ## For each task
 
@@ -140,7 +182,11 @@ for simulated eddies of 1993-2012, which the question asks to test on the observ
 
 ## Reports
 
-`$EVAL/reports/references-<step>.md`, and a short summary to the owner. Per task: its `spec.md`, its
-`values.json`, its `checks.md`, the open points, and the time it took. These 17 questions use public data,
-so their numbers may be shown to the reviewer. This will not hold for the CMOMS questions: their references
-never leave the server.
+`$EVAL/reports/references-<step>.md`, and a short summary to the owner. Per task the report holds, in
+full and not as a summary: its `spec.md`, the `items` of its `values.json`, its `checks.md`, its
+`open-points.md`, and the time it took. The reviewer cannot read the server, so what is not in the report
+is not reviewed. These 17 questions use public data, so their numbers may be shown to the reviewer. This
+will not hold for the CMOMS questions: their references never leave the server.
+
+An open point is settled by the reviewer when it is a matter of reading the rubric, and by the owner when
+it needs the rubric's wording or a tolerance changed.
