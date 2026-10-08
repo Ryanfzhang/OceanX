@@ -1,0 +1,28 @@
+[
+  {
+    "lang": "en",
+    "queries": 17,
+    "methods": 51,
+    "scoreRows": 51,
+    "chartBars": 51,
+    "images": 497,
+    "overflow": false,
+    "brokenVisible": [],
+    "updateRows": 5,
+    "mobileOverflow": false,
+    "errors": []
+  },
+  {
+    "lang": "zh",
+    "queries": 17,
+    "methods": 51,
+    "scoreRows": 51,
+    "chartBars": 51,
+    "images": 497,
+    "overflow": false,
+    "brokenVisible": [],
+    "updateRows": 5,
+    "mobileOverflow": false,
+    "errors": []
+  }
+]

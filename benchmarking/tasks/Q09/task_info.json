@@ -32,11 +32,11 @@
     "pages": "e2019JC015397",
     "doi": "10.1029/2019JC015397",
     "url": "https://doi.org/10.1029/2019JC015397",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
+    "verification": "Crossref metadata and abstract checked 2026-10-01; full text (publisher's PDF, supplied by the owner) read 2026-10-08"
   },
   "period_match": {
-    "paper_period": "August 2016 to July 2017",
-    "paper_data": "underwater glider sections, a regional numerical model",
+    "paper_period": "6 August 2016 to 25 July 2017 (four glider missions); the eddy detached on 15 April 2016. The salt-budget results come from simulated eddies of 1993-2012",
+    "paper_data": "underwater glider sections to at least 1,000 m, altimetry (absolute dynamic topography), and a 1/12-degree regional model with an online salt budget for 16 simulated eddies",
     "paper_window": [
       "2016-08",
       "2017-07"

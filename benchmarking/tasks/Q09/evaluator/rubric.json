@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.2",
+  "rubric_version": "3.3",
   "task_id": "Q09",
   "type": "paper_reproduction",
   "title": "Erosion of the salinity maximum inside the Loop Current eddy Poseidon",
@@ -22,11 +22,11 @@
     "pages": "e2019JC015397",
     "doi": "10.1029/2019JC015397",
     "url": "https://doi.org/10.1029/2019JC015397",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
+    "verification": "Crossref metadata and abstract checked 2026-10-01; full text (publisher's PDF, supplied by the owner) read 2026-10-08"
   },
   "period_match": {
-    "paper_period": "August 2016 to July 2017",
-    "paper_data": "underwater glider sections, a regional numerical model",
+    "paper_period": "6 August 2016 to 25 July 2017 (four glider missions); the eddy detached on 15 April 2016. The salt-budget results come from simulated eddies of 1993-2012",
+    "paper_data": "underwater glider sections to at least 1,000 m, altimetry (absolute dynamic topography), and a 1/12-degree regional model with an online salt budget for 16 simulated eddies",
     "paper_window": [
       "2016-08",
       "2017-07"
@@ -51,9 +51,9 @@
       "weight": 20,
       "title": "Finding 1",
       "claim": "During its westward journey the subsurface salinity maximum of Subtropical Underwater inside the eddy was eroded, forming Gulf Common Water.",
-      "paper_evidence": "Abstract: 'The erosion of the subsurface salinity maximum, signature of the Caribbean Subtropical UnderWater (SUW), within the Loop Current Eddy (LCE) Poseidon (August 2016 to July 2017) ... and the formation of the Gulf Common Water (GCW) during its journey westward, was observed using glider data.'",
+      "paper_evidence": "Abstract: 'The erosion of the subsurface salinity maximum, signature of the Caribbean Subtropical UnderWater (SUW), within the Loop Current Eddy (LCE) Poseidon (August 2016 to July 2017) ... and the formation of the Gulf Common Water (GCW) during its journey westward, was observed using glider data.' Full text, sections 2.1 and 3 (Table 1, Figures 2 and 3): the gliders followed the eddy in four missions, from four months after it detached to its dissipation in the western Gulf. In August 2016 the Subtropical Underwater lies between the 1024.5 and 1026 kg/m3 isopycnals, with a core above 36.9 near 23 C and its maximum near 240 m. From the first mission to the second (December 2016 on) the mission-mean profile loses up to 0.4 between 200 and 300 m. The maximum is above 36.8 near 175 m in February 2017 and about 36.7 in June 2017. The means leave out profiles farther than 0.7 eddy radii from the centre and those taken while the eddy's edge was over the 500 m isobath.",
       "testability": "testable",
-      "how_to_test": "Eddy-following series of the core salinity maximum (value, depth and density) for August 2016-July 2017.",
+      "how_to_test": "Eddy-following series of the core salinity maximum (value, depth and density) for August 2016-July 2017. The paper's core is the 30 km around the eddy centre.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: decrease sign exact; total change +/-40%)",
       "anchors": {
@@ -70,7 +70,7 @@
       "weight": 20,
       "title": "Finding 2",
       "claim": "Most of the dilution occurred in late autumn and winter, with northerly winds and mixed-layer deepening.",
-      "paper_evidence": "Abstract: 'Most of the dilution of the SUW high-salinity core within Poseidon occurs during late autumn and winter associated with Northern winds and mixed-layer deepening.'",
+      "paper_evidence": "Abstract: 'Most of the dilution of the SUW high-salinity core within Poseidon occurs during late autumn and winter associated with Northern winds and mixed-layer deepening.' Full text, section 3: the mixed layer in the eddy deepens to about 75 m by late October and to about 150 m in December. The dilution is strongest between the first mission (ended 7 November 2016) and the start of the second (9 December); the gliders have no data in between. It continues through March and April 2017, when the eddy was also interacting with the western continental slope.",
       "testability": "partly testable",
       "how_to_test": "Testable: the timing of the dilution and the mixed-layer depth in the eddy core. Not testable: the winds, which are not supplied.",
       "expected": "to freeze before judging",
@@ -90,9 +90,9 @@
       "weight": 10,
       "title": "Finding 3",
       "claim": "Above the 1026 kg/m3 isopycnal the salinity trend is explained mostly by vertical salt diffusion, driven by winter heat loss.",
-      "paper_evidence": "Abstract: 'the salinity trend is mostly explained by the vertical salinity diffusion. Cold and dry Northern winds during the first winter drive strong negative net heat fluxes that trigger turbulent flux of salt into the LCEs' thermostad and dilution of the SUW high-salinity core below.'",
+      "paper_evidence": "Abstract: 'the salinity trend is mostly explained by the vertical salinity diffusion. Cold and dry Northern winds during the first winter drive strong negative net heat fluxes that trigger turbulent flux of salt into the LCEs' thermostad and dilution of the SUW high-salinity core below.' Full text, sections 2.2 and 4: a result of the regional model, not of the glider data. The model runs 1993-2012; the salt budget is computed online and averaged within 30 km of the centre of 16 simulated eddies (radius above 40 km, lifetime above 180 days). In the 50-250 m layer the salinity tendency is mainly the vertical diffusion term, which adds salt to the mixing layer and removes it just below; in the upper 50 m it is the surface freshwater flux and vertical diffusion together. The glider data show the matching pattern for Poseidon: the core loses salt while the 30-200 m thermostad gains it (section 3).",
       "testability": "partly testable",
-      "how_to_test": "No salt-budget terms or surface fluxes are supplied. Testable through the vertical redistribution of salt above the isopycnal (column salt content conserved while the maximum erodes).",
+      "how_to_test": "No salt-budget terms or surface fluxes are supplied. Testable through the vertical redistribution of salt above the isopycnal (column salt content conserved while the maximum erodes and the layer above gains salt).",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: sign exact)",
       "anchors": {
@@ -110,7 +110,7 @@
       "weight": 10,
       "title": "Finding 4",
       "claim": "Vertical diffusion keeps homogenising upper-ocean salinity until the vertical salinity gradient is negligible.",
-      "paper_evidence": "Abstract: 'The vertical salinity diffusion continues homogenizing the salinity in the upper ocean until the vertical gradient of salinity is negligible.'",
+      "paper_evidence": "Abstract: 'The vertical salinity diffusion continues homogenizing the salinity in the upper ocean until the vertical gradient of salinity is negligible.' Full text, sections 4.1 and 4.2: again from the model. In the longest-lived simulated eddy the mixed layer reaches about 200 m by the end of February and the high-salinity core is then eroded; the salinity tendency in the deep mixed layer is about zero in late winter and spring, and the second winter brings no further dilution. In the 16-eddy composite the maximum falls to 36.5 by spring. The gliders still found a maximum of about 36.7 in Poseidon in June 2017 (section 3).",
       "testability": "testable",
       "how_to_test": "The vertical salinity gradient above the core through time.",
       "expected": "to freeze before judging",
@@ -129,9 +129,9 @@
       "weight": 10,
       "title": "Finding 5",
       "claim": "Below the 1026 kg/m3 isopycnal, advection, presumably through eddy-eddy interaction, is the main cause of salt loss.",
-      "paper_evidence": "Abstract: below the 1,026 kg m-3 isopycnal advection 'is the most important process driving loss of salinity', presumably through eddy-eddy interaction.",
+      "paper_evidence": "Abstract: below the 1,026 kg m-3 isopycnal advection 'is the most important process driving loss of salinity', presumably through eddy-eddy interaction. Full text, abstract and section 6: from the model. The paper names two presumed causes: eddy-eddy interactions during the westward propagation, and eddy pumping (upwelling) while an eddy decays along the western slope. Below the isopycnal the horizontal and vertical advection terms largely cancel; the net loss comes from horizontal advection during most of an eddy's life and from vertical advection at the western slope. For Poseidon itself the paper reports no interaction with another mesoscale eddy during the first mission; two cyclones pinched off its southern part in mid-December 2016 near 22 N, 94 W, and from early January 2017 it interacted with the western slope.",
       "testability": "partly testable",
-      "how_to_test": "Testable as salt loss on deeper isopycnals coinciding with interactions with other eddies seen in sea surface height. A budget is not possible.",
+      "how_to_test": "Testable as salt loss on deeper isopycnals coinciding with interactions with other eddies, or with the western slope while the eddy decays, seen in sea surface height. A budget is not possible.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: sign exact)",
       "anchors": {
@@ -148,7 +148,7 @@
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "Identification and tracking of Poseidon in sea surface height; an eddy-core definition; analysis on density surfaces (the 1026 kg/m3 isopycnal); mixed-layer depth.",
+      "focus": "Identification and tracking of Poseidon in sea surface height; an eddy-core definition (the paper's: within 30 km of the centre); analysis on density surfaces (the 1026 kg/m3 isopycnal); mixed-layer depth.",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -160,7 +160,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "A reanalysis versus glider sections and the paper's own regional model with a salt budget; assimilation smooths the eddy and may reset its properties; no surface fluxes or winds.",
+      "focus": "A reanalysis versus glider sections and the paper's own regional model with a salt budget; findings 3 to 5 come from simulated eddies of 1993-2012, not from Poseidon; assimilation smooths the eddy and may reset its properties; no surface fluxes or winds.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",

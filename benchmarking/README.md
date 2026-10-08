@@ -21,17 +21,16 @@ only the example is committed. Then launch each method with no arguments (RUNNIN
 
 | Read | For |
 |---|---|
-| [RUNNING.md](RUNNING.md) | Start here: one settings file, three launch commands, how an experiment continues |
-| [summary.md](summary.md) | All 54 questions, required data (type, time, space, variables), and brief assessment criteria |
-| [DESIGN.md](DESIGN.md) | What is tested: allocation, the 30 + 24 questions, verified papers, design rules |
-| [DATA.md](DATA.md) | Data groups, server layout, CMOMS staging, the extra CMOMS variables to request, download commands |
-| [EVALUATION.md](EVALUATION.md) | How runs are stored and judged; the research policy; labels, how lessons and tools are learned in two rounds, and the process measures |
+| [RUNNING.md](RUNNING.md) | 怎么跑（中文）：配置、三个方法跑测试题、续跑和重跑、进化两轮并冻结成库、带库跑测试题、跑完的检查 |
+| [EVALUATION.md](EVALUATION.md) | How results are stored and judged; run settings to disclose; how lessons and tools are learned; what to check before a reported comparison |
+| [evaluation/CODEX_REFERENCES.md](evaluation/CODEX_REFERENCES.md) | How Codex computes the reference answers and freezes a rubric, before any judging |
 | [evaluation/CODEX_JUDGE.md](evaluation/CODEX_JUDGE.md) | How Codex scores one answer, and the score-file format |
 | [evaluation/ASPECT_SCORES.md](evaluation/ASPECT_SCORES.md) | The six indicators per task type that the rubric total is divided into |
-| [CODEX_TEST_PLAN.md](CODEX_TEST_PLAN.md) | The step-by-step tests Codex executes for the library experiment (T0-T13) |
+| [DESIGN.md](DESIGN.md) | What is tested: allocation, the 30 + 24 questions, verified papers, design rules |
+| [summary.md](summary.md) | All 54 questions, required data (type, time, space, variables), and brief assessment criteria |
+| [DATA.md](DATA.md) | Data groups, server layout, CMOMS staging, the extra CMOMS variables to request, download commands |
 | [INSTALL.md](INSTALL.md) | One-time server setup |
 | [finch/README.md](finch/README.md) | The local Finch baseline: isolated runtime, same inputs, saved evidence |
-| [download/README.md](download/README.md) | The download phases and how to recover a partial download |
 
 ## Layout
 
@@ -42,7 +41,7 @@ evolution/E01..E24/task_info.json        evolution questions in two sets, A and 
 download/                                data_manifest.json and download_all.py
 server/                                  the three runners and what they share (below)
 skills/                                  the one skill only benchmark runs of OceanX get (figure style)
-evaluation/                              evaluate.py (blind, validate, freeze, summarize, process, inventory, library-check)
+evaluation/                              evaluate.py (blind, validate, rubric-check, freeze, summarize, process, inventory, library-check)
 experiments/                             pre-registration templates
 reviews/                                 dated reviews of finished runs
 tests/                                   python -m pytest benchmarking/tests

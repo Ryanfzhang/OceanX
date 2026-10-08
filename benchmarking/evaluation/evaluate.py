@@ -4,6 +4,8 @@
     blind      copy each attempt's answer, reports, figures, small outputs and code into a folder named
                by a random ID, so the judge cannot see the arm; the ID-to-arm map is written separately
     validate   check score files against the task rubrics (criteria, 0-4 scores, weighted total)
+    rubric-check  check frozen rubrics before judging: every reference value and tolerance filled, nothing
+               else changed from the repository's draft, the hash of the reference outputs still right
     freeze     hash-lock a pre-registration file before any test run
     summarize  join scores with the map, apply the pre-registered comparisons, write report.md
     process    measure how each attempt's research tree went (needs OceanX importable), compare arms
@@ -17,6 +19,7 @@ Nothing here runs an agent, a model or the agents' code.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -260,6 +263,109 @@ def validate(args) -> dict:
         report[path.name] = validate_score(json.loads(path.read_text()))
     bad = {k: v for k, v in report.items() if v}
     return {"files": len(report), "invalid": bad}
+
+
+# ------------------------------------------------------------------------------------------ frozen rubrics
+PLACEHOLDER = "to freeze before judging"
+CAUSE_VERDICTS = ("supported", "partly supported", "not supported")
+
+
+def outputs_sha256(folder: Path) -> str | None:
+    """One hash of a task's reference outputs: every file's path and content, in path order."""
+    files = sorted(path for path in folder.rglob("*") if path.is_file()) if folder.is_dir() else []
+    if not files:
+        return None
+    digest = hashlib.sha256()
+    for path in files:
+        digest.update(path.relative_to(folder).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
+def _items(doc: dict, group: str) -> list:
+    return doc.get("answer_key", {}).get("items", []) if group == "answer_key" else doc.get(group, [])
+
+
+def places_to_freeze(draft: dict):
+    """Where a draft rubric waits for a reference: the expected value and the tolerance of each finding
+    and answer-key item, and the expected verdict of each candidate cause."""
+    for group in ("criteria", "answer_key", "candidate_causes"):
+        for index, item in enumerate(_items(draft, group)):
+            for key in ("expected", "tolerance"):
+                if PLACEHOLDER in str(item.get(key, "")):
+                    yield group, index, key
+
+
+def rubric_problems(path: Path, references: Path) -> tuple[list[str], str | None]:
+    """What keeps one frozen rubric from being judged with, and the hash of its reference outputs."""
+    task = path.stem
+    try:
+        frozen, draft = json.loads(path.read_text(encoding="utf-8")), rubric(task)
+    except ValueError:
+        return ["not valid JSON"], None
+    except FileNotFoundError:
+        return [f"no task {task} in the repository"], None
+    if not isinstance(frozen, dict):
+        return ["not a rubric"], None
+    problems = []
+    plain_draft, plain_frozen = copy.deepcopy(draft), copy.deepcopy(frozen)
+    for group, index, key in places_to_freeze(draft):
+        source = _items(plain_draft, group)[index]
+        name = f"{source.get('id')} {key}"
+        try:
+            item = _items(plain_frozen, group)[index]
+            value = item[key]
+        except (IndexError, KeyError, TypeError, AttributeError):
+            problems.append(f"{name}: missing")
+            continue
+        if not isinstance(value, str) or not value.strip() or PLACEHOLDER in value:
+            problems.append(f"{name}: not filled")
+        elif group == "candidate_causes" and value not in CAUSE_VERDICTS:
+            problems.append(f"{name}: must be one of {', '.join(CAUSE_VERDICTS)}")
+        elif (group, key) == ("criteria", "expected") and not value.startswith(tuple(draft["verdict_labels"])):
+            problems.append(f"{name}: must begin with a verdict ({'; '.join(draft['verdict_labels'])})")
+        item[key] = source[key] = None
+    # Everything else is the repository's, untouched: criteria, weights, anchors, probes, gates.
+    for doc in (plain_draft, plain_frozen):
+        doc["status"] = doc["frozen"] = None
+    changed = sorted(key for key in set(plain_draft) | set(plain_frozen) if plain_frozen.get(key) != plain_draft.get(key))
+    if changed:
+        problems.append("differs from the repository's rubric outside the places to freeze: " + ", ".join(changed))
+    if draft["query_sha256"] != hashlib.sha256(task_info(task)["query"].encode()).hexdigest():
+        problems.append("the question's text changed after the rubric was written")
+    if frozen.get("status") != "frozen":
+        problems.append('status is not "frozen"')
+    stamp = frozen.get("frozen") if isinstance(frozen.get("frozen"), dict) else {}
+    if not all(stamp.get(key) for key in ("references_sha256", "tolerances_frozen_at", "frozen_by")):
+        problems.append("frozen.references_sha256, tolerances_frozen_at and frozen_by must be set")
+    work = references / task
+    for name in ("spec.md", "compute.py"):
+        if not (work / name).is_file():
+            problems.append(f"references/{task}/{name} is missing")
+    digest = outputs_sha256(work / "outputs")
+    if digest is None:
+        problems.append(f"references/{task}/outputs has no files")
+    elif stamp.get("references_sha256") != digest:
+        problems.append(f"references_sha256 is not the hash of references/{task}/outputs (now {digest})")
+    return problems, digest
+
+
+def rubric_check(args) -> dict:
+    """Frozen rubrics that are ready to judge with, and what is wrong with the others."""
+    folder = args.rubrics.expanduser()
+    found = {path.stem: path for path in sorted(folder.glob("*.json"))}
+    tasks = args.tasks or sorted(found)
+    report = {"ready": [], "not_ready": {}, "references_sha256": {}}
+    for task in tasks:
+        if task not in found:
+            report["not_ready"][task] = ["no frozen rubric file"]
+            continue
+        problems, digest = rubric_problems(found[task], args.references.expanduser())
+        report["references_sha256"][task] = digest
+        if problems:
+            report["not_ready"][task] = problems
+        else:
+            report["ready"].append(task)
+    return report
 
 
 # ------------------------------------------------------------------------------------------ freeze / summarize
@@ -928,12 +1034,18 @@ def main(argv=None):
     i.add_argument("--out", type=Path, required=True)
     lc = sub.add_parser("library-check", aliases=["lessons-check"])
     lc.add_argument("--runs", type=Path, required=True)
+    rc = sub.add_parser("rubric-check")
+    rc.add_argument("--rubrics", type=Path, required=True, help="Folder of frozen rubrics, one <task>.json each")
+    rc.add_argument("--references", type=Path, required=True,
+                    help="Folder of reference work: <task>/spec.md, compute.py and outputs/")
+    rc.add_argument("--tasks", nargs="+", help="Tasks that must be frozen; by default every rubric file found")
     args = parser.parse_args(argv)
     handler = {"blind": blind, "validate": validate, "freeze": freeze, "summarize": summarize,
                "process": process, "inventory": inventory, "library-check": library_check,
-               "lessons-check": library_check}[args.command]
-    print(json.dumps(handler(args), ensure_ascii=False, indent=2))
-    return 0
+               "lessons-check": library_check, "rubric-check": rubric_check}[args.command]
+    result = handler(args)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 1 if args.command == "rubric-check" and result["not_ready"] else 0
 
 
 if __name__ == "__main__":

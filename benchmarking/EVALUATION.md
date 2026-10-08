@@ -17,9 +17,62 @@ helped can only be read from the process measures (lessons named, helper calls, 
 
 ## Run settings and comparison limits
 
-The settings that change how a method behaves in a benchmark run, and the limits of comparing the
-methods, are listed once, in [RUNNING.md](RUNNING.md#run-settings-and-comparison-limits). Disclose them
-with every result.
+- OceanX benchmark runs use `OCEANX_FIGURE_DELIVERY=static`: when the researcher requested a
+  visual, or a figure is necessary scientific evidence, Experts save it as an ordinary PNG image.
+  OceanX's interactive plotting interface is not exposed to the models; the desktop's interactive
+  mode is unchanged. Reading one of these images gives the model a JPEG preview bounded to 1024 px
+  on its longest edge, while the full-resolution result remains on disk. A preview that cannot be
+  made (a missing or corrupt file) is an ordinary error message, as for any other file. In these runs
+  the Coordinator also cannot re-delegate a node that already has a result just to publish a figure
+  the researcher's question did not ask for; the desktop keeps the prompt rule alone.
+- OceanX benchmark runs have one skill that the desktop does not have:
+  `benchmarking/skills/scientific-figure-style`, which says how to choose and draw a figure saved as an
+  image file and names no plotting interface. The two data Experts get it, and one sentence added to their
+  policy points to it. `benchmark_agent_server.py` installs both in the benchmark's own Agent Server
+  process; OceanX's code and packaged skills are unchanged. `arm.json` and each attempt's
+  `model_protocol.json` list it under `benchmark_skills`.
+- Each arm's agent is told to report what it has before it runs out. OceanX: the research time budget
+  below. Claude Code: its prompt says the run is one turn and nothing resumes after the final response.
+  Finch: its prompt states the runner's tools, inputs and limits, and the worker says when 10, 5, 3, 2 and
+  1 steps remain. An attempt that still ends without a final answer is judged on what it kept
+  (`evaluation/CODEX_JUDGE.md`); no substitute answer is written for it.
+- The Expert's last, tool-free delivery call may issue an extra provider request if its first
+  reply contains tool markers rather than a report. Context compaction requests are counted
+  separately as summary calls. Both appear in the per-call ledger and belong in time and token totals;
+  the Expert call limit (60 on the desktop; `BENCH_OCEANX_EXPERT_CALL_LIMIT`, 10 to 60, in benchmark runs
+  and recorded in `arm.json`) is not an exact count of all provider requests. At a lower limit the report
+  checkpoint falls at half of it and the wind-down at four fifths, as at 30 and 48 of 60.
+- A model reply whose tool-call arguments are valid JSON plus stray closing brackets is repaired and the tool runs;
+  a reply with no runnable tool call is asked for once more. Before this, one such reply ended the Coordinator and
+  failed the whole question (Q07 of the 40-call batch, after 21 seconds).
+- `BENCH_OCEANX_MAX_PARALLEL_EXPERTS=3`: data Experts that may work at once; a Search Expert has its own slot
+  (`BENCH_OCEANX_MAX_PARALLEL_SEARCH_EXPERTS=1`), so up to four Experts run together. Watch memory in the first run
+  with this setting; `arm.json` records both. The desktop has the same setting under Settings, Research runtime
+  (1 to 4, default 2); it travels with each request (`session.submit.max_parallel_experts`).
+- Experts work in the background of the Coordinator's run. A `task` call returns when the next running Expert
+  finishes, not when the slowest of its batch has, and `await_experts` is how the Coordinator waits: for the next
+  one, for named nodes, or for all. The Coordinator decides whether to continue one node's own line at once or to
+  wait for several results that a new question depends on; it cannot finish while an Expert is running. Each
+  Expert's own `task` tool run still ends with its own receipt. Elapsed times of runs made before this change
+  (every batch waited for its slowest Expert) are not comparable with later ones.
+- Before the final answer the Coordinator reads every returned node's complete Result and Evidence and limitations
+  with `update_research_tree(changes=[], view='results')`. The ordinary tree view clips each Result to 320 characters
+  and each limit to one sentence, which hid a correction in Q08 of the 40-call batch (0.879 to 0.778 m/s) from the final
+  answer. Experts begin a Result that changes an earlier node's number with `Corrects B1.x: ...`.
+- Only the user's own question authorizes dataset acquisition. The Coordinator and Expert prompts say so;
+  an assignment that says an Expert "is authorized" is not a request (Q08 of the 40-call batch downloaded WOA18
+  and Argo on the Coordinator's own authorization and used them in the answer).
+- `BENCH_TIMEOUT_SECONDS` supplies OceanX's research budget: after 75% no new Expert assignment
+  starts. This is a run setting that changes Coordinator behavior, not merely an external timeout;
+  disclose it alongside the commit, model, delivery mode and other run settings.
+- Finch-local has no literature-search agent; it is not the full Robin system.
+  Claude Code's search depends on its configured tools. OceanX consults Search Expert on demand
+  for definitions, methods or published mechanisms the data context does not settle. These search
+  capabilities are not identical; report them when comparing methods. Search Expert has one
+  independent slot by default and therefore does not occupy either data-analysis slot.
+- Failure categories describe observed messages, not blame. A read-only refusal may correctly
+  protect another node's evidence, and a timeout may reflect slow computation. Inspect logs before
+  assigning a cause; collection completeness and a successful run do not establish scientific correctness.
 
 ## The process
 
@@ -66,7 +119,11 @@ $EVAL_ROOT/library/L2/     frozen after round 2, same files
 ```
 
 `arm.json` records arm, policy, the version and SHA-256 of the library snapshot, git commit (and whether the
-tree was dirty), OceanX version, package versions and the parallel-Expert limit.
+tree was dirty), OceanX version, package versions and the parallel-Expert limit. It is written when the arm
+folder is first used; `launches.jsonl` beside it has one line per launch (commit, settings, questions).
+
+Launched from a settings file (RUNNING.md), an arm folder is `BENCH_OUTPUT_ROOT/<experiment>/runs/<arm>/`,
+with the same `<question>/attempt-*/` folders inside.
 
 ### What every attempt keeps
 
@@ -138,29 +195,83 @@ Four rules follow:
 - **Large scratch arrays are disposable after validated collection.** In one E10 run the 29 files
   over 10 MB were 5.44 of the 5.4 GB in scratch, and the other 126 files, which include every script
   and the tables the reports cite, were 24 MB. `inventory` reports each attempt's disk use and its
-  scratch share. Once a completed attempt has a final answer and collection has no errors, the collector
-  deletes the files over 10 MB and writes `scratch_cleanup.json`, which lists each file removed. It
-  removes nothing if the final answer or a nested Expert report cites a scratch folder by its absolute
-  path. Reports, saved code, registered outputs, small scratch files and runtime records are not
-  removed. Later inventory records both current scratch and the bytes already released.
+  scratch share. What the collector deletes, and when it deletes nothing, is described below.
+
+### OceanX delivery and collection
+
+If a follow-up attempt leaves its question's nonempty `report.md` unchanged, OceanX
+delivers that report and its original Summary; a short closing reply is added only to
+the Coordinator receipt. The closing reply becomes the report only when no nonempty
+report exists, for the Discussion Partner, or when it contains a nonempty `## Summary`.
+Without closing prose, the receipt explicitly says so and gives the model-call stop reason.
+If an Expert reaches model call 30 without saving a report, analysis tools pause until it writes a
+defensible partial `report.md`; it may then continue analysis and update the report. This is a
+checkpoint, not a lower replacement for the call limit.
+Every Expert is told its call budget in its instructions, and each call after the first ends its last tool
+result with a line such as `[Budget: model call 13 of 40; 20 left for analysis, then 8 only to finish the
+report.]`. The line is added to that request only and is never saved in the conversation, so the cached
+prompt prefix does not change. This applies to the desktop's Experts too.
+
+Every OceanX attempt delivers ordinary images, as the Claude Code and Finch arms do:
+`run_oceanx.py` starts the backend with `OCEANX_FIGURE_DELIVERY=static` and records
+`figure_delivery` in `arm.json`. No prompt, tool description or skill the OceanX models read
+names OceanX's plotting interface. A final figure is an image file (`.png`, `.jpg`, `.jpeg`,
+`.svg`, `.pdf`) that an Expert saves under its node's `outputs/` folder; exploratory plots stay
+in `scratch/`, and a file name starting with `_` or `.` is a draft. The result store lists
+each delivered image as a `file` result (`render_status: "static"`), the Expert receipt lists
+them under `Saved figures (cite these paths):`, and the collector copies them into the
+figure gallery and rewrites the cited absolute paths to links.
+
+The OceanX runner automatically creates a new `runs/OceanX/collected/collection-*`
+folder after the batch. Open its `index.md`, then each attempt's `review.md` for the
+answer, figure gallery, registered result data and links to saved reports/code.
+The collector reads `outputs.json.task_results`; it does not discover results by
+scanning ordinary NetCDF files, run models, rerun analysis, or modify the original answer.
+After a completed attempt has a final answer and collection finishes without errors, the collector
+deletes the files over 10 MB in every node's `scratch/` folder: the intermediate arrays, which were
+99.6% of the 5.4 GB of one E10 run. Scripts, tables and notes under 10 MB stay, because reports cite
+them and a recorded command only calls a script by name. `scratch_cleanup.json` lists every file
+removed with its size, and the counts and bytes released and kept. Reports, code, registered outputs
+and runtime records are never touched. If a final answer or any nested Expert report cites a scratch
+folder by its absolute path, nothing is removed and the reason is recorded. If a removal fails part
+way, the status is `partial` and the list shows what went. The collector now deletes files:
+do not run it on an older run folder whose scratch you still want to inspect. Later inventory still
+reports the released byte count from this record.
+
+`summary.json` and each `collection_manifest.json` distinguish runtime status from
+collection status. `collection_status=complete` means the available answer and
+registered files were collected without errors, **not** scientific correctness or
+verified reproducibility. Missing previews, files, checksum mismatches and invalid
+indexes are reported explicitly. Notebook availability is a separate field.
+
+When saved per-execution notebooks exist, `execution_record.ipynb` groups their
+original cells and outputs by agent. It can include failed attempts and original
+server paths; it is **not** a clean, end-to-end `analysis.ipynb`. No missing cells
+are invented or repaired. Collection is for review, not an additional scientific
+completion step or an automatic increase in benchmark scores.
+
+Existing attempts can be recollected without rerunning them:
+
+```bash
+python benchmarking/server/collect_oceanx.py --run /import/home3/share/oceanx-bench/methods-public-r1/runs/OceanX
+```
+
+Replace `--run` with the saved OceanX method folder to review. Every collection uses
+a new directory and preserves previous attempts and collections. Historical receipt
+formats remain readable only when no current task-result index is present.
 
 ## Running arms
 
-```bash
-python benchmarking/server/run_oceanx.py --queries <suite.jsonl> --output <arm folder> \
-  --arm B                                      # arm B
-  --arm C1 --library $EVAL_ROOT/library/L1     # arm C1
-  --arm C2 --library $EVAL_ROOT/library/L2     # arm C2
-```
+The commands are in [RUNNING.md](RUNNING.md): section 1 for an arm without a library (B), section 4 for an
+arm with one (C1 with L1, C2 with L2). No `--policy` is passed: every arm runs the default, `v2-nested`,
+and `arm.json` records it.
 
-No `--policy` is passed: every arm runs the default, `v2-nested`, and `arm.json` records it.
-
-- One JSONL per repeat with the task order shuffled (`seed = repeat number`). Run the arm processes
-  in parallel on the same JSONL, so time-dependent effects (provider load, web search results) hit all arms
-  equally. With limited memory, run them one after another per repeat and keep the order.
-- Every arm uses the same per-attempt time limit, set when the JSONL is prepared (`--timeout`, three hours
-  by default) and recorded in the pre-registration. A timed-out attempt scores 0, so a limit that is too
-  short penalises the arm that explores more.
+- Each repeat is a results folder of its own (another `BENCH_EXPERIMENT`). Run the arms of a repeat at the
+  same time on the same questions, so time-dependent effects (provider load, web search results) hit all
+  arms equally. With limited memory, run them one after another and keep the order.
+- Every arm uses the same per-attempt time limit (`BENCH_TIMEOUT_SECONDS`, three hours by default),
+  recorded in the pre-registration. A timed-out attempt scores 0, so a limit that is too short penalises
+  the arm that explores more.
 - Use the same commit, policy, `benchmarking/.env` model and literature mode (`search_only`) for every arm. No merges
   or setting changes until the test phase ends.
 - A failed, timed-out or empty attempt scores 0 and is reported separately. Do not re-run a failed
@@ -184,27 +295,59 @@ No `--policy` is passed: every arm runs the default, `v2-nested`, and `arm.json`
 
 ## References and frozen rubrics (phase 0)
 
-The rubric in the repository is a template with status `draft`. Before judging, the evaluator makes a
-frozen copy per task under `$EVAL_ROOT/<experiment>/rubrics/`:
+The rubric in the repository is a template with status `draft`: the expected value and the tolerance of
+every finding and answer-key item, and the expected verdict of every candidate cause, wait to be filled
+(215 places in the 30 rubrics). Before judging, the evaluator computes each of them from the same inputs
+the agents get, fills a copy of the rubric under `$EVAL_ROOT/<experiment>/rubrics/`, and freezes it. The
+rules, the file formats and the order of work are in
+[evaluation/CODEX_REFERENCES.md](evaluation/CODEX_REFERENCES.md). `evaluate.py rubric-check --rubrics
+<folder> --references <folder>` says whether each frozen rubric is ready: every place filled, nothing else
+changed from the repository's rubric, the reference work present and unchanged.
 
-1. Write the reference scripts in `$EVAL_ROOT/<experiment>/references/<task>/`:
-   - paper verification: one calculation per finding, following its `how_to_test`;
-   - open problems: one calculation per answer-key item, following its `procedure`.
+Papers still checked from the abstract only: Q01, Q03 and Q06. Before their rubrics are frozen, confirm
+each finding, the region, the window and the definitions from the paper (the owner provides the PDF) and
+record where in the paper each was confirmed; otherwise the abstract wording stands. Two rubrics name a
+detail to confirm first: the transport section of Q03 and the typhoon's passage dates in Q06. For Q05 and
+Q06, record whether the CMOMS forcing contains the typhoon; if it does not, "not reproduced" is the valid
+reference.
 
-   Run them on the same inputs the agents get, plus the evaluator-only data where the rubric names it.
-2. Fill the frozen copy:
-   - `expected` and the final `tolerance` for every finding and every answer-key item (the suggested
-     tolerances unless the owner changes them);
-   - for disagreement questions, the expected verdict of each candidate cause.
-3. Paper tasks: confirm each finding against the paper text. Q02, Q04, Q05, Q07, Q08 and Q10 were read in
-   full when the catalogue was written. Q01, Q03, Q06 and Q09 were checked from the abstract only: confirm
-   their regions, windows and definitions from the paper (the owner provides the PDF) and record where in
-   the paper each was confirmed. Otherwise the abstract wording in the rubric stands. Two rubrics name a
-   detail to confirm first: the transport section of Q03 and the typhoon's passage dates in Q06.
-4. Set `status: "frozen"`, `frozen.references_sha256` (SHA-256 of the reference outputs), date and name.
-   From then on the frozen rubric is read-only.
+Reference outputs of the CMOMS questions contain numbers derived from CMOMS: they stay in `$EVAL_ROOT` and
+are never committed.
 
-Reference outputs contain numbers derived from CMOMS: they stay in `$EVAL_ROOT` and are never committed.
+## Before the test phase
+
+For a comparison that will be reported:
+
+- **Environment.** `check_setup.py` and `python -m pytest benchmarking/tests` pass on the server, and
+  `test_finch_upstream.py` passes in the Finch environment. The working tree is clean; every arm uses that
+  commit. No code or setting changes while a method is running.
+- **Smoke.** Each method runs one evolution question in an experiment of its own. Check the reports, the
+  figures, the token and time records and the conversations (`evaluate.py inventory`). Smoke records do
+  not enter the lesson review.
+- **References.** Every rubric of the questions to be run is frozen (phase 0).
+- **Noise pilot.** One arm, three questions (a paper task, an open problem with an answer key, a
+  disagreement question), two repeats each, judged blind. It sets the repeats of the test phase: one if the
+  median absolute difference between the repeats is at most 5 points, two if at most 10, three otherwise.
+- **Judge calibration.** Three attempts of the pilot are judged twice, in separate sessions, without
+  reading the first scores. No criterion may differ by more than one level, and the owner accepts the
+  three pairs.
+- **Learning pilot,** before the evolution rounds: three questions of set A (E01, E05, E08), one run each,
+  labelled and reviewed in a folder of its own. Go on only if the runs finish in time, the Coordinator
+  opened its planning skill in at least two of them, the owner finds at least one lesson that is a
+  research-tree or analysis decision holding for all three and not already in its skill, and every learned
+  tool passed its test in the sandbox. Nothing of the pilot is frozen.
+- **Pre-registration.** Copy `experiments/preregistration.example.yaml` (for the comparison of methods,
+  `methods.example.yaml`), fill in the commit, the model, the judge, the repeats, the time limit and the
+  library paths, and freeze it with `evaluate.py freeze --prereg <file>`. No frozen file changes after
+  that, and no rule changes after results are seen.
+- **Partial runs** are allowed. Say which questions were left out and why, and do not call the result the
+  full suite.
+- **While the runs go.** Never prune an attempt folder. If two or more attempts of one arm fail for the
+  same infrastructure reason, stop and report. Ask the owner when the cost passes the estimate by half.
+
+Claude Code's tools include host Bash, not a filesystem sandbox; Finch has a network-disabled calculation
+sandbox and no literature-search agent. What an agent sees can leave the server through the model provider
+in every method: use an approved endpoint for confidential CMOMS data.
 
 ## Judging (phase 4)
 
@@ -235,6 +378,11 @@ problem) and by data access (private CMOMS, public). Read these rows before conc
 - a policy can help open problems and do nothing for paper verification;
 - lessons learned on public reanalyses may help public questions more than the unseen CMOMS questions.
 
+The owner receives `report.md`, `process.md` and each repeat's `inventory.md`; for each comparison the
+score result and the process result side by side, with the spread between repeats of the control arm; the
+five largest per-task differences in each direction, each with a line on why; the failures by arm; and the
+total cost. Proposals for a next experiment go in a section of their own.
+
 The rubric total is the main result. `evaluation/ASPECT_SCORES.md` divides it into six indicators for
 open problems and six others for paper verification (each made of the judged criteria, counts the judge
 records, and for robustness two run measures), for one six-axis chart per task type.
@@ -245,9 +393,8 @@ The score says how good the answer is. These measures say how the research tree 
 from each attempt's tree store, after the model judge has labelled the test trees:
 
 ```bash
-for tree in $(find $RUNS_ROOT/<experiment>/test -name research_tree.sqlite3); do
-  python benchmarking/server/research_cli.py judge-labels --tree "$tree"
-done
+find "$RUNS_ROOT/<experiment>/test" -name research_tree.sqlite3 \
+  -exec python benchmarking/server/research_cli.py judge-labels --tree {} \;
 python benchmarking/evaluation/evaluate.py process --runs <every arm folder of the test phase> \
   --prereg $EVAL_ROOT/<experiment>/preregistration.yaml --out $EVAL_ROOT/<experiment>/report
 ```
@@ -383,6 +530,7 @@ not help".
 
 Both rounds use one evolution project, `$RUNS_ROOT/<experiment>/evolution`, so the second round sees the
 first round's records, lessons and tools. The meta-agent reviews once per round, after the round's runs.
+The commands, ready to copy, are in [RUNNING.md](RUNNING.md), section 3.
 
 ### Round 1: set A yields L1
 

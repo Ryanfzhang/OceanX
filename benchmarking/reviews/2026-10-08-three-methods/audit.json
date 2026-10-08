@@ -1,0 +1,22 @@
+{
+  "generated_at_jst": "2026-10-08T16:20:37+09:00",
+  "queries": 17,
+  "attempts": 51,
+  "original_figure_count": 471,
+  "figure_bytes": 147755539,
+  "evidence_sha256": "372859e86dc2b3cb603672fdbdaa13a7038a8a4daf3ab13bc66b894c34b3bb8e",
+  "score_sha256": "37c5245e825b869de809a3685282ecc3ca949219ff5f4a3384d45700f7b9f7d4",
+  "files": {
+    "review-en.html": "8b63c790363cdc032f27dea1dd6e1c0e7ea95298d44ab230b4682e2d6014ee6e",
+    "review-zh.html": "fd877ff9201530697176820f178d621a5526ea741669ddc5d667c003678fb3ce"
+  },
+  "means": {
+    "OceanX": 73.97058823529412,
+    "Claude": 61.3235294117647,
+    "Finch": 35.80882352941177
+  },
+  "unchanged_assessments_verified": 45,
+  "new_assessments": 6,
+  "reused_figures": 425,
+  "new_figures": 46
+}

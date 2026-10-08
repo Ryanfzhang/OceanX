@@ -127,7 +127,7 @@ Each paper was chosen so that its study period lies inside the supplied data.
 | Q10 | Oh et al. (2024), Late-arriving 2023 summer marine heatwave in the East China Sea, npj Climate and Atmospheric Science 7. doi:10.1038/s41612-024-00846-4 | 2023 event, 1982-2011 baseline, 1993-2011 budget reference; OISST, GLORYS12, ERA5 | the same three products, same periods |
 
 How far each paper was checked:
-- **Read in full (six):** Q02, Q04, Q05, Q07, Q08 and Q10. The full text supplied each paper's own
+- **Read in full (seven):** Q02, Q04, Q05, Q07, Q08, Q09 and Q10. The full text supplied each paper's own
   definitions, now in its rubric.
   - Q07: the water-mass criteria, the mixed-layer criteria, the sea-surface-height classes and the
     potential vorticity. That vorticity is the Coriolis parameter divided by the thickness below the 6 C
@@ -135,10 +135,15 @@ How far each paper was checked:
   - Q08: the eddy detached on 15 April 2016; anomalies are taken against a mean profile of Gulf water
     outside Loop Current eddies in April-November 2016; the geostrophic velocity is referenced to the
     glider's depth-averaged velocity, which the agents do not have.
-- **Abstract only (four):** Q01, Q03, Q06 and Q09. The publisher's site refuses automated reading. Open
-  repository copies exist for Q01 (Woods Hole) and Q09 (HAL), but both repositories also answer automated
-  requests with a bot check; none was found for Q03 and Q06. Their regions, windows and definitions must be
-  confirmed from the paper before their rubrics are frozen.
+  - Q09 (read on 2026-10-08 from the PDF the owner supplied): the gliders followed the eddy from 6 August
+    2016 to 25 July 2017, four months after it detached; the core is the 30 km around its centre. The
+    erosion, its timing and the mixed-layer deepening are glider observations. The salt-budget findings
+    (3 to 5) come from 16 eddies of a 1993-2012 regional simulation, not from the observed eddy, and the
+    gliders still found a salinity maximum of about 36.7 at the end.
+- **Abstract only (three):** Q01, Q03 and Q06. The publisher's site refuses automated reading. An open
+  repository copy exists for Q01 (Woods Hole), but the repository also answers automated requests with a
+  bot check; none was found for Q03 and Q06. Their regions, windows and definitions must be confirmed from
+  the paper before their rubrics are frozen.
 
 What still differs from the papers:
 - **The product.** Nine papers used observations or another model. Here CMOMS or the GLORYS12 reanalysis

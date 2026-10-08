@@ -1,0 +1,2520 @@
+{
+ "status": "provisional_not_official",
+ "source": {
+  "scores": "reviews/2026-10-08-three-methods-r2/scores.json",
+  "first_attempts": "reviews/2026-10-06-three-methods/aspect-trial/results.json"
+ },
+ "parts": {
+  "judged": "all 51 attempts",
+  "counted": "not included: recorded for 40 of 51 attempts only",
+  "run": "delivery of each question's first attempt; repeated failures are not part of the indicator"
+ },
+ "new_attempts_without_counts": [
+  "Q08 Finch",
+  "Q09 Finch",
+  "Q15 Claude",
+  "Q15 Finch",
+  "Q20 Finch",
+  "Q23 Finch",
+  "Q24 Finch",
+  "Q25 Claude",
+  "Q25 OceanX",
+  "Q27 Finch",
+  "Q27 OceanX"
+ ],
+ "attempts": [
+  {
+   "query": "Q07",
+   "method": "OceanX",
+   "type": "paper_reproduction",
+   "score": 66.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q07/attempt-1791162432223096723-b06b4c9a",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Right verdicts": {
+     "judged": 32.142857142857146,
+     "run": null,
+     "combined": 32.142857142857146
+    },
+    "Method fidelity": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Differences explained": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q07",
+   "method": "Claude",
+   "type": "paper_reproduction",
+   "score": 61.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q07/attempt-1791013385604382758-7c6cde23",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 92.85714285714286,
+     "run": null,
+     "combined": 92.85714285714286
+    },
+    "Right verdicts": {
+     "judged": 32.142857142857146,
+     "run": null,
+     "combined": 32.142857142857146
+    },
+    "Method fidelity": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Differences explained": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q07",
+   "method": "Finch",
+   "type": "paper_reproduction",
+   "score": 53.75,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q07/attempt-1791039009406786268-62ac0177",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 92.85714285714286,
+     "run": null,
+     "combined": 92.85714285714286
+    },
+    "Right verdicts": {
+     "judged": 10.714285714285714,
+     "run": null,
+     "combined": 10.714285714285714
+    },
+    "Method fidelity": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Differences explained": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q08",
+   "method": "OceanX",
+   "type": "paper_reproduction",
+   "score": 72.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q08/attempt-1791166130411775171-53614198",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Right verdicts": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Method fidelity": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Differences explained": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q08",
+   "method": "Claude",
+   "type": "paper_reproduction",
+   "score": 61.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q08/attempt-1791015137248296820-8c15fbd2",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 92.85714285714286,
+     "run": null,
+     "combined": 92.85714285714286
+    },
+    "Right verdicts": {
+     "judged": 32.142857142857146,
+     "run": null,
+     "combined": 32.142857142857146
+    },
+    "Method fidelity": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Differences explained": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q08",
+   "method": "Finch",
+   "type": "paper_reproduction",
+   "score": 38.75,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q08/attempt-1791359282583742377-792ad431",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "failed",
+    "delivered": false,
+    "why_not": "failed at the step limit"
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 82.14285714285714,
+     "run": null,
+     "combined": 82.14285714285714
+    },
+    "Right verdicts": {
+     "judged": 0.0,
+     "run": null,
+     "combined": 0.0
+    },
+    "Method fidelity": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Differences explained": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Traceability": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 0.0,
+     "combined": 0.0
+    }
+   }
+  },
+  {
+   "query": "Q09",
+   "method": "OceanX",
+   "type": "paper_reproduction",
+   "score": 62.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q09/attempt-1791168645157152036-8a739921",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 92.85714285714286,
+     "run": null,
+     "combined": 92.85714285714286
+    },
+    "Right verdicts": {
+     "judged": 35.714285714285715,
+     "run": null,
+     "combined": 35.714285714285715
+    },
+    "Method fidelity": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Differences explained": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q09",
+   "method": "Claude",
+   "type": "paper_reproduction",
+   "score": 65.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q09/attempt-1791016673707288515-8ff28d11",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 92.85714285714286,
+     "run": null,
+     "combined": 92.85714285714286
+    },
+    "Right verdicts": {
+     "judged": 35.714285714285715,
+     "run": null,
+     "combined": 35.714285714285715
+    },
+    "Method fidelity": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Differences explained": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q09",
+   "method": "Finch",
+   "type": "paper_reproduction",
+   "score": 45.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q09/attempt-1791446824404501085-a1dc6479",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": false,
+    "why_not": "completed without any executed analysis"
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 85.71428571428571,
+     "run": null,
+     "combined": 85.71428571428571
+    },
+    "Right verdicts": {
+     "judged": 0.0,
+     "run": null,
+     "combined": 0.0
+    },
+    "Method fidelity": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Differences explained": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Traceability": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 0.0,
+     "combined": 0.0
+    }
+   }
+  },
+  {
+   "query": "Q10",
+   "method": "OceanX",
+   "type": "paper_reproduction",
+   "score": 76.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q10/attempt-1791173261855121176-bc8df2bd",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Right verdicts": {
+     "judged": 53.57142857142857,
+     "run": null,
+     "combined": 53.57142857142857
+    },
+    "Method fidelity": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Differences explained": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q10",
+   "method": "Claude",
+   "type": "paper_reproduction",
+   "score": 71.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q10/attempt-1791017523323383370-84aeee87",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Right verdicts": {
+     "judged": 39.285714285714285,
+     "run": null,
+     "combined": 39.285714285714285
+    },
+    "Method fidelity": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Differences explained": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q10",
+   "method": "Finch",
+   "type": "paper_reproduction",
+   "score": 61.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q10/attempt-1791043474023859519-5e1e9296",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Finding tests": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Right verdicts": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Method fidelity": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Differences explained": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   }
+  },
+  {
+   "query": "Q15",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 77.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q15/attempt-1791175811906052650-14611304",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q15",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 53.75,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q15/attempt-1791358883353071305-73374bce",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "needs_interaction",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  },
+  {
+   "query": "Q15",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 52.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q15/attempt-1791447436778114869-85a02ff2",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": false,
+    "why_not": "completed without any executed analysis"
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 0.0,
+     "combined": 37.5
+    },
+    "Rigor": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    }
+   }
+  },
+  {
+   "query": "Q18",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 72.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q18/attempt-1791178941549566813-7ac876c9",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q18",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 63.75,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q18/attempt-1791020086536666401-1610b18b",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  },
+  {
+   "query": "Q18",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 45.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q18/attempt-1791047544313494804-d8dce19f",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    }
+   }
+  },
+  {
+   "query": "Q19",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 72.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q19/attempt-1791182250628221557-71d7d90e",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q19",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 63.75,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q19/attempt-1791021216874620210-cfa704d1",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  },
+  {
+   "query": "Q19",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 32.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q19/attempt-1791048123264843509-b7dfd447",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Robustness": {
+     "judged": 25.0,
+     "run": 100.0,
+     "combined": 43.75
+    },
+    "Rigor": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    }
+   }
+  },
+  {
+   "query": "Q20",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 77.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q20/attempt-1791186095912809286-48ef6d53",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q20",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 66.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q20/attempt-1791023145189378219-4bbd0a13",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q20",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 41.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q20/attempt-1791359829091796667-4ae8475c",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "failed",
+    "delivered": false,
+    "why_not": "failed at the step limit"
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 25.0,
+     "run": 0.0,
+     "combined": 18.75
+    },
+    "Rigor": {
+     "judged": 37.5,
+     "run": null,
+     "combined": 37.5
+    }
+   }
+  },
+  {
+   "query": "Q21",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 75.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q21/attempt-1791188969502813757-087e72ab",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  },
+  {
+   "query": "Q21",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 62.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q21/attempt-1791024103151836692-744b4c52",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q21",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 37.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q21/attempt-1791051165091619626-ddf5081b",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Robustness": {
+     "judged": 25.0,
+     "run": 100.0,
+     "combined": 43.75
+    },
+    "Rigor": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    }
+   }
+  },
+  {
+   "query": "Q23",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 70.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q23/attempt-1791193824248841969-7237d69e",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  },
+  {
+   "query": "Q23",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 70.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q23/attempt-1791027182545678462-62a0020f",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q23",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 52.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q23/attempt-1791360208412292405-24f1daab",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "timed_out",
+    "delivered": false,
+    "why_not": "timed out"
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 0.0,
+     "combined": 37.5
+    },
+    "Rigor": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    }
+   }
+  },
+  {
+   "query": "Q24",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 75.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q24/attempt-1791198594223512338-e877be18",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  },
+  {
+   "query": "Q24",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 61.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q24/attempt-1791028686949756368-8d457045",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q24",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 40.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q24/attempt-1791448147293852286-5c26f7fb",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": false,
+    "why_not": "completed without any executed analysis"
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 0.0,
+     "combined": 37.5
+    },
+    "Rigor": {
+     "judged": 37.5,
+     "run": null,
+     "combined": 37.5
+    }
+   }
+  },
+  {
+   "query": "Q25",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 77.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q25/attempt-1791358814469741893-fb539674",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q25",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 63.75,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q25/attempt-1791446733008756680-8996d214",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": false,
+    "why_not": "completed, but the final message says preprocessing is still running"
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 0.0,
+     "combined": 37.5
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  },
+  {
+   "query": "Q25",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 37.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q25/attempt-1791053319449187380-15ae9c6c",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Robustness": {
+     "judged": 25.0,
+     "run": 100.0,
+     "combined": 43.75
+    },
+    "Rigor": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    }
+   }
+  },
+  {
+   "query": "Q26",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 77.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q26/attempt-1791210541206451339-8c57b6ec",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q26",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 71.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q26/attempt-1791031338378750531-e3ff8c0e",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q26",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 60.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q26/attempt-1791056214706821806-23a530ae",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  },
+  {
+   "query": "Q27",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 77.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q27/attempt-1791363429637398289-cbd41b1d",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "failed",
+    "delivered": false,
+    "why_not": "failed"
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 0.0,
+     "combined": 56.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q27",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 75.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q27/attempt-1791034357346804719-bcc74491",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q27",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 52.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q27/attempt-1791448495438296453-2fcbf1da",
+   "same_attempt_as_first_review": false,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": false,
+    "why_not": "completed without any executed analysis"
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 0.0,
+     "combined": 37.5
+    },
+    "Rigor": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    }
+   }
+  },
+  {
+   "query": "Q28",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 77.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q28/attempt-1791218571997732545-f771c84e",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q28",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 66.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q28/attempt-1791036652858713518-db9cf485",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q28",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 47.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q28/attempt-1791059206326961336-8d41d437",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    }
+   }
+  },
+  {
+   "query": "Q29",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 72.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q29/attempt-1791228294381909006-458b65c8",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q29",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 66.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q29/attempt-1791038988404251073-764fb7d9",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q29",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 41.25,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q29/attempt-1791061730192482120-26d6c716",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 25.0,
+     "run": 100.0,
+     "combined": 43.75
+    },
+    "Rigor": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    }
+   }
+  },
+  {
+   "query": "Q30",
+   "method": "OceanX",
+   "type": "open_problem",
+   "score": 77.5,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q30/attempt-1791232367930798502-30d5182d",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 100.0,
+     "combined": 81.25
+    },
+    "Rigor": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    }
+   }
+  },
+  {
+   "query": "Q30",
+   "method": "Claude",
+   "type": "open_problem",
+   "score": 63.75,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q30/attempt-1791041505574655570-a8da36bd",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Depth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  },
+  {
+   "query": "Q30",
+   "method": "Finch",
+   "type": "open_problem",
+   "score": 50.0,
+   "attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q30/attempt-1791062314768934150-519eb5f4",
+   "same_attempt_as_first_review": true,
+   "first_attempt": {
+    "status": "completed",
+    "delivered": true,
+    "why_not": null
+   },
+   "indicators": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Depth": {
+     "judged": 25.0,
+     "run": null,
+     "combined": 25.0
+    },
+    "Breadth": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Robustness": {
+     "judged": 50.0,
+     "run": 100.0,
+     "combined": 62.5
+    },
+    "Rigor": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    }
+   }
+  }
+ ],
+ "summary": {
+  "open_problem": {
+   "OceanX": {
+    "Framing": {
+     "judged": 100.0,
+     "run": null,
+     "combined": 100.0
+    },
+    "Correctness": {
+     "judged": 73.07692307692308,
+     "run": null,
+     "combined": 73.07692307692308
+    },
+    "Depth": {
+     "judged": 69.23076923076923,
+     "run": null,
+     "combined": 69.23076923076923
+    },
+    "Breadth": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": 75.0,
+     "run": 92.3076923076923,
+     "combined": 79.32692307692308
+    },
+    "Rigor": {
+     "judged": 72.11538461538461,
+     "run": null,
+     "combined": 72.11538461538461
+    }
+   },
+   "Claude": {
+    "Framing": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Correctness": {
+     "judged": 71.15384615384616,
+     "run": null,
+     "combined": 71.15384615384616
+    },
+    "Depth": {
+     "judged": 51.92307692307692,
+     "run": null,
+     "combined": 51.92307692307692
+    },
+    "Breadth": {
+     "judged": 69.23076923076923,
+     "run": null,
+     "combined": 69.23076923076923
+    },
+    "Robustness": {
+     "judged": 57.69230769230769,
+     "run": 92.3076923076923,
+     "combined": 66.34615384615384
+    },
+    "Rigor": {
+     "judged": 70.1923076923077,
+     "run": null,
+     "combined": 70.1923076923077
+    }
+   },
+   "Finch": {
+    "Framing": {
+     "judged": 65.38461538461539,
+     "run": null,
+     "combined": 65.38461538461539
+    },
+    "Correctness": {
+     "judged": 51.92307692307692,
+     "run": null,
+     "combined": 51.92307692307692
+    },
+    "Depth": {
+     "judged": 32.69230769230769,
+     "run": null,
+     "combined": 32.69230769230769
+    },
+    "Breadth": {
+     "judged": 44.23076923076923,
+     "run": null,
+     "combined": 44.23076923076923
+    },
+    "Robustness": {
+     "judged": 40.38461538461539,
+     "run": 61.53846153846154,
+     "combined": 45.67307692307692
+    },
+    "Rigor": {
+     "judged": 46.15384615384615,
+     "run": null,
+     "combined": 46.15384615384615
+    }
+   }
+  },
+  "paper_reproduction": {
+   "OceanX": {
+    "Finding tests": {
+     "judged": 98.21428571428572,
+     "run": null,
+     "combined": 98.21428571428572
+    },
+    "Right verdicts": {
+     "judged": 42.85714285714286,
+     "run": null,
+     "combined": 42.85714285714286
+    },
+    "Method fidelity": {
+     "judged": 68.75,
+     "run": null,
+     "combined": 68.75
+    },
+    "Differences explained": {
+     "judged": 56.25,
+     "run": null,
+     "combined": 56.25
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   },
+   "Claude": {
+    "Finding tests": {
+     "judged": 94.64285714285714,
+     "run": null,
+     "combined": 94.64285714285714
+    },
+    "Right verdicts": {
+     "judged": 34.82142857142857,
+     "run": null,
+     "combined": 34.82142857142857
+    },
+    "Method fidelity": {
+     "judged": 62.5,
+     "run": null,
+     "combined": 62.5
+    },
+    "Differences explained": {
+     "judged": 56.25,
+     "run": null,
+     "combined": 56.25
+    },
+    "Traceability": {
+     "judged": 75.0,
+     "run": null,
+     "combined": 75.0
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 100.0,
+     "combined": 100.0
+    }
+   },
+   "Finch": {
+    "Finding tests": {
+     "judged": 90.17857142857143,
+     "run": null,
+     "combined": 90.17857142857143
+    },
+    "Right verdicts": {
+     "judged": 8.928571428571429,
+     "run": null,
+     "combined": 8.928571428571429
+    },
+    "Method fidelity": {
+     "judged": 50.0,
+     "run": null,
+     "combined": 50.0
+    },
+    "Differences explained": {
+     "judged": 43.75,
+     "run": null,
+     "combined": 43.75
+    },
+    "Traceability": {
+     "judged": 56.25,
+     "run": null,
+     "combined": 56.25
+    },
+    "Robustness": {
+     "judged": null,
+     "run": 50.0,
+     "combined": 50.0
+    }
+   }
+  }
+ }
+}

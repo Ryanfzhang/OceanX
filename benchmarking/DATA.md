@@ -243,6 +243,16 @@ and mixing coefficients. The extra-variable request is limited to these four fie
 
 ## Commands (repository root, `oceanx-bench` environment)
 
+`download/data_manifest.json` is the single machine-readable list of the data. `download_all.py` runs it in
+four phases on the server:
+
+| Phase | What | Network |
+|---|---|---|
+| `public` | NOAA OISST (NCEI originals, cropped) and MODIS chlorophyll (ERDDAP) | anonymous HTTPS |
+| `services` | Copernicus Marine (GLORYS12 physics, the global biogeochemical reanalysis) and ERA5 (Google ARCO mirror) | CMEMS login |
+| `private` | Checks the owner-staged CMOMS core folders and the requested production and carbon diagnostics | none |
+| `verify` | Re-checks every downloaded file's request identity and SHA-256 | none |
+
 ```bash
 python benchmarking/download/download_all.py public   --output "$DATA_ROOT"            # preview, no network
 python -u benchmarking/download/download_all.py public   --output "$DATA_ROOT" --execute
@@ -268,7 +278,21 @@ Without `--execute` the same command prints the fixed scope of those groups and 
 - **The private phase:** checks that every variable and year folder holds a readable NetCDF file naming that
   variable. C_CORE, C_PRODUCTION and C_CARBON must be staged for the tasks that bind them.
 - **The coverage report:** `$DATA_ROOT/_download_all/coverage.json` lists, per task, missing agent inputs
-  and missing answer-key data.
+  and missing answer-key data. Beside it are `data_bindings.json` (agent folders per task) and, per group,
+  `*.report.json` and `*.plan.json`.
+- **Layout:** one variable per file, `<data type>/<variable>/<year>/...`; native time sampling and values
+  are kept.
+- **Re-runs:** verified files are skipped (they are still read, to check their SHA-256); corrupt or foreign
+  files are never overwritten; a failed group makes the phase return non-zero. An intact saved plan for
+  the same group is reused, so a complete group is checked without contacting the provider.
+- **Gaps:** a provider missing a requested month or day stops the group. Nothing is gap-filled.
+- **Locks:** the same phase twice, or anything during `verify`, is refused.
+- **Pinned products:** GLORYS12 `202311` and the biogeochemical reanalysis `202406`; a retired version
+  fails rather than switching silently. ERA5 is read hour by hour with resumable checkpoints
+  (`*.part.google`; do not delete them). Each OISST day is fetched whole, cropped, and the temporary copy
+  deleted.
+- **Code:** `download_data.py` (ERDDAP and the shared archive helpers), `download_services.py` (CMEMS and
+  ERA5), `era5_google.py`, `ncei_oisst.py`.
 
 Privacy: CMOMS data, and everything computed from them, stay on the server. That covers references,
 answer keys, figures and scores. They are never committed and never sent to an outside service.

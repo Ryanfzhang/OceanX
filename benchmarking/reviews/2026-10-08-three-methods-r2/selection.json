@@ -1,0 +1,572 @@
+{
+  "rule": "latest terminal attempt, never best score",
+  "changes": [
+    {
+      "query": "Q25",
+      "method": "Claude",
+      "old_attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q25/attempt-1791030465707353905-d64a2cfb",
+      "new_attempt": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q25/attempt-1791446733008756680-8996d214",
+      "old_status": "completed",
+      "new_status": "completed",
+      "old_answer_sha256": "a590223f66ebdca96a80d66fe26aa0afa7f399249e54cbe20cd22c07ec3ff5b4",
+      "new_answer_sha256": "29c25316ce1936a53e98fcebc846d735583c07e474c3383168d9e4a0c770af04"
+    },
+    {
+      "query": "Q09",
+      "method": "Finch",
+      "old_attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q09/attempt-1791043371611451418-8bdb6c6c",
+      "new_attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q09/attempt-1791446824404501085-a1dc6479",
+      "old_status": "completed",
+      "new_status": "completed",
+      "old_answer_sha256": "ae9b475a6b08a507f347fe6a67442b15a6a60d41bcff07cd59d0ab888b786fd6",
+      "new_answer_sha256": "b147ff7f63e6d2ed9ccc183b3853e525c63fd4d4056ed54998c14affc33a7ed1"
+    },
+    {
+      "query": "Q15",
+      "method": "Finch",
+      "old_attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q15/attempt-1791047423982408009-c563dfb3",
+      "new_attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q15/attempt-1791447436778114869-85a02ff2",
+      "old_status": "completed",
+      "new_status": "completed",
+      "old_answer_sha256": "6cc0800887151296cf48f8737aa967d4e73bcdfaf647a924fda44eb58fe20506",
+      "new_answer_sha256": "eb2c1827950b84c7182ae89f89e68429ef5b3299649cc2ae4338a8fac309de48"
+    },
+    {
+      "query": "Q24",
+      "method": "Finch",
+      "old_attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q24/attempt-1791053182604558313-33591ea6",
+      "new_attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q24/attempt-1791448147293852286-5c26f7fb",
+      "old_status": "completed",
+      "new_status": "completed",
+      "old_answer_sha256": "42d99aa1c35f58d9e4ff35d6687719017aee0a8b3b05dd73b5f3c679d7d0387b",
+      "new_answer_sha256": "be556acc927fdd99988f853f9fe740647f9681634ebd3568d4bba75b542decda"
+    },
+    {
+      "query": "Q27",
+      "method": "Finch",
+      "old_attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q27/attempt-1791059152462220743-93cbc9dc",
+      "new_attempt": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q27/attempt-1791448495438296453-2fcbf1da",
+      "old_status": "completed",
+      "new_status": "completed",
+      "old_answer_sha256": "ece3674ece169e9df796c7cae7deafa1d746e45f9a4054872e1efd98f963825e",
+      "new_answer_sha256": "97ee0545213acbe8de4829dd4be69eec0230b2efc3d4b93046602931c3127cb6"
+    }
+  ],
+  "inventory": [
+    {
+      "query": "Q07",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q07/attempt-1791162432223096723-b06b4c9a",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q07/attempt-1791162432223096723-b06b4c9a"
+      ],
+      "status": "completed",
+      "answer_sha256": "5d91949645182bd6e760461101853f877bed683743a5aee78ad66ed98c83d83b"
+    },
+    {
+      "query": "Q08",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q08/attempt-1791166130411775171-53614198",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q08/attempt-1791166130411775171-53614198"
+      ],
+      "status": "completed",
+      "answer_sha256": "c18b522a43d7c76ceba378c64d956c9a57467abe755fcf311996e13c58360fa5"
+    },
+    {
+      "query": "Q09",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q09/attempt-1791168645157152036-8a739921",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q09/attempt-1791168645157152036-8a739921"
+      ],
+      "status": "completed",
+      "answer_sha256": "18b444e5c9ef78b7a584af1e7654cf037a58b1cddfdd38a3d9d989984eaa0da2"
+    },
+    {
+      "query": "Q10",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q10/attempt-1791173261855121176-bc8df2bd",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q10/attempt-1791173261855121176-bc8df2bd"
+      ],
+      "status": "completed",
+      "answer_sha256": "d062e85073f3fbe597b7a6d91a8917891bf866688faebf12efb47bc88a78ff07"
+    },
+    {
+      "query": "Q15",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q15/attempt-1791175811906052650-14611304",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q15/attempt-1791175811906052650-14611304"
+      ],
+      "status": "completed",
+      "answer_sha256": "94a3e804624aaf101a9c670d48a747e0e3478247453c7e940b8a8f9e9c8e3e44"
+    },
+    {
+      "query": "Q18",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q18/attempt-1791178941549566813-7ac876c9",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q18/attempt-1791178941549566813-7ac876c9"
+      ],
+      "status": "completed",
+      "answer_sha256": "df22a06f5da56a092ff136f2c21d0b8061a4e214430c3b35c1c77ee40c2ed618"
+    },
+    {
+      "query": "Q19",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q19/attempt-1791182250628221557-71d7d90e",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q19/attempt-1791182250628221557-71d7d90e"
+      ],
+      "status": "completed",
+      "answer_sha256": "ecf0ad8aecfe1d3681eea588083d3342e364a2ca31953f0775e3e8f96d45124b"
+    },
+    {
+      "query": "Q20",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q20/attempt-1791186095912809286-48ef6d53",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q20/attempt-1791186095912809286-48ef6d53"
+      ],
+      "status": "completed",
+      "answer_sha256": "330357b4f0462890def069b16fb45ff19e9aeae8ae32cd9b4be8f1924fd69937"
+    },
+    {
+      "query": "Q21",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q21/attempt-1791188969502813757-087e72ab",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q21/attempt-1791188969502813757-087e72ab"
+      ],
+      "status": "completed",
+      "answer_sha256": "9ccf64cc1f4366468ff451c5ec4d05333e3e819ba8f821b0a65bdf86dfa4c3d1"
+    },
+    {
+      "query": "Q23",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q23/attempt-1791193824248841969-7237d69e",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q23/attempt-1791193824248841969-7237d69e"
+      ],
+      "status": "completed",
+      "answer_sha256": "cd3bceb922faa38b472317de16066af21a9f4dea2d02319fe81b7adc69a89732"
+    },
+    {
+      "query": "Q24",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q24/attempt-1791198594223512338-e877be18",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q24/attempt-1791198594223512338-e877be18"
+      ],
+      "status": "completed",
+      "answer_sha256": "3c7537e9522e24b41d54d3e4a3cdc439bff8603fcacb62d7aca5271b0a88d8bd"
+    },
+    {
+      "query": "Q25",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q25/attempt-1791358814469741893-fb539674",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q25/attempt-1791358814469741893-fb539674"
+      ],
+      "status": "completed",
+      "answer_sha256": "57d742b443e92170e9d8f8bd424769dcb69cd168b6e75d4b501f47e0757e775a"
+    },
+    {
+      "query": "Q26",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q26/attempt-1791210541206451339-8c57b6ec",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q26/attempt-1791210541206451339-8c57b6ec"
+      ],
+      "status": "completed",
+      "answer_sha256": "a0cb89c418b8a3ae0e16cbd65907f8f31313d5a6c4704c03e51c9011a5e6ecdc"
+    },
+    {
+      "query": "Q27",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q27/attempt-1791363429637398289-cbd41b1d",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q27/attempt-1791215190508783312-f92cfcb1",
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q27/attempt-1791363429637398289-cbd41b1d"
+      ],
+      "status": "completed",
+      "answer_sha256": "2b74127464f73cf5df13bce9abbfc9e0d7e759dbbfe161ab8ca07b613b2affe3"
+    },
+    {
+      "query": "Q28",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q28/attempt-1791218571997732545-f771c84e",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q28/attempt-1791218571997732545-f771c84e"
+      ],
+      "status": "completed",
+      "answer_sha256": "6f7f7d0eb6e04f7979666a95bdacc034b40b62163fa5d61cbb1b5eb36527eca4"
+    },
+    {
+      "query": "Q29",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q29/attempt-1791228294381909006-458b65c8",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q29/attempt-1791228294381909006-458b65c8"
+      ],
+      "status": "completed",
+      "answer_sha256": "1db75bc824e178dd0e8b589ab2a7e7a5f826abc8221bbb587a61542761ec60d1"
+    },
+    {
+      "query": "Q30",
+      "method": "OceanX",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q30/attempt-1791232367930798502-30d5182d",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_oceanx_test/runs/OceanX/Q30/attempt-1791232367930798502-30d5182d"
+      ],
+      "status": "completed",
+      "answer_sha256": "97138a8fcd962db567f15c25ffdb8d6f1da361bf16cee5573dd8e51a65049c5a"
+    },
+    {
+      "query": "Q07",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q07/attempt-1791013385604382758-7c6cde23",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q07/attempt-1791013385604382758-7c6cde23"
+      ],
+      "status": "completed",
+      "answer_sha256": "b0cd7fb9c0f27513d0376908a38ab252404c0471bd09fef0c00fc698546981e4"
+    },
+    {
+      "query": "Q08",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q08/attempt-1791015137248296820-8c15fbd2",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q08/attempt-1791015137248296820-8c15fbd2"
+      ],
+      "status": "completed",
+      "answer_sha256": "7c78325213f19bb956f55104693d45030821981eae8b89f663be67958477575d"
+    },
+    {
+      "query": "Q09",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q09/attempt-1791016673707288515-8ff28d11",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q09/attempt-1791016673707288515-8ff28d11"
+      ],
+      "status": "completed",
+      "answer_sha256": "b88b7d0e5c9bd2aac3474b56ca4f30cefe401195789f6378cf3686b3dc6999d9"
+    },
+    {
+      "query": "Q10",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q10/attempt-1791017523323383370-84aeee87",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q10/attempt-1791017523323383370-84aeee87"
+      ],
+      "status": "completed",
+      "answer_sha256": "5eeca9d5c1a3b49cc58c72c2a734a0ee927d179a15594d50890eeb6ca004d00b"
+    },
+    {
+      "query": "Q15",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q15/attempt-1791358883353071305-73374bce",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q15/attempt-1791018685438513780-0927bcda",
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q15/attempt-1791358883353071305-73374bce"
+      ],
+      "status": "completed",
+      "answer_sha256": "e1a9cbc1cec293be1170f602667076f896763245726101127800901eeca7b5e3"
+    },
+    {
+      "query": "Q18",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q18/attempt-1791020086536666401-1610b18b",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q18/attempt-1791020086536666401-1610b18b"
+      ],
+      "status": "completed",
+      "answer_sha256": "56a61fa27bbd27f23705a6045bb6b7da3093986a1f4516f8922c7876c1b9c2ae"
+    },
+    {
+      "query": "Q19",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q19/attempt-1791021216874620210-cfa704d1",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q19/attempt-1791021216874620210-cfa704d1"
+      ],
+      "status": "completed",
+      "answer_sha256": "7799e34db2df4252f66500167afba4a9d77aae6d148cc67d7603fb8c6d9797f7"
+    },
+    {
+      "query": "Q20",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q20/attempt-1791023145189378219-4bbd0a13",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q20/attempt-1791023145189378219-4bbd0a13"
+      ],
+      "status": "completed",
+      "answer_sha256": "0eaa89769163c8fb641af112eea2628ceb95a52ad2f690b5c0684fee214ff4b9"
+    },
+    {
+      "query": "Q21",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q21/attempt-1791024103151836692-744b4c52",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q21/attempt-1791024103151836692-744b4c52"
+      ],
+      "status": "completed",
+      "answer_sha256": "a5547307b525b4c9cb82eab3a8ae97b8886f10c8ecf29ee7ba64bc1a4295867d"
+    },
+    {
+      "query": "Q23",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q23/attempt-1791027182545678462-62a0020f",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q23/attempt-1791027182545678462-62a0020f"
+      ],
+      "status": "completed",
+      "answer_sha256": "0d8c5d092fbb074711e6bff6f96c649e0b8becc3659180b88ea73aac4917f690"
+    },
+    {
+      "query": "Q24",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q24/attempt-1791028686949756368-8d457045",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q24/attempt-1791028686949756368-8d457045"
+      ],
+      "status": "completed",
+      "answer_sha256": "a21884510be1e39ba02ad25dcd244debfeddee7ffe3eda15d9c28511632b8203"
+    },
+    {
+      "query": "Q25",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q25/attempt-1791446733008756680-8996d214",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q25/attempt-1791446733008756680-8996d214"
+      ],
+      "status": "completed",
+      "answer_sha256": "29c25316ce1936a53e98fcebc846d735583c07e474c3383168d9e4a0c770af04"
+    },
+    {
+      "query": "Q26",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q26/attempt-1791031338378750531-e3ff8c0e",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q26/attempt-1791031338378750531-e3ff8c0e"
+      ],
+      "status": "completed",
+      "answer_sha256": "7393011674657d431a54396cd89e8c6df1d34d344f8594d7e6de23c8a9223a3e"
+    },
+    {
+      "query": "Q27",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q27/attempt-1791034357346804719-bcc74491",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q27/attempt-1791034357346804719-bcc74491"
+      ],
+      "status": "completed",
+      "answer_sha256": "9c397cae7b0264b27a1a06eefcff0de8255c8424af9d05079870f160eeea22b4"
+    },
+    {
+      "query": "Q28",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q28/attempt-1791036652858713518-db9cf485",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q28/attempt-1791036652858713518-db9cf485"
+      ],
+      "status": "completed",
+      "answer_sha256": "94cae8de1829c5bd82ebe7a49935f09a12b1ac8519637c2933a50949aa9a0d52"
+    },
+    {
+      "query": "Q29",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q29/attempt-1791038988404251073-764fb7d9",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q29/attempt-1791038988404251073-764fb7d9"
+      ],
+      "status": "completed",
+      "answer_sha256": "99e665cebe17a18c3561f8362515ecd37171a652fad3f1c4b5b69a422c2445ac"
+    },
+    {
+      "query": "Q30",
+      "method": "Claude",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q30/attempt-1791041505574655570-a8da36bd",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking/runs/Claude/Q30/attempt-1791041505574655570-a8da36bd"
+      ],
+      "status": "completed",
+      "answer_sha256": "7d262bec695b88c0f6dd945477a0f49794f516fa6d7f138027ed9047975f6f90"
+    },
+    {
+      "query": "Q07",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q07/attempt-1791039009406786268-62ac0177",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q07/attempt-1791039009406786268-62ac0177"
+      ],
+      "status": "completed",
+      "answer_sha256": "dc00f7a08be837d3c4958bd44eff82a6a3f46cc1fd9e2a50fb79bfdf43c42ddd"
+    },
+    {
+      "query": "Q08",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q08/attempt-1791359282583742377-792ad431",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q08/attempt-1791042792956714513-9ec7d24d",
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q08/attempt-1791359282583742377-792ad431"
+      ],
+      "status": "completed",
+      "answer_sha256": "9ad95c823aab9096876e592a1318cf88ed7083fe20048f0345c3d664d3a7f7ec"
+    },
+    {
+      "query": "Q09",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q09/attempt-1791446824404501085-a1dc6479",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q09/attempt-1791446824404501085-a1dc6479"
+      ],
+      "status": "completed",
+      "answer_sha256": "b147ff7f63e6d2ed9ccc183b3853e525c63fd4d4056ed54998c14affc33a7ed1"
+    },
+    {
+      "query": "Q10",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q10/attempt-1791043474023859519-5e1e9296",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q10/attempt-1791043474023859519-5e1e9296"
+      ],
+      "status": "completed",
+      "answer_sha256": "6924cda21ccb2744aafe41ea84bad908e1537999b77814891de8fe91b47a083b"
+    },
+    {
+      "query": "Q15",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q15/attempt-1791447436778114869-85a02ff2",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q15/attempt-1791447436778114869-85a02ff2"
+      ],
+      "status": "completed",
+      "answer_sha256": "eb2c1827950b84c7182ae89f89e68429ef5b3299649cc2ae4338a8fac309de48"
+    },
+    {
+      "query": "Q18",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q18/attempt-1791047544313494804-d8dce19f",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q18/attempt-1791047544313494804-d8dce19f"
+      ],
+      "status": "completed",
+      "answer_sha256": "c9b13b904e87e8f3456f60ed2e441da2926ff32c0ee1b71f871746916861c578"
+    },
+    {
+      "query": "Q19",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q19/attempt-1791048123264843509-b7dfd447",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q19/attempt-1791048123264843509-b7dfd447"
+      ],
+      "status": "completed",
+      "answer_sha256": "4f6e35ab907246e7884c92d2ff86aa5fba7465d0bd6216efb94c6a6a0fbe7620"
+    },
+    {
+      "query": "Q20",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q20/attempt-1791359829091796667-4ae8475c",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q20/attempt-1791050723272017768-5e4afb6e",
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q20/attempt-1791359829091796667-4ae8475c"
+      ],
+      "status": "completed",
+      "answer_sha256": "18d5def4c5b26b12b0e848b72829aa412d64d134c06e61760dc32d868cf109df"
+    },
+    {
+      "query": "Q21",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q21/attempt-1791051165091619626-ddf5081b",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q21/attempt-1791051165091619626-ddf5081b"
+      ],
+      "status": "completed",
+      "answer_sha256": "4ec60364e8513be8207af0431884f5dabc2b224561b9207c4f1a4db4d1e3d245"
+    },
+    {
+      "query": "Q23",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q23/attempt-1791360208412292405-24f1daab",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q23/attempt-1791051943450340203-5894274d",
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q23/attempt-1791360208412292405-24f1daab"
+      ],
+      "status": "completed",
+      "answer_sha256": "ef7a77ee514a503b57a0c112f45b47d6c8d6d6dc043cadf8ed91c7fc9f017237"
+    },
+    {
+      "query": "Q24",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q24/attempt-1791448147293852286-5c26f7fb",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q24/attempt-1791448147293852286-5c26f7fb"
+      ],
+      "status": "completed",
+      "answer_sha256": "be556acc927fdd99988f853f9fe740647f9681634ebd3568d4bba75b542decda"
+    },
+    {
+      "query": "Q25",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q25/attempt-1791053319449187380-15ae9c6c",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q25/attempt-1791053319449187380-15ae9c6c"
+      ],
+      "status": "completed",
+      "answer_sha256": "41df942625d951ff2480341e95179b5c349f3ce50dbdb60416d54a16e4c34e99"
+    },
+    {
+      "query": "Q26",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q26/attempt-1791056214706821806-23a530ae",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q26/attempt-1791056214706821806-23a530ae"
+      ],
+      "status": "completed",
+      "answer_sha256": "cc34a1c5540ccc1b314759c0b1ab6d4c32cc13fb34e4a37856669401779dc0bf"
+    },
+    {
+      "query": "Q27",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q27/attempt-1791448495438296453-2fcbf1da",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q27/attempt-1791448495438296453-2fcbf1da"
+      ],
+      "status": "completed",
+      "answer_sha256": "97ee0545213acbe8de4829dd4be69eec0230b2efc3d4b93046602931c3127cb6"
+    },
+    {
+      "query": "Q28",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q28/attempt-1791059206326961336-8d41d437",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q28/attempt-1791059206326961336-8d41d437"
+      ],
+      "status": "completed",
+      "answer_sha256": "d18b510ff1141e6a7523a753e8c6da0f885cd18d7f273ea27c17d457325325d6"
+    },
+    {
+      "query": "Q29",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q29/attempt-1791061730192482120-26d6c716",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q29/attempt-1791061730192482120-26d6c716"
+      ],
+      "status": "completed",
+      "answer_sha256": "54512045854fb33595ad61dcc35d4d441471174b3e293da5f466964579edb437"
+    },
+    {
+      "query": "Q30",
+      "method": "Finch",
+      "selected": "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q30/attempt-1791062314768934150-519eb5f4",
+      "attempts": [
+        "/import/home3/share/oceanx-bench/benchmarking_finch/runs/Finch/Q30/attempt-1791062314768934150-519eb5f4"
+      ],
+      "status": "completed",
+      "answer_sha256": "891f18d7d4361a31d0f4bfa9e9c985acd2733bf499ff5b1999115f919940fc8a"
+    }
+  ]
+}

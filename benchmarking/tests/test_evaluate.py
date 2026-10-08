@@ -325,10 +325,9 @@ def test_code_failure_descriptions_do_not_assign_fault():
 
 
 def test_run_disclosures_cover_delivery_requests_budgets_and_search():
-    text = (evaluate.TASKS.parent / "RUNNING.md").read_text()
+    text = (evaluate.TASKS.parent / "EVALUATION.md").read_text()
+    assert text.count("## Run settings and comparison limits") == 1  # listed once, with the evaluation
     section = text.split("## Run settings and comparison limits", 1)[1].split("\n## ", 1)[0]
-    # Listed once; the evaluation document points here.
-    assert "RUNNING.md#run-settings-and-comparison-limits" in (evaluate.TASKS.parent / "EVALUATION.md").read_text()
     assert "OCEANX_FIGURE_DELIVERY=static" in section
     assert "not exposed" in section
     assert "extra provider request" in section and "compaction" in section and "ledger" in section
@@ -429,3 +428,153 @@ def test_the_messages_of_an_attempt_without_a_final_answer_reach_the_judge(tmp_p
     (attempt / "answer.md").write_text("# Final report")
     # With a final answer the judge reads that, as before.
     assert [p.name for p in evaluate.evidence_files(attempt) if p.is_file()] == ["answer.md"]
+
+
+# --- frozen rubrics ------------------------------------------------------------------------------
+def frozen_copy(task, root, change=None):
+    """A rubric as the reference work leaves it: the repository's draft with every waiting place
+    filled, beside the folder of that work. `change` damages the copy before it is written."""
+    draft = evaluate.rubric(task)
+    doc = json.loads(json.dumps(draft))
+    for group, index, key in evaluate.places_to_freeze(draft):
+        item = evaluate._items(doc, group)[index]
+        if group == "candidate_causes":
+            item[key] = "partly supported"
+        elif (group, key) == ("criteria", "expected"):
+            item[key] = "partly reproduced: low-stratification layer at 60-240 m in the reanalysis eddy core"
+        elif key == "expected":
+            item[key] = "0.42 days per decade (0.31 to 0.55 across the three baselines)"
+        else:  # the suggested tolerance, made final
+            item[key] = item[key].split("suggested: ", 1)[1].rstrip(")") if "suggested: " in item[key] else "+/-10%"
+    work = root / "references" / task
+    (work / "outputs").mkdir(parents=True, exist_ok=True)
+    (work / "spec.md").write_text("definitions, written before anything was computed")
+    (work / "compute.py").write_text("print('reference')")
+    (work / "outputs" / "values.json").write_text(json.dumps({"task": task, "items": []}))
+    doc["status"] = "frozen"
+    doc["frozen"] = {"references_sha256": evaluate.outputs_sha256(work / "outputs"),
+                     "tolerances_frozen_at": "2026-10-09", "frozen_by": "Codex"}
+    if change:
+        change(doc)
+    path = root / "rubrics" / f"{task}.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(doc))
+    return doc
+
+
+def rubric_check(root, capsys, *tasks):
+    code = evaluate.main(["rubric-check", "--rubrics", str(root / "rubrics"),
+                          "--references", str(root / "references"), *(["--tasks", *tasks] if tasks else [])])
+    return code, json.loads(capsys.readouterr().out)
+
+
+def test_filled_rubrics_with_their_reference_work_are_ready_to_judge(tmp_path, capsys):
+    # A paper task, one with a finding that cannot be tested, an open problem, a disagreement question.
+    frozen = {task: frozen_copy(task, tmp_path) for task in ("Q08", "Q10", "Q25", "Q27")}
+    code, report = rubric_check(tmp_path, capsys)
+    assert code == 0 and report["ready"] == ["Q08", "Q10", "Q25", "Q27"] and report["not_ready"] == {}
+    assert report["references_sha256"] == {task: doc["frozen"]["references_sha256"] for task, doc in frozen.items()}
+    # The finding that cannot be tested keeps the repository's "n/a": nothing waited to be filled there.
+    k4 = next(c for c in frozen["Q10"]["criteria"] if c["id"] == "Q10-K4")
+    assert (k4["expected"], k4["tolerance"]) == ("n/a", "n/a")
+
+
+def criterion(doc, cid):
+    return next(c for c in doc["criteria"] if c["id"] == cid)
+
+
+RUBRIC_DAMAGE = [
+    ("Q08", lambda d: criterion(d, "Q08-K1").update(expected=evaluate.rubric("Q08")["criteria"][0]["expected"]),
+     "Q08-K1 expected: not filled"),
+    ("Q08", lambda d: criterion(d, "Q08-K2").update(tolerance=" "), "Q08-K2 tolerance: not filled"),
+    ("Q08", lambda d: criterion(d, "Q08-K1").update(expected="low-stratification layer at 60-240 m"),
+     "Q08-K1 expected: must begin with a verdict"),
+    ("Q08", lambda d: criterion(d, "Q08-K1").pop("tolerance"), "Q08-K1 tolerance: missing"),
+    ("Q08", lambda d: criterion(d, "Q08-K1").update(weight=20), "outside the places to freeze: criteria"),
+    ("Q08", lambda d: criterion(d, "Q08-M")["anchors"].update({"4": "any method at all"}),
+     "outside the places to freeze: criteria"),
+    ("Q10", lambda d: criterion(d, "Q10-K4").update(expected="reproduced"), "outside the places to freeze: criteria"),
+    ("Q27", lambda d: d["depth_probes"].pop(), "outside the places to freeze: depth_probes"),
+    ("Q27", lambda d: d["candidate_causes"][0].update(expected="mostly supported"),
+     "Q27-H1 expected: must be one of supported, partly supported, not supported"),
+    ("Q27", lambda d: d["answer_key"]["items"].pop(), "Q27-A2 expected: missing"),
+    ("Q27", lambda d: d.update(gates=[]), "outside the places to freeze: gates"),
+    ("Q25", lambda d: d.update(status="draft"), 'status is not "frozen"'),
+    ("Q25", lambda d: d["frozen"].update(frozen_by=""), "frozen_by must be set"),
+    ("Q25", lambda d: d["frozen"].update(references_sha256="0" * 64), "references_sha256 is not the hash"),
+    ("Q25", lambda d: d.update(query_sha256="0" * 64), "outside the places to freeze: query_sha256"),
+]
+
+
+@pytest.mark.parametrize("task, damage, said", RUBRIC_DAMAGE)
+def test_rubric_check_names_what_is_wrong_with_a_rubric(tmp_path, capsys, task, damage, said):
+    frozen_copy(task, tmp_path, damage)
+    frozen_copy("Q24", tmp_path)  # a sound one beside it stays ready
+    code, report = rubric_check(tmp_path, capsys)
+    assert code == 1 and report["ready"] == ["Q24"] and list(report["not_ready"]) == [task]
+    assert any(said in problem for problem in report["not_ready"][task]), report["not_ready"][task]
+
+
+def test_rubric_check_follows_the_reference_work_and_the_files_present(tmp_path, capsys):
+    frozen_copy("Q08", tmp_path)
+    work = tmp_path / "references" / "Q08"
+    # The outputs changed after the rubric was frozen.
+    (work / "outputs" / "values.json").write_text('{"items": ["recomputed"]}')
+    code, report = rubric_check(tmp_path, capsys)
+    assert code == 1 and "references_sha256 is not the hash of references/Q08/outputs" in report["not_ready"]["Q08"][0]
+    assert report["references_sha256"]["Q08"] == evaluate.outputs_sha256(work / "outputs")  # what it is now
+    (work / "outputs" / "values.json").unlink()
+    (work / "spec.md").unlink()
+    _, report = rubric_check(tmp_path, capsys)
+    assert report["not_ready"]["Q08"] == ["references/Q08/spec.md is missing", "references/Q08/outputs has no files"]
+    # A draft copied as it is, a file that is not JSON, a task that does not exist, a task with no file.
+    (tmp_path / "rubrics" / "Q09.json").write_text(json.dumps(evaluate.rubric("Q09")))
+    (tmp_path / "rubrics" / "Q07.json").write_text("{")
+    (tmp_path / "rubrics" / "Q99.json").write_text("{}")
+    code, report = rubric_check(tmp_path, capsys, "Q07", "Q09", "Q15", "Q99")
+    assert code == 1 and report["ready"] == []
+    assert report["not_ready"]["Q07"] == ["not valid JSON"]
+    assert report["not_ready"]["Q15"] == ["no frozen rubric file"]
+    assert report["not_ready"]["Q99"] == ["no task Q99 in the repository"]
+    waiting = [p for p in report["not_ready"]["Q09"] if p.endswith(": not filled")]
+    assert len(waiting) == json.dumps(evaluate.rubric("Q09")).count(evaluate.PLACEHOLDER) == 10
+    assert 'status is not "frozen"' in report["not_ready"]["Q09"]
+
+
+def test_the_reference_hash_covers_file_names_and_contents(tmp_path):
+    assert evaluate.outputs_sha256(tmp_path / "absent") is None and evaluate.outputs_sha256(tmp_path) is None
+    (tmp_path / "tables").mkdir()
+    (tmp_path / "values.json").write_text("1")
+    (tmp_path / "tables" / "a.csv").write_text("x")
+    first = evaluate.outputs_sha256(tmp_path)
+    assert len(first) == 64 and evaluate.outputs_sha256(tmp_path) == first
+    (tmp_path / "values.json").write_text("2")
+    changed = evaluate.outputs_sha256(tmp_path)
+    (tmp_path / "values.json").write_text("1")
+    (tmp_path / "tables" / "a.csv").rename(tmp_path / "tables" / "b.csv")
+    renamed = evaluate.outputs_sha256(tmp_path)
+    (tmp_path / "tables" / "b.csv").rename(tmp_path / "tables" / "a.csv")
+    (tmp_path / "extra.txt").write_text("")
+    added = evaluate.outputs_sha256(tmp_path)
+    assert len({first, changed, renamed, added}) == 4
+    (tmp_path / "extra.txt").unlink()
+    assert evaluate.outputs_sha256(tmp_path) == first
+
+
+def test_every_draft_rubric_waits_only_in_the_places_the_check_knows(tmp_path):
+    """215 places in the 30 rubrics, and no placeholder anywhere else in a rubric."""
+    total = 0
+    for path in sorted(evaluate.TASKS.glob("Q*/evaluator/rubric.json")):
+        places = list(evaluate.places_to_freeze(json.loads(path.read_text())))
+        assert len(places) == path.read_text().count(evaluate.PLACEHOLDER), path
+        total += len(places)
+    assert total == 215
+
+
+def test_rubric_check_notices_a_question_reworded_after_its_rubric(tmp_path, capsys, monkeypatch):
+    frozen_copy("Q25", tmp_path)
+    assert rubric_check(tmp_path, capsys)[0] == 0
+    reworded = {**evaluate.task_info("Q25"), "query": evaluate.task_info("Q25")["query"] + " Also map it."}
+    monkeypatch.setattr(evaluate, "task_info", lambda task: reworded)
+    code, report = rubric_check(tmp_path, capsys)
+    assert code == 1 and report["not_ready"]["Q25"] == ["the question's text changed after the rubric was written"]

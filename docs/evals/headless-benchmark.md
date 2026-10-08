@@ -100,7 +100,7 @@ For the canonical Q01–Q30 tasks, `benchmarking/server/prepare_queries.py` can
 generate this JSONL from explicit shared data bindings. Inputs can be directories
 such as `/srv/ocean-data/MODIS_Aqua/chlorophyll/`; data is referenced, not copied
 into each case. The helper checks paths, not scientific time/variable coverage.
-See [download and shared archive guide](../../benchmarking/download/README.md).
+See the [data and download guide](../../benchmarking/DATA.md).
 
 `timeout_seconds` is an outer wall-clock ceiling including backend startup and
 data registration, not an increase to the existing Agent/Expert internal budgets.
