@@ -304,12 +304,13 @@ rules, the file formats and the order of work are in
 <folder> --references <folder>` says whether each frozen rubric is ready: every place filled, nothing else
 changed from the repository's rubric, the reference work present and unchanged.
 
-Papers still checked from the abstract only: Q01, Q03 and Q06. Before their rubrics are frozen, confirm
-each finding, the region, the window and the definitions from the paper (the owner provides the PDF) and
-record where in the paper each was confirmed; otherwise the abstract wording stands. Two rubrics name a
-detail to confirm first: the transport section of Q03 and the typhoon's passage dates in Q06. For Q05 and
-Q06, record whether the CMOMS forcing contains the typhoon; if it does not, "not reproduced" is the valid
-reference.
+Papers whose rubric still names the abstract as the only source checked (`paper.verification`): Q01 to
+Q06, the CMOMS questions. Q07 to Q10 were read in full. Before the rubrics of Q01 to Q06 are frozen,
+confirm each finding, the region, the window and the definitions from the paper (the owner provides the
+PDF) and record where in the paper each was confirmed; otherwise the abstract wording stands. Two rubrics
+name a detail to confirm first: the transport section of Q03 and the typhoon's passage dates in Q06. For
+Q05 and Q06, record whether the CMOMS forcing contains the typhoon; if it does not, "not reproduced" is
+the valid reference.
 
 Reference outputs of the CMOMS questions contain numbers derived from CMOMS: they stay in `$EVAL_ROOT` and
 are never committed.

@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.3",
+  "rubric_version": "3.4",
   "task_id": "Q09",
   "type": "paper_reproduction",
   "title": "Erosion of the salinity maximum inside the Loop Current eddy Poseidon",
@@ -112,9 +112,9 @@
       "claim": "Vertical diffusion keeps homogenising upper-ocean salinity until the vertical salinity gradient is negligible.",
       "paper_evidence": "Abstract: 'The vertical salinity diffusion continues homogenizing the salinity in the upper ocean until the vertical gradient of salinity is negligible.' Full text, sections 4.1 and 4.2: again from the model. In the longest-lived simulated eddy the mixed layer reaches about 200 m by the end of February and the high-salinity core is then eroded; the salinity tendency in the deep mixed layer is about zero in late winter and spring, and the second winter brings no further dilution. In the 16-eddy composite the maximum falls to 36.5 by spring. The gliders still found a maximum of about 36.7 in Poseidon in June 2017 (section 3).",
       "testability": "testable",
-      "how_to_test": "The vertical salinity gradient above the core through time.",
+      "how_to_test": "The vertical salinity gradient above the core through time, and the share of its August 2016 value that remains at the end.",
       "expected": "to freeze before judging",
-      "tolerance": "to freeze before judging (suggested: sign exact; final gradient within the reference tolerance)",
+      "tolerance": "to freeze before judging (suggested: sign exact; the share of the August 2016 gradient that remains at the end within +/-0.2 of the reference's)",
       "anchors": {
         "0": "Not addressed, or given a verdict without executed analysis of the supplied data (for example the paper's own number restated as a result).",
         "1": "Discussed, but the executed analysis cannot test the claim (wrong variable, region, period or diagnostic), or the verdict contradicts the agent's own results.",

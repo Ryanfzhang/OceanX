@@ -53,6 +53,12 @@ nothing.
    written, for example a relative tolerance ("+/-30%") on a reference value that does not differ from
    zero. Write the reason in `open-points.md` and wait for the owner. A tolerance is never set from what
    any method answered.
+
+   One addition needs no new decision (Owner, 2026-10-08). Where a tolerance asks for a sign or a relative
+   size and the reference value does not differ from zero, the frozen tolerance keeps its wording and
+   gains this sentence: "a value that does not differ from zero in the reference agrees when the agent's
+   value lies within the reference's 95% interval or is reported as not different from zero". `expected`
+   then gives that interval, and the report lists every place where the sentence was added.
 5. **Do not guess.** When a procedure is ambiguous, when the supplied data cannot give the quantity, or
    when the paper says something else than the rubric, do not choose silently. Record it in
    `open-points.md` with the options and what each would change, leave that place unfilled, and go on with
@@ -83,36 +89,55 @@ The numbers that decide a label are the ones the claim and its tolerance name: "
 largest value in the paper's period, compared once. Other numbers in `paper_evidence` are shown beside the
 result and decide nothing.
 
-Where the paper gives two diagnostics for one claim and the supplied data meet one and not the other, the
-claim holds in part: `partly reproduced`, with both results in `expected`. They are two parts of the
-claim, not two definitions of one quantity.
+Where a claim says two things and the paper has a diagnostic for each (where a layer lies; how uniform it
+is), and the supplied data meet one and not the other, the claim holds in part: `partly reproduced`, with
+both results in `expected`. Two ways of measuring one quantity (a mixed-layer depth from temperature or
+from density) are not that: they are definitions, and the next paragraph applies.
 
 **More than one legitimate definition.** The primary definition is the paper's own diagnostic, or the
 closest the supplied data allow (paper tasks), and the reading the rubric's `procedure` names first (open
-problems). `expected` gives the primary value and label first, then the value under each other definition,
-and its label where that differs. A spread between definitions wider than the tolerance is not an open
-point: the judge compares an agent with the reference computed under the definition the agent states
-(`CODEX_JUDGE.md`). It is an open point only when no definition can be called primary. Where the labels
-differ, `expected` says which definitions give which label.
+problems). Where neither names a value for a threshold, the value the literature documents is primary (the
+17 cm sea-surface-height contour for the Loop Current) before a round number. `expected` gives the primary
+value and label first, then the range of the value over the other definitions, naming those that change
+the label. Each definition's own value stays in `values.json`. A spread between definitions wider than
+the tolerance is not an open point: the judge compares an agent with the reference computed under the
+definition the agent states (`CODEX_JUDGE.md`). It is an open point only when no definition can be called
+primary.
 
 **The region is a definition too.** An agent is told the region by its name in the question and sees the
 supplied box. It is not told the benchmark's analysis box (`masks` in the data manifest). Where the
 supplied box reaches into water the question does not ask about, or the quantity grows with the region (an
 area, a total), give every item for the region the question names (primary), for the analysis box and for
-the whole supplied box, and give an area also as a share of the region's ocean.
+the whole supplied box, and give an area also as a share of the region's ocean. In a paper task the
+primary region is the paper's. A region drawn by coordinates is checked against the native mask: no water
+of the neighbouring basin inside it.
 
 **A reference is a value, not a bound.** Where a definition leaves a case open, take the reading the
 definition implies, say so, and give the other reading as an alternative. A column warmer than 26 C down
 to the seabed has its heat content above 26 C integrated to the seabed; it is not unknown.
 
-**A candidate cause** (disagreement questions). Judge it by what its test does to the question's main
-answer, on a common footing: a longer season has more days, so compare rates, not totals.
+**A candidate cause** (disagreement questions) is one of two kinds (the second and the wording for counts
+are the Owner's decision of 2026-10-08). Each entry of `spec.md` says which result gives which label
+before anything is computed.
+
+*A choice of method* (a definition, a baseline, a threshold, a record length, a product). Judge it by what
+the choice does to the question's main answer, on a common footing: a longer season has more days, so
+compare rates, not totals.
 
 | Label | When |
 |---|---|
-| `supported` | The choice changes the conclusion: the sign of the result, or whether it differs from zero under statistics that allow for autocorrelation. |
+| `supported` | The choice changes the conclusion: the sign of the result, or whether it differs from zero under statistics that allow for autocorrelation. For an answer that is a count, a date or a rate: the choice moves it by more than its own 95% uncertainty. |
 | `partly supported` | The conclusion stands, but the size changes by more than the tolerance of the answer-key item it bears on. |
 | `not supported` | The test shows no such change, or the supplied data cannot show the cause at work. The `why` says which. |
+
+*A physical mechanism* (a wind, a wave, an intrusion). Judge it by the relation the rubric's `test`
+predicts.
+
+| Label | When |
+|---|---|
+| `supported` | The relation is there, differs from zero under statistics that allow for autocorrelation and the length of the record, and holds under the listed definitions. |
+| `partly supported` | The relation has the predicted sign but does not differ from zero, or it holds in some years or under some definitions only. |
+| `not supported` | The relation is absent or opposite, or the supplied data cannot show the mechanism at work. The `why` says which. |
 
 Where the main answer has several quantities (days, frequency, intensity), the cause takes the strongest
 label any of them gives.
@@ -144,6 +169,9 @@ stays one label). The judge accepts either label from an agent whose numbers agr
      (paper tasks); how the reference value is read off (answer-key items); which result means supported,
      partly supported or not supported (candidate causes).
    ```
+
+   Write it so that the owner can read it: whole words and plain sentences, one definition at a time,
+   every threshold with where it comes from. What all entries share is said once at the top.
 3. **Write and run `compute.py`.** One function per entry of `spec.md`, named after its id. It writes
    `outputs/values.json` and whatever small tables or figures help a reader check it:
 
@@ -187,6 +215,11 @@ stays one label). The judge accepts either label from an agent whose numbers agr
      `frozen_by`.
 
    A finding whose `expected` is already `n/a` (not testable) stays as it is.
+
+   The judge and the owner read `expected`. Write it in a few plain sentences, without JSON: the primary
+   result first, numbers rounded to what the tolerance can tell apart, then the range over the other
+   definitions and which of them change the label, then the name of the `values.json` that holds every
+   definition's full value.
 6. **Check the result** and make the rubric read-only:
 
    ```bash
@@ -199,10 +232,19 @@ stays one label). The judge accepts either label from an agent whose numbers agr
    and lists what is still wrong. A rubric is frozen when it is listed under `ready`. After that, neither
    the rubric nor its `outputs/` changes.
 
-**Q09.** Its rubric was checked against the full paper on 2026-10-08 (rubric 3.3; Sosa-Gutierrez et al.
-2020, doi:10.1029/2019JC015397; the owner has the PDF). Two things to carry into its `spec.md`: the paper's
-eddy core is the 30 km around the centre, and findings 3 to 5 are results of the paper's regional model
-for simulated eddies of 1993-2012, which the question asks to test on the observed eddy of 2016-2017.
+**Q09.** Its rubric was checked against the full paper on 2026-10-08 (Sosa-Gutierrez et al. 2020,
+doi:10.1029/2019JC015397; the owner has the PDF). Two things to carry into its `spec.md`: the paper's eddy
+core is the 30 km around the centre, and findings 3 to 5 are results of the paper's regional model for
+simulated eddies of 1993-2012, which the question asks to test on the observed eddy of 2016-2017. Since
+rubric 3.4 finding 4 is read through the share of the August 2016 gradient that remains at the end. The
+paper gives no number for "negligible", so the item's 0.2 is also what the label uses: reproduced when
+no more than a fifth remains, partly reproduced when the gradient falls but more remains.
+
+**Q10.** Its rubric was revised from the full text on 2026-10-08 (rubric 3.3; Oh et al. 2024, open
+access). To carry into its `spec.md`: the paper's box is 25-34 N, 120-128 E; its heatwave definition joins
+one-day gaps; the budget is the paper's Eq. 1 with the entrainment term at the base of the mixed layer,
+averaged over each phase from its onset to its peak; and "ocean dynamics" in the paper is mainly that
+vertical term, with horizontal advection negative in the box mean.
 
 ## Order of work
 
@@ -221,10 +263,11 @@ for simulated eddies of 1993-2012, which the question asks to test on the observ
 `$EVAL/reports/references-<step>.md`, and a short summary to the owner. Per task the report holds, in
 full and not as a summary: its `spec.md`, the `items` of its `values.json`, every `expected` and
 `tolerance` as written into the frozen copy, its `checks.md`, its `open-points.md`, and the time it took.
-Tables under `outputs/` are named, not pasted. A report after a review holds what changed since the last
-one and says what did not. The reviewer cannot read the server, so what is not in the report is not
-reviewed. These 17 questions use public data, so their numbers may be shown to the reviewer. This will not
-hold for the CMOMS questions: their references never leave the server.
+Tables under `outputs/` are named, not pasted, except a small one that a review asked to see (a track of
+twenty rows). A report after a review holds what changed since the last one and says what did not. The
+reviewer cannot read the server, so what is not in the report is not reviewed. These 17 questions use
+public data, so their numbers may be shown to the reviewer. This will not hold for the CMOMS questions:
+their references never leave the server.
 
 An open point is settled by the reviewer when it is a matter of reading the rubric, and by the owner when
 it needs the rubric's wording or a tolerance changed.

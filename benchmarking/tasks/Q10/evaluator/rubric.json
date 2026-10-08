@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.2",
+  "rubric_version": "3.3",
   "task_id": "Q10",
   "type": "paper_reproduction",
   "title": "The late-arriving 2023 East China Sea marine heatwave",
@@ -22,11 +22,11 @@
     "pages": "294",
     "doi": "10.1038/s41612-024-00846-4",
     "url": "https://doi.org/10.1038/s41612-024-00846-4",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
+    "verification": "Crossref metadata and abstract checked 2026-10-01; full text (publisher HTML, open access) read 2026-10-08"
   },
   "period_match": {
-    "paper_period": "August-October 2023 event; 1982-2011 baseline; 1993-2011 heat-budget reference",
-    "paper_data": "OISST, GLORYS12, ERA5 over 25-34 N, 120-128 E",
+    "paper_period": "the event of 12 August-13 October 2023, in two phases (12 August-5 September and 6 September-13 October); 1982-2011 baseline; mixed-layer heat budget for 30 July-19 October 2023, anomalies from 1993-2011",
+    "paper_data": "OISST, GLORYS12 and ERA5 over 25-34 N, 120-128 E; also one ocean station and nine CMIP6 models",
     "paper_window": [
       "1982-01",
       "2023-10"
@@ -37,7 +37,7 @@
       "1982-01",
       "2023-12"
     ],
-    "note": "The paper's heat budget covers 30 June-19 October, inside the supplied May-November months."
+    "note": "The paper's heat budget covers 30 July-19 October (one figure caption says 30 June), inside the supplied May-November months."
   },
   "verdict_labels": [
     "reproduced",
@@ -52,9 +52,9 @@
       "weight": 25,
       "title": "Finding 1",
       "claim": "A marine heatwave occurred in the East China Sea from 12 August to 13 October 2023, later than the typical July onset.",
-      "paper_evidence": "Abstract: 'a marine heatwave (MHW) in the East China Sea (ECS) from August 12 to October 13. Unlike the typical July onset, this event was delayed'.",
+      "paper_evidence": "Abstract: 'a marine heatwave (MHW) in the East China Sea (ECS) from August 12 to October 13. Unlike the typical July onset, this event was delayed'. Full text, first Results section and Fig. 2: a marine heatwave is the mean sea surface temperature of 25-34 N, 120-128 E above the 90th percentile of an 11-day window over 1982-2011 for at least five consecutive days, with one-day gaps joined. 2023 had four events: 13-18 June, 23-27 July, 12 August-13 October (63 days) and 24 October-3 November; the largest anomaly, 2.06 C above the 1982-2011 mean, came on 29 September. The 'typical July onset' is not given as a date: long events typically occur in July and August, and of the heatwave days of June-October 1982-2023, 45.1% fall in July-August and 39.1% in September-October, August being the most frequent month.",
       "testability": "testable",
-      "how_to_test": "Area-mean and grid-point marine-heatwave detection in OISST over the analysis box with the agent's definition and baseline; start and end dates; the climatological onset month of past summer events.",
+      "how_to_test": "Marine-heatwave detection in OISST on the mean of the analysis box (the paper's 25-34 N, 120-128 E) and at grid points, with the paper's definition and baseline or the agent's stated ones; start and end dates of the 2023 event; when past summer events began (the climatological onset), against which 2023 is late.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: start and end dates +/-7 days under a matching definition; onset later than the climatological onset)",
       "anchors": {
@@ -71,9 +71,9 @@
       "weight": 20,
       "title": "Finding 2",
       "claim": "The early phase was driven by shortwave radiation and ocean dynamics.",
-      "paper_evidence": "Abstract: 'The early phase was driven by shortwave radiation and ocean dynamics'.",
+      "paper_evidence": "Abstract: 'The early phase was driven by shortwave radiation and ocean dynamics'. Full text, second Results section, Methods (Eq. 1) and Fig. 3: a mixed-layer heat budget from GLORYS12 and ERA5 for 30 July-19 October 2023, as anomalies from 1993-2011, averaged over each phase from its onset to its peak. The mixed layer ends where temperature is 0.5 C below the surface value. The terms are the net surface flux less the shortwave that passes below the layer, horizontal advection (split into mean and eddy parts), entrainment or detrainment at the base of the layer together with vertical mixing, and a residual. In the early phase (12 August-5 September) the largest warming term is the ocean's vertical term: detrainment while the mixed layer shoals to about 15 m after Typhoon Khanun (1-5 August). Shortwave radiation is second, and the residual, read as small eddies, adds to the warming. Horizontal advection averaged over the box is negative; warm water from the Yellow Sea reaches only its north.",
       "testability": "testable",
-      "how_to_test": "Mixed-layer heat budget for the early phase: ERA5 shortwave, longwave, sensible and latent anomalies and horizontal advection from GLORYS12; ranking of terms.",
+      "how_to_test": "Mixed-layer heat budget for the early phase as in the paper's Eq. 1: ERA5 shortwave (less the part that passes below the mixed layer), longwave, sensible and latent anomalies; from GLORYS12 the horizontal advection and the entrainment or detrainment at the base of the mixed layer, which needs only temperature, velocity and the layer depth; the residual. Ranking of the warming terms. In the paper 'ocean dynamics' is mainly this vertical term, not horizontal advection.",
       "expected": "to freeze before judging",
       "tolerance": "to freeze before judging (suggested: the two largest warming terms match the reference ranking)",
       "anchors": {
@@ -90,7 +90,7 @@
       "weight": 20,
       "title": "Finding 3",
       "claim": "In the later phase weaker northerlies let warm, humid southerlies dominate, reducing the air-sea humidity difference and the latent heat loss, which prolonged the event.",
-      "paper_evidence": "Abstract: 'the later phase saw reduced northerly winds, allowing warmer, more humid southerlies to dominate. This shift decreased the air-sea humidity difference, enhancing downward latent heat fluxes'.",
+      "paper_evidence": "Abstract: 'the later phase saw reduced northerly winds, allowing warmer, more humid southerlies to dominate. This shift decreased the air-sea humidity difference, enhancing downward latent heat fluxes'. Full text, second Results section and Fig. 3: in the later phase (6 September-13 October) the latent heat flux is anomalously downward, with a southerly wind anomaly that weakens the prevailing northerlies; mean horizontal currents also warm the layer, and the residual is strongly negative. The paper adds that latent heat flux mattered in nearly 60% of the late-summer events of the past 42 years.",
       "testability": "partly testable",
       "how_to_test": "Testable: the latent-heat-flux anomaly and its rank in the late-phase budget. Not testable: wind direction and humidity (not supplied).",
       "expected": "to freeze before judging",
@@ -110,7 +110,7 @@
       "weight": 5,
       "title": "Finding 4",
       "claim": "CMIP6 projections link delayed heatwaves to weak air-sea heat exchange.",
-      "paper_evidence": "Abstract.",
+      "paper_evidence": "Abstract. Full text, third Results section: nine CMIP6 models, with historical, natural-only and greenhouse-gas-only runs for 2001-2020 and the SSP2-4.5 scenario for 2021-2040.",
       "testability": "not testable",
       "how_to_test": "No climate-model projections are supplied.",
       "expected": "n/a",
@@ -126,7 +126,7 @@
       "kind": "method",
       "weight": 10,
       "title": "Method fidelity",
-      "focus": "The marine-heatwave definition and baseline (the paper's, or stated); event dates over the analysis box; a mixed-layer heat budget with ERA5 surface terms and GLORYS12 advection; the split into early and late phases.",
+      "focus": "The marine-heatwave definition and baseline (the paper's: 90th percentile of an 11-day window over 1982-2011, five days, one-day gaps joined; or stated); event dates over the analysis box; a mixed-layer heat budget with ERA5 surface terms, GLORYS12 advection and the entrainment term at the base of the mixed layer (0.5 C criterion); the split into early and late phases (12 August-5 September, 6 September-13 October).",
       "anchors": {
         "0": "The paper's key definitions and methods are not identified; the analysis uses unrelated diagnostics.",
         "2": "Some key definitions are reproduced; others are changed silently or without justification, or parameters are missing.",
@@ -138,7 +138,7 @@
       "kind": "differences",
       "weight": 10,
       "title": "Differences from the paper's setting",
-      "focus": "Product versions; the budget cannot close with the supplied fields (no mixing term, winds or humidity); GLORYS12 and ERA5 cover May-November only.",
+      "focus": "Product versions; the budget does not close with reanalysis fields, as the paper says itself: entrainment is diagnosed, vertical mixing uses a fixed diffusivity and the residual holds the rest; winds and humidity are not supplied; GLORYS12 and ERA5 cover May-November only.",
       "anchors": {
         "0": "No account of how the supplied data, period or region differ from the paper's.",
         "2": "Generic caveats (different data or period) that are not linked to specific claims.",

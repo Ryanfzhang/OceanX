@@ -33,11 +33,11 @@
     "pages": "294",
     "doi": "10.1038/s41612-024-00846-4",
     "url": "https://doi.org/10.1038/s41612-024-00846-4",
-    "verification": "Crossref metadata and abstract checked 2026-10-01"
+    "verification": "Crossref metadata and abstract checked 2026-10-01; full text (publisher HTML, open access) read 2026-10-08"
   },
   "period_match": {
-    "paper_period": "August-October 2023 event; 1982-2011 baseline; 1993-2011 heat-budget reference",
-    "paper_data": "OISST, GLORYS12, ERA5 over 25-34 N, 120-128 E",
+    "paper_period": "the event of 12 August-13 October 2023, in two phases (12 August-5 September and 6 September-13 October); 1982-2011 baseline; mixed-layer heat budget for 30 July-19 October 2023, anomalies from 1993-2011",
+    "paper_data": "OISST, GLORYS12 and ERA5 over 25-34 N, 120-128 E; also one ocean station and nine CMIP6 models",
     "paper_window": [
       "1982-01",
       "2023-10"
@@ -48,6 +48,6 @@
       "1982-01",
       "2023-12"
     ],
-    "note": "The paper's heat budget covers 30 June-19 October, inside the supplied May-November months."
+    "note": "The paper's heat budget covers 30 July-19 October (one figure caption says 30 June), inside the supplied May-November months."
   }
 }
