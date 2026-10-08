@@ -1,6 +1,6 @@
 # Six indicators per task type
 
-**Status: v1.1, fixed with the Owner on 2026-10-09.** v1.0 (2026-10-06) left two settings open until they
+**Status: v1.1, fixed with the Owner on 2026-10-08.** v1.0 (2026-10-06) left two settings open until they
 had been tried: the mix of the parts inside an indicator, and whether repeated failures belong in
 robustness. Two provisional reviews settled them: the mix stays, repeated failures leave the indicator, and
 delivery is taken from each question's first attempt. Nothing here changes once formal judging has begun.

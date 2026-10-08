@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.0",
+  "rubric_version": "3.1",
   "task_id": "Q27",
   "type": "open_problem",
   "open_kind": "disagreement",
@@ -124,7 +124,7 @@
         "procedure": "Trends of summer heatwave days, frequency and cumulative intensity under a fixed 1982-2011 baseline, a fixed 1991-2020 baseline and a detrended (shifting) baseline; area mean and maps.",
         "used_by": "Q27-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: signs exact; magnitudes +/-30%)"
+        "tolerance": "to freeze before judging (suggested: signs exact and magnitudes +/-30% for trends that differ from zero in the reference; a trend that does not differ from zero in the reference agrees when the agent's value lies within the reference's 95% interval or is reported as not different from zero)"
       },
       {
         "id": "Q27-A2",

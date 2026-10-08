@@ -57,6 +57,12 @@ it lies between its neighbours.
 - **Paper verification rewards the right verdict, not agreement with the paper.** A justified "not
   reproduced" that matches the frozen reference earns full marks. A "reproduced" that the data do not
   support does not.
+- **A label at the edge of a tolerance** (Owner's decision of 2026-10-08). Where a label of the reference
+  lies at the edge of its tolerance, the reference says so and names the neighbouring label: in the
+  finding's `expected`, or for a candidate cause in the `why` of its item in
+  `$EVAL_ROOT/<experiment>/references/<task>/outputs/values.json`. There an agent's verdict with either
+  label matches the reference, provided its numbers agree with the reference under the definition it
+  states.
 - **Findings that cannot be tested.** Full marks need a plain statement that the supplied data cannot test
   the finding, naming what is missing. Reporting such a finding as verified scores 0.
 - **Open problems reward depth and breadth only when executed.** A literature review without analysis caps

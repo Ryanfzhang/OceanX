@@ -49,9 +49,10 @@ nothing.
 3. **The same inputs as the agents.** Only the data folders the task binds (`data_groups` in its
    `task_info.json`, resolved through `download/data_manifest.json`). No other product and no download.
 4. **Tolerances are fixed before any score is known.** The rubric's suggested tolerance is frozen as it is
-   written. Propose another only when the reference work itself gives the reason, for example two
-   legitimate definitions that differ by more than the suggested tolerance. Write the reason in
-   `open-points.md` and wait for the owner. A tolerance is never set from what any method answered.
+   written. Propose another only when the reference work itself shows that it cannot be applied as
+   written, for example a relative tolerance ("+/-30%") on a reference value that does not differ from
+   zero. Write the reason in `open-points.md` and wait for the owner. A tolerance is never set from what
+   any method answered.
 5. **Do not guess.** When a procedure is ambiguous, when the supplied data cannot give the quantity, or
    when the paper says something else than the rubric, do not choose silently. Record it in
    `open-points.md` with the options and what each would change, leave that place unfilled, and go on with
@@ -78,12 +79,27 @@ tolerance, the same one the judge later uses between an agent and the reference.
 A finding the rubric marks `partly testable` gets the label of its testable part, and its `expected` names
 what cannot be tested.
 
+The numbers that decide a label are the ones the claim and its tolerance name: "up to 9.7 C" is the
+largest value in the paper's period, compared once. Other numbers in `paper_evidence` are shown beside the
+result and decide nothing.
+
+Where the paper gives two diagnostics for one claim and the supplied data meet one and not the other, the
+claim holds in part: `partly reproduced`, with both results in `expected`. They are two parts of the
+claim, not two definitions of one quantity.
+
 **More than one legitimate definition.** The primary definition is the paper's own diagnostic, or the
 closest the supplied data allow (paper tasks), and the reading the rubric's `procedure` names first (open
 problems). `expected` gives the primary value and label first, then the value under each other definition,
 and its label where that differs. A spread between definitions wider than the tolerance is not an open
 point: the judge compares an agent with the reference computed under the definition the agent states
-(`CODEX_JUDGE.md`). It is an open point only when no definition can be called primary.
+(`CODEX_JUDGE.md`). It is an open point only when no definition can be called primary. Where the labels
+differ, `expected` says which definitions give which label.
+
+**The region is a definition too.** An agent is told the region by its name in the question and sees the
+supplied box. It is not told the benchmark's analysis box (`masks` in the data manifest). Where the
+supplied box reaches into water the question does not ask about, or the quantity grows with the region (an
+area, a total), give every item for the region the question names (primary), for the analysis box and for
+the whole supplied box, and give an area also as a share of the region's ocean.
 
 **A reference is a value, not a bound.** Where a definition leaves a case open, take the reading the
 definition implies, say so, and give the other reading as an alternative. A column warmer than 26 C down
@@ -97,6 +113,15 @@ answer, on a common footing: a longer season has more days, so compare rates, no
 | `supported` | The choice changes the conclusion: the sign of the result, or whether it differs from zero under statistics that allow for autocorrelation. |
 | `partly supported` | The conclusion stands, but the size changes by more than the tolerance of the answer-key item it bears on. |
 | `not supported` | The test shows no such change, or the supplied data cannot show the cause at work. The `why` says which. |
+
+Where the main answer has several quantities (days, frequency, intensity), the cause takes the strongest
+label any of them gives.
+
+**A label at the edge of its tolerance.** A label lies at the edge when the listed definitions, or the
+several quantities of one cause, fall on both sides of the tolerance. The reference then says so and names
+the neighbouring label: in a finding's `expected`, and for a candidate cause in its `why` (its `expected`
+stays one label). The judge accepts either label from an agent whose numbers agree with the reference
+(`CODEX_JUDGE.md`, Owner's decision of 2026-10-08).
 
 ## For each task
 
@@ -128,13 +153,19 @@ answer, on a common footing: a longer season has more days, so compare rates, no
     "items": [
       {"id": "Q08-K1", "definition": "one line",
        "value": {"layer_top_m": 60, "layer_bottom_m": 240},
-       "alternatives": [{"definition": "one line", "value": {"layer_top_m": 55, "layer_bottom_m": 260}}],
+       "alternatives": [{"definition": "one line", "value": {"layer_top_m": 55, "layer_bottom_m": 260},
+                         "verdict": "reproduced"}],
        "verdict": "partly reproduced", "why": "one or two sentences"}
     ]}
    ```
 
    An answer-key item has no `verdict`. A candidate cause has `verdict` (supported, partly supported or
-   not supported) and `why`.
+   not supported) and `why`. An alternative carries its own `verdict` where that differs.
+
+   `items` hold only the numbers that decide a value or a label. Each has a name that carries its unit, and
+   each item a `definition` of its own. An answer-key item gives one value for the question's whole period
+   first, then the values by year. Daily series and sensitivity tables go into CSV files beside
+   `values.json`.
 4. **Check yourself** and write what each check showed in `checks.md`:
    - units and order of magnitude, against a published or textbook value;
    - the main number again by a second, independent code path (another reduction order, an explicit loop
@@ -142,11 +173,14 @@ answer, on a common footing: a longer season has more days, so compare rates, no
    - closure or conservation where the quantity has one;
    - every other legitimate definition of `spec.md`, and whether the reading of the result changes;
    - the share of missing or masked data in what was averaged;
+   - a feature that is followed through time (an eddy, a front, a plume): its position twice a month, the
+     largest step from one day to the next, and the paper's positions beside them;
    - paper tasks: the paper's own numbers beside yours. They need not agree; say which do and which do not.
 5. **Fill the frozen copy.** Copy the repository's rubric to `$EVAL/rubrics/<task>.json` and change only:
    - a finding's `expected`: the verdict label first, then the reference numbers with units, for example
      `"partly reproduced: low-stratification layer 60-240 m in the reanalysis eddy core (paper: 50-250 m)"`;
-   - an answer-key item's `expected`: the value with units, and its range across the legitimate definitions;
+   - an answer-key item's `expected`: one value for the question's whole period with units, then its range
+     over the years and across the legitimate definitions;
    - every `tolerance`: the suggested text made final, without "to freeze before judging (suggested: ...)";
    - a candidate cause's `expected`: exactly `supported`, `partly supported` or `not supported`;
    - `status: "frozen"`, and in `frozen`: `references_sha256`, `tolerances_frozen_at` (the date) and
@@ -174,8 +208,10 @@ for simulated eddies of 1993-2012, which the question asks to test on the observ
 
 1. **Pilot: Q08 (paper), Q25 (open problem), Q27 (disagreement question).** Do all six steps for the
    three, then stop and report. Claude reviews; the owner looks. The formats above change if the pilot
-   shows they should.
-2. **The other 14: every `spec.md` first, nothing computed.** Report; Claude reviews the definitions.
+   shows they should. (Reviewed twice by 2026-10-08; the formats and label rules above are the result. The
+   three are frozen after their corrections have been reviewed.)
+2. **The other 14: every `spec.md` first, nothing computed.** Report, together with the pilot's
+   corrections; Claude reviews the definitions.
 3. **Compute, check, freeze** the 14. Report.
 4. **Review.** Claude checks every task. The owner spot-checks five frozen rubrics: at least two paper
    tasks, one open problem with an answer key and one disagreement question.
@@ -183,10 +219,12 @@ for simulated eddies of 1993-2012, which the question asks to test on the observ
 ## Reports
 
 `$EVAL/reports/references-<step>.md`, and a short summary to the owner. Per task the report holds, in
-full and not as a summary: its `spec.md`, the `items` of its `values.json`, its `checks.md`, its
-`open-points.md`, and the time it took. The reviewer cannot read the server, so what is not in the report
-is not reviewed. These 17 questions use public data, so their numbers may be shown to the reviewer. This
-will not hold for the CMOMS questions: their references never leave the server.
+full and not as a summary: its `spec.md`, the `items` of its `values.json`, every `expected` and
+`tolerance` as written into the frozen copy, its `checks.md`, its `open-points.md`, and the time it took.
+Tables under `outputs/` are named, not pasted. A report after a review holds what changed since the last
+one and says what did not. The reviewer cannot read the server, so what is not in the report is not
+reviewed. These 17 questions use public data, so their numbers may be shown to the reviewer. This will not
+hold for the CMOMS questions: their references never leave the server.
 
 An open point is settled by the reviewer when it is a matter of reading the rubric, and by the owner when
 it needs the rubric's wording or a tolerance changed.
