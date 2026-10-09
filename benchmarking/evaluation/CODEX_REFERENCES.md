@@ -69,6 +69,13 @@ nothing.
    tied when the 95% interval of the difference between their deciding numbers includes zero. Take the
    difference inside the same resampling that gives each number its own interval: between the absolute
    values of two correlations, between two seasons year by year. `expected` then names the tied entries.
+
+   Which pairs are tested follows from what the tolerance asks: for a first place, the first entry
+   against every other; for the rank of one entry, that entry against every other; for a whole ranking,
+   every pair. A tie holds between the two entries tested and does not pass along a chain: A tied with B
+   and B tied with C does not make A tied with C. Where no tie touches what the tolerance asks (a peak
+   season that is told apart from every other season), the sentence is not added, and `expected` names
+   only the ties that bear on the tolerance.
 5. **Do not guess.** When a procedure is ambiguous, when the supplied data cannot give the quantity, or
    when the paper says something else than the rubric, do not choose silently. Record it in
    `open-points.md` with the options and what each would change, leave that place unfilled, and go on with

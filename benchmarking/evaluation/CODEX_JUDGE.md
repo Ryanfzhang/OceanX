@@ -66,7 +66,8 @@ it lies between its neighbours.
 - **Tied entries** (Owner's decision of 2026-10-09). Where a tolerance asks for a ranking, a first place
   or one of several categories and the frozen `expected` names entries as tied, an agent's answer matches
   with those entries in any order and with any of them named first. Entries the reference does not name
-  as tied keep their place.
+  as tied keep their place. A tie holds between the two entries named and does not pass along a chain: A
+  tied with B and B tied with C does not make A tied with C.
 - **Findings that cannot be tested.** Full marks need a plain statement that the supplied data cannot test
   the finding, naming what is missing. Reporting such a finding as verified scores 0.
 - **Open problems reward depth and breadth only when executed.** A literature review without analysis caps
