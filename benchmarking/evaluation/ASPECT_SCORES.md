@@ -56,7 +56,8 @@ supports, and one error is deducted once.
 Each finding's level is divided in two. Up to level 2 it says whether the finding was tested with an
 executed diagnostic (0 no executed analysis, 1 an analysis that cannot test it, 2 tested but with a
 material flaw). Above level 2 it says whether the test was sound and the verdict right (3 sound and in
-agreement with the reference, 4 also complete and compared quantitatively with the paper).
+agreement with the reference, 4 also complete and compared quantitatively with the paper). The judge gives
+levels in steps of a half (`CODEX_JUDGE.md`); they divide in the same way.
 
 | Indicator | Judged (rubric points) | Counted | Run |
 |---|---|---|---|

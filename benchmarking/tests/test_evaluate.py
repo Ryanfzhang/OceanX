@@ -76,6 +76,12 @@ def test_validate_catches_bad_scores():
     wrong = json.loads(json.dumps(good))
     wrong["criteria"][0]["score"] = 5
     assert evaluate.validate_score(wrong)
+    # Half levels are allowed, nothing finer, and nothing that is not a number.
+    half = judged_file("b1", "Q17", {"F": 2.5, "A": 0.5, "Q": 3, "M": 3.5, "R": 4, "B": 0, "I": 1.5})
+    assert evaluate.validate_score(half) == [] and half["total"] == 58.75  # 6.25 + 1.25 + 15 + 17.5 + 15 + 0 + 3.75
+    for bad in (2.25, 4.5, -0.5, "3", True, None):
+        wrong["criteria"][0]["score"] = bad
+        assert any("steps of 0.5" in error for error in evaluate.validate_score(wrong)), bad
     # Whether the attempt delivered is recorded in every score file.
     assert evaluate.validate_score({key: value for key, value in good.items() if key != "delivered"})
     assert evaluate.validate_score({**good, "delivered": "yes"})
@@ -641,6 +647,13 @@ def test_indicator_parts_follow_the_definition():
     points = {"Finding tests": 35, "Right verdicts": 35, "Method fidelity": 10, "Differences explained": 10,
               "Traceability": 10}
     assert sum(parts[name]["judged"] * weight / 100 for name, weight in points.items()) == pytest.approx(score["total"])
+
+    # Half levels divide in the same way: 2.5 is fully tested and a quarter of the way to a right verdict.
+    halves = judged_file("b3", "Q09", {**dict.fromkeys(("K1", "K2", "K3", "K4", "K5"), 2.5), "M": 3.5, "D": 0.5, "R": 4},
+                         findings=findings)
+    parts, _ = evaluate.indicator_parts(paper, halves)
+    assert (parts["Finding tests"]["judged"], parts["Right verdicts"]["judged"]) == (100, 25)
+    assert (parts["Method fidelity"]["judged"], parts["Differences explained"]["judged"]) == (87.5, 12.5)
 
     # An attempt without a score file counts 0 in every part; nothing is reported as left out.
     parts, holes = evaluate.indicator_parts(checkable, None)

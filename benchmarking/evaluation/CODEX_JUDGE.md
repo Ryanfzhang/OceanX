@@ -22,8 +22,10 @@ score-file format below.
 | Paper verification (`paper_reproduction`, Q01-Q10) | One per finding (`K1`...`K5`, 70 points), plus method `M`, differences `D` and report `R` (10 each) | For each finding: the paper's evidence, its testability, how to test it, the frozen expected result and tolerance. Also `period_match`: the paper's study period and the supplied data. |
 | Open problem (`open_problem`, Q11-Q30) | Framing `F` 10, data `A` 10, answer `Q` 20, mechanism `M` 20, robustness `R` 15, breadth `B` 15, insight `I` 10 | Answer-key items with frozen values and tolerances; depth probes; breadth probes; for disagreement questions, candidate causes with the test for each; sometimes literature context. |
 
-Every criterion is scored 0-4 with the anchors written in the rubric. Where a level is not written out,
-it lies between its neighbours.
+Every criterion is scored from 0 to 4 with the anchors written in the rubric, in steps of half a level
+(Owner's decision of 2026-10-09). A half level says that the answer meets the lower description and part
+of the next one; the criterion's `evidence` names that part. Where a level is not written out, it lies
+between its neighbours.
 
 ## Order of work for one attempt
 
@@ -75,6 +77,23 @@ it lies between its neighbours.
   attempt without a final answer, judged on what it kept, did not deliver. Where the runner recorded
   another status than `completed` for an attempt whose report is whole, the report decides; say so in
   `notes`.
+- **Numbers that cannot be traced** (Owner's decision of 2026-10-09; how the rubric's first gate is
+  applied). A number or citation without a traceable source earns nothing and gets a flag. Score the
+  criterion on what remains. The cap at 1 applies only where the criterion's credit rests on that number
+  or citation alone. A check that lacks a source must not score lower than the same answer without the
+  check.
+- **A finding that is partly testable** (Owner's decision of 2026-10-09). The reference labels the
+  testable part and names what cannot be tested; an agent was not told this convention. Its verdict agrees
+  with the reference when its result on the testable part agrees within the tolerance and it says which
+  part the supplied data cannot test, whether it calls the finding by the reference's label or "partly
+  reproduced" for that reason.
+- **How much a flaw costs** (Owner's decision of 2026-10-09). The levels say what an answer achieved. A
+  flaw is material when it changes a verdict, moves a deciding number beyond its tolerance or leaves a
+  deciding part of the question untested; for a finding, level 2 is for such a flaw. A flaw that is not
+  material is noted and costs half a level at most. A flaw lowers the criteria whose results it changes
+  and no other: a track that ends early lowers the findings that need the missing months, not every
+  finding. Between two levels give the half level, not the lower one. Level 4 is for an answer that does
+  what its description says, not only for a perfect one.
 - **Findings that cannot be tested.** Full marks need a plain statement that the supplied data cannot test
   the finding, naming what is missing. Reporting such a finding as verified scores 0.
 - **Open problems reward depth and breadth only when executed.** A literature review without analysis caps
@@ -117,12 +136,12 @@ One file per attempt: `$EVAL_ROOT/<experiment>/scores/<blind_id>.json`.
     {"id": "Q12-F", "score": 3, "evidence": "evidence/answer.md 'Approach'"},
     {"id": "Q12-A", "score": 3, "evidence": "..."},
     {"id": "Q12-Q", "score": 4, "evidence": "..."},
-    {"id": "Q12-M", "score": 2, "evidence": "..."},
+    {"id": "Q12-M", "score": 2.5, "evidence": "..."},
     {"id": "Q12-R", "score": 3, "evidence": "..."},
     {"id": "Q12-B", "score": 2, "evidence": "..."},
     {"id": "Q12-I", "score": 3, "evidence": "..."}
   ],
-  "total": 71.25,
+  "total": 73.75,
   "flags": [],
   "notes": ""
 }
@@ -135,9 +154,9 @@ One file per attempt: `$EVAL_ROOT/<experiment>/scores/<blind_id>.json`.
 - **`flags`:** anything the owner should look at, such as possible leakage of evaluator material, numbers
   that cannot be verified, or a reference that looks wrong.
 
-`evaluate.py validate` checks the criterion IDs, the 0-4 scores, the evidence fields, the total, the
-frozen status (for every score file, also one of an attempt without a final answer), the blind ID,
-the judge and `delivered`. It does not check the other fields; fill them anyway, because the
+`evaluate.py validate` checks the criterion IDs, the levels (0 to 4 in steps of 0.5), the evidence fields,
+the total, the frozen status (for every score file, also one of an attempt without a final answer), the
+blind ID, the judge and `delivered`. It does not check the other fields; fill them anyway, because the
 owner reads them when a score is disputed, and because the six indicators per task type
 (`ASPECT_SCORES.md`) are computed from `answer_key`, `causes`, `findings` and `probes`: an entry left out
 counts as not met. `evaluate.py indicators` names every such entry and ends with status 1 until none is

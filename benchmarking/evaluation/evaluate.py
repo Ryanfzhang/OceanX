@@ -3,7 +3,7 @@
 
     blind      copy each attempt's answer, reports, figures, small outputs and code into a folder named
                by a random ID, so the judge cannot see the arm; the ID-to-arm map is written separately
-    validate   check score files against the task rubrics (criteria, 0-4 scores, weighted total)
+    validate   check score files against the task rubrics (criteria, levels 0 to 4, weighted total)
     rubric-check  check frozen rubrics before judging: every reference value and tolerance filled, nothing
                else changed from the repository's draft, the hash of the reference outputs still right
     freeze     hash-lock a pre-registration file before any test run
@@ -241,8 +241,9 @@ def validate_score(score: dict) -> list[str]:
     if set(given) != set(weights):
         errors.append(f"criteria ids {sorted(given)} != rubric {sorted(weights)}")
     for cid, item in given.items():
-        if item.get("score") not in (0, 1, 2, 3, 4):
-            errors.append(f"{cid}: score must be an integer 0-4")
+        level = item.get("score")
+        if isinstance(level, bool) or not isinstance(level, (int, float)) or level not in [n / 2 for n in range(9)]:
+            errors.append(f"{cid}: score must be a level from 0 to 4 in steps of 0.5")
         if not str(item.get("evidence", "")).strip():
             errors.append(f"{cid}: evidence is required")
     if not errors:
