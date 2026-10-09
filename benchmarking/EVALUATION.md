@@ -330,8 +330,8 @@ For a comparison that will be reported:
   disagreement question), two repeats each, judged blind. It sets the repeats of the test phase: one if the
   median absolute difference between the repeats is at most 5 points, two if at most 10, three otherwise.
 - **Judge calibration.** Three attempts of the pilot are judged twice, in separate sessions, without
-  reading the first scores. No criterion may differ by more than one level, and the owner accepts the
-  three pairs.
+  reading the first scores. No criterion may differ by more than one level. The reviewer (Claude) checks
+  the three pairs and tells the owner the result (Owner's decision of 2026-10-09).
 - **Learning pilot,** before the evolution rounds: three questions of set A (E01, E05, E08), one run each,
   labelled and reviewed in a folder of its own. Go on only if the runs finish in time, the Coordinator
   opened its planning skill in at least two of them, the owner finds at least one lesson that is a
@@ -357,8 +357,10 @@ python benchmarking/evaluation/evaluate.py blind --runs <every arm folder of the
   --out $EVAL_ROOT/<experiment>/blind --map $EVAL_ROOT/<experiment>/blind_map.json
 ```
 
-Codex then follows `evaluation/CODEX_JUDGE.md` for every blind folder and writes `scores/<blind_id>.json`.
-Afterwards:
+Where a question was run more than once in an arm, its blind folder also holds the first attempt
+(`first_attempt/`): the latest attempt is the one judged, and the first one says whether the arm delivered
+at the first try. Codex then follows `evaluation/CODEX_JUDGE.md` for every blind folder and writes
+`scores/<blind_id>.json`. Afterwards:
 
 ```bash
 python benchmarking/evaluation/evaluate.py validate --scores $EVAL_ROOT/<experiment>/scores
@@ -371,6 +373,14 @@ python benchmarking/evaluation/evaluate.py summarize --prereg $EVAL_ROOT/<experi
   --map $EVAL_ROOT/<experiment>/blind_map.json --scores $EVAL_ROOT/<experiment>/scores \
   --out $EVAL_ROOT/<experiment>/report
 ```
+
+```bash
+python benchmarking/evaluation/evaluate.py indicators --map $EVAL_ROOT/<experiment>/blind_map.json \
+  --scores $EVAL_ROOT/<experiment>/scores --out $EVAL_ROOT/<experiment>/indicators
+```
+
+The second command writes the six indicators per task type and arm (`evaluation/ASPECT_SCORES.md`): a
+table with every indicator's parts, and one six-axis chart per task type. It needs no pre-registration.
 
 For each comparison, the per-task score difference is averaged over repeats. The report gives the mean
 difference over tasks with a 95% bootstrap interval, wins and losses, the reduction in tokens and in time,

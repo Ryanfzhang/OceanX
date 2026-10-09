@@ -2,12 +2,15 @@
 """Benchmark evaluation: blind the run outputs, validate Codex score files, compare arms.
 
     blind      copy each attempt's answer, reports, figures, small outputs and code into a folder named
-               by a random ID, so the judge cannot see the arm; the ID-to-arm map is written separately
+               by a random ID, so the judge cannot see the arm; the ID-to-arm map is written separately.
+               Where a question was run again, the first attempt goes along, for the judge to say
+               whether it delivered
     validate   check score files against the task rubrics (criteria, 0-4 scores, weighted total)
     rubric-check  check frozen rubrics before judging: every reference value and tolerance filled, nothing
                else changed from the repository's draft, the hash of the reference outputs still right
     freeze     hash-lock a pre-registration file before any test run
     summarize  join scores with the map, apply the pre-registered comparisons, write report.md
+    indicators the six indicators per task type and arm (ASPECT_SCORES.md): a table and a chart
     process    measure how each attempt's research tree went (needs OceanX importable), compare arms
                on the pre-registered process metric, write process.md
     inventory  write run_record.json and run_record.md into every attempt (time, tokens, code runs, what
@@ -75,6 +78,12 @@ def latest_attempts(arm_dir: Path):
             yield case.name, attempts[-1].parent
 
 
+def first_attempt(attempt: Path) -> Path:
+    """The oldest attempt of the same question in the arm folder. Attempt folders are named by their
+    start time, and only an attempt that ended with a result counts."""
+    return min(attempt.parent.glob("attempt-*/result.json")).parent
+
+
 def evidence_files(attempt: Path):
     """Answer, Agent reports, published outputs and small code/tables; never state, logs or the tree.
 
@@ -119,6 +128,26 @@ def evidence_files(attempt: Path):
             yield path
 
 
+def copy_evidence(attempt: Path, arm_dir: Path, target: Path) -> None:
+    """What the judge may read of one attempt, copied to target/evidence without the arm folder's name."""
+    total = 0
+    for source in evidence_files(attempt):
+        if not source.is_file():
+            continue
+        relative = source.relative_to(attempt)
+        destination = target / "evidence" / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        total += source.stat().st_size
+        if total > MAX_TOTAL:
+            break
+        if source.suffix.lower() in TEXT:
+            # Absolute run paths contain the arm folder name; replace them.
+            text = source.read_text(encoding="utf-8", errors="replace").replace(str(arm_dir), "<RUN>")
+            destination.write_text(text, encoding="utf-8")
+        else:
+            shutil.copyfile(source, destination)
+
+
 def blind(args) -> dict:
     out = args.out.expanduser().resolve()
     mapping_path = args.map.expanduser().resolve()
@@ -136,30 +165,24 @@ def blind(args) -> dict:
             blind_id = "b" + secrets.token_hex(6)
             target = out / blind_id
             target.mkdir(parents=True)
-            total = 0
-            for source in evidence_files(attempt):
-                if not source.is_file():
-                    continue
-                relative = source.relative_to(attempt)
-                destination = target / "evidence" / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                total += source.stat().st_size
-                if total > MAX_TOTAL:
-                    break
-                if source.suffix.lower() in TEXT:
-                    # Absolute run paths contain the arm folder name; replace them.
-                    text = source.read_text(encoding="utf-8", errors="replace").replace(str(arm_dir), "<RUN>")
-                    destination.write_text(text, encoding="utf-8")
-                else:
-                    shutil.copyfile(source, destination)
+            copy_evidence(attempt, arm_dir, target)
             result = json.loads((attempt / "result.json").read_text())
             query = json.loads((attempt / "query.json").read_text())["query"]
             write_json(target / "task.json", {"blind_id": blind_id, "task_id": task_id, "query": query,
                                               "status": result.get("status")})
+            # Delivery is judged on the question's first attempt (ASPECT_SCORES.md). Where the question
+            # was run again, the judge needs that attempt too.
+            first = first_attempt(attempt)
+            first_status = result.get("status")
+            if first != attempt:
+                first_status = json.loads((first / "result.json").read_text()).get("status")
+                copy_evidence(first, arm_dir, target / "first_attempt")
+                write_json(target / "first_attempt" / "task.json", {"status": first_status})
             spent = usage(attempt, result)
             mapping[blind_id] = {"task_id": task_id, "arm": arm["arm"], "policy": arm.get("policy"),
                                  "library_version": library_version(arm),
                                  "arm_dir": str(arm_dir), "attempt": str(attempt), "status": result.get("status"),
+                                 "first_attempt": str(first), "first_status": first_status,
                                  "elapsed_seconds": result.get("elapsed_seconds"),
                                  "tokens": (spent["input_tokens"] + spent["output_tokens"]
                                             if spent["input_tokens"] is not None and spent["output_tokens"] is not None
@@ -254,6 +277,8 @@ def validate_score(score: dict) -> list[str]:
     for key in ("blind_id", "judge"):
         if not score.get(key):
             errors.append(f"missing {key}")
+    if not isinstance(score.get("first_attempt_delivered"), bool):
+        errors.append("first_attempt_delivered must be true or false")
     return errors
 
 
@@ -499,6 +524,318 @@ def summarize(args) -> dict:
                 lines.append(f"\n{c['name']}, mean difference {field.replace('_', ' ')}: {parts}")
     (out / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return {"report": str(out / "report.md"), "comparisons": [(c["name"], c.get("decision")) for c in comparisons]}
+
+
+# ------------------------------------------------------------------------------------------ indicators
+# The six indicators of each task type in the order of the chart's axes, with the Chinese names of the
+# owner's charts (ASPECT_SCORES.md).
+INDICATORS = {
+    "open_problem": (("Framing", "问题拆解"), ("Correctness", "正确性"), ("Depth", "深度"),
+                     ("Breadth", "广度"), ("Robustness", "稳健性"), ("Rigor", "严谨性")),
+    "paper_reproduction": (("Finding tests", "命题检验"), ("Right verdicts", "判定正确"),
+                           ("Method fidelity", "方法忠实"), ("Differences explained", "差异归因"),
+                           ("Traceability", "可追溯"), ("Robustness", "稳健性")),
+}
+TYPE_NAMES = {"open_problem": ("Open problems", "开放题"),
+              "paper_reproduction": ("Paper verification", "论文验证题")}
+PARTS = ("judged", "counted", "run", "combined")
+ANSWER_KEY_RESULTS = {"pass": 1, "partial": 0.5, "fail": 0, "not_reported": 0}
+AGENT_VERDICTS = {"reproduced", "partly_reproduced", "not_reproduced", "not_testable", "missing"}
+
+
+def combine(judged, counted=None, run=None):
+    """One indicator from its parts: 0.50 judged + 0.25 counted + 0.25 run. A part the indicator does
+    not have gives its share to the judged part; an indicator with a run part alone equals it."""
+    if judged is None:
+        return run
+    others = [part for part in (counted, run) if part is not None]
+    return (1 - 0.25 * len(others)) * judged + 0.25 * sum(others)
+
+
+def indicator_parts(ref: dict, score: dict | None) -> tuple[dict, list[str]]:
+    """The parts of one attempt's six indicators, each 0-100, and the entries its score file leaves out.
+
+    The judged and counted parts come from the score file of the attempt; an attempt without one counts
+    0 in each. The run part is the delivery of the question's first attempt, recorded in the same file.
+    """
+    holes = []
+    weight = {c["id"].rsplit("-", 1)[-1]: c["weight"] for c in ref["criteria"]}
+    level = ({c["id"].rsplit("-", 1)[-1]: c["score"] for c in score["criteria"]} if score
+             else dict.fromkeys(weight, 0))
+
+    def judged(letters, part=lambda value: value / 4):
+        return 100 * sum(weight[k] * part(level[k]) for k in letters) / sum(weight[k] for k in letters)
+
+    def counted(field, listed, key, read):
+        """Share of the listed items that count, read from the score file's entry for each."""
+        entries = {entry.get("id"): entry for entry in (score or {}).get(field) or []}
+        values = []
+        for item in listed:
+            value = read(entries[item].get(key)) if item in entries else None
+            if value is None and score:
+                holes.append(f"{field}: {item} has no usable {key}")
+            values.append(value or 0)
+        return 100 * statistics.fmean(values) if values else None
+
+    def addressed(kind):
+        listed = set(range(1, len(ref.get(f"{kind}_probes", [])) + 1))
+        marked = ((score or {}).get("probes") or {}).get(f"{kind}_addressed")
+        if score and not (isinstance(marked, list) and set(marked) <= listed):
+            holes.append(f"probes: {kind}_addressed must list numbers from 1 to {len(listed)}")
+        marked = set(marked) & listed if isinstance(marked, list) else set()
+        return 100 * len(marked) / len(listed) if listed else None
+
+    def flag(value):
+        return value if isinstance(value, bool) else None
+
+    if ref["type"] == "open_problem":
+        used_by_answer = [item["id"] for item in _items(ref, "answer_key")
+                          if item.get("used_by") == f"{ref['task_id']}-Q"]
+        depth = addressed("depth")
+        causes = counted("causes", [cause["id"] for cause in ref.get("candidate_causes", [])], "tested", flag)
+        if causes is not None:  # a disagreement question: probes and candidate causes count alike
+            depth = causes if depth is None else (depth + causes) / 2
+        parts = {"Framing": (judged("F"), None),
+                 "Correctness": (judged("Q"), counted("answer_key", used_by_answer, "result", ANSWER_KEY_RESULTS.get)),
+                 "Depth": (judged("M"), depth),
+                 "Breadth": (judged("B"), addressed("breadth")),
+                 "Robustness": (judged("R"), None),
+                 "Rigor": (judged("AI"), None)}
+    else:
+        findings = [c["id"] for c in ref["criteria"] if c.get("kind") == "claim"]
+        letters = [finding.rsplit("-", 1)[-1] for finding in findings]
+        parts = {  # a finding's level up to 2 says whether it was tested, above 2 whether the verdict is right
+            "Finding tests": (judged(letters, lambda value: min(value, 2) / 2),
+                              counted("findings", findings, "agent_verdict",
+                                      lambda value: value != "missing" if value in AGENT_VERDICTS else None)),
+            "Right verdicts": (judged(letters, lambda value: max(value - 2, 0) / 2),
+                               counted("findings", findings, "matches_reference", flag)),
+            "Method fidelity": (judged("M"), None),
+            "Differences explained": (judged("D"), None),
+            "Traceability": (judged("R"), counted("findings", findings, "evidence_ok", flag)),
+            "Robustness": (None, None)}
+    delivery = 100.0 if (score or {}).get("first_attempt_delivered") is True else 0.0
+    result = {}
+    for name, (judged_part, counted_part) in parts.items():
+        run = delivery if name == "Robustness" else None
+        result[name] = {"judged": judged_part, "counted": counted_part, "run": run,
+                        "combined": combine(judged_part, counted_part, run)}
+    return result, list(dict.fromkeys(holes))
+
+
+def mean_parts(rows: list[dict]) -> dict:
+    """Every part of every indicator, averaged over the rows that have it."""
+    return {name: {part: mean(row[name][part] for row in rows) for part in PARTS} for name in rows[0]}
+
+
+def indicators(args) -> dict:
+    mapping = json.loads(args.map.read_text())
+    scores = {}
+    for path in sorted(args.scores.glob("*.json")):
+        score = json.loads(path.read_text())
+        if validate_score(score):
+            raise SystemExit(f"ERROR: invalid score file {path.name}; run validate first")
+        scores[score["blind_id"]] = score
+    arms = args.arms or sorted({entry["arm"] for entry in mapping.values()})
+    unknown = set(arms) - {entry["arm"] for entry in mapping.values()}
+    if unknown:
+        raise SystemExit(f"ERROR: no attempt of arm {sorted(unknown)} in the map")
+    attempts, holes, unscored, status_differs = [], {}, [], []
+    for blind_id, entry in mapping.items():
+        if entry["arm"] not in arms:
+            continue
+        if "first_attempt" not in entry:
+            raise SystemExit("ERROR: the map was written before first attempts were recorded; run blind again "
+                             "into a new folder")
+        score = scores.get(blind_id)
+        if score is None and entry["status"] == "completed":
+            raise SystemExit(f"ERROR: completed attempt {blind_id} has no score")
+        ref = rubric(entry["task_id"])
+        parts, missing = indicator_parts(ref, score)
+        if missing:
+            holes[blind_id] = missing
+        if score is None:
+            unscored.append(blind_id)
+        elif score["first_attempt_delivered"] and entry["first_status"] != "completed":
+            status_differs.append(blind_id)  # delivered although the runner did not record a completed run
+        attempts.append({"blind_id": blind_id, "arm": entry["arm"], "task_id": entry["task_id"],
+                         "type": ref["type"], "total": float(score["total"]) if score else 0.0,
+                         "status": entry["status"], "scored": score is not None,
+                         "run_again": entry["first_attempt"] != entry["attempt"],
+                         "first_status": entry["first_status"],
+                         "first_attempt_delivered": bool(score and score["first_attempt_delivered"]),
+                         "elapsed_seconds": entry.get("elapsed_seconds"), "tokens": entry.get("tokens"),
+                         "indicators": parts})
+    summary, beside = {}, {}
+    for kind in INDICATORS:
+        for arm in arms:
+            rows = [a for a in attempts if a["type"] == kind and a["arm"] == arm]
+            if not rows:
+                continue
+            by_task = {}
+            for row in rows:
+                by_task.setdefault(row["task_id"], []).append(row)
+            # Repeats of a question are averaged first, then the questions of the type.
+            summary.setdefault(kind, {})[arm] = mean_parts(
+                [mean_parts([row["indicators"] for row in group]) for group in by_task.values()])
+            tokens = [row["tokens"] for row in rows]
+            beside.setdefault(kind, {})[arm] = {
+                "questions": len(by_task), "attempts": len(rows),
+                "mean_total": statistics.fmean(statistics.fmean(row["total"] for row in group)
+                                               for group in by_task.values()),
+                "not_completed": sum(row["status"] != "completed" for row in rows),
+                "without_score_file": sum(not row["scored"] for row in rows),
+                "run_again": sum(row["run_again"] for row in rows),
+                "first_attempt_not_delivered": sum(not row["first_attempt_delivered"] for row in rows),
+                "hours": sum(row["elapsed_seconds"] or 0 for row in rows) / 3600,
+                "tokens": sum(tokens) if all(value is not None for value in tokens) else None}
+    out = args.out.expanduser().resolve()
+    no_chart = indicator_chart(summary, beside, arms, out)
+    write_json(out / "indicators.json", {
+        "definition": "benchmarking/evaluation/ASPECT_SCORES.md", "arms": arms, "summary": summary,
+        "beside": beside, "attempts": attempts, "holes": holes, "without_score_file": unscored,
+        "delivered_with_other_status": status_differs, "chart": no_chart or "six-indicators.png"})
+
+    def shown(value):
+        return "" if value is None else f"{value:.1f}"
+
+    lines = ["# Six indicators per task type", "",
+             ("Defined in `benchmarking/evaluation/ASPECT_SCORES.md`. Each indicator is 0-100: 0.50 judged + "
+              "0.25 counted + 0.25 run, and a part it does not have gives its share to the judged part."), ""]
+    for kind, names in INDICATORS.items():
+        if kind not in summary:
+            continue
+        present = [arm for arm in arms if arm in summary[kind]]
+        lines += [f"## {TYPE_NAMES[kind][0]} ({TYPE_NAMES[kind][1]})", "",
+                  "| Indicator | " + " | ".join(present) + " |", "|---|" + "---|" * len(present)]
+        lines += [f"| {name} ({chinese}) | "
+                  + " | ".join(shown(summary[kind][arm][name]["combined"]) for arm in present) + " |"
+                  for name, chinese in names]
+        lines += ["", "The parts of each indicator, as judged / counted / run:", "",
+                  "| Indicator | " + " | ".join(present) + " |", "|---|" + "---|" * len(present)]
+        lines += [f"| {name} | "
+                  + " | ".join(" / ".join(shown(summary[kind][arm][name][part]) or "-" for part in PARTS[:3])
+                               for arm in present) + " |" for name, _ in names]
+        lines += ["", "Beside the indicators (not part of any of them):", "",
+                  "| | " + " | ".join(present) + " |", "|---|" + "---|" * len(present)]
+        for key, label in (("questions", "Questions"), ("attempts", "Attempts judged"),
+                           ("mean_total", "Mean rubric total"),
+                           ("not_completed", "Judged attempts not completed"),
+                           ("without_score_file", "Attempts without a score file (count 0)"),
+                           ("run_again", "Questions run again"),
+                           ("first_attempt_not_delivered", "First attempts not delivered"),
+                           ("hours", "Hours"), ("tokens", "Tokens (millions)")):
+            cells = []
+            for arm in present:
+                value = beside[kind][arm][key]
+                cells.append("n/a" if value is None else f"{value / 1e6:.1f}" if key == "tokens"
+                             else f"{value:.1f}" if isinstance(value, float) else str(value))
+            lines.append(f"| {label} | " + " | ".join(cells) + " |")
+        lines.append("")
+    if no_chart:
+        lines += [f"No chart: {no_chart}.", ""]
+    else:
+        lines += ["![six indicators](six-indicators.png)", ""]
+    if holes:
+        lines += ["## Entries the score files leave out", "",
+                  "Each counts as not met until the judge fills it in.", ""]
+        lines += [f"- `{blind_id}`: {'; '.join(missing)}" for blind_id, missing in holes.items()]
+        lines.append("")
+    if status_differs:
+        lines += [("First attempt recorded as delivered although its status is not `completed` "
+                   "(the judge's notes say why): ") + ", ".join(f"`{b}`" for b in status_differs) + ".", ""]
+    (out / "indicators.md").write_text("\n".join(lines), encoding="utf-8")
+    return {"report": str(out / "indicators.md"), "chart": None if no_chart else str(out / "six-indicators.png"),
+            "no_chart": no_chart, "holes": sum(len(v) for v in holes.values()),
+            "indicators": {kind: {arm: {name: round(parts["combined"], 1) for name, parts in by_arm.items()}
+                                  for arm, by_arm in arms_.items()} for kind, arms_ in summary.items()}}
+
+
+# Categorical slots 1 to 3 of a palette checked for colour-vision deficiency with every pair side by side;
+# overlapping polygons stay apart for three series at most, so a chart shows three arms at most.
+CHART_COLOURS = ("#2a78d6", "#eb6834", "#1baf7a")
+CHART_MARKERS = ("o", "^", "s")
+CHART_SURFACE, CHART_INK, CHART_INK_2, CHART_MUTED, CHART_GRID, CHART_RIM = (
+    "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7")
+CJK_FONTS = ("PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC",
+             "WenQuanYi Micro Hei", "Microsoft YaHei", "SimHei", "Arial Unicode MS")
+
+
+def indicator_chart(summary: dict, beside: dict, arms: list[str], out: Path) -> str | None:
+    """One six-axis chart per task type with the arms overlaid, as PNG and SVG. Returns why there is
+    no chart, or None. The values themselves are in the table of indicators.md, not on the chart."""
+    if len(arms) > len(CHART_COLOURS):
+        return "more than three arms; name the three to draw with --arms"
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib import font_manager
+        from matplotlib.lines import Line2D
+        from matplotlib.patheffects import withStroke
+    except ImportError:
+        return "matplotlib is not installed"
+    import math
+    kinds = [kind for kind in INDICATORS if kind in summary]
+    if not kinds:
+        return "no judged attempt"
+    cjk = next((name for name in CJK_FONTS if name in {font.name for font in font_manager.fontManager.ttflist}), None)
+    language = 1 if cjk else 0  # Chinese names where the machine has a font for them
+    with plt.rc_context({"font.family": "sans-serif", "axes.unicode_minus": False,
+                         "font.sans-serif": [*([cjk] if cjk else []), "DejaVu Sans"]}):
+        fig, panels = plt.subplots(1, len(kinds), figsize=(6.4 * len(kinds), 6.6), squeeze=False,
+                                   facecolor=CHART_SURFACE)
+        for ax, kind in zip(panels[0], kinds):
+            names = INDICATORS[kind]
+            angles = [2 * math.pi * index / len(names) for index in range(len(names))]
+            closed = [*angles, angles[0]]
+            between = math.pi / len(names)  # the scale is written between two axes, clear of the marks on them
+            for radius in (20, 40, 60, 80, 100):
+                ax.plot([radius * math.sin(a) for a in closed], [radius * math.cos(a) for a in closed],
+                        color=CHART_RIM if radius == 100 else CHART_GRID, linewidth=0.8, zorder=1)
+                edge = radius * math.cos(between)
+                ax.text(edge * math.sin(between) + 2, edge * math.cos(between) + 2, str(radius), fontsize=7.5,
+                        color=CHART_MUTED, ha="left", va="bottom", zorder=6,
+                        path_effects=[withStroke(linewidth=2.2, foreground=CHART_SURFACE)])
+            for angle in angles:
+                ax.plot([0, 100 * math.sin(angle)], [0, 100 * math.cos(angle)], color=CHART_GRID, linewidth=0.8,
+                        zorder=1)
+            # The first arm is drawn last, so it lies on top.
+            for colour, marker, arm in reversed(list(zip(CHART_COLOURS, CHART_MARKERS, arms))):
+                if arm not in summary[kind]:
+                    continue
+                values = [summary[kind][arm][name]["combined"] for name, _ in names]
+                x = [value * math.sin(angle) for value, angle in zip(values, angles)]
+                y = [value * math.cos(angle) for value, angle in zip(values, angles)]
+                ax.fill(x, y, color=colour, alpha=0.10, zorder=3)
+                ax.plot([*x, x[0]], [*y, y[0]], color=colour, linewidth=2, marker=marker, markersize=8,
+                        markeredgecolor=CHART_SURFACE, markeredgewidth=1.5, solid_joinstyle="round", zorder=4)
+            for angle, name in zip(angles, names):
+                side = math.sin(angle)
+                ax.text(112 * side, 110 * math.cos(angle), name[language], fontsize=12, color=CHART_INK, va="center",
+                        ha="center" if abs(side) < 0.3 else "left" if side > 0 else "right")
+            questions = max(beside[kind][arm]["questions"] for arm in arms if arm in beside[kind])
+            ax.set_title(f"{TYPE_NAMES[kind][1]}（{questions} 题）" if cjk
+                         else f"{TYPE_NAMES[kind][0]} ({questions} questions)", fontsize=14, color=CHART_INK, pad=14)
+            ax.set_xlim(-170, 170)
+            ax.set_ylim(-128, 128)
+            ax.set_aspect("equal")
+            ax.axis("off")
+        handles = [Line2D([0], [0], color=colour, linewidth=2, marker=marker, markersize=8,
+                          markeredgecolor=CHART_SURFACE, markeredgewidth=1.5, label=arm)
+                   for colour, marker, arm in zip(CHART_COLOURS, CHART_MARKERS, arms)]
+        fig.legend(handles=handles, loc="lower center", ncol=len(arms), frameon=False, fontsize=11.5,
+                   labelcolor=CHART_INK, bbox_to_anchor=(0.5, 0.07), handlelength=2.6, columnspacing=2.4)
+        note = ("各轴 0–100：0.50 判分 + 0.25 计数 + 0.25 运行（ASPECT_SCORES.md）；数值见 indicators.md。" if cjk
+                else "Each axis 0-100: 0.50 judged + 0.25 counted + 0.25 run (ASPECT_SCORES.md); "
+                     "the values are in indicators.md.")
+        fig.text(0.5, 0.03, note, ha="center", va="center", fontsize=8.5, color=CHART_INK_2)
+        fig.subplots_adjust(left=0.02, right=0.98, top=0.9, bottom=0.14, wspace=0.04)
+        out.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out / "six-indicators.png", dpi=200, facecolor=CHART_SURFACE)
+        fig.savefig(out / "six-indicators.svg", facecolor=CHART_SURFACE)
+        plt.close(fig)
+    return None
 
 
 # ------------------------------------------------------------------------------------------ process
@@ -1025,6 +1362,11 @@ def main(argv=None):
     s.add_argument("--map", type=Path, required=True)
     s.add_argument("--scores", type=Path, required=True)
     s.add_argument("--out", type=Path, required=True)
+    x = sub.add_parser("indicators")
+    x.add_argument("--map", type=Path, required=True)
+    x.add_argument("--scores", type=Path, required=True)
+    x.add_argument("--out", type=Path, required=True)
+    x.add_argument("--arms", nargs="+", help="Arms to show, in this order; by default every arm of the map")
     p = sub.add_parser("process")
     p.add_argument("--runs", type=Path, nargs="+", required=True, help="Arm output folders (with arm.json)")
     p.add_argument("--out", type=Path, required=True)
@@ -1041,11 +1383,14 @@ def main(argv=None):
     rc.add_argument("--tasks", nargs="+", help="Tasks that must be frozen; by default every rubric file found")
     args = parser.parse_args(argv)
     handler = {"blind": blind, "validate": validate, "freeze": freeze, "summarize": summarize,
-               "process": process, "inventory": inventory, "library-check": library_check,
-               "lessons-check": library_check, "rubric-check": rubric_check}[args.command]
+               "indicators": indicators, "process": process, "inventory": inventory,
+               "library-check": library_check, "lessons-check": library_check,
+               "rubric-check": rubric_check}[args.command]
     result = handler(args)
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 1 if args.command == "rubric-check" and result["not_ready"] else 0
+    # Not ready to judge with, or an indicator with entries the judge has still to fill in.
+    return 1 if (args.command == "rubric-check" and result["not_ready"]
+                 or args.command == "indicators" and result["holes"]) else 0
 
 
 if __name__ == "__main__":

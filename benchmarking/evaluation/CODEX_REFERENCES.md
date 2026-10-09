@@ -282,6 +282,11 @@ vertical term, with horizontal advection negative in the box mean.
 4. **Review.** Claude checks every task. The owner spot-checks five frozen rubrics: at least two paper
    tasks, one open problem with an answer key and one disagreement question.
 
+State on 2026-10-09: the 17 questions with public data (Q07 to Q10, Q15, Q18 to Q21, Q23 to Q30) are frozen
+and `rubric-check` lists all of them as ready, after four review rounds. The owner waived the spot check
+and let the reviewer's verdict stand. The 13 questions that need CMOMS data (Q01 to Q06, Q11 to Q14, Q16,
+Q17, Q22) are not started.
+
 ## Reports
 
 `$EVAL/reports/references-<step>.md`, and a short summary to the owner. Per task the report holds, in

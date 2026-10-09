@@ -41,7 +41,7 @@ evolution/E01..E24/task_info.json        evolution questions in two sets, A and 
 download/                                data_manifest.json and download_all.py
 server/                                  the three runners and what they share (below)
 skills/                                  the one skill only benchmark runs of OceanX get (figure style)
-evaluation/                              evaluate.py (blind, validate, rubric-check, freeze, summarize, process, inventory, library-check)
+evaluation/                              evaluate.py (blind, validate, rubric-check, freeze, summarize, indicators, process, inventory, library-check)
 experiments/                             pre-registration templates
 reviews/                                 dated reviews of finished runs
 tests/                                   python -m pytest benchmarking/tests

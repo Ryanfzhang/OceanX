@@ -10,7 +10,8 @@ score-file format below.
    `benchmarking/tasks/<task>/evaluator/rubric.json` with the evaluator's results filled in,
    `status: "frozen"`, and `frozen.references_sha256` set. Repository rubrics are drafts and are never used
    to judge. See `EVALUATION.md`, "References and frozen rubrics".
-2. You judge from the blind folder `$EVAL_ROOT/<experiment>/blind/<blind_id>/` only.
+2. You judge from the blind folder `$EVAL_ROOT/<experiment>/blind/<blind_id>/` only: `task.json`,
+   `evidence/` and, where the question was run more than once, `first_attempt/` (see "The first attempt").
    Do **not** open `blind_map.json`, run folders, `arm.json` or run logs until every score file is written.
 3. You never run the agent's code. You may read its code, open its NetCDF outputs to read numbers, and run
    your own reference scripts.
@@ -49,6 +50,8 @@ it lies between its neighbours.
       - `B`: the breadth probes and the literature context.
 4. Apply the rubric's gates. They cap individual criteria, so the total stays the weighted sum.
 5. Compute `total = sum(weight * score / 4)` over the criteria (0-100).
+6. Record whether the question's first attempt delivered (`first_attempt_delivered`, see "The first
+   attempt").
 
 ## Rules
 
@@ -68,6 +71,15 @@ it lies between its neighbours.
   with those entries in any order and with any of them named first. Entries the reference does not name
   as tied keep their place. A tie holds between the two entries named and does not pass along a chain: A
   tied with B and B tied with C does not make A tied with C.
+- **The first attempt** (`ASPECT_SCORES.md`, "Delivery"). `first_attempt_delivered` is `true` when the
+  question's first attempt ended with a final answer that rests on analysis executed in that attempt. A
+  plan, a note that the work could not be done, or a message that work is still running is not a delivery,
+  whatever the status says. A blind folder without `first_attempt/` holds the first attempt itself: decide
+  from what you judged. A blind folder with `first_attempt/` belongs to a question that was run again:
+  decide from `first_attempt/task.json` (the status of that attempt) and `first_attempt/evidence/`, and
+  score nothing there. Where the runner recorded another status than `completed` for an attempt whose
+  report is whole (the first Claude Code runner wrote `needs_interaction` whenever a tool call had been
+  refused), the report decides; say so in `notes`.
 - **Findings that cannot be tested.** Full marks need a plain statement that the supplied data cannot test
   the finding, naming what is missing. Reporting such a finding as verified scores 0.
 - **Open problems reward depth and breadth only when executed.** A literature review without analysis caps
@@ -95,6 +107,7 @@ One file per attempt: `$EVAL_ROOT/<experiment>/scores/<blind_id>.json`.
   "blind_id": "b1a2b3c4d5e6",
   "task_id": "Q12",
   "status": "completed",
+  "first_attempt_delivered": true,
   "rubric_version": "3.1",
   "rubric_status": "frozen",
   "references_sha256": "<frozen.references_sha256 of the rubric used>",
@@ -128,15 +141,18 @@ One file per attempt: `$EVAL_ROOT/<experiment>/scores/<blind_id>.json`.
   that cannot be verified, or a reference that looks wrong.
 
 `evaluate.py validate` checks the criterion IDs, the 0-4 scores, the evidence fields, the total, the
-frozen status (for every score file, also one of an attempt without a final answer), the blind ID
-and the judge. It does not check the other fields; fill them anyway, because the
+frozen status (for every score file, also one of an attempt without a final answer), the blind ID,
+the judge and `first_attempt_delivered`. It does not check the other fields; fill them anyway, because the
 owner reads them when a score is disputed, and because the six indicators per task type
 (`ASPECT_SCORES.md`) are computed from `answer_key`, `causes`, `findings` and `probes`: an entry left out
-is a hole in an indicator.
+counts as not met. `evaluate.py indicators` names every such entry and ends with status 1 until none is
+left.
 
 ## Calibration before the main judging
 
 Judge three pilot attempts twice, in separate sessions, without looking at the first scores: one paper
-verification, one checkable open problem and one disagreement question. Report every criterion whose two
-scores differ by more than one level, and send the three score pairs to the owner. Main judging starts after
-the owner accepts them.
+verification, one checkable open problem and one disagreement question. Write the second set of score
+files into a folder of its own. Report every criterion whose two scores differ by more than one level, and
+send the three score pairs to the reviewer (Claude), who checks them and tells the owner the result
+(Owner's decision of 2026-10-09; before, the owner accepted the pairs). Main judging starts when no
+criterion differs by more than one level. A larger difference goes to the owner first.

@@ -83,7 +83,12 @@ averaged over questions it is the share of questions an arm delivers at the firs
   is complete and delivery is 100 for every method (review of 2026-10-08). A rerun may replace an attempt
   for every other part. It does not erase that the first try failed.
 - **Who records it.** The judge, per question and arm, from the first attempt's status and final answer.
-  Where the first attempt is the one being judged, it follows from the judging itself.
+  Where the first attempt is the one being judged, it follows from the judging itself. Where the question
+  was run again, `evaluate.py blind` puts the first attempt into the same blind folder as `first_attempt/`.
+  The judge writes `first_attempt_delivered` into the score file (`CODEX_JUDGE.md`, "The first attempt").
+- **A status the runner recorded wrongly.** An attempt whose report is whole and rests on executed
+  analysis is delivered although its recorded status is not `completed` (one attempt of the first batch:
+  the Claude Code runner of that time wrote `needs_interaction` whenever a tool call had been refused).
 
 **Repeated failures are not part of an indicator.** A repeated failure is an execution that fails with the
 same error as the failed execution just before it, by the same agent. The trial of 2026-10-06 showed that
@@ -99,7 +104,7 @@ for every attempt that gets a score file:
 - open problems: `answer_key[].result`, `probes.depth_addressed`, `probes.breadth_addressed`, and on
   disagreement questions `causes[].tested`;
 - paper verification: `findings[].agent_verdict`, `findings[].matches_reference`, `findings[].evidence_ok`;
-- for every question and arm: whether the first attempt delivered.
+- for every question and arm: whether the first attempt delivered (`first_attempt_delivered`).
 
 Without frozen references (a provisional review) `answer_key[].result` and `matches_reference` cannot be
 recorded. Those two counted parts are then left out and their share returns to the judged part.
@@ -110,8 +115,12 @@ Per arm and task type: the six indicators, each with its parts, the number of at
 the unscored diagnostics. One table and one six-axis chart for open problems, the same for paper
 verification. The two task types are never averaged into one chart: their axes are different things.
 
-`evaluate.py` does not compute the indicators yet. The two provisional charts were made by the scripts in
-their review folders (below).
+`evaluate.py indicators --map <blind map> --scores <score files> --out <folder>` computes them and writes
+`indicators.md` (the table, each indicator with its parts, and the numbers beside them), `indicators.json`
+and the chart `six-indicators.png` and `.svg`. An entry that a score file leaves out counts as not met;
+the command names every such entry and ends with status 1 until none is left. The chart shows three arms
+at most (`--arms` names them and their order) and carries no numbers: they are in the table. The two
+provisional charts were made by the scripts in their review folders (below).
 
 ## Rules that keep the comparison sound
 
