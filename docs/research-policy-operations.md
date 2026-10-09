@@ -98,11 +98,11 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   ```text
   <!-- oceanx:lessons max=4 for="coordinator" about="which follow-ups were worth asking ..." -->
   <!-- /oceanx:lessons -->
-  <!-- oceanx:tools max=12 -->
+  <!-- oceanx:tools max=40 -->
   <!-- /oceanx:tools -->
   ```
 
-  `max` is how many items the region holds, `about` what belongs there, and `for` whose records
+  `max` is how many items a task is shown in the region, `about` what belongs there, and `for` whose records
   the meta-agent reads. The author of the skill decides both; the meta-agent can only fill the
   region. Six skills take lessons: `research-trajectory-planning` (Coordinator, 4),
   `ocean-analysis-design` (6), `ocean-physical-consistency-review` (6), `ocean-dataset-diagnosis` (4),
@@ -115,19 +115,31 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   helper function with its signature and the first paragraph of its docstring, written from the
   code. The version of the lessons and tools a task ran with is appended to the policy version on
   every tree event.
+- **Reading the skills.** What was learned reaches an agent only by its opening the skill, and
+  an agent opens a skill only when it is told to: in 34 benchmark runs up to 2026-10-08 Experts
+  opened the skills that hold lessons in about 2% of their questions, and the helper list in 3
+  of 468. So a research task names to each reader the skills that now carry something learned
+  (`ProjectResearch.learned_in`): a data Expert is told, before its first calculation, to read
+  in one step every skill of its role that holds a lesson, and `xarray-array-ops` when it lists a
+  learned function; the Coordinator reads `claim-grounded-writing` before the final answer when it
+  holds a lesson (its planning skill is always named). A model call that only reads files under
+  `/skills` is not counted in an Expert's call budget, up to six such calls a run, so reading
+  what was learned takes nothing from the analysis. A project that has learned nothing names no
+  skill.
 - **Upkeep.** After a research request the backend refreshes digests and call counts (no model
   call). At most once a day it also lets the meta-agent review; **Review → Update now** does the
   same on request. Nothing runs when `OCEANX_LIBRARY_FROZEN` is set (experiment arms).
 - **Lessons.** One model call per skill that takes lessons. The call gets the skill as its
-  readers get it, what the reader is told elsewhere, the lessons the owner marked wrong, and the
+  readers get it, what the reader is told elsewhere, the lessons other skills carry (one idea
+  belongs in one skill), the lessons the owner marked wrong, and the
   role's view of the records (about 200k characters, one run of every question before any repeat),
   each with the reading of its final answer where one exists.
   It judges every current lesson (keep, revise, retire) and may add at most 2. Code enforces:
   - a new lesson needs supporting tasks from at least 3 different questions (with fewer, a skill
     without lessons is not reviewed at all);
   - a lesson contradicted by as many questions as support it is retired, whatever the model said;
-  - a skill never holds more than its region's `max`; when full, a new lesson must be better
-    supported than the weakest one, which it replaces;
+  - the project keeps every lesson that passed; a task is shown at most the region's `max` of a
+    skill's lessons, so the library can go on growing while a reader's page stays short;
   - ≤40 words with no task keys or node IDs, and an applies-when of ≤25 words.
 
   What passes takes effect at once. The order within a skill is: lessons the owner marked right,
@@ -139,9 +151,13 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   - *Elimination by use.* A function no task called for 20 tasks in a row leaves the list. A
     packaged function stays importable; a learned one is retired. A new function is listed ahead
     of the others for its first 10 tasks.
-  - *Learning.* The update collects functions that Experts defined in the code of tasks on at
-    least 3 different questions. The meta-agent may turn them into at most 3 general functions per
-    review, each with a test. A function is mounted only if all of these pass: a static check (one
+  - *Learning.* Experts name one calculation differently from task to task (an area mean was
+    `amean`, `wm`, `am` and `gw` within a single task), so repeated code is collected per task: a
+    function the task defined at least twice, or whose name another task also used, at most 8 per
+    task. The meta-agent matches these entries across tasks by what they compute and may turn
+    them into at most 3 general functions per review, each with a test and each replacing entries
+    from tasks on at least 3 different questions. A function is mounted only if all of these
+    pass: a static check (one
     pure function with a docstring, ≤60 lines, imports limited to numpy, xarray, pandas, scipy, gsw
     and math, no file, network, printing or global state), its test run in the sandbox, and a
     review by a second model call that looks for a numerical or scientific error.

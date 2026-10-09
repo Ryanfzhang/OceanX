@@ -141,3 +141,61 @@ async def test_every_expert_is_told_its_call_budget_in_its_instructions(tmp_path
             f"{graphs.EXPERT_WIND_DOWN_START + 1} to {graphs.EXPERT_FINAL_CALL} may only finish the report, "
             f"and call {graphs.EXPERT_MODEL_CALL_LIMIT} has no tools.") in prompt
     assert "The end of each tool result shows which call you are on and how many remain." in prompt
+
+
+def test_a_call_that_only_reads_skills_is_not_counted_up_to_a_limit():
+    """Reading what the skills hold is not analysis, so it does not use the Expert's budget."""
+    middleware = ExpertCallBudgetMiddleware()
+
+    def calls(*requests):
+        return AIMessage(content="", tool_calls=[
+            {"name": name, "args": {"file_path": path}, "id": f"call-{index}", "type": "tool_call"}
+            for index, (name, path) in enumerate(requests)])
+
+    skills = calls(("read_file", "/skills/ocean-analysis-design/SKILL.md"),
+                   ("read_file", "/skills/xarray-array-ops/SKILL.md"))
+    counted = {"thread_model_call_count": 4, "run_model_call_count": 4}
+
+    def after(*messages):
+        state = {"messages": [HumanMessage(content="Assigned question"), *messages],
+                 "thread_model_call_count": 3, "run_model_call_count": 3}
+        return middleware.after_model(state, None)
+
+    assert after(skills) is None  # two skills opened in one step: the budget is as it was
+    assert after(calls(("read_file", "/skills/ocean-analysis-design/SKILL.md"),
+                       ("execute", "/skills/xarray-array-ops/SKILL.md"))) == counted  # it also ran something
+    assert after(calls(("read_file", "/work/reports/B1.1/report.md"))) == counted  # not a skill
+    assert after(AIMessage(content="The answer.")) == counted  # no tool at all
+    # A run cannot go on reading for free.
+    assert after(*[skills] * graphs.FREE_SKILL_CALLS) is None
+    assert after(*[skills] * (graphs.FREE_SKILL_CALLS + 1)) == counted
+    assert (f"A call that only reads files under /skills is not counted, up to {graphs.FREE_SKILL_CALLS} "
+            "such calls.") in graphs._call_budget_sentence()
+
+
+def test_in_a_run_the_skills_are_read_before_the_first_counted_call():
+    @tool
+    def execute(value: int) -> str:
+        """Perform one probe research operation."""
+        return f"result {value}"
+
+    @tool
+    def read_file(file_path: str) -> str:
+        """Read one probe file."""
+        return f"text of {file_path}"
+
+    def call(name, args, index):
+        return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"{name}-{index}",
+                                                  "type": "tool_call"}])
+
+    model = _BudgetProbeModel(responses=[
+        call("read_file", {"file_path": "/skills/ocean-analysis-design/SKILL.md"}, 0),
+        call("execute", {"value": 1}, 1), call("execute", {"value": 2}, 2),
+        AIMessage(content="Final report delivery.")])
+    graph = create_agent(model=model, tools=[execute, read_file], system_prompt="base",
+                         middleware=[ExpertCallBudgetMiddleware()])
+    asyncio.run(graph.ainvoke({"messages": [HumanMessage(content="Assigned question")]}))
+    notes = [messages[-1].text.rsplit("\n\n", 1)[-1] for messages in model.seen_messages[1:]]
+    # After the skill was read the next call is still the first of the budget.
+    assert [note.split(";")[0] for note in notes] == [
+        f"[Budget: model call {number} of {graphs.EXPERT_MODEL_CALL_LIMIT}" for number in (1, 2, 3)]

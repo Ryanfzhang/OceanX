@@ -62,6 +62,19 @@ class ProjectResearch:
             rendered[skill] = fill_regions(load_ocean_skill(skill)[0], {"lessons": block})
         return rendered
 
+    def learned_in(self, role: str, *, research: bool, capabilities=()) -> list[str]:
+        """The skills ``role`` can open that now carry something the project learned: lessons
+        (in research tasks) or a learned helper function. An agent opens a skill only when it
+        is told to, so a task names these to their readers; a project that has learned nothing
+        names none."""
+        from oceanx.skills import ocean_skill_metadata
+        readable = {skill.name for skill in ocean_skill_metadata(role=role, capabilities=capabilities)}
+        with_lessons = {lesson.get("skill") for lesson in self.lessons.active()} if research else set()
+        found = [skill for skill in self.lessons.regions() if skill in readable and skill in with_lessons]
+        if TOOL_SKILL in readable and any(tool["source"] == "learned" for tool in self.tools.mounted()):
+            found.append(TOOL_SKILL)
+        return found
+
     def version(self) -> str | None:
         """Names the lessons and tools a task runs with; None when the project has neither."""
         parts = [part for part in (self.lessons.version(), self.tools.version()) if part]

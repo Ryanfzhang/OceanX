@@ -183,10 +183,10 @@ def test_the_meta_agent_reads_each_skill_as_its_readers_get_it(tmp_path, memory)
     assert f'<skill name="{PLANNING}">' in tree_prompt and "oceanx:" not in tree_prompt
     assert "## Scientific value\nA useful question addresses" in tree_prompt
     assert "This skill takes lessons about: which sub-questions and proposed follow-ups" in tree_prompt
-    assert "It holds at most 4 lessons." in tree_prompt and "the Coordinator reads" in tree_prompt
+    assert "A task is shown at most 4 of its lessons" in tree_prompt and "the Coordinator reads" in tree_prompt
     assert f'<skill name="{PHYSICS}">' in analysis_prompt and "an Expert reads" in analysis_prompt
     assert "A residual is not a measured forcing" in analysis_prompt  # so it is not proposed again
-    assert "It holds at most 6 lessons." in analysis_prompt
+    assert "A task is shown at most 6 of its lessons" in analysis_prompt
     # The Coordinator's lessons come from decisions: who proposed a question, retries, dropped follow-ups.
     assert "policy v0-coordinator-bfs, run without lessons" in tree_prompt
     assert "- B1.1.1 | adopted from B1.1#1 |" in tree_prompt
@@ -314,7 +314,7 @@ def test_the_meta_agent_keeps_revises_or_retires_and_the_records_overrule_it(tmp
     assert book.changes()[0]["before"] == "Test rivals first."
 
 
-def test_a_full_skill_only_takes_a_better_supported_lesson(tmp_path, memory):
+def test_a_full_region_shows_the_best_supported_and_the_project_keeps_the_rest(tmp_path, memory):
     keys = mined(memory, tmp_path, n=5)
     book = LessonBook(memory)
     book._save([lesson("L001", DESIGN, "First.", keys[:3], added_at="2026-01-01T00:00:00+00:00"),
@@ -324,17 +324,22 @@ def test_a_full_skill_only_takes_a_better_supported_lesson(tmp_path, memory):
     result = book.review(fake_llm({DESIGN: {"add": [
         {**new, "text": "No better than the weakest.", "supporting": keys[:3]},
         {**new, "text": "Better supported.", "supporting": keys}]}}))
-    assert result["changes"] == [{"lesson": "L001", "change": "retired"}, {"lesson": "L004", "change": "added"}]
-    assert "already holds 3 lessons" in result["rejected"][0]["reason"]
-    # The owner's lesson is listed first and is never the one replaced; then the best supported.
-    assert [l["id"] for l in book.shown(DESIGN)] == ["L003", "L004", "L002"]
-    retired = next(l for l in book.lessons() if l["id"] == "L001")
-    assert retired["retired_reason"] == "replaced by the better supported L004"
-    # Older data over the limit is cut back to the region's size at the next review.
-    book._save([lesson(f"L{i:03d}", DESIGN, f"Lesson {i}.", keys[:i]) for i in range(1, 6)])
-    cut = book.review(fake_llm(), force=True)
-    assert [c["lesson"] for c in cut["changes"]] == ["L001", "L002"]
-    assert [l["id"] for l in book.shown(DESIGN)] == ["L005", "L004", "L003"]
+    # Both pass the rules, so both are kept: nothing is pushed out of the library.
+    assert result["changes"] == [{"lesson": "L004", "change": "added"}, {"lesson": "L005", "change": "added"}]
+    assert result["rejected"] == [] and len(book.active(DESIGN)) == 5
+    # A task is shown as many as the region allows: the owner's lesson first, then the best supported.
+    assert [l["id"] for l in book.shown(DESIGN)] == ["L003", "L005", "L002"]
+    assert book.block(DESIGN).count("Applies when:") == 3 and "(L001)" not in book.block(DESIGN)
+    # A lesson that is kept but not shown goes on collecting support and comes into view with it.
+    more = book.review(fake_llm({DESIGN: {"lessons": [
+        {"id": "L001", "verdict": "keep", "supporting": keys, "counter": []}]}}), force=True)
+    assert more["changes"] == [] and [l["id"] for l in book.shown(DESIGN)] == ["L003", "L001", "L005"]
+    # Another skill's review sees these lessons, so that one idea is not written into two skills.
+    prompt, _ = book.review_prompt(PLANNING, memory.load_digests())
+    assert f"# Lessons other skills carry\n- {DESIGN}: First. Applies when: Always." in prompt
+    assert "what a lesson of another skill already says" in prompt
+    own, _ = book.review_prompt(DESIGN, memory.load_digests())
+    assert "# Lessons other skills carry\nNone." in own
 
 
 def test_the_owner_marks_a_lesson_right_or_wrong(tmp_path, memory):

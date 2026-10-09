@@ -480,10 +480,20 @@ a prompt, and the packaged skill files are never changed: each task's copy of th
 Arms B, C1 and C2 run the same commit and differ only in what stands in those two places.
 
 **Where.** A skill reserves a region with a marker line, for example
-`<!-- oceanx:lessons max=4 for="coordinator" about="..." -->`. The marker says how many lessons the skill
-holds and what they are about. Six skills take lessons (the Coordinator's planning skill and five analysis
+`<!-- oceanx:lessons max=4 for="coordinator" about="..." -->`. The marker says how many lessons of the
+skill a run is shown and what they are about. Six skills take lessons (the Coordinator's planning skill and five analysis
 skills); `xarray-array-ops` has the tools region, which lists the helper functions that analysis code calls
 as `ao.<name>`. A skill without a region takes nothing.
+
+What stands in a region reaches an agent only when it opens the skill, and an agent opens a skill only
+when it is told to. So a run names to each reader the skills that hold something learned: a data Expert is
+told, before its first calculation, to read every skill of its role that holds a lesson and
+`xarray-array-ops` when it lists a learned function; the Coordinator reads `claim-grounded-writing` before
+the final answer when it holds a lesson (its planning skill is always named). A model call that only reads
+skill files is not counted in an Expert's call limit (up to six such calls a run). An arm without a library
+names no skill. In the runs up to 2026-10-08 nothing named
+the Experts' skills and they opened them in about 2% of their questions, so those runs say little about
+lessons for Experts or about tools.
 
 **Records.** `consolidate` writes one digest per finished run. For each question it holds who proposed it,
 when it was created and run, every retry, its result and stated limits, its cost, its label, and which of
@@ -499,8 +509,14 @@ support the answer gives, and superseded numbers still used. The reading is kept
 `.oceanx/research/referee/` and shown with the run's record. It is evidence, not a rule: in a hand check
 of five answers about one finding in three was wrong.
 
+The same reading can be applied to the test answers of every arm (`server/read_answers.py`, the only
+step after the runs that calls a model). It reads each arm against one list per question and counts, per
+answer, what is asked and not given and which conclusions are stronger than their support. It needs no
+rubric and no reference, so it measures what the reading can teach, not what the rubric scores.
+
 **Lessons.** The meta-agent then makes one model call per skill that takes lessons.
-It reads the skill as its readers get it and the records with their readings, then:
+It reads the skill as its readers get it, the lessons the other skills carry (so that one idea is not
+written into two skills) and the records with their readings, then:
 - judges every current lesson: keep, revise or retire;
 - may add at most two lessons to that skill.
 
@@ -508,8 +524,8 @@ What it decides takes effect at once. Code, not the model, enforces these rules:
 - a new lesson needs supporting runs from at least three different questions (two repeats of one question
   count once);
 - a lesson contradicted by as many questions as support it is retired, whatever the model said;
-- a skill never holds more lessons than its region allows; when it is full, a new lesson must be better
-  supported than the weakest one, which it replaces;
+- every lesson that passed is kept; a run is shown at most as many lessons of a skill as its region
+  allows, the best supported first;
 - a lesson is at most 40 words with an explicit "applies when" condition, and names no task or node.
 
 The instructions exclude programming advice, findings about one region or process, and anything the skill
@@ -518,8 +534,11 @@ already says.
 **Tools.** The same update counts the helper calls of every finished run and then:
 - takes a function that no run called for 20 runs in a row off the skill's list (a packaged function stays
   importable; a learned one is retired);
-- looks for small functions the Experts wrote again in runs of at least three different questions, and asks
-  the meta-agent for general versions of them, at most three per review, each with a test.
+- collects, per run, the small functions its Experts defined more than once, at most eight per run. The same
+  calculation is named differently from run to run (an area mean was `amean`, `wm`, `am` and `gw` within
+  one run), so the meta-agent matches the entries across runs by what they compute and writes general
+  versions, at most three per review, each with a test and each replacing code from runs of at least
+  three different questions.
 
 A proposed function is mounted only if all three checks pass: a static check (one pure function, no file,
 network or printing, a short list of allowed imports), its own test run in the sandbox, and a review by a

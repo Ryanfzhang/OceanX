@@ -20,7 +20,7 @@ start with `import oceanx_array_ops as ao`. They check structure, not scientific
 no data are inspected automatically, and every scientific choice (dimensions, units,
 weights) is an argument you pass. To check installation: `ao.self_test()`.
 
-<!-- oceanx:tools max=12 -->
+<!-- oceanx:tools max=40 -->
 <!-- /oceanx:tools -->
 
 Read [examples](/skills/xarray-array-ops/references/examples.md) for the specific

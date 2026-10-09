@@ -13,8 +13,9 @@ the model:
 * a new lesson needs supporting tasks from at least ``MIN_SUPPORT`` different research
   questions; repeated runs of one question count once;
 * a lesson whose counterexamples come from as many questions as its support is retired;
-* a skill holds at most as many lessons as its region allows; when it is full, a new lesson
-  must be better supported than the weakest one, which it then replaces;
+* the project keeps every lesson that passed; a region's ``max`` is how many of a skill's
+  lessons a task is shown, the best supported first, so the library can go on growing while
+  what a reader sees stays short;
 * a lesson is at most ``MAX_WORDS`` words with an explicit "applies when" condition, and
   names no task or node.
 
@@ -62,7 +63,8 @@ finished tasks. You maintain the lessons of this skill. They sit in one marked p
 and you cannot change any other part of it.
 
 This skill takes lessons about: {about}
-It holds at most {limit} lessons.
+A task is shown at most {limit} of its lessons, the best supported first. The project keeps the
+others, and their support goes on being counted.
 
 Do two things.
 
@@ -71,7 +73,7 @@ Do two things.
 - "revise": it holds, but the records show its wording or its condition is wrong; give the new
   "text" and "applies_when";
 - "retire": the records contradict it, the skill's own text already says it, or it repeats
-  another lesson.
+  another lesson, of this skill or of another one.
 For each lesson, name the task keys that newly support it ("supporting") and those that contradict
 it ("counter"). A task contradicts a lesson when the lesson's situation arose, the task did what
 the lesson says, and that cost effort without changing the answer or led to a wrong result; or
@@ -87,6 +89,8 @@ Prefer no lesson over a weak one.
 {scope}
 
 Do not propose:
+- what a lesson of another skill already says (they are listed below): one idea belongs in one
+  skill, the one whose subject it fits best;
 - programming advice (reading files, variable names, array shapes, indexing);
 - a finding about one task's region, season or process: a lesson must hold for other ocean questions;
 - advice that needs data, tools or time the tasks did not have;
@@ -347,6 +351,7 @@ class LessonBook:
             size += len(record)
         questions = self._questions()
         current = self.active(skill)
+        elsewhere = [l for l in self.active() if l.get("skill") != skill]
         wrong = [l["text"] for l in self.lessons() if l.get("human") == "wrong"]
         prompt = (REVIEW_INSTRUCTIONS.format(
             reader=reader, about=region.about, limit=region.limit, max_new=MAX_NEW_PER_REVIEW,
@@ -356,6 +361,8 @@ class LessonBook:
             + _body(self.skill_text(skill)) + "\n</skill>"
             + "\n\n# Its lessons now\n" + ("\n".join(self._facts(l, questions, digests) for l in current)
                                           or "None yet.")
+            + "\n\n# Lessons other skills carry\n" + ("\n".join(
+                f"- {l['skill']}: {l['text']} Applies when: {l['applies_when']}" for l in elsewhere) or "None.")
             + "\n\n# Lessons the owner marked wrong\n" + ("\n".join(f"- {text}" for text in wrong) or "None.")
             + "\n\n# Already in place\n" + _in_place(self.reader(skill, region), skill)
             + "\n\n# How to read a record\n" + reading + "\n" + READING_NOTE
@@ -437,25 +444,9 @@ class LessonBook:
                     f"contradicted: {len(counter)} questions against it, {len(support)} for it"))
                 changed.append({"lesson": lesson["id"], "change": "retired"})
 
-        def active() -> list[dict]:
-            return [l for l in lessons if l["status"] == "active" and l.get("skill") == skill]
-
-        def weakest() -> dict | None:
-            free = [l for l in active() if l.get("human") != "right"]
-            return min(free, key=lambda l: (self._strength(l, questions),
-                                            l.get("updated_at") or l.get("added_at") or ""),
-                       default=None)
-
         for raw in (reply.get("add") or [])[:MAX_NEW_PER_REVIEW]:
             try:
                 lesson = self._new_lesson(raw, skill, role, digests, lessons)
-                if len(active()) >= region.limit:
-                    loser = weakest()
-                    if loser is None or self._strength(lesson, questions) <= self._strength(loser, questions):
-                        raise ValueError(f"{skill} already holds {region.limit} lessons and this one is "
-                                         "not better supported than its weakest.")
-                    self._retire(loser, by="rule", reason=f"replaced by the better supported {lesson['id']}")
-                    changed.append({"lesson": loser["id"], "change": "retired"})
             except (ValueError, TypeError, AttributeError) as exc:
                 text = raw.get("text", "") if isinstance(raw, dict) else raw
                 rejected.append({"skill": skill, "text": str(text)[:200], "reason": str(exc)})
@@ -464,10 +455,6 @@ class LessonBook:
             self._log({"lesson": lesson["id"], "skill": skill, "change": "added", "by": "meta-agent",
                        "reason": str(raw.get("rationale") or "")[:600], "text": lesson["text"]})
             changed.append({"lesson": lesson["id"], "change": "added"})
-        while len(active()) > region.limit and weakest() is not None:  # older data over the limit
-            loser = weakest()
-            self._retire(loser, by="rule", reason=f"{skill} holds at most {region.limit} lessons")
-            changed.append({"lesson": loser["id"], "change": "retired"})
         return changed, rejected
 
     def review(self, llm: Callable[[str], str], *, task_keys: set[str] | None = None,

@@ -11,9 +11,11 @@ a tool on the list: one that no task has called for ``IDLE_TASKS`` tasks is take
 learned tool is then retired; a packaged one stays importable but is no longer listed. The
 owner can mark any tool right (it stays) or wrong (it goes).
 
-A learned tool starts as code that Experts wrote again in several tasks. The meta-agent turns
-such code into one general function with a test; it is mounted only if a static check, its
-test in the sandbox and an independent review all pass.
+A learned tool starts as code that Experts wrote again in several tasks. Experts name one
+calculation differently from task to task, so repeated code is collected per task and the
+meta-agent matches it across tasks by what it computes. It turns such code into one general
+function with a test; the function is mounted only if a static check, its test in the sandbox
+and an independent review all pass.
 
 Layout under ``<project>/.oceanx/research/tools/``::
 
@@ -45,7 +47,8 @@ PROBATION_TASKS = 10  # a new tool is listed ahead of the others until this many
 IDLE_TASKS = 20  # tasks in a row without a call before a tool leaves the list
 MAX_NEW_PER_REVIEW = 3
 MAX_TOOL_LINES = 60
-MAX_CANDIDATES = 30  # groups of repeated code shown to the meta-agent
+MAX_CANDIDATES = 96  # functions shown to the meta-agent, the most rewritten first
+MAX_PER_TASK = 8  # of them from one task, so that one long task does not fill the list
 MIN_SUPPORT = 3  # a learned tool must replace code written for this many different questions
 ALLOWED_IMPORTS = frozenset({"math", "numpy", "xarray", "pandas", "scipy", "gsw"})
 FORBIDDEN_CALLS = frozenset({"open", "eval", "exec", "compile", "__import__", "input", "print",
@@ -101,8 +104,10 @@ You maintain the helper functions of OceanX, an ocean-science research system. I
 ocean data with Python. The helper module below is imported in their code as `{alias}`. Past tasks
 show which small functions the Experts wrote again and again instead.
 
-Propose at most {max_new} new helper functions that would replace such repeated code. Prefer no
-function over a weak one.
+Propose at most {max_new} new helper functions that would replace such repeated code. The same
+calculation carries different names from task to task (`amean`, `wm`, `area_avg`): match the
+entries by what they compute, not by their names. A function is worth adding only when calling
+it is shorter and safer than writing the calculation again. Prefer no function over a weak one.
 
 Each function must:
 - be one pure function: it computes on its arguments and returns a value. No file, network or
@@ -122,8 +127,8 @@ must refuse. `np` and `{alias}` are already imported in the test.
 Do not propose: a function the module already has, even under another name; anything specific to
 one region, dataset or variable name; plotting; reading or writing files.
 
-"replaces" names the groups of repeated code the function replaces. Together they must come from
-at least {min_support} different research questions.
+"replaces" lists the ids (such as C07) of the entries the function replaces. Together they must
+come from at least {min_support} different research questions.
 
 Return JSON only:
 {{"tools": [{{"name": "...", "code": "def ...", "test": "...", "replaces": ["..."],
@@ -254,10 +259,14 @@ def run_tool_test(module_source: str, test: str, *, timeout: int = 120) -> str |
 
 
 def repeated_functions(stores: list[Path], questions: dict[str, str]) -> list[dict]:
-    """Functions Experts defined in the code of several tasks, grouped by name: the raw material
-    for a learned tool. ``questions`` maps a task key to its research question, because repeats
-    of one question are one piece of evidence. No model is involved."""
-    groups: dict[str, dict] = {}
+    """Functions the Experts of a task wrote again: the raw material for a learned tool.
+
+    A function is grouped by its name inside one task only, because the same calculation is
+    called ``amean`` in one task and ``wm`` in the next. An entry is kept when the task defined
+    the function at least twice, or another task defined one of the same name. ``questions``
+    maps a task key to its research question, because repeats of one question are one piece of
+    evidence. No model is involved; the meta-agent matches the entries across tasks."""
+    by_task: dict[str, dict[str, dict]] = {}
     for store in stores:
         task_root, key = Path(store).parents[2], task_key(Path(store))
         files = [*task_root.glob("agents/*/.runtime/executions/*/code/analysis.py"),
@@ -274,18 +283,29 @@ def repeated_functions(stores: list[Path], questions: dict[str, str]) -> list[di
                 body = ast.get_source_segment(source, node) or ""
                 if not 2 <= len(body.splitlines()) <= MAX_TOOL_LINES:
                     continue
-                group = groups.setdefault(node.name, {"name": node.name, "tasks": set(),
-                                                      "questions": set(), "uses": 0, "examples": {}})
-                group["tasks"].add(key)
-                group["questions"].add(" ".join((questions.get(key) or key).lower().split()))
+                group = by_task.setdefault(key, {}).setdefault(node.name, {"uses": 0, "bodies": {}})
                 group["uses"] += 1
-                group["examples"].setdefault(ast.dump(node), body)
-    ranked = sorted(groups.values(), key=lambda g: (-len(g["questions"]), -len(g["tasks"]), -g["uses"]))
-    return [{"name": g["name"], "questions": len(g["questions"]), "tasks": len(g["tasks"]),
-             "uses": g["uses"], "task_keys": sorted(g["tasks"]),
-             "question_set": sorted(g["questions"]),
-             "examples": sorted(g["examples"].values(), key=len)[:2]}
-            for g in ranked if len(g["questions"]) >= 2][:MAX_CANDIDATES]
+                group["bodies"].setdefault(ast.dump(node), [0, body])[0] += 1
+    named_in: dict[str, set[str]] = {}
+    for key, groups in by_task.items():
+        for name in groups:
+            named_in.setdefault(name, set()).add(key)
+    found = []
+    for key, groups in by_task.items():
+        question = " ".join((questions.get(key) or key).lower().split())
+        kept = [{"name": name, "uses": group["uses"], "other_tasks": len(named_in[name]) - 1,
+                 "task_keys": [key], "question_set": [question],
+                 # The form the task wrote most often; the shorter one when two are as common.
+                 "examples": [min(group["bodies"].values(), key=lambda b: (-b[0], len(b[1])))[1]]}
+                for name, group in groups.items()
+                if group["uses"] >= 2 or len(named_in[name]) > 1]
+        kept.sort(key=lambda c: (-(c["uses"] + c["other_tasks"]), c["name"]))
+        found += kept[:MAX_PER_TASK]
+    found.sort(key=lambda c: (-(c["uses"] + c["other_tasks"]), c["name"], c["task_keys"]))
+    found = found[:MAX_CANDIDATES]
+    for index, candidate in enumerate(found, 1):
+        candidate["id"] = f"C{index:02d}"
+    return found
 
 
 def _usage_rate(stats: dict) -> float:
@@ -451,14 +471,17 @@ class ToolBook:
     # --- learning ----------------------------------------------------------------
     def writing_prompt(self, candidates: list[dict]) -> str:
         groups = "\n\n".join(
-            f"## {c['name']}: written in {c['tasks']} tasks on {c['questions']} different questions, "
-            f"{c['uses']} times\n" + "\n\n".join(f"```python\n{example}\n```" for example in c["examples"])
+            f"## {c['id']} `{c['name']}`: defined in {c['uses']} code runs of the task on "
+            f"\"{c['question_set'][0][:120]}\""
+            + (f"; the same name in {c['other_tasks']} other tasks" if c["other_tasks"] else "")
+            + "\n" + "\n\n".join(f"```python\n{example}\n```" for example in c["examples"])
             for c in candidates)
         return (WRITING_INSTRUCTIONS.format(
             alias=TOOL_ALIAS, max_new=MAX_NEW_PER_REVIEW, imports=", ".join(sorted(ALLOWED_IMPORTS)),
             max_lines=MAX_TOOL_LINES, min_support=MIN_SUPPORT)
             + "\n# The helper module now\n```python\n" + self.source().rstrip()
-            + "\n```\n\n# Code the Experts wrote repeatedly\n" + groups)
+            + "\n```\n\n# Code the Experts wrote repeatedly\nEach entry is one function as the Experts of "
+            "one task wrote it.\n\n" + groups)
 
     def admit(self, raw: dict, candidates: list[dict], *, reviewer: Callable[[str], str] | None = None,
               run_test: Callable[[str, str], str | None] | None = None) -> dict:
@@ -473,8 +496,9 @@ class ToolBook:
             raise ValueError(f"The helper module already has, or once had, {name}.")
         check_tool_code(code, name=name)
         check_test_code(test)
-        by_name = {c["name"]: c for c in candidates}
-        replaced = [by_name[n] for n in dict.fromkeys(raw.get("replaces") or []) if n in by_name]
+        # An id names one entry; a name stands for every entry that carries it.
+        named = [str(reference) for reference in dict.fromkeys(raw.get("replaces") or [])]
+        replaced = [c for c in candidates if c["id"] in named or c["name"] in named]
         questions = {q for c in replaced for q in c["question_set"]}
         if len(questions) < MIN_SUPPORT:
             raise ValueError(f"A tool must replace code from at least {MIN_SUPPORT} different "
@@ -491,7 +515,8 @@ class ToolBook:
         entry = {"source": "learned", "status": "listed", "human": None, "code": code, "test": test,
                  "signature": described["signature"], "summary": described["summary"],
                  "created_at": datetime.now(UTC).isoformat(),
-                 "evidence": {"replaces": [c["name"] for c in replaced], "questions": len(questions),
+                 "evidence": {"replaces": list(dict.fromkeys(c["name"] for c in replaced)),
+                              "questions": len(questions),
                               "tasks": sorted({k for c in replaced for k in c["task_keys"]})},
                  "stats": {"tasks": 0, "tasks_called": 0, "calls": 0, "idle": 0}}
         saved["tools"][name] = entry

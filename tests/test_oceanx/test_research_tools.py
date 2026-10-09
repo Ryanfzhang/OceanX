@@ -1,6 +1,7 @@
 """Skill regions, the helper functions a task mounts, call counts, and tools learned from tasks."""
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -94,7 +95,7 @@ def test_the_tools_region_is_written_from_the_code(book):
     assert all(f["summary"] for f in described)  # every function says what it does
     assert describe_functions("def _hidden(x):\n    return x\n\ndef shown(x, *, dim):\n    '''One.\n\n    Two.'''\n") == [
         {"name": "shown", "signature": "shown(x, *, dim)", "summary": "One."}]
-    assert book.limit() == 12 and [t["name"] for t in book.mounted()] == PACKAGED
+    assert book.limit() == 40 and [t["name"] for t in book.mounted()] == PACKAGED
     block = book.block().splitlines()
     assert len(block) == 8 and block[5] == (
         "- `ao.weighted_mean(array, weights, *, dims)`: Named-dimension mean with a validity-matched "
@@ -305,13 +306,33 @@ def test_code_written_again_in_several_tasks_is_the_material_for_a_tool(tmp_path
                        "def only_here(x):\n    y = x\n    return y\n")
     (tmp_path / "t1" / "agents" / "physics" / "scratch").mkdir(parents=True)
     (tmp_path / "t1" / "agents" / "physics" / "scratch" / "broken.py").write_text("def broken(:\n")
+    # Another task wrote the same calculation twice under a name of its own.
+    for run in ("e2", "e3"):
+        other = tmp_path / "t2" / "agents" / "physics" / ".runtime" / "executions" / run / "code" / "analysis.py"
+        other.parent.mkdir(parents=True)
+        other.write_text("def wm(x, lat):\n    w = np.cos(np.deg2rad(lat))\n    return (x * w).sum() / w.sum()\n")
     questions = {d["task_key"]: d["question"] for d in book.memory.load_digests()}
-    [group] = repeated_functions(stores, questions)  # one_liner, main and only_here are not repeats
-    assert (group["name"], group["questions"], group["tasks"], group["uses"]) == ("area_mean", 4, 4, 5)
-    assert group["task_keys"] == sorted(task_key(store) for store in stores)
-    assert len(group["examples"]) == 2 and all(e.startswith("def area_mean") for e in group["examples"])
-    # Repeated runs of one question are one piece of evidence.
-    assert repeated_functions(stores, dict.fromkeys(questions, "Same question?")) == []
+    found = repeated_functions(stores, questions)  # one_liner, main and only_here are not repeats
+    # One entry per task and name: the meta-agent, not the name, matches them across tasks.
+    assert [(c["id"], c["name"]) for c in found] == [
+        ("C01", "area_mean"), ("C02", "area_mean"), ("C03", "area_mean"), ("C04", "area_mean"), ("C05", "wm")]
+    first = found[0]  # the task that wrote it twice
+    assert (first["task_keys"], first["uses"], first["other_tasks"]) == ([task_key(stores[0])], 2, 3)
+    assert first["examples"] == ["def area_mean(field, lat):\n    w = np.cos(lat)\n    return (field * w).mean()"]
+    assert all((c["uses"], c["other_tasks"], len(c["question_set"])) == (1, 3, 1) for c in found[1:4])
+    assert sorted(c["task_keys"][0] for c in found[:4]) == sorted(task_key(store) for store in stores)
+    assert (found[4]["task_keys"], found[4]["uses"], found[4]["other_tasks"]) == ([task_key(stores[2])], 2, 0)
+    # Repeated runs of one question are one piece of evidence: every entry then has the same question.
+    same = repeated_functions(stores, dict.fromkeys(questions, "Same question?"))
+    assert {q for c in same for q in c["question_set"]} == {"same question?"}
+    # One long task does not fill the list.
+    busy = tmp_path / "t3" / "agents" / "physics" / "scratch"
+    busy.mkdir(parents=True)
+    for index in range(2):
+        (busy / f"many{index}.py").write_text("\n".join(
+            f"def helper_{n}(x):\n    y = x + {n}\n    return y\n" for n in range(20)))
+    crowded = repeated_functions(stores, questions)
+    assert sum(c["task_keys"] == [task_key(stores[3])] for c in crowded) == toolbook.MAX_PER_TASK
 
 
 def test_a_proposed_tool_is_mounted_only_through_every_gate(tmp_path):
@@ -334,13 +355,15 @@ def test_a_proposed_tool_is_mounted_only_through_every_gate(tmp_path):
         return json.dumps({"verdict": "accept", "reason": "Correct."})
 
     result = book.learn(llm, stores, reviewer=reviewer, run_test=run_test)
-    assert result["created"] == ["anomaly"] and result["candidates"] == 1
+    assert result["created"] == ["anomaly"] and result["candidates"] == 4
     assert [(r["name"], r["reason"].split(";")[0][:60]) for r in result["rejected"]] == [
         ("weighted_mean", "The helper module already has, or once had, weighted_mean."),
         ("departure", "The code must be exactly one function named departure.")]
     # The meta-agent saw the module as it is and the repeated code, without the call counter.
     assert "# The helper module now" in prompts[0] and "def weighted_mean(" in prompts[0]
-    assert "## area_mean: written in 4 tasks on 4 different questions, 4 times" in prompts[0]
+    assert re.search(r'## C01 `area_mean`: defined in 1 code runs of the task on "why is t\d warm\?"; '
+                     "the same name in 3 other tasks", prompts[0])
+    assert "match the\nentries by what they compute, not by their names" in prompts[0]
     assert "_oceanx_count_calls" not in prompts[0]
     # The test ran against the module the function would be mounted in; the reviewer saw both.
     [(module, test)] = tested
@@ -374,13 +397,16 @@ def test_a_failed_test_or_a_refusing_reviewer_keeps_a_tool_out(tmp_path):
             {"verdict": "reject", "reason": "Divides by the wrong count."}))
     with pytest.raises(ValueError, match="at least 3 different questions; this replaces code from 0"):
         book.admit({**proposal, "replaces": ["never_written"]}, candidates, run_test=lambda module, test: None)
+    # An id names one task's entry, so two ids are code from two questions.
+    with pytest.raises(ValueError, match="at least 3 different questions; this replaces code from 2"):
+        book.admit({**proposal, "replaces": ["C01", "C02"]}, candidates, run_test=lambda module, test: None)
     with pytest.raises(ValueError, match="lower-case name"):
         book.admit({**proposal, "name": "Bad-Name"}, candidates, run_test=lambda module, test: None)
     assert book.version() is None and not (book.root / "learned").exists()  # nothing was mounted
     # With code from fewer than three questions nothing could pass, so the model is not asked.
     few, few_stores = project_with_repeated_code(tmp_path / "few", tasks=2)
     result = few.learn(lambda prompt: pytest.fail("the model must not be asked"), few_stores)
-    assert result == {"created": [], "rejected": [], "candidates": 1}
+    assert result == {"created": [], "rejected": [], "candidates": 2}
     # A reply that cannot be read adds nothing and does not stop the update.
     unreadable = book.learn(lambda prompt: "I could not decide.", stores)
     assert unreadable["created"] == [] and "could not be read" in unreadable["rejected"][0]["reason"]
@@ -391,7 +417,7 @@ def test_a_learned_tool_nobody_calls_is_retired(tmp_path, monkeypatch):
     monkeypatch.setattr(toolbook, "IDLE_TASKS", 2)
     book, stores = project_with_repeated_code(tmp_path)
     candidates = repeated_functions(stores, {d["task_key"]: d["question"] for d in book.memory.load_digests()})
-    proposal = {"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": ["area_mean"]}
+    proposal = {"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": ["C01", "C02", "C04"]}
     book.admit(proposal, candidates, run_test=lambda module, test: None)
     book.mark("weighted_mean", "right", reviewer="owner")
     mounted = [*PACKAGED, "anomaly"]
@@ -423,3 +449,48 @@ def test_a_tool_test_runs_in_the_sandbox(tmp_path, book, monkeypatch):
     secret.write_text("private")
     outside = toolbook.run_tool_test(module, f"assert __builtins__.open({str(secret)!r}).read()")
     assert outside.startswith(("PermissionError", "FileNotFoundError"))
+
+
+def test_a_task_names_to_each_reader_the_skills_that_hold_what_was_learned(tmp_path):
+    """Lessons and tools live only in skills, and an agent opens a skill only when told to:
+    unnamed, Experts opened these skills in about 2% of their questions."""
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from oceanx.research import graphs
+    from oceanx.research.review import ProjectResearch
+    project = ProjectResearch(SimpleNamespace(root=tmp_path / ".oceanx"))
+    process, statistics = "ocean_process_expert", "statistical_inference_expert"
+    # Nothing learned: nobody is told to read anything.
+    assert all(project.learned_in(role, research=True) == [] for role in ("coordinator", process, statistics))
+    assert graphs.learned_skills_rule([]) == ""
+
+    book, stores = project_with_repeated_code(tmp_path)  # the same project folder
+    candidates = repeated_functions(stores, {d["task_key"]: d["question"] for d in book.memory.load_digests()})
+    book.admit({"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": ["area_mean"]},
+               candidates, run_test=lambda module, test: None)
+    project.lessons._save([
+        {"id": f"L00{index}", "skill": skill, "role": "expert", "text": "Check the mask first.",
+         "applies_when": "Always.", "evidence": {"supporting": [], "counter": []}, "status": "active",
+         "human": None, "added_by": "meta-agent", "added_at": "2026-01-01T00:00:00+00:00"}
+        for index, skill in enumerate(("research-trajectory-planning", "claim-grounded-writing",
+                                       "ocean-dataset-diagnosis", "hypothesis-experiment-design"), 1)])
+    # Each reader is told of the skills it can open that now hold lessons, and of the learned tool.
+    assert set(project.learned_in(process, research=True)) == {
+        "claim-grounded-writing", "ocean-dataset-diagnosis", toolbook.SKILL}
+    assert set(project.learned_in(statistics, research=True)) == {
+        "claim-grounded-writing", "ocean-dataset-diagnosis", "hypothesis-experiment-design", toolbook.SKILL}
+    assert set(project.learned_in("coordinator", research=True)) == {
+        "research-trajectory-planning", graphs.WRITING_SKILL}
+    # Lessons are written only into research tasks; the learned tool is mounted in every task.
+    assert project.learned_in(process, research=False) == [toolbook.SKILL]
+    rule = graphs.learned_skills_rule(project.learned_in(process, research=True))
+    assert "Earlier tasks left lessons in /skills/" in rule and "/skills/ocean-dataset-diagnosis/SKILL.md" in rule
+    assert f"/skills/{toolbook.SKILL}/SKILL.md lists tested helper functions, already imported as `ao`" in rule
+    assert rule.endswith("Read these files in one step before your first calculation.")
+    assert graphs.learned_skills_rule([toolbook.SKILL]).endswith("Read this file before your first calculation.")
+    assert f"/skills/{graphs.WRITING_SKILL}/SKILL.md" in graphs.FINAL_ANSWER_SKILL_RULE
+    # Both instructions are part of the prompts the research graphs build.
+    source = Path(graphs.__file__).read_text(encoding="utf-8")
+    assert 'prompt += " " + learned_skills_rule(learned)' in source
+    assert 'prompt += "\\n" + FINAL_ANSWER_SKILL_RULE' in source

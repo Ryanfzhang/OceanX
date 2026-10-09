@@ -248,6 +248,18 @@ def _wind_down_request(request):
     )
 
 
+FREE_SKILL_CALLS = 6  # model calls of one Expert run that only open skill files and are not counted
+
+
+def _reads_only_skills(message) -> bool:
+    """A model call that did nothing but open files under /skills."""
+    calls = getattr(message, "tool_calls", None) or []
+    return bool(calls) and all(
+        call.get("name") == "read_file"
+        and str((call.get("args") or {}).get("file_path", "")).startswith("/skills/")
+        for call in calls)
+
+
 def _call_budget_sentence() -> str:
     """The Expert's whole budget, once, in its instructions (the same for the whole run)."""
     return (
@@ -255,7 +267,8 @@ def _call_budget_sentence() -> str:
         f"can run several tools. Analysis tools work through call {EXPERT_WIND_DOWN_START}; calls "
         f"{EXPERT_WIND_DOWN_START + 1} to {EXPERT_FINAL_CALL} may only finish the report, and call "
         f"{EXPERT_MODEL_CALL_LIMIT} has no tools. The end of each tool result shows which call you are on "
-        "and how many remain.\n"
+        f"and how many remain. A call that only reads files under /skills is not counted, up to "
+        f"{FREE_SKILL_CALLS} such calls.\n"
     )
 
 
@@ -415,6 +428,16 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
         super().__init__(run_limit=EXPERT_MODEL_CALL_LIMIT, exit_behavior="end")
         self.report_path = report_path
 
+    def after_model(self, state, runtime):
+        """Count the call just made, unless it only opened skill files. Reading what the skills
+        hold is not analysis, so the first ``FREE_SKILL_CALLS`` such calls of a run leave the
+        budget as it was; later ones are counted, so a run cannot go on reading for free."""
+        messages = state.get("messages") or []
+        if messages and _reads_only_skills(messages[-1]) and sum(
+                _reads_only_skills(message) for message in messages) <= FREE_SKILL_CALLS:
+            return None
+        return super().after_model(state, runtime)
+
     def _report_missing(self) -> bool:
         if self.report_path is None:
             return False
@@ -572,6 +595,33 @@ def coordinator_report_path(config) -> Path:
 
 # Experts that analyse the supplied data; literature and discussion work starts without Python.
 DATA_EXPERT_ROLES = frozenset({"ocean_process_expert", "statistical_inference_expert"})
+# What the project learned reaches an agent only inside its skills (ProjectResearch.skills). Where
+# no instruction named a skill, Experts opened the ones that hold lessons in about 2% of their
+# questions and the helper list in 3 of 468 (34 benchmark runs, 2026-10-09). So a research task
+# names to each reader the skills that now carry something learned (ProjectResearch.learned_in),
+# as the Coordinator's planning skill always is. A project that has learned nothing names none.
+WRITING_SKILL = "claim-grounded-writing"  # the Coordinator reads its lessons before the final answer
+FINAL_ANSWER_SKILL_RULE = f"Before you write the final answer, read /skills/{WRITING_SKILL}/SKILL.md once. "
+
+
+def learned_skills_rule(skills: list[str]) -> str:
+    """Tells a data Expert which skills hold what earlier tasks learned; empty when none does.
+    A call that only reads skills is not counted against the Expert's budget (after_model below)."""
+    from oceanx.research.toolbook import SKILL as TOOL_SKILL
+    from oceanx.skill_regions import TOOL_ALIAS
+    lessons = [name for name in skills if name != TOOL_SKILL]
+    parts = []
+    if lessons:
+        parts.append("Earlier tasks left lessons in "
+                     + ", ".join(f"/skills/{name}/SKILL.md" for name in lessons) + ".")
+    if TOOL_SKILL in skills:
+        parts.append(f"/skills/{TOOL_SKILL}/SKILL.md lists tested helper functions, already imported as "
+                     f"`{TOOL_ALIAS}`, some written from calculations earlier tasks repeated; call one "
+                     "instead of writing that calculation again.")
+    if not parts:
+        return ""
+    return " ".join(parts) + (" Read these files in one step before your first calculation."
+                              if len(skills) > 1 else " Read this file before your first calculation.")
 
 
 async def _describe_task_data(c) -> None:
@@ -811,10 +861,13 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
     from oceanx.native_skills import prepare_skill_library
     # What the project learned reaches a role only inside the regions its skills reserve:
     # the helper functions always, lessons only in research mode (see ProjectResearch.skills).
+    project = _project()
     library = prepare_skill_library(
         work_root / ".runtime" / "skills",
         role=role, capabilities=svc.skill_capabilities,
-        revisions=_project().skills(research=research))
+        revisions=project.skills(research=research))
+    # The skills this role is told to open, because they now hold something the project learned.
+    learned = project.learned_in(role, research=research, capabilities=svc.skill_capabilities)
     from oceanx.native_backend import task_backend
     filesystem, working_directory = task_backend(host(), config, run=run, library=library)
     discussion = role == "scientific_discussion_partner"
@@ -846,6 +899,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                        "variables for this attempt, so prefer it for iterative array analysis; use execute "
                        "for reproducible scripts or shell work. Do not save full source-field copies merely "
                        "to carry state within one attempt. Save only a checkpoint another node or retry needs.")
+            if role in DATA_EXPERT_ROLES and learned:
+                prompt += " " + learned_skills_rule(learned)
     if (svc.native_vision and research and not static
             and role not in {"coordinator", "scientific_discussion_partner"}):
         prompt += (
@@ -903,6 +958,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                "and time ranges; reuse them rather than re-inspecting the files."
                "\nDataset and workspace context:\n"
                + json.dumps(context.payload, ensure_ascii=False))
+    if role == "coordinator" and research and WRITING_SKILL in learned:
+        prompt += "\n" + FINAL_ANSWER_SKILL_RULE
     prompt += suffix
 
     filesystem_tools = (

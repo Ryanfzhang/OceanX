@@ -157,10 +157,14 @@ python benchmarking/server/run_oceanx.py --arm OceanX-L1 --library "$ROOT/librar
 RUNS=$ROOT/$EXP/runs
 python benchmarking/evaluation/evaluate.py library-check --runs "$RUNS/OceanX-L1"
 python benchmarking/evaluation/evaluate.py process --runs "$RUNS/OceanX" "$RUNS/OceanX-L1" --out "$ROOT/$EXP/process"
+python benchmarking/server/read_answers.py --runs "$RUNS/OceanX" "$RUNS/OceanX-L1" --out "$ROOT/$EXP/readings"
 ```
 
 - `library-check`：带库的 attempt 运行前后库没有变，`changed_or_unfinished` 应该是空的。
 - `process`：过程指标，包括调用了多少次辅助函数、引用了几条经验、代码失败的比例。
+- `read_answers.py`：让模型只看题目和最终答案，数每份答案里题目要的有几项没给、有几条结论超出了证据。
+  各组用同一份清单（存在 `readings/asked/`），以后新跑的组加进 `--runs` 再跑一遍即可，读过的不会重读。
+  它有模型调用（每份答案约 2.5 万 token），不是评分；约三分之一的标记是误报，结论要靠人工核对几条。
 - 确认一组带没带库：
   - 方法目录的 `arm.json` 里，`library` 是 `null` 还是一个快照；
   - 带库的 attempt 目录里有 `arm_library.json`；
