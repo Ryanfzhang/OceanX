@@ -83,7 +83,10 @@ tolerance, the same one the judge later uses between an agent and the reference.
 | `not testable with the supplied data` | The data cannot decide. |
 
 A finding the rubric marks `partly testable` gets the label of its testable part, and its `expected` names
-what cannot be tested.
+what cannot be tested. `not testable with the supplied data` is for a finding of which no part can be
+decided. Where the data follow a feature for a part of the paper's period only (an eddy that is lost
+half-way), the label is given on that part, `partly reproduced` at most, and `expected` says where the
+record ends.
 
 The numbers that decide a label are the ones the claim and its tolerance name: "up to 9.7 C" is the
 largest value in the paper's period, compared once. Other numbers in `paper_evidence` are shown beside the
@@ -116,9 +119,9 @@ of the neighbouring basin inside it.
 definition implies, say so, and give the other reading as an alternative. A column warmer than 26 C down
 to the seabed has its heat content above 26 C integrated to the seabed; it is not unknown.
 
-**A candidate cause** (disagreement questions) is one of two kinds (the second and the wording for counts
-are the Owner's decision of 2026-10-08). Each entry of `spec.md` says which result gives which label
-before anything is computed.
+**A candidate cause** (disagreement questions) is one of two kinds (the second kind is the Owner's decision
+of 2026-10-08, the wording for counts, dates and rates that of 2026-10-09). Each entry of `spec.md` says
+which result gives which label before anything is computed.
 
 *A choice of method* (a definition, a baseline, a threshold, a record length, a product). Judge it by what
 the choice does to the question's main answer, on a common footing: a longer season has more days, so
@@ -126,9 +129,13 @@ compare rates, not totals.
 
 | Label | When |
 |---|---|
-| `supported` | The choice changes the conclusion: the sign of the result, or whether it differs from zero under statistics that allow for autocorrelation. For an answer that is a count, a date or a rate: the choice moves it by more than its own 95% uncertainty. |
+| `supported` | The choice changes the conclusion: the sign of the result, or whether it differs from zero under statistics that allow for autocorrelation. For an answer that is a count, a date or a rate: the choice moves it by more than twice the tolerance, so that no value agrees with both answers. |
 | `partly supported` | The conclusion stands, but the size changes by more than the tolerance of the answer-key item it bears on. |
 | `not supported` | The test shows no such change, or the supplied data cannot show the cause at work. The `why` says which. |
+
+Changing a definition on one record is a paired comparison, so the sampling uncertainty of the answer is
+not the yardstick, and a date has none. Where the cause is the length of the record itself, the two ends
+of the answer's 95% interval stand for the two choices.
 
 *A physical mechanism* (a wind, a wave, an intrusion). Judge it by the relation the rubric's `test`
 predicts.
@@ -192,12 +199,12 @@ stays one label). The judge accepts either label from an agent whose numbers agr
 
    `items` hold only the numbers that decide a value or a label. Each has a name that carries its unit, and
    each item a `definition` of its own. An answer-key item gives one value for the question's whole period
-   first, then the values by year. Daily series and sensitivity tables go into CSV files beside
-   `values.json`.
+   first, then the values by year. Alternatives change one choice at a time from the primary; a grid of
+   combinations, like daily series and sensitivity tables, goes into CSV files beside `values.json`.
 4. **Check yourself** and write what each check showed in `checks.md`:
    - units and order of magnitude, against a published or textbook value;
-   - the main number again by a second, independent code path (another reduction order, an explicit loop
-     on a sub-sample, another library call);
+   - the task's own deciding numbers again by a second, independent code path (another reduction order, an
+     explicit loop on a sub-sample, another library call); a check that several tasks share does not count;
    - closure or conservation where the quantity has one;
    - every other legitimate definition of `spec.md`, and whether the reading of the result changes;
    - the share of missing or masked data in what was averaged;
