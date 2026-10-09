@@ -63,6 +63,10 @@ it lies between its neighbours.
   `$EVAL_ROOT/<experiment>/references/<task>/outputs/values.json`. There an agent's verdict with either
   label matches the reference, provided its numbers agree with the reference under the definition it
   states.
+- **Tied entries** (Owner's decision of 2026-10-09). Where a tolerance asks for a ranking, a first place
+  or one of several categories and the frozen `expected` names entries as tied, an agent's answer matches
+  with those entries in any order and with any of them named first. Entries the reference does not name
+  as tied keep their place.
 - **Findings that cannot be tested.** Full marks need a plain statement that the supplied data cannot test
   the finding, naming what is missing. Reporting such a finding as verified scores 0.
 - **Open problems reward depth and breadth only when executed.** A literature review without analysis caps

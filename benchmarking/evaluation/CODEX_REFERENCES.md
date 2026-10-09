@@ -54,11 +54,21 @@ nothing.
    zero. Write the reason in `open-points.md` and wait for the owner. A tolerance is never set from what
    any method answered.
 
-   One addition needs no new decision (Owner, 2026-10-08). Where a tolerance asks for a sign or a relative
-   size and the reference value does not differ from zero, the frozen tolerance keeps its wording and
-   gains this sentence: "a value that does not differ from zero in the reference agrees when the agent's
-   value lies within the reference's 95% interval or is reported as not different from zero". `expected`
-   then gives that interval, and the report lists every place where the sentence was added.
+   Two additions need no new decision. The report lists every place where either sentence was added.
+
+   *A value near zero* (Owner, 2026-10-08). Where a tolerance asks for a sign or a relative size and the
+   reference value does not differ from zero, the frozen tolerance keeps its wording and gains this
+   sentence: "a value that does not differ from zero in the reference agrees when the agent's value lies
+   within the reference's 95% interval or is reported as not different from zero". `expected` then gives
+   that interval.
+
+   *A tie* (Owner, 2026-10-09). Where a tolerance asks for a ranking, a first place or one of several
+   categories ("ranking exact", "top relation exact", "main pathway exact") and the reference cannot tell
+   two entries apart, the frozen tolerance keeps its wording and gains this sentence: "entries that the
+   reference names as tied may come in any order, and any of them may be named first". Two entries are
+   tied when the 95% interval of the difference between their deciding numbers includes zero. Take the
+   difference inside the same resampling that gives each number its own interval: between the absolute
+   values of two correlations, between two seasons year by year. `expected` then names the tied entries.
 5. **Do not guess.** When a procedure is ambiguous, when the supplied data cannot give the quantity, or
    when the paper says something else than the rubric, do not choose silently. Record it in
    `open-points.md` with the options and what each would change, leave that place unfilled, and go on with
