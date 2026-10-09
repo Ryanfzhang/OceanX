@@ -330,25 +330,37 @@ class LessonBook:
         return (f"- {lesson['id']}: supported by {len(support)} questions, contradicted by "
                 f"{len(counter)}; shown in {shown} tasks, cited in {cited}{mark}")
 
-    def review_prompt(self, skill: str, digests: list[dict]) -> tuple[str, int]:
-        """The meta-agent's prompt for one skill, and how many task records fit in it."""
-        region = self.regions()[skill]
-        reader, scope, reading = REVIEW_SCOPE[self.reader(skill, region)]
-        # Newest first, but one run of every question before any repeat, because support is
-        # counted in questions.
+    def _fitting(self, skill: str, digests: list[dict],
+                 unread: frozenset[str] = frozenset()) -> list[tuple[dict, str]]:
+        """The tasks one review prompt holds, each with its record. Tasks no review has read yet
+        come before the others, the newest first, and one run of every question before any
+        repeat, because support is counted in questions."""
+        role = self.reader(skill, self.regions()[skill])
+        newest = sorted(digests, key=_task_time, reverse=True)
         firsts, repeats, seen = [], [], set()
-        for digest in sorted(digests, key=_task_time, reverse=True):
+        for digest in sorted(newest, key=lambda d: d["task_key"] not in unread):  # a stable sort
             question = _norm(digest.get("question"))
             (repeats if question in seen else firsts).append(digest)
             seen.add(question)
         readings = Referee(self.memory).readings()
-        records, size = [], 0
+        fitted, size = [], 0
         for digest in firsts + repeats:
-            record = _record(digest, self.reader(skill, region), readings.get(digest["task_key"]))
-            if records and size + len(record) > MAX_PROMPT_CHARS:
+            record = _record(digest, role, readings.get(digest["task_key"]))
+            if fitted and size + len(record) > MAX_PROMPT_CHARS:
                 break
-            records.append(record)
+            fitted.append((digest, record))
             size += len(record)
+        return fitted
+
+    def review_prompt(self, skill: str, digests: list[dict],
+                      unread: frozenset[str] = frozenset()) -> tuple[str, int]:
+        """The meta-agent's prompt for one skill, and how many task records fit in it."""
+        fitted = self._fitting(skill, digests, unread)
+        return self._prompt(skill, digests, [record for _, record in fitted]), len(fitted)
+
+    def _prompt(self, skill: str, digests: list[dict], records: list[str]) -> str:
+        region = self.regions()[skill]
+        reader, scope, reading = REVIEW_SCOPE[self.reader(skill, region)]
         questions = self._questions()
         current = self.active(skill)
         elsewhere = [l for l in self.active() if l.get("skill") != skill]
@@ -367,7 +379,7 @@ class LessonBook:
             + "\n\n# Already in place\n" + _in_place(self.reader(skill, region), skill)
             + "\n\n# How to read a record\n" + reading + "\n" + READING_NOTE
             + "\n\n# Records\n" + "\n\n".join(records))
-        return prompt, len(records)
+        return prompt
 
     def _evidence(self, raw: dict, digests: dict[str, dict]) -> tuple[list[str], list[str]]:
         supporting = [k for k in dict.fromkeys(raw.get("supporting") or []) if k in digests]
@@ -464,19 +476,24 @@ class LessonBook:
                    if d.get("finished") and (task_keys is None or d["task_key"] in task_keys)}
         questions = len({_norm(d.get("question")) for d in digests.values()})
         result = {"changes": [], "rejected": [], "skills_reviewed": 0, "tasks_considered": 0,
-                  "questions": questions, "new_tasks": 0}
-        new = set(digests) - set(self._state().get("tasks", []))
-        result["new_tasks"] = len(new)
-        if not new and not force:
+                  "questions": questions, "new_tasks": 0, "tasks_left": 0}
+        read = set(self._state().get("tasks", [])) & set(digests)
+        unread = frozenset(set(digests) - read)
+        result["new_tasks"] = result["tasks_left"] = len(unread)
+        if not unread and not force:
             return result  # nothing happened since the last review
         lessons = self.lessons()
+        held: set[str] | None = None  # the tasks whose records every reviewed skill's prompt held
         for skill, region in self.regions().items():
             has_lessons = any(l["status"] == "active" and l.get("skill") == skill for l in lessons)
             if not has_lessons and questions < MIN_SUPPORT:
                 continue  # nothing to judge, and no new lesson could pass
-            prompt, fitted = self.review_prompt(skill, list(digests.values()))
+            fitted = self._fitting(skill, list(digests.values()), unread)
+            keys = {digest["task_key"] for digest, _ in fitted}
+            held = keys if held is None else held & keys
+            prompt = self._prompt(skill, list(digests.values()), [record for _, record in fitted])
             result["skills_reviewed"] += 1
-            result["tasks_considered"] = max(result["tasks_considered"], fitted)
+            result["tasks_considered"] = max(result["tasks_considered"], len(fitted))
             try:
                 reply = parse_json_object(llm(prompt))
             except ValueError as exc:  # an unreadable reply changes nothing; the other skills go on
@@ -487,8 +504,12 @@ class LessonBook:
             result["changes"] += changed
             result["rejected"] += rejected
             self._save(lessons)  # a later skill's prompt sees what this one changed
+        # A prompt holds a limited number of records. A task that did not fit stays unread, so
+        # the next review runs for it and reads it first.
+        read |= set(digests) if held is None else held
+        result["tasks_left"] = len(set(digests) - read)
         atomic_write_text(self.root / "review_state.json",
-                          json.dumps({"at": _now(), "tasks": sorted(digests)}))
+                          json.dumps({"at": _now(), "tasks": sorted(read)}))
         return result
 
     # --- the owner's view --------------------------------------------------------------

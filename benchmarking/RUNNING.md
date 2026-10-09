@@ -119,6 +119,11 @@ python benchmarking/server/research_cli.py snapshot --project "$EVO" --output "$
 - 学习那一步会先让模型把每道题的最终答案单独读一遍（只给题目和答案），列出题目要的哪些没给、哪些结论
   超出了证据，再和研究树记录一起交给元代理。12 道题大约多花 15 分钟；`review.json` 里的 `referee` 一项
   是读了几道、哪几道没读成。
+- 一次学习的提示词装不下所有题目的记录时（12 题里装了 10 题），`review.json` 里 `lessons.tasks_left`
+  会大于 0。再执行一遍同样的 `consolidate --review` 命令，它会先读没读过的那几题。
+- 工具：这里一道题里反复写的代码就可以提成工具（`research_cli.py` 设了 `OCEANX_TOOL_MIN_SUPPORT=1`）；
+  日常使用的 OceanX 要两道题。`review.json` 的 `tools` 一项里，`created` 是装上的工具，`rejected` 是被拒的
+  和原因。
 - 这几条用 `benchmarking/.env` 里的模型和 key。
 - `--retention-days 3650` 不能省。默认是 30 天，更早的研究树记录会被移出 attempt 目录。
 - `--project` 只指向进化实验的目录，不要指向放测试题结果的目录。

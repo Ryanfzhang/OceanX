@@ -537,12 +537,22 @@ already says.
 - collects, per run, the small functions its Experts defined more than once, at most eight per run. The same
   calculation is named differently from run to run (an area mean was `amean`, `wm`, `am` and `gw` within
   one run), so the meta-agent matches the entries across runs by what they compute and writes general
-  versions, at most three per review, each with a test and each replacing code from runs of at least
-  three different questions.
+  versions, each with a test. In this benchmark the repeated code of one question is enough for a tool
+  (Owner, 2026-10-10: a round is one review of a dozen runs, and with three questions required 12 runs
+  gave no tool). `research_cli.py` sets this (`OCEANX_TOOL_MIN_SUPPORT=1`); everyday OceanX asks for two
+  questions. A review tries up to eight proposals and mounts at most five. Whether a tool stays is then
+  decided by use.
 
 A proposed function is mounted only if all three checks pass: a static check (one pure function, no file,
 network or printing, a short list of allowed imports), its own test run in the sandbox, and a review by a
-second model call that looks for a numerical or scientific error.
+second model call that looks for a numerical or scientific error. A proposal that a check refuses goes back
+to the meta-agent once with the reason, so that a weak test or an incomplete list of what it replaces can
+be put right; the checks themselves do not move. `review.json` keeps every refused proposal with its code,
+its test and the reason.
+
+A review prompt holds about 200,000 characters of records, which was 10 of 12 runs in the first trial. A
+run that did not fit is not counted as read: `lessons.tasks_left` in `review.json` says how many remain,
+and running `consolidate --review` again reads those first.
 
 **The owner.** No approval step stands between the meta-agent and the library. The owner can read every
 lesson and tool and mark it right (it stays, whatever later records say) or wrong (it goes and is not

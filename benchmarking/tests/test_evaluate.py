@@ -62,6 +62,51 @@ def test_blind_hides_the_arm_and_the_tree(tmp_path):
         evaluate.main(["blind", "--runs", str(runs[0]), "--out", str(out), "--map", str(out / "map.json")])
 
 
+def test_blind_keeps_a_large_notebook_and_names_what_it_leaves_out(tmp_path, monkeypatch):
+    """An executed notebook is mostly images; the judge needs its code and numbers, and must be able to
+    tell a file that was too large to copy from one the agent never wrote."""
+    arm_dir = make_arm(tmp_path / "runs", "C", None, {"Q07": 2})
+    attempt = arm_dir / "Q07" / "attempt-1"
+    notebook = {"nbformat": 4, "nbformat_minor": 5, "metadata": {}, "cells": [
+        {"cell_type": "markdown", "source": "# Analysis"},
+        {"cell_type": "code", "execution_count": 1, "source": "plot(field)", "outputs": [
+            {"output_type": "display_data", "metadata": {},
+             "data": {"image/png": "A" * 6000, "text/plain": "<Figure size 640x480>"}},
+            {"output_type": "execute_result", "execution_count": 1, "metadata": {},
+             "data": {"text/html": "<table>" + "<td>1</td>" * 400 + "</table>", "text/plain": "mean 1.25"}},
+            {"output_type": "stream", "name": "stdout", "text": [f"row {n} {arm_dir}\n" for n in range(400)]}]}]}
+    (attempt / "workspace" / "analysis.ipynb").write_text(json.dumps(notebook))
+    (attempt / "outputs").mkdir()
+    (attempt / "outputs" / "table.csv").write_text("a,b\n" + "1,2\n" * 3000)
+    (attempt / "outputs" / "small.csv").write_text("a,b\n1,2\n")
+    (attempt / "evidence_manifest.json").write_text(json.dumps(
+        {"files": ["workspace/analysis.ipynb", "outputs/table.csv", "outputs/small.csv", "outputs/never_written.csv"]}))
+    monkeypatch.setattr(evaluate, "MAX_TEXT", 4000)
+    monkeypatch.setattr(evaluate, "LONG_OUTPUT", 300)
+    out, mapping = tmp_path / "eval" / "blind", tmp_path / "eval" / "blind_map.json"
+    result = evaluate.blind(type("Args", (), {"runs": [arm_dir], "out": out, "map": mapping})())
+    assert (result["notebooks_copied_without_images"], result["folders_with_files_left_out"]) == (1, 1)
+    [folder] = [path for path in out.iterdir()]
+    text = (folder / "evidence" / "workspace" / "analysis.ipynb").read_text()
+    figure, table, printed = json.loads(text)["cells"][1]["outputs"]
+    assert set(figure["data"]) == {"text/plain"} and "image/png removed" in figure["data"]["text/plain"]
+    assert "<Figure size 640x480>" in figure["data"]["text/plain"]
+    assert set(table["data"]) == {"text/plain"} and table["data"]["text/plain"].endswith("mean 1.25")
+    assert printed["text"].startswith("row 0 <RUN>") and "is cut in the copy" in printed["text"]
+    assert len(text) < 4000 and "arm-C" not in text and json.loads(text)["cells"][1]["source"] == "plot(field)"
+    # The table that was too large is named with its size; the one never written is not, so it reads as missing.
+    left = json.loads((folder / "left_out.json").read_text())["files"]
+    assert left == [{"path": "outputs/table.csv", "bytes": 12004}]
+    assert (folder / "evidence" / "outputs" / "small.csv").is_file()
+    # Without anything too large there is no such file.
+    monkeypatch.setattr(evaluate, "MAX_TEXT", 2 * 1024**2)
+    other = evaluate.blind(type("Args", (), {"runs": [arm_dir], "out": tmp_path / "b2", "map": tmp_path / "m2.json"})())
+    assert (other["notebooks_copied_without_images"], other["folders_with_files_left_out"]) == (0, 0)
+    [whole] = [path for path in (tmp_path / "b2").iterdir()]
+    assert not (whole / "left_out.json").exists()
+    assert "image/png" in json.loads((whole / "evidence" / "workspace" / "analysis.ipynb").read_text())["cells"][1]["outputs"][0]["data"]
+
+
 def test_validate_catches_bad_scores():
     good = score_file("b1", "Q17", 3)
     assert evaluate.validate_score(good) == []

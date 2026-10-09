@@ -132,7 +132,9 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
 - **Lessons.** One model call per skill that takes lessons. The call gets the skill as its
   readers get it, what the reader is told elsewhere, the lessons other skills carry (one idea
   belongs in one skill), the lessons the owner marked wrong, and the
-  role's view of the records (about 200k characters, one run of every question before any repeat),
+  role's view of the records (about 200k characters: tasks no review has read yet first, then the
+  newest, one run of every question before any repeat; a task that did not fit stays unread and
+  the next review runs for it),
   each with the reading of its final answer where one exists.
   It judges every current lesson (keep, revise, retire) and may add at most 2. Code enforces:
   - a new lesson needs supporting tasks from at least 3 different questions (with fewer, a skill
@@ -154,13 +156,18 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   - *Learning.* Experts name one calculation differently from task to task (an area mean was
     `amean`, `wm`, `am` and `gw` within a single task), so repeated code is collected per task: a
     function the task defined at least twice, or whose name another task also used, at most 8 per
-    task. The meta-agent matches these entries across tasks by what they compute and may turn
-    them into at most 3 general functions per review, each with a test and each replacing entries
-    from tasks on at least 3 different questions. A function is mounted only if all of these
-    pass: a static check (one
+    task. The meta-agent matches these entries across tasks by what they compute and turns them
+    into general functions, each with a test. A function must replace repeated code from two
+    questions (`OCEANX_TOOL_MIN_SUPPORT`, default 2), and use decides whether it stays. The
+    benchmark's learning step sets 1, because a round there is one review of a dozen tasks
+    (Owner, 2026-10-10: with three questions required, 12 tasks gave no tool). A review tries up
+    to 8 proposals and mounts at most 5. A function is mounted only if all of these pass: a
+    static check (one
     pure function with a docstring, ≤60 lines, imports limited to numpy, xarray, pandas, scipy, gsw
     and math, no file, network, printing or global state), its test run in the sandbox, and a
-    review by a second model call that looks for a numerical or scientific error.
+    review by a second model call that looks for a numerical or scientific error. A proposal a
+    gate refuses goes back to the meta-agent once with the reason; the update's result keeps
+    every refused proposal with its code, its test and the reason.
 - **The owner.** **Review** in the desktop lists every lesson and tool with its evidence, how
   often it was shown, named or called, and the latest changes. Two buttons mark an item right (it
   stays whatever later records say; a retired one comes back) or wrong (it goes and is not

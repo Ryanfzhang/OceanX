@@ -38,6 +38,8 @@ TASKS = BENCH / "tasks"
 TEXT = {".md", ".py", ".ipynb", ".csv", ".json", ".txt"}
 IMAGES = {".png", ".jpg", ".jpeg", ".svg"}
 MAX_TEXT, MAX_OUTPUT, MAX_TOTAL = 2 * 1024**2, 20 * 1024**2, 400 * 1024**2
+# An executed notebook is mostly embedded images. A larger one is copied without them, long outputs cut.
+MAX_NOTEBOOK, LONG_OUTPUT = 300 * 1024**2, 20_000
 # Research-tree exports carry the policy (frontier mode, policy version), so they would reveal the arm.
 NEVER_COPY = {"research_tree.json", "research_tree.sqlite3", "research_tree.lock", "arm.json",
               "arm_library.json", "arm_lessons.json"}
@@ -76,12 +78,24 @@ def latest_attempts(arm_dir: Path):
             yield case.name, attempts[-1].parent
 
 
-def evidence_files(attempt: Path):
+def fits(path: Path, kinds: set, limit: int, left_out: list | None) -> bool:
+    """Whether a file of one of these kinds is small enough to copy; a larger one is noted as left out."""
+    suffix, size = path.suffix.lower(), path.stat().st_size
+    if suffix not in kinds:
+        return False
+    if size <= (MAX_NOTEBOOK if suffix == ".ipynb" else limit):
+        return True
+    if left_out is not None:
+        left_out.append(path)
+    return False
+
+
+def evidence_files(attempt: Path, left_out: list | None = None):
     """Answer, Agent reports, published outputs and small code/tables; never state, logs or the tree.
 
     An attempt without a final answer delivered whatever it kept. For OceanX and Finch that is already
     below (the Experts' reports, the notebook, the outputs); for Claude Code it is also the messages the
-    agent wrote on the way.
+    agent wrote on the way. A file of a kind that is copied but too large for it is added to `left_out`.
     """
     answer = attempt / "answer.md"
     yield answer
@@ -104,8 +118,7 @@ def evidence_files(attempt: Path):
                 continue
             if not path.is_file():
                 continue
-            suffix, size = path.suffix.lower(), path.stat().st_size
-            if suffix in TEXT and size <= MAX_TEXT or suffix in IMAGES | {".nc", ".pdf"} and size <= MAX_OUTPUT:
+            if fits(path, TEXT, MAX_TEXT, left_out) or fits(path, IMAGES | {".nc", ".pdf"}, MAX_OUTPUT, left_out):
                 yield path
     tasks_root = attempt / "workspace" / "OceanX Tasks"
     for path in sorted(tasks_root.rglob("*")) if tasks_root.is_dir() else []:
@@ -114,10 +127,42 @@ def evidence_files(attempt: Path):
         parts = set(path.relative_to(tasks_root).parts)
         if ".runtime" in parts or "kernel" in parts:
             continue
-        suffix = path.suffix.lower()
-        size = path.stat().st_size
-        if "outputs" in parts and (suffix in IMAGES or suffix == ".nc") and size <= MAX_OUTPUT or suffix in TEXT and size <= MAX_TEXT:
+        if ("outputs" in parts and fits(path, IMAGES | {".nc"}, MAX_OUTPUT, left_out)
+                or fits(path, TEXT, MAX_TEXT, left_out)):
             yield path
+
+
+def slim_notebook(path: Path) -> str | None:
+    """An executed notebook without its images and other binary outputs, and with long text outputs cut.
+    The figures themselves are among the published outputs. None when the file cannot be read as one."""
+    def cut(text):
+        text = "".join(text) if isinstance(text, list) else text
+        if isinstance(text, str) and len(text) > LONG_OUTPUT:
+            return text[:LONG_OUTPUT] + "\n[the rest of this output is cut in the copy for the judge]\n"
+        return text
+
+    try:
+        notebook = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        for cell in notebook["cells"]:
+            for output in cell.get("outputs") or []:
+                data = output.get("data")
+                if isinstance(data, dict):
+                    removed = [kind for kind in data if not kind.startswith("text/")]
+                    if "text/html" in data and "text/plain" in data:
+                        removed.append("text/html")  # the same table twice
+                    for kind in removed:
+                        del data[kind]
+                    for kind in data:
+                        data[kind] = cut(data[kind])
+                    if removed:
+                        data["text/plain"] = (f"[{', '.join(removed)} removed in the copy for the judge]\n"
+                                              + (cut(data.get("text/plain")) or ""))
+                for key in ("text", "traceback"):
+                    if key in output:
+                        output[key] = cut(output[key])
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+    return json.dumps(notebook, ensure_ascii=False, indent=1)
 
 
 def blind(args) -> dict:
@@ -127,7 +172,7 @@ def blind(args) -> dict:
         raise SystemExit("ERROR: keep the blind map outside the folder the judge reads")
     mapping = json.loads(mapping_path.read_text()) if mapping_path.exists() else {}
     seen = {entry["attempt"] for entry in mapping.values()}
-    created = 0
+    created = slimmed = incomplete = 0
     for arm_dir in args.runs:
         arm_dir = arm_dir.expanduser().resolve()
         arm = json.loads((arm_dir / "arm.json").read_text())
@@ -137,22 +182,37 @@ def blind(args) -> dict:
             blind_id = "b" + secrets.token_hex(6)
             target = out / blind_id
             target.mkdir(parents=True)
-            total = 0
-            for source in evidence_files(attempt):
+            total, left_out = 0, []
+            for source in evidence_files(attempt, left_out):
                 if not source.is_file():
                     continue
-                relative = source.relative_to(attempt)
-                destination = target / "evidence" / relative
+                size, text = source.stat().st_size, None
+                if source.suffix.lower() == ".ipynb" and size > MAX_TEXT:
+                    text = slim_notebook(source)
+                    if text is None or len(text.encode("utf-8")) > MAX_OUTPUT:
+                        left_out.append(source)
+                        continue
+                    size, slimmed = len(text.encode("utf-8")), slimmed + 1
+                if total + size > MAX_TOTAL:
+                    left_out.append(source)
+                    continue
+                total += size
+                destination = target / "evidence" / source.relative_to(attempt)
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                total += source.stat().st_size
-                if total > MAX_TOTAL:
-                    break
                 if source.suffix.lower() in TEXT:
                     # Absolute run paths contain the arm folder name; replace them.
-                    text = source.read_text(encoding="utf-8", errors="replace").replace(str(arm_dir), "<RUN>")
-                    destination.write_text(text, encoding="utf-8")
+                    text = source.read_text(encoding="utf-8", errors="replace") if text is None else text
+                    destination.write_text(text.replace(str(arm_dir), "<RUN>"), encoding="utf-8")
                 else:
                     shutil.copyfile(source, destination)
+            if left_out:
+                # The judge must be able to tell a file that was too large to copy from one that is missing.
+                incomplete += 1
+                write_json(target / "left_out.json", {
+                    "note": "Files of the attempt that exist but were too large to copy. What they hold cannot "
+                            "be credited, and they are not missing.",
+                    "files": [{"path": str(path.relative_to(attempt)), "bytes": path.stat().st_size}
+                              for path in left_out]})
             result = json.loads((attempt / "result.json").read_text())
             query = json.loads((attempt / "query.json").read_text())["query"]
             write_json(target / "task.json", {"blind_id": blind_id, "task_id": task_id, "query": query,
@@ -167,7 +227,8 @@ def blind(args) -> dict:
                                             else None), "usage": spent}
             created += 1
     write_json(mapping_path, mapping)
-    return {"created": created, "total": len(mapping), "blind_folder": str(out), "map": str(mapping_path)}
+    return {"created": created, "total": len(mapping), "blind_folder": str(out), "map": str(mapping_path),
+            "notebooks_copied_without_images": slimmed, "folders_with_files_left_out": incomplete}
 
 
 def library_version(arm: dict) -> str | None:

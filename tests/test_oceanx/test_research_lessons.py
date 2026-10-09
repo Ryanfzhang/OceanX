@@ -385,6 +385,30 @@ def test_prompt_budget_keeps_one_run_of_every_question_before_repeats(tmp_path, 
     assert "Why is gulf warm?" in prompt and prompt.count("Why is bay warm?") == 1
 
 
+def test_a_task_that_did_not_fit_is_read_first_at_the_next_review(tmp_path, memory, monkeypatch):
+    keys = mined(memory, tmp_path, n=5)  # t0 is the oldest, t4 the newest
+    digests = memory.load_digests()
+    sizes = [len(lessons._record(d, role)) for d in digests for role in ("coordinator", "expert")]
+    monkeypatch.setattr(lessons, "MAX_PROMPT_CHARS", 3 * max(sizes) + 10)  # three records fit
+    book, prompts = LessonBook(memory), []
+
+    def tasks_in(prompt):
+        return set(re.findall(r"## Task ([0-9a-f]{16})", prompt))
+
+    first = book.review(fake_llm(prompts=prompts))
+    assert (first["new_tasks"], first["tasks_considered"], first["tasks_left"]) == (5, 3, 2)
+    assert all(tasks_in(prompt) == set(keys[2:]) for prompt in prompts)  # the three newest
+    # The two that did not fit were not counted as read: the next review runs for them, and
+    # they come before the tasks a review has read.
+    prompts.clear()
+    second = book.review(fake_llm(prompts=prompts))
+    assert (second["new_tasks"], second["tasks_left"]) == (2, 0) and len(prompts) == 6
+    assert all(tasks_in(prompt) == {keys[0], keys[1], keys[4]} for prompt in prompts)
+    assert all(prompt.index(keys[0]) < prompt.index(keys[4]) for prompt in prompts)
+    prompts.clear()
+    assert book.review(fake_llm(prompts=prompts))["new_tasks"] == 0 and prompts == []
+
+
 def test_old_digests_stay_readable_and_are_rebuilt_while_the_store_exists(tmp_path, memory):
     tree = finished_task(tmp_path, "t1")
     current = memory.digest(tree.store.path)

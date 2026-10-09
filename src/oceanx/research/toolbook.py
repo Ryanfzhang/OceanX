@@ -11,11 +11,13 @@ a tool on the list: one that no task has called for ``IDLE_TASKS`` tasks is take
 learned tool is then retired; a packaged one stays importable but is no longer listed. The
 owner can mark any tool right (it stays) or wrong (it goes).
 
-A learned tool starts as code that Experts wrote again in several tasks. Experts name one
-calculation differently from task to task, so repeated code is collected per task and the
-meta-agent matches it across tasks by what it computes. It turns such code into one general
-function with a test; the function is mounted only if a static check, its test in the sandbox
-and an independent review all pass.
+A learned tool starts as code that Experts wrote again and again, in one task or in several.
+Experts name one calculation differently from task to task, so repeated code is collected per
+task and the meta-agent matches it across tasks by what it computes. It turns such code into one
+general function with a test; the function is mounted only if a static check, its test in the
+sandbox and an independent review all pass. Admission is easy on purpose (repeated code from two
+questions in everyday use, from one in a benchmark's learning step): whether a tool stays is
+decided by whether tasks call it.
 
 Layout under ``<project>/.oceanx/research/tools/``::
 
@@ -28,6 +30,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import re
 import shutil
 import tempfile
@@ -45,11 +48,16 @@ MODULE = "oceanx_array_ops"
 TOOL_LOG_ENV = "OCEAN_TOOL_LOG"
 PROBATION_TASKS = 10  # a new tool is listed ahead of the others until this many tasks could call it
 IDLE_TASKS = 20  # tasks in a row without a call before a tool leaves the list
-MAX_NEW_PER_REVIEW = 3
+MAX_NEW_PER_REVIEW = 5  # tools one review may mount
+MAX_PROPOSALS = 8  # proposals one review tries, in the meta-agent's order, until that many passed
 MAX_TOOL_LINES = 60
 MAX_CANDIDATES = 96  # functions shown to the meta-agent, the most rewritten first
 MAX_PER_TASK = 8  # of them from one task, so that one long task does not fill the list
-MIN_SUPPORT = 3  # a learned tool must replace code written for this many different questions
+# Questions whose repeated code a learned tool must replace: two in everyday use. A benchmark's
+# learning step has one review of a dozen tasks, so it sets one (Owner, 2026-10-10: with three
+# required, 12 tasks gave no tool). A tool no task calls is retired after IDLE_TASKS.
+MIN_SUPPORT_ENV = "OCEANX_TOOL_MIN_SUPPORT"
+DEFAULT_MIN_SUPPORT = 2
 ALLOWED_IMPORTS = frozenset({"math", "numpy", "xarray", "pandas", "scipy", "gsw"})
 FORBIDDEN_CALLS = frozenset({"open", "eval", "exec", "compile", "__import__", "input", "print",
                              "globals", "locals", "getattr", "setattr", "delattr", "vars"})
@@ -104,7 +112,8 @@ You maintain the helper functions of OceanX, an ocean-science research system. I
 ocean data with Python. The helper module below is imported in their code as `{alias}`. Past tasks
 show which small functions the Experts wrote again and again instead.
 
-Propose at most {max_new} new helper functions that would replace such repeated code. The same
+Propose at most {max_new} new helper functions that would replace such repeated code, the most
+useful first. The same
 calculation carries different names from task to task (`amean`, `wm`, `area_avg`): match the
 entries by what they compute, not by their names. A function is worth adding only when calling
 it is shorter and safer than writing the calculation again. Prefer no function over a weak one.
@@ -121,18 +130,29 @@ Each function must:
   what it computes, in which units and under which assumption.
 
 Each function needs a test: plain `assert` statements that call `{alias}.<name>` on small arrays
-with a known answer (a constant field must give back the constant), and one input the function
-must refuse. `np` and `{alias}` are already imported in the test.
+with a known answer, and one input the function must refuse. At least one case must use values
+that differ from one another, with the expected result worked out by hand, so that a wrong
+weight, grouping, axis or sign would fail it. A constant field that gives back the constant may
+be added, but proves little by itself. `np` and `{alias}` are already imported in the test.
 
 Do not propose: a function the module already has, even under another name; anything specific to
 one region, dataset or variable name; plotting; reading or writing files.
 
-"replaces" lists the ids (such as C07) of the entries the function replaces. Together they must
-come from at least {min_support} different research questions.
+"replaces" lists the ids (such as C07) of every entry the function replaces, from all tasks.
+Together they must come from {min_support} or more research questions; a calculation that
+several tasks needed is the better choice.
 
 Return JSON only:
 {{"tools": [{{"name": "...", "code": "def ...", "test": "...", "replaces": ["..."],
   "rationale": "..."}}]}}
+"""
+
+REVISION_INSTRUCTIONS = """\
+
+# Refused
+The proposals below were refused, each for the reason given. Return a corrected version of those
+that can be corrected, under the same name, and leave the others out. Do not return a proposal
+that was accepted, and do not add a new one.
 """
 
 REVIEW_INSTRUCTIONS = """\
@@ -149,6 +169,14 @@ Function:
 Its test:
 {test}
 """
+
+
+def min_support() -> int:
+    """How many questions' repeated code a learned tool must replace (see MIN_SUPPORT_ENV)."""
+    try:
+        return max(1, int(os.environ.get(MIN_SUPPORT_ENV) or DEFAULT_MIN_SUPPORT))
+    except ValueError:
+        return DEFAULT_MIN_SUPPORT
 
 
 def packaged_source() -> str:
@@ -477,8 +505,8 @@ class ToolBook:
             + "\n" + "\n\n".join(f"```python\n{example}\n```" for example in c["examples"])
             for c in candidates)
         return (WRITING_INSTRUCTIONS.format(
-            alias=TOOL_ALIAS, max_new=MAX_NEW_PER_REVIEW, imports=", ".join(sorted(ALLOWED_IMPORTS)),
-            max_lines=MAX_TOOL_LINES, min_support=MIN_SUPPORT)
+            alias=TOOL_ALIAS, max_new=MAX_PROPOSALS, imports=", ".join(sorted(ALLOWED_IMPORTS)),
+            max_lines=MAX_TOOL_LINES, min_support=min_support())
             + "\n# The helper module now\n```python\n" + self.source().rstrip()
             + "\n```\n\n# Code the Experts wrote repeatedly\nEach entry is one function as the Experts of "
             "one task wrote it.\n\n" + groups)
@@ -500,9 +528,9 @@ class ToolBook:
         named = [str(reference) for reference in dict.fromkeys(raw.get("replaces") or [])]
         replaced = [c for c in candidates if c["id"] in named or c["name"] in named]
         questions = {q for c in replaced for q in c["question_set"]}
-        if len(questions) < MIN_SUPPORT:
-            raise ValueError(f"A tool must replace code from at least {MIN_SUPPORT} different "
-                             f"questions; this replaces code from {len(questions)}.")
+        if len(questions) < min_support():
+            raise ValueError(f"A tool must replace repeated code from {min_support()} or more questions; "
+                             f"the entries it names come from {len(questions)}.")
         module = self.source().rstrip() + "\n\n\n" + code + "\n" + TRACKER
         failure = (run_test or run_tool_test)(module, test)
         if failure:
@@ -525,25 +553,56 @@ class ToolBook:
                    "reason": str(raw.get("rationale") or "")[:600]})
         return {"name": name, **entry}
 
+    @staticmethod
+    def _refusal(raw, reason: str, attempt: int) -> dict:
+        """One refused proposal as the owner can read it: what was proposed, and why not."""
+        proposal = raw if isinstance(raw, dict) else {"name": raw}
+        replaces = proposal.get("replaces")
+        return {"name": str(proposal.get("name") or "")[:60], "reason": reason, "round": attempt,
+                "code": str(proposal.get("code") or "")[:4000], "test": str(proposal.get("test") or "")[:4000],
+                "replaces": [str(item)[:60] for item in (replaces if isinstance(replaces, list) else [])][:40]}
+
+    @staticmethod
+    def _refused_section(refused: list[dict]) -> str:
+        """What the meta-agent is told about the proposals a gate refused, to correct them once."""
+        if not refused:
+            return ""
+        return REVISION_INSTRUCTIONS + "".join(
+            f"\n## {r['name']}\nRefused: {r['reason']}\n\"replaces\": {json.dumps(r['replaces'])}\n"
+            f"```python\n{r['code']}\n```\nIts test:\n```python\n{r['test']}\n```\n" for r in refused)
+
     def learn(self, llm: Callable[[str], str], stores: list[Path], *,
               reviewer: Callable[[str], str] | None = None,
               run_test: Callable[[str, str], str | None] | None = None) -> dict:
-        """Ask the meta-agent for functions that replace repeated code; mount those that pass."""
+        """Ask the meta-agent for functions that replace repeated code; mount those that pass.
+        A proposal a gate refuses goes back once with the reason, so that a weak test or an
+        incomplete list of what it replaces can be put right; the gates themselves do not move."""
         questions = {d["task_key"]: d.get("question") or "" for d in self.memory.load_digests()}
         candidates = repeated_functions(stores, questions)
-        created, rejected, proposals = [], [], []
-        # A tool may replace several groups; with code from fewer questions nothing could pass.
-        if len({q for c in candidates for q in c["question_set"]}) >= MIN_SUPPORT:
-            try:
-                proposals = parse_json_object(llm(self.writing_prompt(candidates))).get("tools") or []
-            except ValueError as exc:  # an unreadable reply adds nothing
-                rejected.append({"name": "", "reason": f"The meta-agent's reply could not be read: {exc}"})
-        for raw in proposals[:MAX_NEW_PER_REVIEW]:
-            try:
-                created.append(self.admit(raw, candidates, reviewer=reviewer, run_test=run_test))
-            except (ValueError, TypeError, AttributeError) as exc:
-                name = raw.get("name") if isinstance(raw, dict) else raw
-                rejected.append({"name": str(name)[:60], "reason": str(exc)})
+        created, rejected = [], []
+        # A tool may replace several entries; with code from fewer questions nothing could pass.
+        if len({q for c in candidates for q in c["question_set"]}) >= min_support():
+            refused: list[dict] = []
+            for attempt in (1, 2):
+                try:
+                    proposals = parse_json_object(llm(
+                        self.writing_prompt(candidates) + self._refused_section(refused))).get("tools") or []
+                except ValueError as exc:  # an unreadable reply adds nothing
+                    rejected.append({"name": "", "reason": f"The meta-agent's reply could not be read: {exc}"})
+                    break
+                made = {tool["name"] for tool in created}
+                fresh = [raw for raw in proposals if not (isinstance(raw, dict) and raw.get("name") in made)]
+                refused = []
+                for raw in fresh[:MAX_PROPOSALS]:
+                    if len(created) >= MAX_NEW_PER_REVIEW:
+                        break
+                    try:
+                        created.append(self.admit(raw, candidates, reviewer=reviewer, run_test=run_test))
+                    except (ValueError, TypeError, AttributeError) as exc:
+                        refused.append(self._refusal(raw, str(exc), attempt))
+                rejected += refused
+                if not refused or len(created) >= MAX_NEW_PER_REVIEW:
+                    break
         return {"created": [tool["name"] for tool in created], "rejected": rejected,
                 "candidates": len(candidates)}
 

@@ -12,8 +12,15 @@ score-file format below.
    to judge. See `EVALUATION.md`, "References and frozen rubrics".
 2. You judge from the blind folder `$EVAL_ROOT/<experiment>/blind/<blind_id>/` only.
    Do **not** open `blind_map.json`, run folders, `arm.json` or run logs until every score file is written.
+   A notebook larger than 2 MB is copied without its images and with long outputs cut; its figures are
+   among the outputs. `left_out.json`, where a folder has one, names files of the attempt that exist but
+   were too large to copy: what they hold cannot be credited, and they are not missing.
 3. You never run the agent's code. You may read its code, open its NetCDF outputs to read numbers, and run
    your own reference scripts.
+4. Beside the blind folder you may read the reference work of the task,
+   `$EVAL_ROOT/<experiment>/references/<task>/` (`spec.md`, `compute.py`, `outputs/`), and the input data
+   the task binds. A reference recomputed under an agent's definition is written to
+   `$EVAL_ROOT/<experiment>/recomputed/<blind_id>/`. Nothing under `references/` or `rubrics/` is changed.
 
 ## The two rubric types
 
@@ -34,13 +41,16 @@ between its neighbours.
    1. For each finding, find the agent's verdict and its evidence in `answer.md`, the reports or the
       published outputs. Record them under `findings`.
    2. Compare the agent's result with the frozen `expected` value within the frozen `tolerance`. If the
-      agent used a different but stated definition, recompute the reference with that definition and compare
-      against it.
+      agent used a different but stated definition, take the alternative of `values.json` that has it;
+      where none has, recompute the reference with that definition and compare against it. Where the
+      definition needs a method the reference script does not have, compare with the nearest frozen
+      definition and say so in the note.
    3. Score the finding with its anchors. A finding marked `not testable` has its own anchors.
    4. Score `M` and `D` against their `focus` lists, and `R`.
 3. **Open problem.**
    1. For each answer-key item, find the agent's value and compare it with the frozen value within
-      tolerance. Record `pass`, `partial`, `fail` or `not_reported` under `answer_key`.
+      tolerance, under the agent's stated definition as for a finding (step 2.2). Record `pass`, `partial`,
+      `fail` or `not_reported` under `answer_key`.
    2. Disagreement questions: for each candidate cause, record whether the agent tested it and whether its
       conclusion matches the frozen expectation, under `causes`.
    3. Note which depth probes and breadth probes the answer addresses.

@@ -49,6 +49,12 @@ Read a.md.
 """
 
 
+@pytest.fixture(autouse=True)
+def everyday_threshold(monkeypatch):
+    """These tests state the everyday rule, whatever a shell set up for a benchmark says."""
+    monkeypatch.delenv(toolbook.MIN_SUPPORT_ENV, raising=False)
+
+
 @pytest.fixture
 def book(tmp_path):
     return ToolBook(ResearchMemory(tmp_path / ".oceanx" / "research"))
@@ -345,7 +351,7 @@ def test_a_proposed_tool_is_mounted_only_through_every_gate(tmp_path):
         prompts.append(prompt)
         return json.dumps({"tools": [
             proposal, {**proposal, "name": "weighted_mean"}, {**proposal, "name": "departure", "replaces": []},
-            {**proposal, "name": "fourth"}]})  # more than one review may add
+            {**proposal, "name": "fourth"}]})
 
     def run_test(module, test):
         tested.append((module, test))
@@ -356,9 +362,16 @@ def test_a_proposed_tool_is_mounted_only_through_every_gate(tmp_path):
 
     result = book.learn(llm, stores, reviewer=reviewer, run_test=run_test)
     assert result["created"] == ["anomaly"] and result["candidates"] == 4
-    assert [(r["name"], r["reason"].split(";")[0][:60]) for r in result["rejected"]] == [
-        ("weighted_mean", "The helper module already has, or once had, weighted_mean."),
-        ("departure", "The code must be exactly one function named departure.")]
+    # What a gate refuses goes back once with the reason; refused again, it stays out.
+    assert [(r["round"], r["name"], r["reason"].split(";")[0][:60]) for r in result["rejected"]] == [
+        (attempt, name, reason) for attempt in (1, 2) for name, reason in (
+            ("weighted_mean", "The helper module already has, or once had, weighted_mean."),
+            ("departure", "The code must be exactly one function named departure."),
+            ("fourth", "The code must be exactly one function named fourth."))]
+    assert result["rejected"][0]["code"] == ANOMALY and result["rejected"][0]["replaces"] == ["area_mean"]
+    assert len(prompts) == 2 and "# Refused" not in prompts[0]
+    assert "# Refused" in prompts[1] and "## departure\nRefused: The code must be exactly one function" in prompts[1]
+    assert "def anomaly(" in prompts[1].split("# Code the Experts wrote repeatedly")[0]  # now in the module
     # The meta-agent saw the module as it is and the repeated code, without the call counter.
     assert "# The helper module now" in prompts[0] and "def weighted_mean(" in prompts[0]
     assert re.search(r'## C01 `area_mean`: defined in 1 code runs of the task on "why is t\d warm\?"; '
@@ -386,6 +399,63 @@ def test_a_proposed_tool_is_mounted_only_through_every_gate(tmp_path):
         "anomaly", "added", "meta-agent", "Written again in four tasks.")
 
 
+def test_a_refused_proposal_can_be_corrected_once(tmp_path):
+    """A weak test or an incomplete list of what a function replaces is put right, not lost."""
+    book, stores = project_with_repeated_code(tmp_path)
+    weak = "assert ao.anomaly(1.0, 1.0, dim='t') == 0.0"
+    replies = iter([
+        {"tools": [{"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": []},
+                   {"name": "departure", "code": ANOMALY.replace("def anomaly(", "def departure("),
+                    "test": weak.replace("anomaly", "departure"), "replaces": ["area_mean"]}]},
+        {"tools": [{"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": ["C01", "C02"]},
+                   {"name": "departure", "code": ANOMALY.replace("def anomaly(", "def departure("),
+                    "test": ANOMALY_TEST.replace("anomaly", "departure"), "replaces": ["area_mean"]}]}])
+    prompts = []
+
+    def reviewer(prompt):  # refuses a test that could not tell a wrong function from a right one
+        strong = ANOMALY_TEST.strip() in prompt or ANOMALY_TEST.replace("anomaly", "departure").strip() in prompt
+        return json.dumps({"verdict": "accept" if strong else "reject", "reason": "The test proves nothing."})
+
+    result = book.learn(lambda prompt: prompts.append(prompt) or json.dumps(next(replies)), stores,
+                        reviewer=reviewer, run_test=lambda module, test: None)
+    assert result["created"] == ["anomaly", "departure"]
+    assert [(r["round"], r["name"], r["reason"][:48]) for r in result["rejected"]] == [
+        (1, "anomaly", "A tool must replace repeated code from 2 or more"),
+        (1, "departure", "The reviewer refused it: The test proves nothing")]
+    assert result["rejected"][1]["test"] == weak.replace("anomaly", "departure")  # kept for the owner
+    assert "Refused: The reviewer refused it: The test proves nothing." in prompts[1]
+    assert "At least one case must use values\nthat differ from one another" in prompts[0]
+    assert {"anomaly", "departure"} <= {tool["name"] for tool in book.mounted()}
+    assert next(tool for tool in book.tools() if tool["name"] == "anomaly")["evidence"]["questions"] == 2
+
+
+def test_a_benchmark_learning_step_takes_the_repeated_code_of_one_question(tmp_path, monkeypatch):
+    """Everyday use asks for repeated code from two questions. A benchmark round is one review
+    of a dozen tasks, so its learning step sets one (benchmarking/server/research_cli.py)."""
+    book, stores = project_with_repeated_code(tmp_path)
+    candidates = repeated_functions(stores, {d["task_key"]: d["question"] for d in book.memory.load_digests()})
+    proposal = {"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": ["C01"]}
+    assert toolbook.min_support() == 2
+    with pytest.raises(ValueError, match="from 2 or more questions; the entries it names come from 1"):
+        book.admit(proposal, candidates, run_test=lambda module, test: None)
+    monkeypatch.setenv(toolbook.MIN_SUPPORT_ENV, "1")
+    assert "Together they must come from 1 or more research questions" in book.writing_prompt(candidates)
+    admitted = book.admit(proposal, candidates, run_test=lambda module, test: None)
+    assert admitted["evidence"]["questions"] == 1 and "anomaly" in {tool["name"] for tool in book.mounted()}
+    # Code from one question is then worth a model call, too.
+    single, single_stores = project_with_repeated_code(tmp_path / "single", tasks=1)
+    code = tmp_path / "single" / "t0" / "agents" / "physics" / ".runtime" / "executions" / "e2" / "code"
+    code.mkdir(parents=True)
+    (code / "analysis.py").write_text(AREA_MEAN.format(variant=""))  # the task wrote it a second time
+    asked = []
+    result = single.learn(lambda prompt: asked.append(prompt) or "{}", single_stores)
+    assert len(asked) == 1 and result["candidates"] == 1
+    monkeypatch.delenv(toolbook.MIN_SUPPORT_ENV)
+    assert single.learn(lambda prompt: pytest.fail("two questions are needed"), single_stores)["created"] == []
+    monkeypatch.setenv(toolbook.MIN_SUPPORT_ENV, "nonsense")
+    assert toolbook.min_support() == 2
+
+
 def test_a_failed_test_or_a_refusing_reviewer_keeps_a_tool_out(tmp_path):
     book, stores = project_with_repeated_code(tmp_path)
     candidates = repeated_functions(stores, {d["task_key"]: d["question"] for d in book.memory.load_digests()})
@@ -395,18 +465,15 @@ def test_a_failed_test_or_a_refusing_reviewer_keeps_a_tool_out(tmp_path):
     with pytest.raises(ValueError, match="The reviewer refused it: Divides by the wrong count."):
         book.admit(proposal, candidates, run_test=lambda module, test: None, reviewer=lambda prompt: json.dumps(
             {"verdict": "reject", "reason": "Divides by the wrong count."}))
-    with pytest.raises(ValueError, match="at least 3 different questions; this replaces code from 0"):
+    with pytest.raises(ValueError, match="from 2 or more questions; the entries it names come from 0"):
         book.admit({**proposal, "replaces": ["never_written"]}, candidates, run_test=lambda module, test: None)
-    # An id names one task's entry, so two ids are code from two questions.
-    with pytest.raises(ValueError, match="at least 3 different questions; this replaces code from 2"):
-        book.admit({**proposal, "replaces": ["C01", "C02"]}, candidates, run_test=lambda module, test: None)
     with pytest.raises(ValueError, match="lower-case name"):
         book.admit({**proposal, "name": "Bad-Name"}, candidates, run_test=lambda module, test: None)
     assert book.version() is None and not (book.root / "learned").exists()  # nothing was mounted
-    # With code from fewer than three questions nothing could pass, so the model is not asked.
-    few, few_stores = project_with_repeated_code(tmp_path / "few", tasks=2)
+    # Where no task wrote a function again there is nothing to replace, so the model is not asked.
+    few, few_stores = project_with_repeated_code(tmp_path / "few", tasks=1)
     result = few.learn(lambda prompt: pytest.fail("the model must not be asked"), few_stores)
-    assert result == {"created": [], "rejected": [], "candidates": 2}
+    assert result == {"created": [], "rejected": [], "candidates": 0}
     # A reply that cannot be read adds nothing and does not stop the update.
     unreadable = book.learn(lambda prompt: "I could not decide.", stores)
     assert unreadable["created"] == [] and "could not be read" in unreadable["rejected"][0]["reason"]
