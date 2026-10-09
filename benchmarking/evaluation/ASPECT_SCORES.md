@@ -1,9 +1,10 @@
 # Six indicators per task type
 
-**Status: v1.1, fixed with the Owner on 2026-10-08.** v1.0 (2026-10-06) left two settings open until they
+**Status: v1.2, fixed with the Owner on 2026-10-09.** v1.0 (2026-10-06) left two settings open until they
 had been tried: the mix of the parts inside an indicator, and whether repeated failures belong in
-robustness. Two provisional reviews settled them: the mix stays, repeated failures leave the indicator, and
-delivery is taken from each question's first attempt. Nothing here changes once formal judging has begun.
+robustness. Two provisional reviews settled them: the mix stays and repeated failures leave the indicator.
+v1.1 (2026-10-08) read delivery from each question's first attempt; v1.2 reads it from the attempt that is
+judged (see "Delivery" for the reason). Nothing here changes once formal judging has begun.
 
 The rubric total says how good an attempt is. The six indicators say in what, on six axes that can be
 drawn as one chart per task type.
@@ -32,10 +33,9 @@ share to the judged part. So an indicator with a judged part and one other part 
 that part`, one with only a judged part equals it, and robustness of paper verification, which has only a
 run part, equals that.
 
-The judged and counted parts come from each question's latest attempt, the one the evaluation reads.
-Delivery comes from its first attempt. Every part is computed per question and averaged over the questions
-of the type, per arm; with repeats, over the repeats of a question first. An attempt without a score file
-(nothing was executed) counts 0 in every judged and counted part.
+Every part comes from each question's latest attempt, the one the evaluation reads. Every part is computed
+per question and averaged over the questions of the type, per arm; with repeats, over the repeats of a
+question first. An attempt without a score file (nothing was executed) counts 0 in every part.
 
 ## Open problems (Q11-Q30)
 
@@ -74,21 +74,30 @@ one sentence, not as a list (Owner's decision: judged only, rubrics unchanged).
 
 ## Delivery
 
-**Delivered** means: the question's first attempt in the arm ended `completed` with a final answer that
-rests on analysis executed in that attempt. A plan, a note that the work could not be done, or a message
-that work is still running is not a delivery, whatever the status says. Delivery is 100 or 0 per question;
-averaged over questions it is the share of questions an arm delivers at the first try.
+**Delivered** means: the attempt that is judged ended with a final answer that rests on analysis executed
+in that attempt. A plan, a note that the work could not be done, or a message that work is still running
+is not a delivery, whatever the status says. Delivery is 100 or 0 per attempt; averaged over questions it
+is the share of questions an arm delivers.
 
-- **Why the first attempt.** Once a failed question has been run again, every question's latest attempt
-  is complete and delivery is 100 for every method (review of 2026-10-08). A rerun may replace an attempt
-  for every other part. It does not erase that the first try failed.
-- **Who records it.** The judge, per question and arm, from the first attempt's status and final answer.
-  Where the first attempt is the one being judged, it follows from the judging itself. Where the question
-  was run again, `evaluate.py blind` puts the first attempt into the same blind folder as `first_attempt/`.
-  The judge writes `first_attempt_delivered` into the score file (`CODEX_JUDGE.md`, "The first attempt").
-- **A status the runner recorded wrongly.** An attempt whose report is whole and rests on executed
-  analysis is delivered although its recorded status is not `completed` (one attempt of the first batch:
-  the Claude Code runner of that time wrote `needs_interaction` whenever a tool call had been refused).
+- **Who records it.** The judge, for the attempt it judges, as `delivered` in the score file
+  (`CODEX_JUDGE.md`, "Delivery"). An attempt whose report is whole and rests on executed analysis is
+  delivered although its recorded status is not `completed` (an early Claude Code runner wrote
+  `needs_interaction` whenever a tool call had been refused).
+- **Void attempts.** An attempt that failed for a reason outside the method (a fault of the runner, the
+  sandbox, the data mount or the model provider) is void. The question is run again, and the void attempt
+  enters no indicator. The owner decides, and the reason is recorded.
+- **Why not the first attempt** (Owner's decision of 2026-10-09). v1.1 read delivery from each question's
+  first attempt, so that the axis would not be 100 for every method once failed questions had been run
+  again. But the first attempts of the first batch failed mostly for faults of the runners, which were
+  then corrected: a step limit without a warning, a prompt that did not say that a run is one turn, a
+  notebook replayed whole within the time limit. Counting them would have charged the methods with the
+  harness's faults.
+- **Attempts that were replaced are listed beside the results**, void or not, each with its reason and
+  without a score: a reader has to see that a question was run more than once.
+- **What follows.** In a batch where every failed question has been run again, delivery is 100 for every
+  method. Robustness of paper verification then does not separate the methods, and robustness of open
+  problems separates them through its judged part alone. Delivery separates methods in a comparison that
+  allows no rerun except of void attempts.
 
 **Repeated failures are not part of an indicator.** A repeated failure is an execution that fails with the
 same error as the failed execution just before it, by the same agent. The trial of 2026-10-06 showed that
@@ -104,7 +113,7 @@ for every attempt that gets a score file:
 - open problems: `answer_key[].result`, `probes.depth_addressed`, `probes.breadth_addressed`, and on
   disagreement questions `causes[].tested`;
 - paper verification: `findings[].agent_verdict`, `findings[].matches_reference`, `findings[].evidence_ok`;
-- for every question and arm: whether the first attempt delivered (`first_attempt_delivered`).
+- for every attempt: whether it delivered (`delivered`).
 
 Without frozen references (a provisional review) `answer_key[].result` and `matches_reference` cannot be
 recorded. Those two counted parts are then left out and their share returns to the judged part.
@@ -119,8 +128,9 @@ verification. The two task types are never averaged into one chart: their axes a
 `indicators.md` (the table, each indicator with its parts, and the numbers beside them), `indicators.json`
 and the chart `six-indicators.png` and `.svg`. An entry that a score file leaves out counts as not met;
 the command names every such entry and ends with status 1 until none is left. The chart shows three arms
-at most (`--arms` names them and their order) and carries no numbers: they are in the table. The two
-provisional charts were made by the scripts in their review folders (below).
+at most (`--arms` names them and their order) and carries no numbers: they are in the table. The list of
+replaced attempts is written by hand into the report of the batch: the run folders do not always hold
+them. The two provisional charts were made by the scripts in their review folders (below).
 
 ## Rules that keep the comparison sound
 

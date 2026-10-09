@@ -36,5 +36,5 @@ State the aggregation and baseline instead of silently selecting a favorable win
 Use only supported precision and cite current evidence. A negative result is a legitimate answer.
 Missing evidence and execution interruption are limitations, not scientific refutations.
 
-<!-- oceanx:lessons max=3 for="expert" about="how to report a result the evidence could not decide, and claims whose scope or attribution a later question had to correct" -->
+<!-- oceanx:lessons max=3 for="expert" about="how to report a result the evidence could not decide, and claims stated more strongly than their evidence or whose scope or attribution a later question had to correct" -->
 <!-- /oceanx:lessons -->

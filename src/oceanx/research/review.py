@@ -16,6 +16,7 @@ from pathlib import Path
 from oceanx.research.lessons import LessonBook
 from oceanx.research.memory import ResearchMemory
 from oceanx.research.policy import active_policy
+from oceanx.research.referee import Referee
 from oceanx.research.toolbook import MODULE as TOOL_MODULE
 from oceanx.research.toolbook import SKILL as TOOL_SKILL
 from oceanx.research.toolbook import ToolBook
@@ -38,6 +39,7 @@ class ProjectResearch:
         self.memory = ResearchMemory(self.root)
         self.lessons = LessonBook(self.memory)
         self.tools = ToolBook(self.memory)
+        self.referee = Referee(self.memory)
 
     @staticmethod
     def policy():
@@ -69,12 +71,14 @@ class ProjectResearch:
                reviewer: Callable[[str], str] | None = None, force: bool = False,
                retention_days: int | None = None) -> dict:
         """The periodic update. Without a model it only brings the records and the call counts
-        up to date; with one, the meta-agent also reviews the lessons and learns tools."""
+        up to date; with one, the final answers of newly finished tasks are read first
+        (referee.py), then the meta-agent reviews the lessons and learns tools."""
         options = {} if retention_days is None else {"retention_days": retention_days}
         result = {"consolidation": self.memory.consolidate(stores, **options)}
         digests = self.memory.load_digests()
         result["tool_usage"] = self.tools.record_usage(digests)
         if llm is not None:
+            result["referee"] = self.referee.read_new(stores, digests, llm)
             result["lessons"] = self.lessons.review(llm, force=force)
             if result["lessons"]["new_tasks"] or force:
                 result["tools"] = self.tools.learn(llm, stores, reviewer=reviewer)

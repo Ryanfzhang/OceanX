@@ -6,6 +6,7 @@ Layout under ``<project>/.oceanx/research/``::
     archive/<task_key>.sqlite3.gz  raw stores past retention (never read by agents)
     lessons/                   lessons, their change log and the rendered skills (lessons.py)
     tools/                     learned helper functions and call counts (toolbook.py)
+    referee/                   independent readings of final answers (referee.py)
     state.json                 last consolidation time and counters
 
 Raw per-task stores keep full events and attempts for as long as they are useful;

@@ -2,9 +2,7 @@
 """Benchmark evaluation: blind the run outputs, validate Codex score files, compare arms.
 
     blind      copy each attempt's answer, reports, figures, small outputs and code into a folder named
-               by a random ID, so the judge cannot see the arm; the ID-to-arm map is written separately.
-               Where a question was run again, the first attempt goes along, for the judge to say
-               whether it delivered
+               by a random ID, so the judge cannot see the arm; the ID-to-arm map is written separately
     validate   check score files against the task rubrics (criteria, 0-4 scores, weighted total)
     rubric-check  check frozen rubrics before judging: every reference value and tolerance filled, nothing
                else changed from the repository's draft, the hash of the reference outputs still right
@@ -78,12 +76,6 @@ def latest_attempts(arm_dir: Path):
             yield case.name, attempts[-1].parent
 
 
-def first_attempt(attempt: Path) -> Path:
-    """The oldest attempt of the same question in the arm folder. Attempt folders are named by their
-    start time, and only an attempt that ended with a result counts."""
-    return min(attempt.parent.glob("attempt-*/result.json")).parent
-
-
 def evidence_files(attempt: Path):
     """Answer, Agent reports, published outputs and small code/tables; never state, logs or the tree.
 
@@ -128,26 +120,6 @@ def evidence_files(attempt: Path):
             yield path
 
 
-def copy_evidence(attempt: Path, arm_dir: Path, target: Path) -> None:
-    """What the judge may read of one attempt, copied to target/evidence without the arm folder's name."""
-    total = 0
-    for source in evidence_files(attempt):
-        if not source.is_file():
-            continue
-        relative = source.relative_to(attempt)
-        destination = target / "evidence" / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        total += source.stat().st_size
-        if total > MAX_TOTAL:
-            break
-        if source.suffix.lower() in TEXT:
-            # Absolute run paths contain the arm folder name; replace them.
-            text = source.read_text(encoding="utf-8", errors="replace").replace(str(arm_dir), "<RUN>")
-            destination.write_text(text, encoding="utf-8")
-        else:
-            shutil.copyfile(source, destination)
-
-
 def blind(args) -> dict:
     out = args.out.expanduser().resolve()
     mapping_path = args.map.expanduser().resolve()
@@ -165,24 +137,30 @@ def blind(args) -> dict:
             blind_id = "b" + secrets.token_hex(6)
             target = out / blind_id
             target.mkdir(parents=True)
-            copy_evidence(attempt, arm_dir, target)
+            total = 0
+            for source in evidence_files(attempt):
+                if not source.is_file():
+                    continue
+                relative = source.relative_to(attempt)
+                destination = target / "evidence" / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                total += source.stat().st_size
+                if total > MAX_TOTAL:
+                    break
+                if source.suffix.lower() in TEXT:
+                    # Absolute run paths contain the arm folder name; replace them.
+                    text = source.read_text(encoding="utf-8", errors="replace").replace(str(arm_dir), "<RUN>")
+                    destination.write_text(text, encoding="utf-8")
+                else:
+                    shutil.copyfile(source, destination)
             result = json.loads((attempt / "result.json").read_text())
             query = json.loads((attempt / "query.json").read_text())["query"]
             write_json(target / "task.json", {"blind_id": blind_id, "task_id": task_id, "query": query,
                                               "status": result.get("status")})
-            # Delivery is judged on the question's first attempt (ASPECT_SCORES.md). Where the question
-            # was run again, the judge needs that attempt too.
-            first = first_attempt(attempt)
-            first_status = result.get("status")
-            if first != attempt:
-                first_status = json.loads((first / "result.json").read_text()).get("status")
-                copy_evidence(first, arm_dir, target / "first_attempt")
-                write_json(target / "first_attempt" / "task.json", {"status": first_status})
             spent = usage(attempt, result)
             mapping[blind_id] = {"task_id": task_id, "arm": arm["arm"], "policy": arm.get("policy"),
                                  "library_version": library_version(arm),
                                  "arm_dir": str(arm_dir), "attempt": str(attempt), "status": result.get("status"),
-                                 "first_attempt": str(first), "first_status": first_status,
                                  "elapsed_seconds": result.get("elapsed_seconds"),
                                  "tokens": (spent["input_tokens"] + spent["output_tokens"]
                                             if spent["input_tokens"] is not None and spent["output_tokens"] is not None
@@ -277,8 +255,8 @@ def validate_score(score: dict) -> list[str]:
     for key in ("blind_id", "judge"):
         if not score.get(key):
             errors.append(f"missing {key}")
-    if not isinstance(score.get("first_attempt_delivered"), bool):
-        errors.append("first_attempt_delivered must be true or false")
+    if not isinstance(score.get("delivered"), bool):
+        errors.append("delivered must be true or false")
     return errors
 
 
@@ -555,8 +533,8 @@ def combine(judged, counted=None, run=None):
 def indicator_parts(ref: dict, score: dict | None) -> tuple[dict, list[str]]:
     """The parts of one attempt's six indicators, each 0-100, and the entries its score file leaves out.
 
-    The judged and counted parts come from the score file of the attempt; an attempt without one counts
-    0 in each. The run part is the delivery of the question's first attempt, recorded in the same file.
+    Every part comes from the score file of the attempt, the run part from the delivery the judge
+    records there. An attempt without a score file counts 0 in each.
     """
     holes = []
     weight = {c["id"].rsplit("-", 1)[-1]: c["weight"] for c in ref["criteria"]}
@@ -614,7 +592,7 @@ def indicator_parts(ref: dict, score: dict | None) -> tuple[dict, list[str]]:
             "Differences explained": (judged("D"), None),
             "Traceability": (judged("R"), counted("findings", findings, "evidence_ok", flag)),
             "Robustness": (None, None)}
-    delivery = 100.0 if (score or {}).get("first_attempt_delivered") is True else 0.0
+    delivery = 100.0 if (score or {}).get("delivered") is True else 0.0
     result = {}
     for name, (judged_part, counted_part) in parts.items():
         run = delivery if name == "Robustness" else None
@@ -644,9 +622,6 @@ def indicators(args) -> dict:
     for blind_id, entry in mapping.items():
         if entry["arm"] not in arms:
             continue
-        if "first_attempt" not in entry:
-            raise SystemExit("ERROR: the map was written before first attempts were recorded; run blind again "
-                             "into a new folder")
         score = scores.get(blind_id)
         if score is None and entry["status"] == "completed":
             raise SystemExit(f"ERROR: completed attempt {blind_id} has no score")
@@ -656,14 +631,12 @@ def indicators(args) -> dict:
             holes[blind_id] = missing
         if score is None:
             unscored.append(blind_id)
-        elif score["first_attempt_delivered"] and entry["first_status"] != "completed":
+        elif score["delivered"] and entry["status"] != "completed":
             status_differs.append(blind_id)  # delivered although the runner did not record a completed run
         attempts.append({"blind_id": blind_id, "arm": entry["arm"], "task_id": entry["task_id"],
                          "type": ref["type"], "total": float(score["total"]) if score else 0.0,
                          "status": entry["status"], "scored": score is not None,
-                         "run_again": entry["first_attempt"] != entry["attempt"],
-                         "first_status": entry["first_status"],
-                         "first_attempt_delivered": bool(score and score["first_attempt_delivered"]),
+                         "delivered": bool(score and score["delivered"]),
                          "elapsed_seconds": entry.get("elapsed_seconds"), "tokens": entry.get("tokens"),
                          "indicators": parts})
     summary, beside = {}, {}
@@ -685,8 +658,7 @@ def indicators(args) -> dict:
                                                for group in by_task.values()),
                 "not_completed": sum(row["status"] != "completed" for row in rows),
                 "without_score_file": sum(not row["scored"] for row in rows),
-                "run_again": sum(row["run_again"] for row in rows),
-                "first_attempt_not_delivered": sum(not row["first_attempt_delivered"] for row in rows),
+                "not_delivered": sum(not row["delivered"] for row in rows),
                 "hours": sum(row["elapsed_seconds"] or 0 for row in rows) / 3600,
                 "tokens": sum(tokens) if all(value is not None for value in tokens) else None}
     out = args.out.expanduser().resolve()
@@ -722,8 +694,7 @@ def indicators(args) -> dict:
                            ("mean_total", "Mean rubric total"),
                            ("not_completed", "Judged attempts not completed"),
                            ("without_score_file", "Attempts without a score file (count 0)"),
-                           ("run_again", "Questions run again"),
-                           ("first_attempt_not_delivered", "First attempts not delivered"),
+                           ("not_delivered", "Attempts that did not deliver"),
                            ("hours", "Hours"), ("tokens", "Tokens (millions)")):
             cells = []
             for arm in present:
@@ -742,8 +713,8 @@ def indicators(args) -> dict:
         lines += [f"- `{blind_id}`: {'; '.join(missing)}" for blind_id, missing in holes.items()]
         lines.append("")
     if status_differs:
-        lines += [("First attempt recorded as delivered although its status is not `completed` "
-                   "(the judge's notes say why): ") + ", ".join(f"`{b}`" for b in status_differs) + ".", ""]
+        lines += [("Recorded as delivered although the status is not `completed` (the judge's notes say why): ")
+                  + ", ".join(f"`{b}`" for b in status_differs) + ".", ""]
     (out / "indicators.md").write_text("\n".join(lines), encoding="utf-8")
     return {"report": str(out / "indicators.md"), "chart": None if no_chart else str(out / "six-indicators.png"),
             "no_chart": no_chart, "holes": sum(len(v) for v in holes.values()),

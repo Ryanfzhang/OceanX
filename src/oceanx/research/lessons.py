@@ -3,7 +3,8 @@
 A skill reserves a place for lessons with a marked region (``skill_regions.py``): how many it
 may hold and what they are about. The meta-agent maintains the lessons of each such skill. At
 every review it reads the skill as its readers get it, and the saved records of finished
-tasks; it judges every current lesson (keep, revise or retire) and may add new ones. Only the
+tasks, each with an independent reading of its final answer where one exists (``referee.py``);
+it judges every current lesson (keep, revise or retire) and may add new ones. Only the
 region is rewritten. The rest of the skill, and the packaged files, never change.
 
 What the meta-agent decides takes effect at once. These rules are enforced by code, not by
@@ -33,6 +34,7 @@ from pathlib import Path
 
 from oceanx.research.llm import parse_json_object
 from oceanx.research.memory import ResearchMemory
+from oceanx.research.referee import Referee, reading_lines
 from oceanx.research.tree_store import atomic_write_text
 from oceanx.skill_regions import Region, fill_regions, find_regions
 
@@ -78,8 +80,9 @@ when the task did the opposite and that went well.
 2. Propose at most {max_new} new lessons ("add"). Read the skill first. A lesson must add something
 the skill does not already say: propose nothing it already says, even in other words, and nothing
 the records show already being done. A lesson is worth proposing only when the records show a
-contrast: a choice that cost effort without changing the answer, or one that went well in some
-places and badly in others. Prefer no lesson over a weak one.
+contrast: a choice that cost effort without changing the answer, one that went well in some
+places and badly in others, or the same kind of gap left in the final answers of several tasks.
+Prefer no lesson over a weak one.
 
 {scope}
 
@@ -114,7 +117,8 @@ together, which proposed follow-ups to adopt or drop, when to follow a line deep
 leave it, and when the question is answered well enough to write the final answer.
 Judge a decision by what it cost and gained in the records: minutes and tokens, whether the node
 changed the conclusion (its label) and is cited, what was asked after a result that could not decide
-the question, and which follow-ups were dropped.""", """\
+the question, which follow-ups were dropped, and what the final answer still lacked of what the
+question asks for.""", """\
 Each task lists its questions in the order the Coordinator created them. An ID shows the parent:
 B1.3.2 is under B1.3, and B1 is the task's question. Minutes count from the start of the task.
 A task "run with lessons" had lessons in its skills when it ran.
@@ -127,9 +131,11 @@ These lessons are about what to watch for in an analysis. Each lesson must name 
 that changed, weakened or invalidated a result in the records: a baseline, region, period or index
 whose choice changed the result; a property of the data product that limits what can be concluded;
 a method assumption that did not hold; a test that caught an error, or whose absence let one
-through; or how a result the data cannot decide was reported.
-The evidence is in each node's result and limits, and in later questions that had to re-examine an
-earlier result. Each node names the Expert that analysed it.""", """\
+through; how a result the data cannot decide was reported; or a conclusion stated more strongly
+than the analysis behind it supports.
+The evidence is in each node's result and limits, in later questions that had to re-examine an
+earlier result, and in the independent reading of the final answer. Each node names the Expert
+that analysed it.""", """\
 Each task lists the questions its Experts answered, in order. An ID shows the parent: B1.3.2 is under
 B1.3. A task "run with lessons" had lessons in its skills when it ran. "found" is the Expert's
 result and "limits" the limitations it reported. "why" is the Coordinator's reason for asking, which
@@ -137,6 +143,15 @@ often names the earlier result that needed another look.
 A label says whether the final conclusion would change without the node; a "rule" label comes from
 citations only and is crude."""),
 }
+
+# How every reader's records show a referee's reading of the final answer (referee.py).
+READING_NOTE = """\
+"Independent reading" comes from a model that saw only the research question and the final
+answer, none of the work. It lists what the question asks for and the answer does not give,
+conclusions stronger than the support the answer states, and superseded numbers the answer
+still uses. About one such finding in three is wrong. Use a finding only where the task's own
+results bear it out, and build a lesson on a kind of finding that recurs in tasks on different
+questions, never on one finding."""
 
 
 def _words(text: str) -> int:
@@ -322,9 +337,10 @@ class LessonBook:
             question = _norm(digest.get("question"))
             (repeats if question in seen else firsts).append(digest)
             seen.add(question)
+        readings = Referee(self.memory).readings()
         records, size = [], 0
         for digest in firsts + repeats:
-            record = _record(digest, self.reader(skill, region))
+            record = _record(digest, self.reader(skill, region), readings.get(digest["task_key"]))
             if records and size + len(record) > MAX_PROMPT_CHARS:
                 break
             records.append(record)
@@ -342,7 +358,7 @@ class LessonBook:
                                           or "None yet.")
             + "\n\n# Lessons the owner marked wrong\n" + ("\n".join(f"- {text}" for text in wrong) or "None.")
             + "\n\n# Already in place\n" + _in_place(self.reader(skill, region), skill)
-            + "\n\n# How to read a record\n" + reading
+            + "\n\n# How to read a record\n" + reading + "\n" + READING_NOTE
             + "\n\n# Records\n" + "\n\n".join(records))
         return prompt, len(records)
 
@@ -597,9 +613,9 @@ def _attempts(node: dict) -> str:
         for i, run in enumerate(runs, 1))
 
 
-def _record(digest: dict, role: str) -> str:
+def _record(digest: dict, role: str, reading: dict | None = None) -> str:
     """One task as the meta-agent reads it: its decisions for the Coordinator skill, its
-    analyses for the Expert skill."""
+    analyses for the Expert skill, and for both the referee's reading of its final answer."""
     outline, outcomes = digest.get("outline", {}), digest.get("outcomes", {})
     questions = {n: node for n, node in outline.items() if node.get("parent") is not None}
     proposals = [p for node in outline.values() for p in node.get("proposals") or []]
@@ -613,7 +629,7 @@ def _record(digest: dict, role: str) -> str:
               f"min, {_millions(int(digest.get('tokens', 0)))}, {answered} questions answered, "
               f"{adopted} of {len(proposals)} proposed follow-ups adopted")
     lines = [header, f"Question: {digest.get('question')}",
-             f"Final answer: {answer or 'none recorded'}"]
+             f"Final answer: {answer or 'none recorded'}", *(reading_lines(reading) if reading else [])]
     for node_id, node in questions.items():
         outcome = outcomes.get(node_id, {})
         runs = node.get("attempts") or []

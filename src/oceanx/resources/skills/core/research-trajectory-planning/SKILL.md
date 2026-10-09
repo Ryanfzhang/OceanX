@@ -32,5 +32,5 @@ can be informative. If several plausible explanations remain compatible with the
 that uncertainty is part of the result, not a reason to claim all explanations were tested.
 Keep exploratory findings distinct from predictions specified before examining the data.
 
-<!-- oceanx:lessons max=4 for="coordinator" about="which sub-questions and proposed follow-ups were worth asking, in what order, how deep to follow a line, and when the question was answered well enough to stop" -->
+<!-- oceanx:lessons max=4 for="coordinator" about="which sub-questions and proposed follow-ups were worth asking, in what order, how deep to follow a line, when the question was answered well enough to stop, and what the question asked for that the final answer did not give" -->
 <!-- /oceanx:lessons -->

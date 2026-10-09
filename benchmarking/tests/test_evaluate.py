@@ -35,7 +35,7 @@ def score_file(blind_id, task, level):
     criteria = evaluate.rubric(task)["criteria"]
     return {"blind_id": blind_id, "task_id": task, "status": "completed", "rubric_version": "3.0",
             "rubric_status": "frozen", "references_sha256": "x" * 64, "judge": {"name": "codex"},
-            "first_attempt_delivered": True,
+            "delivered": True,
             "criteria": [{"id": c["id"], "score": level, "evidence": "evidence/answer.md"} for c in criteria],
             "total": sum(c["weight"] * level / 4 for c in criteria)}
 
@@ -62,32 +62,6 @@ def test_blind_hides_the_arm_and_the_tree(tmp_path):
         evaluate.main(["blind", "--runs", str(runs[0]), "--out", str(out), "--map", str(out / "map.json")])
 
 
-def test_blind_takes_the_first_attempt_along_when_a_question_was_run_again(tmp_path):
-    """Delivery is judged on a question's first attempt, so the judge has to see it beside the latest."""
-    arm_dir = make_arm(tmp_path / "runs", "A", "v2-nested", {"Q07": 2, "Q17": 2})
-    earlier = arm_dir / "Q07" / "attempt-0"  # attempt folders sort by their start time
-    earlier.mkdir()
-    (earlier / "result.json").write_text(json.dumps({"status": "failed", "elapsed_seconds": 60}))
-    (earlier / "query.json").write_text((arm_dir / "Q07" / "attempt-1" / "query.json").read_text())
-    (earlier / "partial_answer.md").write_text(f"The run stopped; see {arm_dir}/Q07/attempt-0/log")
-    (earlier / "arm.json").write_text("{}")
-    out, mapping = tmp_path / "eval" / "blind", tmp_path / "eval" / "blind_map.json"
-    evaluate.main(["blind", "--runs", str(arm_dir), "--out", str(out), "--map", str(mapping)])
-    entries = {entry["task_id"]: (blind_id, entry) for blind_id, entry in json.loads(mapping.read_text()).items()}
-    blind_id, entry = entries["Q07"]
-    assert entry["attempt"].endswith("attempt-1") and entry["first_attempt"].endswith("attempt-0")
-    assert (entry["status"], entry["first_status"]) == ("completed", "failed")
-    first = out / blind_id / "first_attempt"
-    assert json.loads((first / "task.json").read_text()) == {"status": "failed"}
-    text = (first / "evidence" / "partial_answer.md").read_text()
-    assert "<RUN>" in text and "arm-A" not in text and not list(first.rglob("arm.json"))
-    assert (out / blind_id / "evidence" / "answer.md").read_text() == "## Summary\nanswer"  # the judged attempt
-    # A question run once: its only attempt is the first, and no second folder is made.
-    blind_id, entry = entries["Q17"]
-    assert entry["first_attempt"] == entry["attempt"] and entry["first_status"] == "completed"
-    assert not (out / blind_id / "first_attempt").exists()
-
-
 def test_validate_catches_bad_scores():
     good = score_file("b1", "Q17", 3)
     assert evaluate.validate_score(good) == []
@@ -102,10 +76,10 @@ def test_validate_catches_bad_scores():
     wrong = json.loads(json.dumps(good))
     wrong["criteria"][0]["score"] = 5
     assert evaluate.validate_score(wrong)
-    # Whether the question's first attempt delivered is recorded in every score file.
-    assert evaluate.validate_score({key: value for key, value in good.items() if key != "first_attempt_delivered"})
-    assert evaluate.validate_score({**good, "first_attempt_delivered": "yes"})
-    assert evaluate.validate_score({**good, "first_attempt_delivered": False}) == []
+    # Whether the attempt delivered is recorded in every score file.
+    assert evaluate.validate_score({key: value for key, value in good.items() if key != "delivered"})
+    assert evaluate.validate_score({**good, "delivered": "yes"})
+    assert evaluate.validate_score({**good, "delivered": False}) == []
 
 
 def test_freeze_summarize_and_decisions(tmp_path):
@@ -627,7 +601,7 @@ PAPER_LEVELS = {"K1": 4, "K2": 3, "K3": 2, "K4": 1, "K5": 0, "M": 2, "D": 4, "R"
 def test_indicator_parts_follow_the_definition():
     """ASPECT_SCORES.md: judged parts divide the rubric total; counts and delivery stand beside them."""
     checkable = evaluate.rubric("Q21")  # answer key A1, A2 used by Q; three depth probes, two breadth probes
-    score = judged_file("b1", "Q21", OPEN_LEVELS, first_attempt_delivered=False,
+    score = judged_file("b1", "Q21", OPEN_LEVELS, delivered=False,
                         answer_key=[{"id": "Q21-A1", "result": "pass"}, {"id": "Q21-A2", "result": "fail"},
                                     {"id": "Q21-A3", "result": "pass"}],  # A3 belongs to M and is not counted
                         probes={"depth_addressed": [1, 3], "breadth_addressed": [2]})
@@ -650,7 +624,7 @@ def test_indicator_parts_follow_the_definition():
     parts, holes = evaluate.indicator_parts(disagreement, score)
     assert holes == [] and parts["Depth"]["counted"] == (50 + 75) / 2  # probes and causes count alike
     assert parts["Correctness"]["counted"] == 25 and parts["Breadth"]["counted"] == 0
-    assert parts["Robustness"]["combined"] == 100  # judged 100 and the first attempt delivered
+    assert parts["Robustness"]["combined"] == 100  # judged 100 and the attempt delivered
 
     paper = evaluate.rubric("Q09")  # findings K1, K2 (20 points each), K3 to K5 (10 each); M, D, R
     findings = [{"id": f"Q09-K{n}", "agent_verdict": "missing" if n == 5 else "reproduced",
@@ -687,6 +661,9 @@ def test_indicators_average_questions_and_repeats_per_arm(tmp_path):
     runs = [make_arm(tmp_path / "r1", "A", "v2-nested", {"Q21": 2, "Q20": 2, "Q09": 2}),
             make_arm(tmp_path / "r2", "A", "v2-nested", {"Q21": 2}),  # a repeat of one question
             make_arm(tmp_path / "r1", "B", "v2-nested", {"Q21": None, "Q09": 2})]  # Q21 failed, nothing executed
+    # Arm B's paper task ended with a whole report, but its runner recorded another status.
+    relabelled = runs[2] / "Q09" / "attempt-1" / "result.json"
+    relabelled.write_text(json.dumps({**json.loads(relabelled.read_text()), "status": "needs_interaction"}))
     eval_root = tmp_path / "eval"
     mapping, scores, out = eval_root / "blind_map.json", eval_root / "scores", eval_root / "indicators"
     evaluate.main(["blind", "--runs", *map(str, runs), "--out", str(eval_root / "blind"), "--map", str(mapping)])
@@ -700,11 +677,11 @@ def test_indicators_average_questions_and_repeats_per_arm(tmp_path):
                                     "evidence_ok": True} for n in range(1, 6)]}}
     for blind_id, entry in json.loads(mapping.read_text()).items():
         task, repeat = entry["task_id"], "r2" in entry["arm_dir"]
-        if entry["status"] != "completed":
+        if entry["status"] == "failed":
             continue
         levels = PAPER_LEVELS if task == "Q09" else {**OPEN_LEVELS, "F": 0 if repeat else 4}
         (scores / f"{blind_id}.json").write_text(json.dumps(judged_file(
-            blind_id, task, levels, **counts[task], first_attempt_delivered=not repeat)))
+            blind_id, task, levels, **counts[task], delivered=not repeat)))
     assert evaluate.main(["indicators", "--map", str(mapping), "--scores", str(scores), "--out", str(out),
                           "--arms", "B", "A"]) == 0
     result = json.loads((out / "indicators.json").read_text())
@@ -718,9 +695,12 @@ def test_indicators_average_questions_and_repeats_per_arm(tmp_path):
     # Arm B: its only open problem was not scored and counts 0 everywhere.
     assert {name: parts["combined"] for name, parts in b.items()} == dict.fromkeys(b, 0)
     beside = result["beside"]["open_problem"]
-    assert (beside["A"]["questions"], beside["A"]["attempts"], beside["A"]["first_attempt_not_delivered"]) == (2, 3, 1)
-    assert (beside["B"]["without_score_file"], beside["B"]["not_completed"]) == (1, 1)
+    assert (beside["A"]["questions"], beside["A"]["attempts"], beside["A"]["not_delivered"]) == (2, 3, 1)
+    assert (beside["B"]["without_score_file"], beside["B"]["not_completed"], beside["B"]["not_delivered"]) == (1, 1, 1)
+    # Delivery is the judge's record for the attempt it judged, whatever status the runner wrote.
     assert result["summary"]["paper_reproduction"]["B"]["Robustness"]["combined"] == 100
+    [flagged] = result["delivered_with_other_status"]
+    assert json.loads(mapping.read_text())[flagged]["task_id"] == "Q09" and result["beside"]["paper_reproduction"]["B"]["not_completed"] == 1
     report = (out / "indicators.md").read_text()
     assert "| Framing (问题拆解) | 0.0 | 75.0 |" in report and "## Paper verification (论文验证题)" in report
     import importlib.util

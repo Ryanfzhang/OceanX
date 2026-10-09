@@ -357,10 +357,8 @@ python benchmarking/evaluation/evaluate.py blind --runs <every arm folder of the
   --out $EVAL_ROOT/<experiment>/blind --map $EVAL_ROOT/<experiment>/blind_map.json
 ```
 
-Where a question was run more than once in an arm, its blind folder also holds the first attempt
-(`first_attempt/`): the latest attempt is the one judged, and the first one says whether the arm delivered
-at the first try. Codex then follows `evaluation/CODEX_JUDGE.md` for every blind folder and writes
-`scores/<blind_id>.json`. Afterwards:
+Where a question was run more than once in an arm, the latest attempt is the one judged. Codex then
+follows `evaluation/CODEX_JUDGE.md` for every blind folder and writes `scores/<blind_id>.json`. Afterwards:
 
 ```bash
 python benchmarking/evaluation/evaluate.py validate --scores $EVAL_ROOT/<experiment>/scores
@@ -396,8 +394,7 @@ total cost. Proposals for a next experiment go in a section of their own.
 
 The rubric total is the main result. `evaluation/ASPECT_SCORES.md` divides it into six indicators for
 open problems and six others for paper verification (each made of the judged criteria, counts the judge
-records, and for robustness the share of questions delivered at the first attempt), for one six-axis chart
-per task type.
+records, and for robustness the share of questions delivered), for one six-axis chart per task type.
 
 ### Process measures
 
@@ -493,8 +490,17 @@ when it was created and run, every retry, its result and stated limits, its cost
 its proposed follow-ups were adopted or dropped. The digest also holds which lessons the run was shown,
 which it named, which helper functions it could call and how often it called each.
 
-**Lessons.** With `consolidate --review` the meta-agent makes one model call per skill that takes lessons.
-It reads the skill as its readers get it and the records, then:
+**Readings.** A record cannot show what the final answer left out or overstated, because the agents that
+wrote the answer also wrote the record. So `consolidate --review` first has the model read each finished
+run's research question and final answer, and nothing else: no tree, no code, no rubric and no reference.
+One call lists what the question asks for, from the question alone and once per question. A second call
+reads the answer against that list and notes what is missing or partial, conclusions stronger than the
+support the answer gives, and superseded numbers still used. The reading is kept under
+`.oceanx/research/referee/` and shown with the run's record. It is evidence, not a rule: in a hand check
+of five answers about one finding in three was wrong.
+
+**Lessons.** The meta-agent then makes one model call per skill that takes lessons.
+It reads the skill as its readers get it and the records with their readings, then:
 - judges every current lesson: keep, revise or retire;
 - may add at most two lessons to that skill.
 

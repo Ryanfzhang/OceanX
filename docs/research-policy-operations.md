@@ -56,6 +56,7 @@ default, is a code change reviewed like any other, then compared with paired run
 | `outcomes.py` | Per-node cost, code runs, citation, children, proposals made/adopted, reopen/conflict, skills opened; the Coordinator's own calls count on the root |
 | `labels.py` | Auto and judge labels, the small human review set, judge–human agreement |
 | `memory.py` | Per-task digests (outline, decision history, outcomes, labels), process measures of a finished tree (`run_measures`), weekly consolidation and archiving |
+| `referee.py` | An independent reading of each finished task's final answer (what the question asks for and the answer lacks, conclusions stronger than their support), kept as evidence for the lesson review |
 | `lessons.py` | The meta-agent's review of each skill's lessons (keep, revise, retire, add), the rules code enforces, the owner's marks and the change log |
 | `toolbook.py` | The helper functions a task mounts, the call counter, usage statistics, and tools learned from repeated code (static check, sandboxed test, independent review) |
 | `../skill_regions.py` | The marked regions of a SKILL.md (`oceanx:lessons`, `oceanx:tools`) and how they are filled |
@@ -82,6 +83,16 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   It also keeps which lessons the task was shown and which it named, which helper functions it
   could call and how often it called each. The meta-agent reads digests only. Digests written
   before this history was kept stay readable and are rebuilt while their raw store exists.
+- **Readings.** A digest cannot show what the final answer left out or overstated: the agents
+  that wrote the answer also wrote the records. So before a review, a model that saw none of the
+  work reads each newly finished task's research question and final answer
+  (`.oceanx/research/referee/<task_key>.json`). One call lists what the question asks for, from
+  the question alone and once per question; a second reads the answer against that list and
+  notes what is missing or partial, conclusions stronger than the support the answer gives, and
+  superseded numbers still used. A reading is evidence, not a rule: in a hand check of five
+  answers about one finding in three was wrong, so a lesson still needs the same kind of finding
+  in tasks on 3 different questions. At most 20 tasks are read in one update; a call that fails
+  twice or does not return in 300 s leaves its task for the next update.
 - **Marked regions.** A skill reserves a place for what the project learns:
 
   ```text
@@ -109,7 +120,8 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   same on request. Nothing runs when `OCEANX_LIBRARY_FROZEN` is set (experiment arms).
 - **Lessons.** One model call per skill that takes lessons. The call gets the skill as its
   readers get it, what the reader is told elsewhere, the lessons the owner marked wrong, and the
-  role's view of the records (about 200k characters, one run of every question before any repeat).
+  role's view of the records (about 200k characters, one run of every question before any repeat),
+  each with the reading of its final answer where one exists.
   It judges every current lesson (keep, revise, retire) and may add at most 2. Code enforces:
   - a new lesson needs supporting tasks from at least 3 different questions (with fewer, a skill
     without lessons is not reviewed at all);
@@ -171,4 +183,5 @@ elimination, the static check, a real sandboxed test run, admission with a stand
 library requests through the backend router, and frozen snapshots.
 
 Not yet run: a live meta-agent review with a real model, a live task that calls a learned tool, and
-the desktop dialog in a running app.
+the desktop dialog in a running app. The reading of final answers has unit tests only; the two prompts
+it uses now were written after the trial of 2026-10-09 and have not been run with a model.

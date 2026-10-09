@@ -122,7 +122,8 @@ def consolidate(
     model_role: str = typer.Option("meta", "--model-role"),
 ) -> None:
     """Digest research trees, archive raw records past retention and count tool calls; with
-    --review the meta-agent updates the project's lessons and tools (model calls)."""
+    --review the final answers of newly finished tasks are read and the meta-agent updates
+    the project's lessons and tools (model calls)."""
     from oceanx.research.memory import find_stores
     llm = None
     if review:
