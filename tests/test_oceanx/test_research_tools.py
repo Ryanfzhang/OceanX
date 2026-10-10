@@ -631,11 +631,11 @@ def test_a_task_names_to_each_reader_the_skills_that_hold_what_was_learned(tmp_p
          "human": None, "added_by": "meta-agent", "added_at": "2026-01-01T00:00:00+00:00"}
         for index, skill in enumerate(("research-trajectory-planning", "claim-grounded-writing",
                                        "ocean-dataset-diagnosis", "hypothesis-experiment-design"), 1)])
-    # Each reader is told of the skills it can open that now hold lessons, and of the learned tool.
-    assert set(project.learned_in(process, research=True)) == {
-        "claim-grounded-writing", "ocean-dataset-diagnosis", toolbook.SKILL}
+    # Each reader is told of the skills that now hold lessons written for it, and of the learned
+    # tool. The writing skill's lessons are the Coordinator's, so no Expert is sent to read them.
+    assert set(project.learned_in(process, research=True)) == {"ocean-dataset-diagnosis", toolbook.SKILL}
     assert set(project.learned_in(statistics, research=True)) == {
-        "claim-grounded-writing", "ocean-dataset-diagnosis", "hypothesis-experiment-design", toolbook.SKILL}
+        "ocean-dataset-diagnosis", "hypothesis-experiment-design", toolbook.SKILL}
     assert set(project.learned_in("coordinator", research=True)) == {
         "research-trajectory-planning", graphs.WRITING_SKILL}
     # Lessons are written only into research tasks; the learned tool is mounted in every task.

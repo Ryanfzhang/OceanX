@@ -13,7 +13,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from oceanx.research.lessons import LessonBook
+from oceanx.research.lessons import READERS, LessonBook
 from oceanx.research.memory import ResearchMemory
 from oceanx.research.policy import active_policy
 from oceanx.research.referee import Referee
@@ -63,14 +63,16 @@ class ProjectResearch:
         return rendered
 
     def learned_in(self, role: str, *, research: bool, capabilities=()) -> list[str]:
-        """The skills ``role`` can open that now carry something the project learned: lessons
-        (in research tasks) or a learned helper function. An agent opens a skill only when it
-        is told to, so a task names these to their readers; a project that has learned nothing
-        names none."""
+        """The skills ``role`` can open that now carry something the project learned for it:
+        lessons written for this reader (in research tasks) or a learned helper function. An
+        agent opens a skill only when it is told to, so a task names these to their readers; a
+        project that has learned nothing names none."""
         from oceanx.skills import ocean_skill_metadata
         readable = {skill.name for skill in ocean_skill_metadata(role=role, capabilities=capabilities)}
         with_lessons = {lesson.get("skill") for lesson in self.lessons.active()} if research else set()
-        found = [skill for skill in self.lessons.regions() if skill in readable and skill in with_lessons]
+        found = [skill for skill, region in self.lessons.regions().items()
+                 if skill in readable and skill in with_lessons
+                 and role in READERS[self.lessons.reader(skill, region)]]
         if TOOL_SKILL in readable and any(tool["source"] == "learned" for tool in self.tools.mounted()):
             found.append(TOOL_SKILL)
         return found

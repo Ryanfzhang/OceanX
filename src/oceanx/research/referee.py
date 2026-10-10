@@ -3,13 +3,18 @@
 A research tree records what a task did. It cannot show what the final answer left out or
 overstated: the agents that wrote the answer also wrote those records, and an error nobody
 caught leaves no trace in them. So after a task finishes, a model that saw none of the work
-reads the research question and the final answer, in two calls:
+reads the research question and the final answer, in three calls:
 
 1. from the question alone, the list of what it asks for. The list is kept per question text,
    so every run of a question is read against the same list;
 2. the final answer against that list: what is missing or partial, which conclusions are
    stronger than the support the answer itself gives, and which superseded numbers it still
-   uses.
+   uses;
+3. the final answer along six questions a careful reader asks of any research answer
+   (``ASPECTS``): for each one the answer does not fully meet, what a stronger answer would
+   have contained. The first two parts say what an answer got wrong or left out; this part
+   says what would have made it better research, which is what the Coordinator's lessons
+   are learned from.
 
 A reading is evidence for the lesson review (``lessons.py``), never a rule or a score. In a
 hand check of five answers (2026-10-09) about one finding in three was wrong, which is why a
@@ -47,6 +52,20 @@ MAX_NEW_PER_UPDATE = 20  # tasks read in one update, newest first; the rest wait
 CALL_SECONDS = 300  # one model call; the slowest of 33 trial calls took 95 s, one never returned
 # What a task record shows the meta-agent of one reading (the file keeps all of it).
 SHOWN_ASKED, SHOWN_CLAIMS, SHOWN_SUPERSEDED = 6, 5, 3
+# What a careful reader asks of a research answer. Each can be judged from the question and the
+# answer alone: no data, no code and no reference result.
+ASPECTS = {
+    "framing": "Is the research question turned into hypotheses that the analysis could have refuted?",
+    "results": "Is each headline result given under one stated definition (region, period, depth, "
+               "baseline), and do the numbers in the answer agree with each other?",
+    "depth": "Is each mechanism the answer names tested in the data by something that could have refuted "
+             "it, not only shown to be compatible?",
+    "breadth": "Are the results connected to related processes and compared with published values or methods?",
+    "robustness": "Do the main conclusions hold under other defensible choices of definition, period or "
+                  "region, and are their uncertainties given?",
+    "rigor": "Are the data handled in a way that fits the conclusions drawn, and are the limits of those "
+             "conclusions stated?",
+}
 
 ASKED_PROMPT = """\
 You prepare the list an independent reader will check answers to one research question
@@ -95,6 +114,30 @@ Question:
 
 What it asks for:
 {asked}
+
+Final answer:
+{answer}
+"""
+
+QUALITY_PROMPT = """\
+You read a research answer as someone who saw none of the work behind it. You see only the
+question and the final answer: no data, no code and no reference result.
+
+For each of the six questions below, say whether the answer does it: "yes", "partly" or "no".
+For "partly" and "no", say in one sentence what a stronger answer to this research question
+would have contained. Name the missing analysis or content itself; do not repeat the question.
+
+{aspects}
+
+Judge only what the answer shows. Where the answer says the supplied data cannot decide
+something and names the data that would, count that part as done. Do not ask for data the
+question says are not supplied.
+
+Return JSON only:
+{{"quality": [{{"aspect": "<name>", "status": "yes" | "partly" | "no", "gap": "<one sentence, or empty>"}}]}}
+
+Question:
+{question}
 
 Final answer:
 {answer}
@@ -181,6 +224,21 @@ def read_answer(question: str, asked: list[str], answer: str, llm: Callable[[str
     }
 
 
+def read_quality(question: str, answer: str, llm: Callable[[str], str]) -> list[dict]:
+    """One final answer along the six questions: what a stronger answer would have contained."""
+    reply = _ask(llm, QUALITY_PROMPT.format(
+        aspects="\n".join(f"{name}: {text}" for name, text in ASPECTS.items()),
+        question=question, answer=answer[:MAX_ANSWER_CHARS]))
+    found = {}
+    for entry in reply.get("quality") or []:
+        if isinstance(entry, dict) and entry.get("aspect") in ASPECTS and entry.get("status") in STATUSES:
+            found[entry["aspect"]] = {"aspect": entry["aspect"], "status": entry["status"],
+                                      "gap": "" if entry["status"] == "yes" else _clip(entry.get("gap"), 240)}
+    if len(found) < len(ASPECTS):
+        raise ValueError(f"The reader left out {', '.join(sorted(set(ASPECTS) - set(found)))}.")
+    return [found[name] for name in ASPECTS]
+
+
 def reading_lines(reading: dict) -> list[str]:
     """One reading as the meta-agent sees it in a task record."""
     asked = reading.get("asked") or []
@@ -203,6 +261,10 @@ def reading_lines(reading: dict) -> list[str]:
     if stale:
         lines.append("  superseded but still used: " + listed(stale, SHOWN_SUPERSEDED, lambda e: (
             f"\"{_clip(e['stale'], 110)}\", corrected to \"{_clip(e.get('corrected'), 110)}\"")))
+    gaps = [entry for entry in reading.get("quality") or [] if entry.get("status") in ("partly", "no")]
+    if gaps:
+        lines.append("  a stronger answer would have contained: " + " | ".join(
+            f"{entry['aspect']} ({entry['status']}): {entry.get('gap') or 'not said'}" for entry in gaps))
     return lines
 
 
@@ -245,37 +307,50 @@ class Referee:
             answer = (root.get("result") or {}).get("summary") or ""
         return root.get("question") or "", answer
 
-    def read(self, store_path: Path, llm: Callable[[str], str]) -> dict | None:
-        """Read one task's final answer and keep the reading. None when it has no answer."""
-        question, answer = self._task(store_path)
-        if not question.strip() or len(answer.strip()) < MIN_ANSWER_CHARS:
-            return None
-        reading = {"schema": READING_SCHEMA, "task_key": task_key(store_path),
-                   "question_key": question_key(question),
-                   "read_at": datetime.now(UTC).isoformat(), "answer_chars": len(answer),
-                   **read_answer(question, self._asked(question, llm), answer, llm)}
+    def _keep(self, reading: dict) -> None:
         atomic_write_text(self.root / f"{reading['task_key']}.json",
                           json.dumps(reading, ensure_ascii=False, indent=1))
+
+    def read(self, store_path: Path, llm: Callable[[str], str], *, earlier: dict | None = None) -> dict | None:
+        """Read one task's final answer and keep the reading. None when it has no answer.
+        ``earlier`` is a reading made before the third part existed: only that part is added.
+        The first two parts are kept as soon as they are made, so a third call that fails
+        costs only itself and is made again at the next update."""
+        question, answer = self._task(store_path)
+        if not question.strip() or len(answer.strip()) < MIN_ANSWER_CHARS:
+            if earlier is not None:  # its answer is no longer kept: there is nothing to add to
+                self._keep({**earlier, "quality": []})
+            return None
+        reading = earlier or {
+            "schema": READING_SCHEMA, "task_key": task_key(store_path), "question_key": question_key(question),
+            "read_at": datetime.now(UTC).isoformat(), "answer_chars": len(answer),
+            **read_answer(question, self._asked(question, llm), answer, llm)}
+        self._keep(reading)
+        reading = {**reading, "quality": read_quality(question, answer, llm)}
+        self._keep(reading)
         return reading
 
     def read_new(self, store_paths: list[Path], digests: list[dict], llm: Callable[[str], str]) -> dict:
-        """Read the finished tasks that have no reading yet, newest first. A task whose reading
-        fails is left for the next update; nothing else depends on it."""
+        """Read the finished tasks whose reading is missing or lacks its third part, newest first.
+        A task whose reading fails is left for the next update; nothing else depends on it."""
         finished = {d["task_key"]: d for d in digests if d.get("finished")}
-        have = set(self.readings())
+        have = self.readings()
         waiting = [path for path in map(Path, store_paths)
-                   if path.is_file() and task_key(path) in finished and task_key(path) not in have]
+                   if path.is_file() and task_key(path) in finished
+                   and "quality" not in have.get(task_key(path), {})]
         waiting.sort(key=lambda path: finished[task_key(path)].get("started_at") or "", reverse=True)
-        result = {"read": 0, "without_answer": 0, "failed": [],
+        result = {"read": 0, "completed": 0, "without_answer": 0, "failed": [],
                   "left_for_later": max(len(waiting) - MAX_NEW_PER_UPDATE, 0)}
         for path in waiting[:MAX_NEW_PER_UPDATE]:
+            earlier = have.get(task_key(path))
             try:
-                reading = self.read(path, llm)
+                reading = self.read(path, llm, earlier=earlier)
             except ValueError as exc:
                 result["failed"].append({"task_key": task_key(path), "reason": _clip(exc, 300)})
                 continue
-            result["read" if reading else "without_answer"] += 1
+            result["without_answer" if reading is None else "completed" if earlier else "read"] += 1
         return result
 
 
-__all__ = ["READING_SCHEMA", "Referee", "asked_items", "question_key", "read_answer", "reading_lines"]
+__all__ = ["ASPECTS", "READING_SCHEMA", "Referee", "asked_items", "question_key", "read_answer",
+           "read_quality", "reading_lines"]

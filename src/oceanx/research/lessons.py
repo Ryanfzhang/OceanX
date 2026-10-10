@@ -7,12 +7,21 @@ tasks, each with an independent reading of its final answer where one exists (``
 it judges every current lesson (keep, revise or retire) and may add new ones. Only the
 region is rewritten. The rest of the skill, and the packaged files, never change.
 
+The Coordinator is the reader that learns most (``MAX_NEW_PER_REVIEW``). It decides which
+sub-questions are asked and writes the final answer, and that is where answers fell short: the
+first library, mostly cautions for Experts, left the judged answers unchanged (2026-10-10).
+Its lessons are learned from the trees' decisions and from what the independent reading says
+a stronger final answer would have contained.
+
 What the meta-agent decides takes effect at once. These rules are enforced by code, not by
 the model:
 
 * a new lesson needs supporting tasks from at least ``MIN_SUPPORT`` different research
   questions; repeated runs of one question count once;
 * a lesson whose counterexamples come from as many questions as its support is retired;
+* one idea is kept once: a proposal that says what a lesson already says, in any skill, is
+  not added, and its supporting tasks are added to that lesson (one model call compares
+  them; the first library held twelve lessons that were five ideas);
 * the project keeps every lesson that passed; a region's ``max`` is how many of a skill's
   lessons a task is shown, the best supported first, so the library can go on growing while
   what a reader sees stays short;
@@ -48,7 +57,8 @@ LEARNED = ("Learned from past OceanX tasks (evidence, not rules; name a lesson's
 MAX_WORDS = 40
 MAX_CONDITION_WORDS = 25
 MIN_SUPPORT = 3  # different research questions, not repeated runs of one
-MAX_NEW_PER_REVIEW = 2  # per skill
+# New lessons one review may add to a skill, by the skill's reader.
+MAX_NEW_PER_REVIEW = {"coordinator": 4, "expert": 1}
 MAX_PROMPT_CHARS = 200_000  # task records in one review prompt (about 50k tokens)
 VERDICTS = ("right", "wrong")
 
@@ -116,13 +126,18 @@ Return JSON only:
 # Per reader: who reads the lessons, what a lesson must be about, and how to read a task record.
 REVIEW_SCOPE = {
     "coordinator": ("the Coordinator", """\
-These lessons are about research-tree decisions: what to establish first and which questions to run
-together, which proposed follow-ups to adopt or drop, when to follow a line deeper and when to
-leave it, and when the question is answered well enough to write the final answer.
+These lessons are about what the Coordinator decides: which sub-questions to ask and in what order,
+which proposed follow-ups to adopt or drop, when to follow a line deeper and when to leave it, when
+the question is answered well enough, and what the final answer must contain and check. The line
+"This skill takes lessons about" says which of these belong in this skill.
 Judge a decision by what it cost and gained in the records: minutes and tokens, whether the node
 changed the conclusion (its label) and is cited, what was asked after a result that could not decide
-the question, which follow-ups were dropped, and what the final answer still lacked of what the
-question asks for.""", """\
+the question, and which follow-ups were dropped.
+Judge the whole tree by its final answer: what the question asks for that the answer does not give,
+and what a stronger answer would have contained (the independent reading). A lesson that closes
+such a gap names the sub-question that was never asked, or what the final answer left unchecked.
+It says what to do, not what to avoid, and asks for nothing that the tasks' data, Experts and time
+could not have done.""", """\
 Each task lists its questions in the order the Coordinator created them. An ID shows the parent:
 B1.3.2 is under B1.3, and B1 is the task's question. Minutes count from the start of the task.
 A task "run with lessons" had lessons in its skills when it ran.
@@ -153,9 +168,30 @@ READING_NOTE = """\
 "Independent reading" comes from a model that saw only the research question and the final
 answer, none of the work. It lists what the question asks for and the answer does not give,
 conclusions stronger than the support the answer states, and superseded numbers the answer
-still uses. About one such finding in three is wrong. Use a finding only where the task's own
-results bear it out, and build a lesson on a kind of finding that recurs in tasks on different
-questions, never on one finding."""
+still uses. "A stronger answer would have contained" is the same reader on six questions it
+asks of any research answer (framing, results, depth, breadth, robustness, rigor); only those
+the answer did not fully meet are listed. About one such finding in three is wrong. Use a
+finding only where the task's own results bear it out, and build a lesson on a kind of finding
+that recurs in tasks on different questions, never on one finding."""
+
+SAME_PROMPT = """\
+You check new lessons against the lessons OceanX's skills already carry, so that no idea is
+kept twice. A lesson tells a reader what to do in a situation.
+
+A candidate is the same as an existing lesson when a reader who follows the existing lesson,
+in the situation the candidate names, would already do what the candidate says. Lessons on one
+subject that ask for different actions are different. Compare each candidate with every
+existing lesson and with the candidates before it.
+
+Existing lessons:
+{existing}
+
+Candidates:
+{candidates}
+
+Return JSON only:
+{{"candidates": [{{"number": <n>, "same_as": "<the id of the existing lesson>" | "candidate <n>" | null}}]}}
+"""
 
 
 def _words(text: str) -> int:
@@ -360,13 +396,14 @@ class LessonBook:
 
     def _prompt(self, skill: str, digests: list[dict], records: list[str]) -> str:
         region = self.regions()[skill]
-        reader, scope, reading = REVIEW_SCOPE[self.reader(skill, region)]
+        role = self.reader(skill, region)
+        reader, scope, reading = REVIEW_SCOPE[role]
         questions = self._questions()
         current = self.active(skill)
         elsewhere = [l for l in self.active() if l.get("skill") != skill]
         wrong = [l["text"] for l in self.lessons() if l.get("human") == "wrong"]
         prompt = (REVIEW_INSTRUCTIONS.format(
-            reader=reader, about=region.about, limit=region.limit, max_new=MAX_NEW_PER_REVIEW,
+            reader=reader, about=region.about, limit=region.limit, max_new=MAX_NEW_PER_REVIEW[role],
             scope=scope, max_words=MAX_WORDS, max_condition=MAX_CONDITION_WORDS,
             min_support=MIN_SUPPORT)
             + f'\n# The skill\nIts lessons carry their id, such as (L003).\n\n<skill name="{skill}">\n'
@@ -376,7 +413,7 @@ class LessonBook:
             + "\n\n# Lessons other skills carry\n" + ("\n".join(
                 f"- {l['skill']}: {l['text']} Applies when: {l['applies_when']}" for l in elsewhere) or "None.")
             + "\n\n# Lessons the owner marked wrong\n" + ("\n".join(f"- {text}" for text in wrong) or "None.")
-            + "\n\n# Already in place\n" + _in_place(self.reader(skill, region), skill)
+            + "\n\n# Already in place\n" + _in_place(role, skill)
             + "\n\n# How to read a record\n" + reading + "\n" + READING_NOTE
             + "\n\n# Records\n" + "\n\n".join(records))
         return prompt
@@ -406,14 +443,47 @@ class LessonBook:
                 "applies_when": condition, "evidence": {"supporting": supporting, "counter": counter},
                 "status": "active", "human": None, "added_by": "meta-agent", "added_at": _now()}
 
+    def _repeats(self, llm: Callable[[str], str], candidates: list[dict],
+                 lessons: list[dict]) -> dict[int, str | int]:
+        """Which candidates say what is already kept: by position (from 1), the id of the lesson
+        that says it, or the position of an earlier candidate. One model call, made again when
+        its reply cannot be read; a ValueError when it still cannot."""
+        existing = [l for l in lessons if l["status"] == "active"]
+        if len(existing) + len(candidates) < 2 or not candidates:
+            return {}  # nothing to compare with
+        prompt = SAME_PROMPT.format(
+            existing="\n".join(f"- {l['id']} ({l['skill']}): {l['text']} Applies when: {l['applies_when']}"
+                               for l in existing) or "None.",
+            candidates="\n".join(f"{number}. {c['text']} Applies when: {c['applies_when']}"
+                                 for number, c in enumerate(candidates, 1)))
+        try:
+            reply = parse_json_object(llm(prompt))
+        except ValueError:
+            reply = parse_json_object(llm(prompt))
+        ids, found = {l["id"] for l in existing}, {}
+        for entry in reply.get("candidates") or []:
+            try:
+                number, same = int(entry["number"]), str(entry.get("same_as") or "").strip()
+            except (KeyError, TypeError, ValueError, AttributeError):
+                continue
+            earlier = re.fullmatch(r"candidate\s*(\d+)", same, re.IGNORECASE)
+            if not 1 <= number <= len(candidates):
+                continue
+            if same in ids:
+                found[number] = same
+            elif earlier and 1 <= int(earlier.group(1)) < number:
+                found[number] = int(earlier.group(1))
+        return found
+
     def _retire(self, lesson: dict, *, by: str, reason: str) -> None:
         lesson.update(status="retired", retired_by=by, retired_at=_now(), retired_reason=reason[:600])
         self._log({"lesson": lesson["id"], "skill": lesson.get("skill"), "change": "retired", "by": by,
                    "reason": reason[:600], "text": lesson["text"]})
 
     def _apply(self, skill: str, region: Region, reply: dict, digests: dict[str, dict],
-               lessons: list[dict]) -> tuple[list[dict], list[dict]]:
-        """Carry out one skill's review. Returns what changed and what was refused."""
+               lessons: list[dict], llm: Callable[[str], str] | None = None) -> tuple[list[dict], list[dict]]:
+        """Carry out one skill's review. Returns what changed and what was refused. With ``llm``
+        the proposals are first compared with the lessons already kept (``_repeats``)."""
         role, changed, rejected = self.reader(skill, region), [], []
         questions = {k: _norm(d.get("question")) for k, d in digests.items()}
         current = {l["id"]: l for l in lessons if l["status"] == "active" and l.get("skill") == skill}
@@ -456,14 +526,36 @@ class LessonBook:
                     f"contradicted: {len(counter)} questions against it, {len(support)} for it"))
                 changed.append({"lesson": lesson["id"], "change": "retired"})
 
-        for raw in (reply.get("add") or [])[:MAX_NEW_PER_REVIEW]:
+        proposed = []
+        for raw in (reply.get("add") or [])[:MAX_NEW_PER_REVIEW[role]]:
             try:
-                lesson = self._new_lesson(raw, skill, role, digests, lessons)
+                proposed.append((raw, self._new_lesson(raw, skill, role, digests, lessons)))
             except (ValueError, TypeError, AttributeError) as exc:
                 text = raw.get("text", "") if isinstance(raw, dict) else raw
                 rejected.append({"skill": skill, "text": str(text)[:200], "reason": str(exc)})
+        try:
+            repeats = self._repeats(llm, [lesson for _, lesson in proposed], lessons) if llm else {}
+        except ValueError as exc:  # nothing unchecked is added: one idea is kept once
+            rejected += [{"skill": skill, "text": lesson["text"][:200], "reason": (
+                f"It could not be compared with the lessons already kept: {exc}")} for _, lesson in proposed]
+            proposed = []
+        became: dict[int, dict] = {}  # by position, the lesson a proposal became or was counted for
+        for number, (raw, lesson) in enumerate(proposed, 1):
+            same = repeats.get(number)
+            said = (became.get(same) if isinstance(same, int)
+                    else next((l for l in lessons if l["id"] == same), None))
+            if said is not None:  # the idea is kept already: the proposal is more support for it
+                evidence = said.setdefault("evidence", {"supporting": [], "counter": []})
+                evidence["supporting"] = list(dict.fromkeys(
+                    [*evidence.get("supporting", []), *lesson["evidence"]["supporting"]]))
+                said["updated_at"] = _now()
+                became[number] = said
+                rejected.append({"skill": skill, "text": lesson["text"][:200], "reason": (
+                    f"{said['id']} already says this; its supporting tasks were added to {said['id']}.")})
                 continue
+            lesson["id"] = f"L{len(lessons) + 1:03d}"
             lessons.append(lesson)
+            became[number] = lesson
             self._log({"lesson": lesson["id"], "skill": skill, "change": "added", "by": "meta-agent",
                        "reason": str(raw.get("rationale") or "")[:600], "text": lesson["text"]})
             changed.append({"lesson": lesson["id"], "change": "added"})
@@ -500,7 +592,7 @@ class LessonBook:
                 result["rejected"].append({"skill": skill, "text": "",
                                            "reason": f"The meta-agent's reply could not be read: {exc}"})
                 continue
-            changed, rejected = self._apply(skill, region, reply, digests, lessons)
+            changed, rejected = self._apply(skill, region, reply, digests, lessons, llm)
             result["changes"] += changed
             result["rejected"] += rejected
             self._save(lessons)  # a later skill's prompt sees what this one changed

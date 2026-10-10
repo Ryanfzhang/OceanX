@@ -89,14 +89,19 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   (`.oceanx/research/referee/<task_key>.json`). One call lists what the question asks for, from
   the question alone and once per question; a second reads the answer against that list and
   notes what is missing or partial, conclusions stronger than the support the answer gives, and
-  superseded numbers still used. A reading is evidence, not a rule: in a hand check of five
+  superseded numbers still used; a third asks six questions a careful reader asks of any
+  research answer (`referee.ASPECTS`: framing, results, depth, breadth, robustness, rigor) and
+  says, for each the answer does not fully meet, what a stronger answer would have contained.
+  The first two say what an answer got wrong or left out; the third says what would have made
+  it better research, and the Coordinator's lessons are learned from it. A reading made before
+  the third call existed is completed by that call alone. A reading is evidence, not a rule: in a hand check of five
   answers about one finding in three was wrong, so a lesson still needs the same kind of finding
   in tasks on 3 different questions. At most 20 tasks are read in one update; a call that fails
   twice or does not return in 300 s leaves its task for the next update.
 - **Marked regions.** A skill reserves a place for what the project learns:
 
   ```text
-  <!-- oceanx:lessons max=4 for="coordinator" about="which follow-ups were worth asking ..." -->
+  <!-- oceanx:lessons max=8 for="coordinator" about="which sub-questions to ask ..." -->
   <!-- /oceanx:lessons -->
   <!-- oceanx:tools max=40 -->
   <!-- /oceanx:tools -->
@@ -120,8 +125,8 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   opened the skills that hold lessons in about 2% of their questions, and the helper list in 3
   of 468. So a research task names to each reader the skills that now carry something learned
   (`ProjectResearch.learned_in`): a data Expert is told, before its first calculation, to read
-  in one step every skill of its role that holds a lesson, and `xarray-array-ops` when it lists a
-  learned function; the Coordinator reads `claim-grounded-writing` before the final answer when it
+  in one step every skill of its role that holds a lesson written for Experts, and
+  `xarray-array-ops` when it lists a learned function; the Coordinator reads `claim-grounded-writing` before the final answer when it
   holds a lesson (its planning skill is always named). A model call that only reads files under
   `/skills` is not counted in an Expert's call budget, up to six such calls a run, so reading
   what was learned takes nothing from the analysis. A project that has learned nothing names no
@@ -140,10 +145,19 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   newest, one run of every question before any repeat; a task that did not fit stays unread and
   the next review runs for it),
   each with the reading of its final answer where one exists.
-  It judges every current lesson (keep, revise, retire) and may add at most 2. Code enforces:
+  It judges every current lesson (keep, revise, retire) and may add at most 4 to a Coordinator
+  skill and 1 to an Expert skill (`MAX_NEW_PER_REVIEW`). The Coordinator is the reader that
+  learns most: it decides which analyses are asked for and writes the final answer, in two
+  skills, planning (read at the start, 8 lessons shown) and writing (read before the final
+  answer, 4). The first library, mostly cautions for Experts, left the judged answers unchanged.
+  Code enforces:
   - a new lesson needs supporting tasks from at least 3 different questions (with fewer, a skill
     without lessons is not reviewed at all);
   - a lesson contradicted by as many questions as support it is retired, whatever the model said;
+  - one idea is kept once: one more model call compares the proposals with every lesson the
+    skills carry and with each other, and a proposal that says what a lesson already says is not
+    added; its supporting tasks are added to that lesson. A comparison that cannot be read adds
+    nothing;
   - the project keeps every lesson that passed; a task is shown at most the region's `max` of a
     skill's lessons, so the library can go on growing while a reader's page stays short;
   - ≤40 words with no task keys or node IDs, and an applies-when of ≤25 words.

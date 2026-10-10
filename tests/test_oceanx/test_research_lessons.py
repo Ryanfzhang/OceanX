@@ -75,13 +75,16 @@ def mined(memory, tmp_path, n=4):
     return keys
 
 
-def fake_llm(replies=None, prompts=None):
-    """A meta model that answers each skill's review with the reply given for that skill."""
+def fake_llm(replies=None, prompts=None, same=()):
+    """A meta model that answers each skill's review with the reply given for that skill. Asked
+    whether new lessons repeat kept ones, it answers ``same``: by default that none does."""
     def reply(prompt):
         if prompts is not None:
             prompts.append(prompt)
-        skill = re.search(r'<skill name="([^"]+)">', prompt).group(1)
-        return json.dumps((replies or {}).get(skill, {}))
+        skill = re.search(r'<skill name="([^"]+)">', prompt)
+        if skill is None:
+            return json.dumps({"candidates": list(same)})
+        return json.dumps((replies or {}).get(skill.group(1), {}))
     return reply
 
 
@@ -182,8 +185,10 @@ def test_the_meta_agent_reads_each_skill_as_its_readers_get_it(tmp_path, memory)
     # It reads the whole skill it maintains, without the region markers, and what the region is for.
     assert f'<skill name="{PLANNING}">' in tree_prompt and "oceanx:" not in tree_prompt
     assert "## Scientific value\nA useful question addresses" in tree_prompt
-    assert "This skill takes lessons about: which sub-questions and proposed follow-ups" in tree_prompt
-    assert "A task is shown at most 4 of its lessons" in tree_prompt and "the Coordinator reads" in tree_prompt
+    assert "This skill takes lessons about: which sub-questions to ask and in what order" in tree_prompt
+    assert "A task is shown at most 8 of its lessons" in tree_prompt and "the Coordinator reads" in tree_prompt
+    # The Coordinator is the reader that learns most: four new lessons a review, one for an Expert skill.
+    assert "Propose at most 4 new lessons" in tree_prompt and "Propose at most 1 new lessons" in analysis_prompt
     assert f'<skill name="{PHYSICS}">' in analysis_prompt and "an Expert reads" in analysis_prompt
     assert "A residual is not a measured forcing" in analysis_prompt  # so it is not proposed again
     assert "A task is shown at most 6 of its lessons" in analysis_prompt
@@ -207,10 +212,12 @@ def test_the_meta_agent_reads_each_skill_as_its_readers_get_it(tmp_path, memory)
 def test_only_skills_with_a_lessons_region_take_lessons():
     regions = LessonBook.regions()
     assert {skill: region.limit for skill, region in regions.items()} == {
-        "claim-grounded-writing": 3, DESIGN: 3, "ocean-analysis-design": 6,
-        "ocean-dataset-diagnosis": 4, PHYSICS: 6, PLANNING: 4}
+        "claim-grounded-writing": 4, DESIGN: 3, "ocean-analysis-design": 6,
+        "ocean-dataset-diagnosis": 4, PHYSICS: 6, PLANNING: 8}
     readers = {skill: LessonBook.reader(skill, region) for skill, region in regions.items()}
-    assert readers.pop(PLANNING) == "coordinator" and set(readers.values()) == {"expert"}
+    # The Coordinator plans the tree and writes the final answer; the other four are for Experts.
+    assert readers.pop(PLANNING) == readers.pop("claim-grounded-writing") == "coordinator"
+    assert set(readers.values()) == {"expert"} and len(readers) == 4
     assert "xarray-array-ops" not in regions  # its region is for tools
     assert all(region.about for region in regions.values())
 
@@ -223,11 +230,13 @@ def test_a_review_applies_at_once_what_passes_the_rules(tmp_path, memory):
             "counter": [], "rationale": "B1.2 was never run in t0, t1 and t2."}
     result = book.review(fake_llm({
         PLANNING: {"add": [good, {**good, "text": "Another idea.", "supporting": keys[:2]},
-                           {**good, "text": "A third idea."}]},  # more than a review may add
+                           {**good, "text": "Repeat what B1.2 did."},
+                           {**good, "text": "Contested.", "counter": keys[:3]},
+                           {**good, "text": "A fifth idea."}]},  # more than a review may add
         PHYSICS: {"add": [{**good, "text": "word " * (MAX_WORDS + 1)},
-                          {**good, "text": "Repeat what B1.2 did."}]},
-        DESIGN: {"add": [{**good, "text": "Invented evidence.", "supporting": ["no1", "no2", "no3"]},
-                         {**good, "text": "Contested.", "counter": keys[:3]}]}}, prompts))
+                          {**good, "text": "A second idea for an Expert skill."}]},  # one a review
+        DESIGN: {"add": [{**good, "text": "Invented evidence.", "supporting": ["no1", "no2", "no3"]}]}},
+        prompts))
     assert result["changes"] == [{"lesson": "L001", "change": "added"}]
     assert (result["skills_reviewed"], result["questions"], result["new_tasks"]) == (6, 4, 4)
     reasons = " | ".join(item["reason"] for item in result["rejected"])
@@ -321,12 +330,14 @@ def test_a_full_region_shows_the_best_supported_and_the_project_keeps_the_rest(t
                 lesson("L002", DESIGN, "Second.", keys[:4], added_at="2026-01-02T00:00:00+00:00"),
                 lesson("L003", DESIGN, "Third.", keys[:3], added_at="2026-01-03T00:00:00+00:00", human="right")])
     new = {"applies_when": "A mechanism is claimed.", "rationale": "Seen across tasks."}
-    result = book.review(fake_llm({DESIGN: {"add": [
-        {**new, "text": "No better than the weakest.", "supporting": keys[:3]},
-        {**new, "text": "Better supported.", "supporting": keys}]}}))
+    first = book.review(fake_llm({DESIGN: {"add": [
+        {**new, "text": "No better than the weakest.", "supporting": keys[:3]}]}}))
+    second = book.review(fake_llm({DESIGN: {"add": [
+        {**new, "text": "Better supported.", "supporting": keys}]}}), force=True)
     # Both pass the rules, so both are kept: nothing is pushed out of the library.
-    assert result["changes"] == [{"lesson": "L004", "change": "added"}, {"lesson": "L005", "change": "added"}]
-    assert result["rejected"] == [] and len(book.active(DESIGN)) == 5
+    assert first["changes"] == [{"lesson": "L004", "change": "added"}]
+    assert second["changes"] == [{"lesson": "L005", "change": "added"}]
+    assert first["rejected"] == second["rejected"] == [] and len(book.active(DESIGN)) == 5
     # A task is shown as many as the region allows: the owner's lesson first, then the best supported.
     assert [l["id"] for l in book.shown(DESIGN)] == ["L003", "L005", "L002"]
     assert book.block(DESIGN).count("Applies when:") == 3 and "(L001)" not in book.block(DESIGN)
@@ -340,6 +351,51 @@ def test_a_full_region_shows_the_best_supported_and_the_project_keeps_the_rest(t
     assert "what a lesson of another skill already says" in prompt
     own, _ = book.review_prompt(DESIGN, memory.load_digests())
     assert "# Lessons other skills carry\nNone." in own
+
+
+def test_a_proposal_that_repeats_a_kept_lesson_adds_its_support_instead(tmp_path, memory):
+    """One idea is kept once (Owner, 2026-10-11): the first library held twelve lessons that
+    were five ideas, and telling the meta-agent not to repeat did not stop it."""
+    keys = mined(memory, tmp_path, n=5)
+    book, prompts = LessonBook(memory), []
+    book._save([lesson("L001", PHYSICS, "Bound the residual.", keys[:3])])
+    new = {"applies_when": "A budget is not closed.", "rationale": "Seen across tasks."}
+    result = book.review(fake_llm({PLANNING: {"add": [
+        {**new, "text": "Report a residual as a bound.", "supporting": keys[1:]},
+        {**new, "text": "Ask for the annual table first.", "supporting": keys[:3]},
+        {**new, "text": "Request the yearly values before mechanisms.", "supporting": keys[2:]},
+        {**new, "text": "Stop a line after two null results.", "supporting": keys[:3]}]}}, prompts, same=[
+            {"number": 1, "same_as": "L001"}, {"number": 3, "same_as": "candidate 2"},
+            {"number": 4, "same_as": None}, {"number": 2, "same_as": "L999"},  # no such lesson: not the same
+            {"number": 9, "same_as": "L001"}, "junk"]))
+    assert result["changes"] == [{"lesson": "L002", "change": "added"}, {"lesson": "L003", "change": "added"}]
+    assert [(r["text"], r["reason"]) for r in result["rejected"]] == [
+        ("Report a residual as a bound.", "L001 already says this; its supporting tasks were added to L001."),
+        ("Request the yearly values before mechanisms.",
+         "L002 already says this; its supporting tasks were added to L002.")]
+    by_id = {l["id"]: l for l in book.lessons()}
+    assert [l["text"] for l in book.active(PLANNING)] == [
+        "Ask for the annual table first.", "Stop a line after two null results."]
+    # What repeated a lesson counts for it: its support grows, in whatever skill it is kept.
+    assert by_id["L001"]["evidence"]["supporting"] == keys and by_id["L002"]["evidence"]["supporting"] == keys
+    assert by_id["L003"]["evidence"]["supporting"] == keys[:3]
+    # One comparison for the skill that proposed: every kept lesson, then the proposals in order.
+    [comparison] = [prompt for prompt in prompts if "<skill name=" not in prompt]
+    assert f"- L001 ({PHYSICS}): Bound the residual. Applies when: Always." in comparison
+    assert ("1. Report a residual as a bound. Applies when: A budget is not closed.\n"
+            "2. Ask for the annual table first.") in comparison
+    assert "would already do what the candidate says" in comparison
+    # A comparison that cannot be read adds nothing, and one proposal beside nothing needs none.
+    reviewing = fake_llm({PLANNING: {"add": [{**new, "text": "A further idea.", "supporting": keys[:3]}]}})
+    unread = book.review(lambda prompt: reviewing(prompt) if "<skill name=" in prompt else "no json", force=True)
+    assert unread["changes"] == [] and unread["rejected"][0]["reason"].startswith(
+        "It could not be compared with the lessons already kept:")
+    empty = LessonBook(ResearchMemory(memory.root.parent / "empty"))
+    for digest in memory.load_digests():
+        (empty.memory.digests / f"{digest['task_key']}.json").parent.mkdir(parents=True, exist_ok=True)
+        (empty.memory.digests / f"{digest['task_key']}.json").write_text(json.dumps(digest))
+    alone = empty.review(lambda prompt: reviewing(prompt) if "<skill name=" in prompt else pytest.fail("asked"))
+    assert alone["changes"] == [{"lesson": "L001", "change": "added"}]
 
 
 def test_the_owner_marks_a_lesson_right_or_wrong(tmp_path, memory):
@@ -493,7 +549,7 @@ def test_a_task_records_the_lessons_it_was_shown_and_those_it_named(tmp_path, me
     assert len(earlier) == 4 and all(d["lessons_shown"] is None for d in earlier)  # recorded before this was logged
     overview = book.overview()
     [planning] = [s for s in overview["skills"] if s["name"] == PLANNING]
-    assert (planning["limit"], planning["reader"]) == (4, "coordinator") and planning["about"]
+    assert (planning["limit"], planning["reader"]) == (8, "coordinator") and planning["about"]
     [shown] = planning["lessons"]
     assert (shown["shown"], shown["tasks_shown"], shown["tasks_cited"]) == (True, 1, 1)
     assert shown["evidence_tasks"]["counter"][0]["question"] == "Why is t3 warm?"

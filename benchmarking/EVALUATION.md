@@ -488,16 +488,24 @@ a prompt, and the packaged skill files are never changed: each task's copy of th
 Arms B, C1 and C2 run the same commit and differ only in what stands in those two places.
 
 **Where.** A skill reserves a region with a marker line, for example
-`<!-- oceanx:lessons max=4 for="coordinator" about="..." -->`. The marker says how many lessons of the
-skill a run is shown and what they are about. Six skills take lessons (the Coordinator's planning skill and five analysis
-skills); `xarray-array-ops` has the tools region, which lists the helper functions that analysis code calls
-as `ao.<name>`. A skill without a region takes nothing.
+`<!-- oceanx:lessons max=8 for="coordinator" about="..." -->`. The marker says how many lessons of the
+skill a run is shown, whose they are and what they are about. Six skills take lessons: two for the
+Coordinator (planning, read at the start, 8 lessons; writing, read before the final answer, 4) and four
+analysis skills for Experts. `xarray-array-ops` has the tools region, which lists the helper functions that
+analysis code calls as `ao.<name>`. A skill without a region takes nothing.
+
+The Coordinator is the reader that learns most (Owner, 2026-10-10). The first library held 19 lessons,
+17 of them for Experts and most of those cautions, and left three test questions where they were (85.8
+against 86.5, one run each). OceanX loses its points where the Coordinator decides: which analyses are asked for and what
+the final answer delivers. So a review may add four lessons to a Coordinator skill and one to an Expert
+skill.
 
 What stands in a region reaches an agent only when it opens the skill, and an agent opens a skill only
-when it is told to. So a run names to each reader the skills that hold something learned: a data Expert is
-told, before its first calculation, to read every skill of its role that holds a lesson and
-`xarray-array-ops` when it lists a learned function; the Coordinator reads `claim-grounded-writing` before
-the final answer when it holds a lesson (its planning skill is always named). A model call that only reads
+when it is told to. So a run names to each reader the skills that hold something learned for it: a data
+Expert is told, before its first calculation, to read every skill of its role that holds a lesson for
+Experts and `xarray-array-ops` when it lists a learned function; the Coordinator reads
+`claim-grounded-writing` before the final answer when it holds a lesson (its planning skill is always
+named). A model call that only reads
 skill files is not counted in an Expert's call limit (up to six such calls a run). An arm without a library
 names no skill. In the runs up to 2026-10-08 nothing named
 the Experts' skills and they opened them in about 2% of their questions, so those runs say little about
@@ -513,9 +521,16 @@ wrote the answer also wrote the record. So `consolidate --review` first has the 
 run's research question and final answer, and nothing else: no tree, no code, no rubric and no reference.
 One call lists what the question asks for, from the question alone and once per question. A second call
 reads the answer against that list and notes what is missing or partial, conclusions stronger than the
-support the answer gives, and superseded numbers still used. The reading is kept under
-`.oceanx/research/referee/` and shown with the run's record. It is evidence, not a rule: in a hand check
-of five answers about one finding in three was wrong.
+support the answer gives, and superseded numbers still used. A third call asks six questions of the
+answer and says, for each one it does not fully meet, what a stronger answer would have contained:
+hypotheses that could be refuted, results under one stated definition with numbers that agree, mechanisms
+tested by something that could have refuted them, links to related processes and published work,
+conclusions that hold under other choices, and data handled to fit the conclusions. These are the six
+indicators of `evaluation/ASPECT_SCORES.md` as a reader without a reference can ask them (agreed
+with the Owner on 2026-10-10). No rubric of a question and no reference answer is read, and only
+evolution runs are read. The reading is kept under `.oceanx/research/referee/` and shown with the run's
+record. It is evidence, not a rule: in a hand check of five answers about one finding in three was wrong.
+A reading made before the third call existed is completed by that call alone.
 
 The same reading can be applied to the test answers of every arm (`server/read_answers.py`, the only
 step after the runs that calls a model). It reads each arm against one list per question and counts, per
@@ -526,12 +541,16 @@ rubric and no reference, so it measures what the reading can teach, not what the
 It reads the skill as its readers get it, the lessons the other skills carry (so that one idea is not
 written into two skills) and the records with their readings, then:
 - judges every current lesson: keep, revise or retire;
-- may add at most two lessons to that skill.
+- may add at most four lessons to a Coordinator skill and one to an Expert skill.
 
 What it decides takes effect at once. Code, not the model, enforces these rules:
 - a new lesson needs supporting runs from at least three different questions (two repeats of one question
   count once);
 - a lesson contradicted by as many questions as support it is retired, whatever the model said;
+- one idea is kept once (Owner, 2026-10-11): one more model call compares the proposals with every lesson
+  the skills already carry and with each other. A proposal that says what a lesson already says is not
+  added; its supporting runs are added to that lesson. The first library held twelve lessons that were five
+  ideas, although the instructions said not to repeat;
 - every lesson that passed is kept; a run is shown at most as many lessons of a skill as its region
   allows, the best supported first;
 - a lesson is at most 40 words with an explicit "applies when" condition, and names no task or node.

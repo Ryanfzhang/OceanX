@@ -117,8 +117,12 @@ python benchmarking/server/research_cli.py snapshot --project "$EVO" --output "$
 
 - 三步依次是：让模型给每棵研究树打标签；读这些记录学习一次（经验和工具）；把学到的冻结成库。
 - 学习那一步会先让模型把每道题的最终答案单独读一遍（只给题目和答案），列出题目要的哪些没给、哪些结论
-  超出了证据，再和研究树记录一起交给元代理。12 道题大约多花 15 分钟；`review.json` 里的 `referee` 一项
-  是读了几道、哪几道没读成。
+  超出了证据、一份更强的答案还应该包含什么，再和研究树记录一起交给元代理。12 道题大约多花 20 分钟；
+  `review.json` 里的 `referee` 一项是读了几道（`read`）、给旧的阅读补了几道（`completed`）、哪几道没读成。
+- 经验以协调者为主：每次学习给协调者的两个 skill 各最多加 4 条，给专家的四个 skill 各最多加 1 条。新提的
+  经验和已有的说的是同一件事时不新增，它的依据并到已有那条上，`lessons.rejected` 里会写明并到了哪一条。
+- 想让经验按新策略从头学一遍：把 `$EVO/.oceanx/research/lessons` 改名留作备份，再执行 `consolidate --review`。
+  工具不受影响。
 - 一次学习的提示词装不下所有题目的记录时（12 题里装了 10 题），`review.json` 里 `lessons.tasks_left`
   会大于 0。再执行一遍同样的 `consolidate --review` 命令，它会先读没读过的那几题。
 - 工具：这里一道题里反复写的代码就可以提成工具（`research_cli.py` 设了 `OCEANX_TOOL_MIN_SUPPORT=1`）；
