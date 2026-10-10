@@ -186,7 +186,7 @@ def test_freeze_summarize_and_decisions(tmp_path):
     prereg = eval_root / "preregistration.yaml"
     prereg.write_text("experiment: unit\nfailed_attempt_score: 0\nbootstrap: {resamples: 200, seed: 1}\n"
                       "comparisons:\n  - name: policy\n    treatment: B\n    control: A\n"
-                      "    rule: {type: noninferior_and_better_or_cheaper, margin: -2, token_reduction: 0.15}\n")
+                      "    rule: {type: superior, margin: 0}\n")
     judged = ["--map", str(mapping), "--scores", str(scores), "--added", str(added)]
     with pytest.raises(SystemExit):  # not frozen yet
         evaluate.main(["summarize", "--prereg", str(prereg), *judged, "--out", str(eval_root / "report")])
@@ -202,7 +202,13 @@ def test_freeze_summarize_and_decisions(tmp_path):
     # Paper task: five indicators at 50 and every verdict in agreement with the reference.
     assert summary["cells"]["A|Q17"]["score"] == 50 and summary["cells"]["B|Q17"]["score"] == 75
     assert summary["cells"]["A|Q07"]["score"] == pytest.approx((5 * 50 + 100) / 6) and summary["cells"]["B|Q07"]["score"] == 100
-    assert policy["token_reduction"] == 0 and policy["time_reduction"] == 0  # both arms cost the same here
+    # What the arms cost is not part of the results: no tokens, no time, in the summary or in the report.
+    report = (eval_root / "report" / "report.md").read_text()
+    assert not {"tokens", "elapsed_hours"} & set(summary["arms"]["A"]) and "tokens" not in summary["cells"]["A|Q17"]
+    assert not {"token_reduction", "time_reduction"} & set(policy)
+    assert "Tokens" not in report and "Hours" not in report and "cut" not in report
+    with pytest.raises(ValueError, match="unknown rule type"):  # the rule that weighed a score against tokens is gone
+        evaluate.decide({"type": "noninferior_and_better_or_cheaper", "margin": -2, "token_reduction": 0.15}, policy)
     assert set(policy["by_type"]) == {"paper_reproduction", "open_problem"}
     assert policy["by_data"]["public"]["tasks"] == 2 and policy["by_data"]["private"]["tasks"] == 2
     assert summary["arms"]["A"]["failures"] == 1  # Q01 failed in both arms and scored 0
@@ -341,12 +347,15 @@ def test_tokens_come_from_the_call_ledger_not_the_end_of_run_report(tmp_path):
     assert (spent["input_tokens"], spent["cached_input_tokens"], spent["output_tokens"]) == (10000, 800, 550)
     assert (spent["calls"], spent["failed_calls"], spent["model_seconds"]) == (3, 1, 6.5)
     assert spent["by_role"]["ocean_process_expert"] == {"calls": 2, "input_tokens": 9000, "output_tokens": 500}
+    # Without a state folder the end-of-run report is all there is.
+    other = arm_dir / "Q17" / "attempt-1"
+    reported = evaluate.usage(other, json.loads((other / "result.json").read_text()))
+    assert (reported["source"], reported["input_tokens"], reported["output_tokens"]) == ("result.json", 1000, 100)
+    # The blind map that the results are computed from holds none of this: what an attempt cost is its own record.
     mapping = tmp_path / "eval" / "blind_map.json"
     evaluate.main(["blind", "--runs", str(arm_dir), "--out", str(tmp_path / "eval" / "blind"), "--map", str(mapping)])
-    tokens = {entry["task_id"]: (entry["tokens"], entry["usage"]["source"])
-              for entry in json.loads(mapping.read_text()).values()}
-    # Without a state folder the end-of-run report is all there is.
-    assert tokens == {"Q07": (10550, "ledger"), "Q17": (1100, "result.json")}
+    for entry in json.loads(mapping.read_text()).values():
+        assert not {"tokens", "usage", "elapsed_seconds"} & set(entry)
 
 
 def test_inventory_records_what_each_attempt_cost_and_kept(tmp_path):
@@ -756,6 +765,7 @@ def test_indicators_average_questions_and_repeats_per_arm(tmp_path):
     assert b == {"indicators": dict.fromkeys(a["indicators"], 0), "score": 0}
     beside = result["beside"]["open_problem"]
     assert (beside["A"]["questions"], beside["A"]["attempts"], beside["A"]["not_delivered"]) == (2, 3, 1)
+    assert not {"hours", "tokens"} & set(beside["A"]) and not {"tokens", "elapsed_seconds"} & set(result["attempts"][0])
     assert (beside["B"]["without_score_file"], beside["B"]["not_completed"], beside["B"]["not_delivered"]) == (1, 1, 1)
     paper = result["summary"]["paper_reproduction"]
     assert paper["A"] == paper["B"] and paper["A"]["score"] == pytest.approx((25 * 170 / 70 + 40 + 50 + 100 + 75 + 37.5) / 6)
@@ -765,6 +775,7 @@ def test_indicators_average_questions_and_repeats_per_arm(tmp_path):
     report = (out / "indicators.md").read_text()
     assert "| Framing (问题拆解) | Is the question turned into testable hypotheses? | 0.0 | 75.0 |" in report
     assert "| **Score (mean of the six)** | | **0.0** | **66.7** |" in report and "## Paper verification (论文验证题)" in report
+    assert "Hours" not in report and "Tokens" not in report  # time and tokens are not reported with the results
     import importlib.util
     drawn = importlib.util.find_spec("matplotlib")
     if drawn:

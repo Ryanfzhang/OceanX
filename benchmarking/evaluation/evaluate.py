@@ -219,14 +219,10 @@ def blind(args) -> dict:
             query = json.loads((attempt / "query.json").read_text())["query"]
             write_json(target / "task.json", {"blind_id": blind_id, "task_id": task_id, "query": query,
                                               "status": result.get("status")})
-            spent = usage(attempt, result)
+            # What an attempt cost (time, tokens) is not part of the results; `inventory` records it per attempt.
             mapping[blind_id] = {"task_id": task_id, "arm": arm["arm"], "policy": arm.get("policy"),
                                  "library_version": library_version(arm),
-                                 "arm_dir": str(arm_dir), "attempt": str(attempt), "status": result.get("status"),
-                                 "elapsed_seconds": result.get("elapsed_seconds"),
-                                 "tokens": (spent["input_tokens"] + spent["output_tokens"]
-                                            if spent["input_tokens"] is not None and spent["output_tokens"] is not None
-                                            else None), "usage": spent}
+                                 "arm_dir": str(arm_dir), "attempt": str(attempt), "status": result.get("status")}
             created += 1
     write_json(mapping_path, mapping)
     return {"created": created, "total": len(mapping), "blind_folder": str(out), "map": str(mapping_path),
@@ -523,9 +519,6 @@ def decide(rule: dict, comparison: dict) -> bool:
         return comparison["ci_low"] > rule.get("margin", 0)
     if rule["type"] == "lower":  # for measures where less is better, such as wasted effort
         return comparison["ci_high"] < rule.get("margin", 0)
-    if rule["type"] == "noninferior_and_better_or_cheaper":
-        return comparison["ci_low"] >= rule["margin"] and (
-            comparison["mean_diff"] > 0 or (comparison["token_reduction"] or 0) >= rule["token_reduction"])
     raise ValueError(f"unknown rule type {rule['type']}")
 
 
@@ -562,17 +555,7 @@ def summarize(args) -> dict:
     by = {}
     for row in rows:
         by.setdefault((row["arm"], row["task_id"]), []).append(row)
-    def known_mean(values):
-        values = list(values)
-        return statistics.fmean(values) if values and all(v is not None for v in values) else None
-
-    def known_sum(values):
-        values = list(values)
-        return sum(values) if values and all(v is not None for v in values) else None
-
     cell = {key: {"score": statistics.fmean(r["total"] for r in group),
-                  "tokens": known_mean(r["tokens"] for r in group),
-                  "elapsed": statistics.fmean(r["elapsed_seconds"] or 0 for r in group),
                   "failures": sum(r["status"] != "completed" for r in group),
                   "failures_scored": sum(r["status"] != "completed" and r["scored"] for r in group),
                   "n": len(group)}
@@ -580,9 +563,7 @@ def summarize(args) -> dict:
     arms = sorted({arm for arm, _ in cell})
     per_arm = {arm: {"mean_score": statistics.fmean(v["score"] for (a, _), v in cell.items() if a == arm),
                      "failures": sum(v["failures"] for (a, _), v in cell.items() if a == arm),
-                     "failures_scored": sum(v["failures_scored"] for (a, _), v in cell.items() if a == arm),
-                     "tokens": known_sum(v["tokens"] for (a, _), v in cell.items() if a == arm),
-                     "elapsed_hours": sum(v["elapsed"] for (a, _), v in cell.items() if a == arm) / 3600}
+                     "failures_scored": sum(v["failures_scored"] for (a, _), v in cell.items() if a == arm)}
                for arm in arms}
     boot = prereg.get("bootstrap", {})
     comparisons = []
@@ -594,16 +575,9 @@ def summarize(args) -> dict:
             comparisons.append({**spec, "tasks": 0, "decision": None})
             continue
         low, high = bootstrap_ci(diffs, int(boot.get("resamples", 10000)), int(boot.get("seed", 7)))
-        tokens_t = known_sum(cell[(treat, t)]["tokens"] for t in tasks)
-        tokens_c = known_sum(cell[(control, t)]["tokens"] for t in tasks)
-        elapsed_t = sum(cell[(treat, t)]["elapsed"] for t in tasks)
-        elapsed_c = sum(cell[(control, t)]["elapsed"] for t in tasks)
         comparison = {"name": spec["name"], "treatment": treat, "control": control, "tasks": len(tasks),
                       "mean_diff": statistics.fmean(diffs), "ci_low": low, "ci_high": high,
                       "wins": sum(d > 0 for d in diffs), "losses": sum(d < 0 for d in diffs),
-                      "token_reduction": ((tokens_c - tokens_t) / tokens_c
-                                          if tokens_c and tokens_t is not None else None),
-                      "time_reduction": (elapsed_c - elapsed_t) / elapsed_c if elapsed_c else None,
                       "by_type": breakdown(diffs, tasks, "type"), "by_data": breakdown(diffs, tasks, "data_access")}
         comparison["decision"] = decide(spec["rule"], comparison)
         comparisons.append(comparison)
@@ -612,20 +586,18 @@ def summarize(args) -> dict:
     out = args.out.expanduser().resolve()
     write_json(out / "summary.json", summary)
     lines = [f"# {prereg['experiment']}", "",
-             "| Arm | Mean score | Attempts not completed (judged on what they kept) | Tokens | Hours |",
-             "|---|---|---|---|---|"]
-    lines += [f"| {a} | {v['mean_score']:.1f} | {v['failures']} ({v['failures_scored']}) | "
-              f"{format(v['tokens'], '.3g') if v['tokens'] is not None else 'n/a'} | {v['elapsed_hours']:.1f} |"
+             "| Arm | Mean score | Attempts not completed (judged on what they kept) |",
+             "|---|---|---|"]
+    lines += [f"| {a} | {v['mean_score']:.1f} | {v['failures']} ({v['failures_scored']}) |"
               for a, v in per_arm.items()]
-    lines += ["", "| Comparison | Tasks | Mean diff | 95% CI | Wins/losses | Token cut | Time cut | Decision |",
-              "|---|---|---|---|---|---|---|---|"]
+    lines += ["", "| Comparison | Tasks | Mean diff | 95% CI | Wins/losses | Decision |",
+              "|---|---|---|---|---|---|"]
     for c in comparisons:
         if c.get("decision") is None:
-            lines.append(f"| {c['name']} | 0 | | | | | | no paired tasks |")
+            lines.append(f"| {c['name']} | 0 | | | | no paired tasks |")
             continue
-        cut, faster = (f"{c[key]:.0%}" if c[key] is not None else "n/a" for key in ("token_reduction", "time_reduction"))
         lines.append(f"| {c['name']} ({c['treatment']} vs {c['control']}) | {c['tasks']} | {c['mean_diff']:+.1f} | "
-                     f"[{c['ci_low']:+.1f}, {c['ci_high']:+.1f}] | {c['wins']}/{c['losses']} | {cut} | {faster} | "
+                     f"[{c['ci_low']:+.1f}, {c['ci_high']:+.1f}] | {c['wins']}/{c['losses']} | "
                      f"{'meets rule' if c['decision'] else 'does not meet rule'} |")
     for c in comparisons:
         for field in ("by_type", "by_data"):
@@ -724,7 +696,6 @@ def indicators(args) -> dict:
         attempts.append({"blind_id": blind_id, "arm": entry["arm"], "task_id": entry["task_id"],
                          "type": ref["type"], "status": entry["status"], "scored": score is not None,
                          "delivered": bool(score and score["delivered"]),
-                         "elapsed_seconds": entry.get("elapsed_seconds"), "tokens": entry.get("tokens"),
                          "indicators": values, "score": whole_mean(values.values())})
     summary, beside = {}, {}
     for kind, listed in INDICATORS.items():
@@ -740,14 +711,11 @@ def indicators(args) -> dict:
             means = {name: whole_mean(whole_mean(row["indicators"][name] for row in group)
                                       for group in by_task.values()) for name, *_ in listed}
             summary.setdefault(kind, {})[arm] = {"indicators": means, "score": whole_mean(means.values())}
-            tokens = [row["tokens"] for row in rows]
             beside.setdefault(kind, {})[arm] = {
                 "questions": len(by_task), "attempts": len(rows),
                 "not_completed": sum(row["status"] != "completed" for row in rows),
                 "without_score_file": sum(not row["scored"] for row in rows),
-                "not_delivered": sum(not row["delivered"] for row in rows),
-                "hours": sum(row["elapsed_seconds"] or 0 for row in rows) / 3600,
-                "tokens": sum(tokens) if all(value is not None for value in tokens) else None}
+                "not_delivered": sum(not row["delivered"] for row in rows)}
     out = args.out.expanduser().resolve()
     no_chart = indicator_chart(summary, beside, arms, out)
     write_json(out / "indicators.json", {
@@ -778,14 +746,8 @@ def indicators(args) -> dict:
         for key, label in (("questions", "Questions"), ("attempts", "Attempts judged"),
                            ("not_completed", "Judged attempts not completed"),
                            ("without_score_file", "Attempts without a score file (count 0)"),
-                           ("not_delivered", "Attempts that did not deliver"),
-                           ("hours", "Hours"), ("tokens", "Tokens (millions)")):
-            cells = []
-            for arm in present:
-                value = beside[kind][arm][key]
-                cells.append("n/a" if value is None else f"{value / 1e6:.1f}" if key == "tokens"
-                             else f"{value:.1f}" if isinstance(value, float) else str(value))
-            lines.append(f"| {label} | " + " | ".join(cells) + " |")
+                           ("not_delivered", "Attempts that did not deliver")):
+            lines.append(f"| {label} | " + " | ".join(str(beside[kind][arm][key]) for arm in present) + " |")
         lines.append("")
     if no_chart:
         lines += [f"No chart: {no_chart}.", ""]

@@ -70,8 +70,9 @@ is not a delivery, whatever the status says.
   without a score: a reader has to see that a question was run more than once.
 
 Also beside the scores: what the judge records with the levels (answer-key results, probes, candidate
-causes), which is the evidence for the levels and is read when a level is disputed; hours and tokens; and
-repeated failures, whose counts cannot be compared between methods (trial of 2026-10-06).
+causes), which is the evidence for the levels and is read when a level is disputed; and repeated failures,
+whose counts cannot be compared between methods (trial of 2026-10-06). Time and tokens are not reported
+with the results (Owner's decision of 2026-10-10).
 
 ## What is reported
 

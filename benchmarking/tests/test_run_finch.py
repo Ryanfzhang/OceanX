@@ -420,7 +420,7 @@ def test_external_blind_evidence_and_null_usage(setup, tmp_path):
     mapping, blind = tmp_path / "mapping.json", tmp_path / "blind"
     assert evaluate.main(["blind", "--runs", str(output), "--out", str(blind), "--map", str(mapping)]) == 0
     [record] = json.loads(mapping.read_text()).values()
-    assert record["tokens"] is None
+    assert "tokens" not in record and evaluate.usage(attempt, result)["input_tokens"] is None  # null, never zero
     assert list(blind.rglob("map.png")) and list(blind.rglob("notebook.ipynb"))
     assert not list(blind.rglob("transcript.jsonl")) and not list(blind.rglob("worker.json"))
     (attempt / "evidence_manifest.json").write_text(json.dumps({"files": ["../../private.nc"]}))
@@ -457,8 +457,8 @@ def test_external_missing_usage_still_allows_score_summary(tmp_path):
     evaluate.main(["summarize", "--prereg", str(prereg), "--map", str(mapping),
                    "--scores", str(scores), "--added", str(added), "--out", str(tmp_path / "report")])
     summary = json.loads((tmp_path / "report/summary.json").read_text())
-    assert summary["arms"]["F"]["tokens"] is None
-    assert "n/a" in (tmp_path / "report/report.md").read_text()
+    assert summary["arms"]["F"]["mean_score"] == pytest.approx((5 * 50 + 100) / 6)
+    assert "tokens" not in summary["arms"]["F"]  # usage is no part of the results, missing or not
 
 
 def test_checkout_pin(tmp_path, monkeypatch):

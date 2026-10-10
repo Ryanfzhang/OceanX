@@ -384,16 +384,20 @@ The second command writes the six indicators per task type and arm (`evaluation/
 table, and one six-axis chart per task type. It needs no pre-registration.
 
 For each comparison, the per-task score difference is averaged over repeats. The report gives the mean
-difference over tasks with a 95% bootstrap interval, wins and losses, the reduction in tokens and in time,
-and whether the pre-registered rule is met. It also gives the difference by question type (paper verification, open
+difference over tasks with a 95% bootstrap interval, wins and losses, and whether the pre-registered rule
+is met. It also gives the difference by question type (paper verification, open
 problem) and by data access (private CMOMS, public). Read these rows before concluding:
 - a policy can help open problems and do nothing for paper verification;
 - lessons learned on public reanalyses may help public questions more than the unseen CMOMS questions.
 
 The owner receives `report.md`, `process.md` and each repeat's `inventory.md`; for each comparison the
 score result and the process result side by side, with the spread between repeats of the control arm; the
-five largest per-task differences in each direction, each with a line on why; the failures by arm; and the
-total cost. Proposals for a next experiment go in a section of their own.
+five largest per-task differences in each direction, each with a line on why; and the failures by arm.
+Proposals for a next experiment go in a section of their own.
+
+Time and tokens are not part of the results (Owner's decision of 2026-10-10): `summarize` and `indicators`
+report neither, and the blind map does not hold them. What one attempt cost stays in its own folder and
+is read with `evaluate.py inventory` when a run has to be diagnosed.
 
 An attempt's score is the mean of the six indicators of its task type, which count the same
 (`evaluation/ASPECT_SCORES.md`, the Owner's rule of 2026-10-10): six for open problems and six others for
