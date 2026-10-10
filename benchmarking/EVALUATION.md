@@ -358,10 +358,12 @@ python benchmarking/evaluation/evaluate.py blind --runs <every arm folder of the
 ```
 
 Where a question was run more than once in an arm, the latest attempt is the one judged. Codex then
-follows `evaluation/CODEX_JUDGE.md` for every blind folder and writes `scores/<blind_id>.json`. Afterwards:
+follows `evaluation/CODEX_JUDGE.md` for every blind folder and writes `scores/<blind_id>.json`, and for a
+paper verification task also `added/<blind_id>.json` (two criteria that no rubric holds). Afterwards:
 
 ```bash
-python benchmarking/evaluation/evaluate.py validate --scores $EVAL_ROOT/<experiment>/scores
+python benchmarking/evaluation/evaluate.py validate --scores $EVAL_ROOT/<experiment>/scores \
+  --added $EVAL_ROOT/<experiment>/added
 ```
 
 ## Analysis (phase 5)
@@ -369,16 +371,17 @@ python benchmarking/evaluation/evaluate.py validate --scores $EVAL_ROOT/<experim
 ```bash
 python benchmarking/evaluation/evaluate.py summarize --prereg $EVAL_ROOT/<experiment>/preregistration.yaml \
   --map $EVAL_ROOT/<experiment>/blind_map.json --scores $EVAL_ROOT/<experiment>/scores \
-  --out $EVAL_ROOT/<experiment>/report
+  --added $EVAL_ROOT/<experiment>/added --out $EVAL_ROOT/<experiment>/report
 ```
 
 ```bash
 python benchmarking/evaluation/evaluate.py indicators --map $EVAL_ROOT/<experiment>/blind_map.json \
-  --scores $EVAL_ROOT/<experiment>/scores --out $EVAL_ROOT/<experiment>/indicators
+  --scores $EVAL_ROOT/<experiment>/scores --added $EVAL_ROOT/<experiment>/added \
+  --out $EVAL_ROOT/<experiment>/indicators
 ```
 
 The second command writes the six indicators per task type and arm (`evaluation/ASPECT_SCORES.md`): a
-table with every indicator's parts, and one six-axis chart per task type. It needs no pre-registration.
+table, and one six-axis chart per task type. It needs no pre-registration.
 
 For each comparison, the per-task score difference is averaged over repeats. The report gives the mean
 difference over tasks with a 95% bootstrap interval, wins and losses, the reduction in tokens and in time,
@@ -392,9 +395,10 @@ score result and the process result side by side, with the spread between repeat
 five largest per-task differences in each direction, each with a line on why; the failures by arm; and the
 total cost. Proposals for a next experiment go in a section of their own.
 
-The rubric total is the main result. `evaluation/ASPECT_SCORES.md` divides it into six indicators for
-open problems and six others for paper verification (each made of the judged criteria, counts the judge
-records, and for robustness the share of questions delivered), for one six-axis chart per task type.
+An attempt's score is the mean of the six indicators of its task type, which count the same
+(`evaluation/ASPECT_SCORES.md`, the Owner's rule of 2026-10-10): six for open problems and six others for
+paper verification, each the judge's level of the criteria it names. `evaluate.py` computes the scores;
+the weights in the rubrics no longer decide them.
 
 ### Process measures
 

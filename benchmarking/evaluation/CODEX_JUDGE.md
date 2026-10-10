@@ -29,6 +29,9 @@ score-file format below.
 | Paper verification (`paper_reproduction`, Q01-Q10) | One per finding (`K1`...`K5`, 70 points), plus method `M`, differences `D` and report `R` (10 each) | For each finding: the paper's evidence, its testability, how to test it, the frozen expected result and tolerance. Also `period_match`: the paper's study period and the supplied data. |
 | Open problem (`open_problem`, Q11-Q30) | Framing `F` 10, data `A` 10, answer `Q` 20, mechanism `M` 20, robustness `R` 15, breadth `B` 15, insight `I` 10 | Answer-key items with frozen values and tolerances; depth probes; breadth probes; for disagreement questions, candidate causes with the test for each; sometimes literature context. |
 
+Paper verification has two more criteria, which no rubric holds: robustness `S` and data `A`. They are
+scored beside the rubric ("Added criteria of paper verification").
+
 Every criterion is scored from 0 to 4 with the anchors written in the rubric, in steps of half a level
 (Owner's decision of 2026-10-09). A half level says that the answer meets the lower description and part
 of the next one; the criterion's `evidence` names that part. Where a level is not written out, it lies
@@ -47,6 +50,7 @@ between its neighbours.
       definition and say so in the note.
    3. Score the finding with its anchors. A finding marked `not testable` has its own anchors.
    4. Score `M` and `D` against their `focus` lists, and `R`.
+   5. Score the two added criteria `S` and `A` ("Added criteria of paper verification").
 3. **Open problem.**
    1. For each answer-key item, find the agent's value and compare it with the frozen value within
       tolerance, under the agent's stated definition as for a finding (step 2.2). Record `pass`, `partial`,
@@ -59,9 +63,12 @@ between its neighbours.
       - `M`: its answer-key items, the candidate causes and the depth probes;
       - `R`: the depth probes;
       - `B`: the breadth probes and the literature context.
-4. Apply the rubric's gates. They cap individual criteria, so the total stays the weighted sum.
-5. Compute `total = sum(weight * score / 4)` over the criteria (0-100).
-6. Record whether the attempt delivered (`delivered`, see "Delivery").
+4. Apply the rubric's gates. They cap individual criteria.
+5. Record whether the attempt delivered (`delivered`, see "Delivery").
+
+You add nothing up (Owner's rule of 2026-10-10). `evaluate.py` computes an attempt's score from your
+levels: the mean of six indicators that count the same (`ASPECT_SCORES.md`). The weights in a rubric no
+longer decide the score, except the weights of the findings among themselves.
 
 ## Rules
 
@@ -122,6 +129,52 @@ between its neighbours.
   are not executed work.
 - **Consistency.** Judge all attempts of one task in one sitting, in blind-ID order.
 
+## Added criteria of paper verification
+
+(Owner's decision of 2026-10-10.) Every paper verification attempt gets two more levels, with the level
+descriptions of the open problems. No rubric holds them, so they go into a file of their own,
+`$EVAL_ROOT/<experiment>/added/<blind_id>.json`. The rubric, the references and the score file are not
+changed for them.
+
+**`S`, robustness and uncertainty.** Do the verdicts hold under other reasonable choices?
+
+| Level | Description |
+|---|---|
+| 0 | No sensitivity tests and no uncertainty. |
+| 1 | Generic caveats only. |
+| 2 | One sensitivity test, or statistics that ignore short or autocorrelated records. |
+| 3 | Several targeted sensitivity tests and suitable statistics; some key numbers lack uncertainty. |
+| 4 | Targeted sensitivity tests on every choice that could change a verdict (thresholds, baselines, regions, definitions), statistics suited to short and autocorrelated records, and uncertainty on all key numbers. |
+
+**`A`, data fitness and handling.** Are the supplied data handled correctly, and is their fitness for
+testing the findings examined?
+
+| Level | Description |
+|---|---|
+| 0 | Data mishandled (units, masks, grid, time or depth conventions) in a way that changes the results. |
+| 2 | Correct handling, but the data's fitness for testing these findings (model versus ocean, record length, resolution, missing variables) is not examined. |
+| 4 | Correct handling, and fitness for the findings is checked explicitly (for example against known observations or by internal consistency), with its consequences for the verdicts stated. |
+
+The rules above hold for these two as for any criterion: executed evidence only, half levels, how much a
+flaw costs. Work that earned credit under a finding or under `D` earns credit here as well where it is
+what the level describes; an error is deducted once.
+
+```json
+{
+  "blind_id": "b1a2b3c4d5e6",
+  "task_id": "Q07",
+  "judge": {"name": "codex", "model": "<model>", "judged_utc": "2026-10-20T08:00:00Z"},
+  "criteria": [
+    {"id": "Q07-S", "score": 2.5, "evidence": "evidence/answer.md 'Sensitivity'; evidence/outputs/sensitivity.csv"},
+    {"id": "Q07-A", "score": 3, "evidence": "..."}
+  ],
+  "notes": ""
+}
+```
+
+`evaluate.py validate --scores <scores> --added <added>` checks these files and names every paper attempt
+that has none. Until both levels are there, the attempt has no score.
+
 ## Score file
 
 One file per attempt: `$EVAL_ROOT/<experiment>/scores/<blind_id>.json`.
@@ -151,7 +204,6 @@ One file per attempt: `$EVAL_ROOT/<experiment>/scores/<blind_id>.json`.
     {"id": "Q12-B", "score": 2, "evidence": "..."},
     {"id": "Q12-I", "score": 3, "evidence": "..."}
   ],
-  "total": 73.75,
   "flags": [],
   "notes": ""
 }
@@ -165,12 +217,12 @@ One file per attempt: `$EVAL_ROOT/<experiment>/scores/<blind_id>.json`.
   that cannot be verified, or a reference that looks wrong.
 
 `evaluate.py validate` checks the criterion IDs, the levels (0 to 4 in steps of 0.5), the evidence fields,
-the total, the frozen status (for every score file, also one of an attempt without a final answer), the
-blind ID, the judge and `delivered`. It does not check the other fields; fill them anyway, because the
-owner reads them when a score is disputed, and because the six indicators per task type
-(`ASPECT_SCORES.md`) are computed from `answer_key`, `causes`, `findings` and `probes`: an entry left out
-counts as not met. `evaluate.py indicators` names every such entry and ends with status 1 until none is
-left.
+the frozen status (for every score file, also one of an attempt without a final answer), the blind ID,
+the judge and `delivered`. A score file holds no total; one that an older file carries is not read. It
+does not check the other fields; fill them anyway, because the owner reads them when a level is disputed.
+One of them is scored: `findings[].matches_reference` is the indicator "right verdicts" of paper
+verification (`ASPECT_SCORES.md`). `evaluate.py indicators` names an attempt with a finding that lacks it
+and ends with status 1 until none is left.
 
 ## Calibration before the main judging
 

@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import stat
+import threading
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -287,6 +288,11 @@ class OceanRequestRouter:
         # Protocol v2 payload or the router-wide default.
         self._cancelling_agent_requests: set[str] = set()
         self._pending_questions: dict[str, tuple[str, str, asyncio.Future[str]]] = {}
+        # "Update now" requests that run off the connection's request loop.
+        self._library_updates: set[asyncio.Task[None]] = set()
+        # One writer of the project's lessons and tools at a time: "Update now", the regular
+        # upkeep and a mark would otherwise overwrite one another's changes.
+        self._library_lock = threading.Lock()
         self._closing = False
         self.recovered_events = self.store.recover_incomplete(
             self._interrupted_event,
@@ -332,6 +338,10 @@ class OceanRequestRouter:
             if not task.done():
                 task.cancel()
         tasks = [task for task in self._agent_tasks.values() if not task.done()]
+        for task in list(self._library_updates):
+            # The request stays in progress and is ended by request recovery, like any other.
+            if task.cancel():
+                tasks.append(task)
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         sessions = list(self._agent_sessions.values())
@@ -689,8 +699,10 @@ class OceanRequestRouter:
         if isinstance(request, PortableExportCreateRequest):
             await self._portable_export_create(client, request)
             return
-        if isinstance(request, (ResearchLibraryGetRequest, ResearchLibraryUpdateRequest,
-                                ResearchLibraryMarkRequest)):
+        if isinstance(request, ResearchLibraryUpdateRequest):
+            self._start_library_update(client, request)
+            return
+        if isinstance(request, (ResearchLibraryGetRequest, ResearchLibraryMarkRequest)):
             await self._research_library(client, request)
             return
         if isinstance(request, DisclosurePolicyGetRequest):
@@ -1448,13 +1460,31 @@ class OceanRequestRouter:
                 stores.append(candidate)
         return stores
 
-    def _update_library(self, workspace_id: str, *, review: bool) -> dict:
+    def _update_library(self, workspace_id: str, *, review: bool, wait: bool = True) -> dict | None:
         """Bring records and call counts up to date; with ``review`` the meta-agent also
-        reviews the lessons and learns tools."""
+        reviews the lessons and learns tools. One update runs at a time: another waits for
+        it, or with ``wait`` false is left out (None)."""
         from oceanx.research.llm import default_llm
-        llm = default_llm() if review else None
-        return self._project_research().update(self._research_tree_stores(workspace_id),
-                                               llm=llm, reviewer=llm)
+        if not self._library_lock.acquire(blocking=wait):
+            return None
+        try:
+            if self._closing:
+                return None  # it waited its turn until the backend began to close
+            llm = default_llm() if review else None
+            return self._project_research().update(self._research_tree_stores(workspace_id),
+                                                   llm=llm, reviewer=llm)
+        finally:
+            self._library_lock.release()
+
+    def _mark_library(self, project, kind: str, item_id: str, verdict: str) -> None:
+        """The owner's mark. An update that is running has read the library and will write it
+        back, so a mark made meanwhile would be lost: it is refused, to be made again."""
+        if not self._library_lock.acquire(blocking=False):
+            raise ValueError("The lessons and tools are being updated; mark it again when the update is done.")
+        try:
+            project.mark(kind, item_id, verdict)
+        finally:
+            self._library_lock.release()
 
     def _maintain_library(self, workspace_id: str) -> dict | None:
         """Regular upkeep after a research request. Records and call counts are refreshed every
@@ -1465,12 +1495,13 @@ class OceanRequestRouter:
             return None
         due = self._project_research().lessons.review_due()
         try:
-            return self._update_library(workspace_id, review=due)
+            # Left out while an update runs; the upkeep after the next request catches up.
+            return self._update_library(workspace_id, review=due, wait=False)
         except Exception:  # e.g. no model configured for the meta-agent
             if not due:
                 raise
             _LOGGER.exception("The meta-agent's library review failed; records were kept current")
-            return self._update_library(workspace_id, review=False)
+            return self._update_library(workspace_id, review=False, wait=False)
 
     def _schedule_research_consolidation(self, request: RequestEnvelope) -> None:
         """Keep the project's library current after research requests, off the request path."""
@@ -1489,6 +1520,28 @@ class OceanRequestRouter:
 
         asyncio.get_running_loop().create_task(run())
 
+    def _start_library_update(self, client: BackendClient, request: ResearchLibraryUpdateRequest) -> None:
+        """Run "Update now" off the connection's request loop; the reply is sent when it is done.
+
+        A review reads the final answer of every newly finished task and can take many minutes.
+        The loop answers one request at a time, so awaited there the update would leave every
+        other request of the window unanswered until it ended."""
+
+        async def run() -> None:
+            try:
+                await self._research_library(client, request)
+            except asyncio.CancelledError:
+                if not self._closing:
+                    raise
+            except Exception as exc:  # noqa: BLE001 - nothing awaits this task; the request must still end
+                await self._fail_request(client, request, code="store_error",
+                                         message="Backend request handler failed",
+                                         recoverable=True, details={"reason": str(exc)})
+
+        task = asyncio.get_running_loop().create_task(run(), name=f"ocean-library-{request.request_id}")
+        self._library_updates.add(task)
+        task.add_done_callback(self._library_updates.discard)
+
     async def _research_library(self, client: BackendClient, request: RequestEnvelope) -> None:
         """The project's lessons and tools: look at them, update them now, or mark one right
         or wrong."""
@@ -1498,7 +1551,7 @@ class OceanRequestRouter:
             payload = request.payload
             result: dict[str, Any] = {}
             if isinstance(request, ResearchLibraryMarkRequest):
-                await run(project.mark, payload.kind, payload.id, payload.verdict)
+                await run(self._mark_library, project, payload.kind, payload.id, payload.verdict)
             elif isinstance(request, ResearchLibraryUpdateRequest):
                 result["update"] = await run(
                     self._update_library, self._workspace_id(request), review=payload.review)

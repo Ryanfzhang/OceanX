@@ -128,7 +128,11 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   skill.
 - **Upkeep.** After a research request the backend refreshes digests and call counts (no model
   call). At most once a day it also lets the meta-agent review; **Review → Update now** does the
-  same on request. Nothing runs when `OCEANX_LIBRARY_FROZEN` is set (experiment arms).
+  same on request. Nothing runs when `OCEANX_LIBRARY_FROZEN` is set (experiment arms). A review
+  reads the final answer of every newly finished task and can take many minutes, so the backend
+  runs an update beside its other work and the desktop stays usable; the dialog shows the result
+  when it is done. One update runs at a time, and a mark made while one runs is refused, because
+  the update would write the library back without it.
 - **Lessons.** One model call per skill that takes lessons. The call gets the skill as its
   readers get it, what the reader is told elsewhere, the lessons other skills carry (one idea
   belongs in one skill), the lessons the owner marked wrong, and the

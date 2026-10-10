@@ -10,6 +10,8 @@ export type Lesson = {
   text: string;
   applies_when: string;
   active: boolean;
+  /** Whether tasks get it now. A skill shows a task its best `limit` lessons and keeps the others. */
+  shown: boolean;
   human: Mark | null;
   /** Finished tasks whose skills carried this lesson, and those that named it. */
   tasksShown: number;
@@ -17,7 +19,7 @@ export type Lesson = {
   retiredReason: string;
   evidence_tasks: {supporting: EvidenceTask[]; counter: EvidenceTask[]};
 };
-/** One skill that takes lessons: how many it holds, what they are about and who reads them. */
+/** One skill that takes lessons: how many of them a task is shown, what they are about and who reads them. */
 export type LessonSkill = {name: string; about: string; limit: number; reader: 'coordinator' | 'expert'; lessons: Lesson[]};
 export type Tool = {
   name: string;
@@ -71,6 +73,7 @@ function lesson(item: Record<string, unknown>): Lesson {
     text: str(item.text),
     applies_when: str(item.applies_when),
     active: item.status === 'active',
+    shown: item.shown !== false,
     human: mark(item.human),
     tasksShown: count(item.tasks_shown),
     tasksCited: count(item.tasks_cited),
@@ -125,10 +128,12 @@ export function parseLibrary(result: EventPayload): Library | null {
 
 export type UpdateSummary = {
   digested: number;
-  /** False when no task finished since the last review, so the meta-agent was not asked. */
+  /** False when no task finished since the last update, so the meta-agent was not asked. */
   reviewed: boolean;
-  /** Different research questions among the finished tasks; lessons and tools need three. */
+  /** Different research questions among the finished tasks; a lesson needs `Library.minSupport` of them. */
   questions: number | null;
+  /** Finished tasks whose records did not fit this review; the next update reads them first. */
+  tasksLeft: number;
   lessonChanges: number;
   toolsAdded: string[];
   toolsRemoved: string[];
@@ -144,8 +149,10 @@ export function summarizeUpdate(result: EventPayload): UpdateSummary | null {
   const names = (value: unknown): string[] => (Array.isArray(value) ? value : []).filter((item): item is string => typeof item === 'string');
   return {
     digested: count(record(update.consolidation).digested),
-    reviewed: count(lessons.skills_reviewed) > 0 || 'tools' in update,
+    // Each of the two steps says how many finished tasks were new to it.
+    reviewed: count(lessons.new_tasks) > 0 || count(tools.new_tasks) > 0,
     questions: typeof lessons.questions === 'number' ? lessons.questions : null,
+    tasksLeft: count(lessons.tasks_left),
     lessonChanges: records(lessons.changes).length,
     toolsAdded: names(tools.created),
     toolsRemoved: names(record(update.tool_usage).removed),

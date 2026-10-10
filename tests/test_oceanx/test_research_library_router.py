@@ -1,6 +1,8 @@
 """The desktop's view of a project's lessons and tools: look, update now, mark right or wrong.
 Also the real code-execution service: which helper functions each run called."""
+import asyncio
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -24,6 +26,18 @@ class _Recorder:
     def failure(self, request_id: str):
         [event] = [e for e in self.events if e.type == "request.failed" and e.request_id == request_id]
         return event.payload
+
+    def ended(self, request_id: str) -> bool:
+        return any(e.request_id == request_id and e.type in ("request.completed", "request.failed")
+                   for e in self.events)
+
+    async def wait(self, request_id: str) -> None:
+        """An update runs off the request loop: its reply comes after the request was taken."""
+        for _ in range(500):
+            if self.ended(request_id):
+                return
+            await asyncio.sleep(0.01)
+        raise AssertionError(f"{request_id} did not end")
 
 
 async def _open_project(host: OceanBackendHost, tmp_path: Path, workspace_id: str):
@@ -78,6 +92,7 @@ async def test_library_requests_show_update_and_mark(tmp_path: Path, monkeypatch
 
         # "Update now" without a review needs no model: records and call counts only.
         await send("req_update", "update", {"review": False})
+        await recorder.wait("req_update")
         updated = recorder.result("req_update")
         assert updated["update"]["consolidation"]["digested"] == 0
         assert updated["update"]["tool_usage"] == {"tasks_counted": 0, "removed": []}
@@ -92,6 +107,100 @@ async def test_library_requests_show_update_and_mark(tmp_path: Path, monkeypatch
             RuntimeError("no meta model configured")))
         assert set(host.router._maintain_library("ws_library")) == {"consolidation", "tool_usage"}
     finally:
+        await host.close()
+
+
+@pytest.mark.asyncio
+async def test_update_now_does_not_hold_up_the_window(tmp_path: Path, monkeypatch):
+    """A review reads every newly finished task's answer and takes minutes. The connection
+    answers one request at a time, so the update runs beside it and replies when it is done."""
+    from oceanx.research.review import ProjectResearch
+    started, release, calls = threading.Event(), threading.Event(), []
+
+    def slow_update(self, stores, **options):  # the meta-agent at work
+        calls.append(options["llm"] is not None)
+        started.set()
+        assert release.wait(20)
+        return {"consolidation": {"digested": 0}, "tool_usage": {"tasks_counted": 0, "removed": []}}
+
+    monkeypatch.setattr(ProjectResearch, "update", slow_update)
+    monkeypatch.setattr("oceanx.research.llm.default_llm", lambda *a, **k: lambda prompt: "{}")
+    host = OceanBackendHost(tmp_path / "state", write_frame=lambda _frame: None)
+    try:
+        client, recorder, context = await _open_project(host, tmp_path, "ws_busy")
+
+        async def send(request_id: str, kind: str, payload: dict) -> None:
+            await host.router.handle_payload(client, {
+                "protocol_version": 2, "request_id": request_id, "type": f"research.library.{kind}",
+                "payload": payload, "context": context})
+
+        await send("req_update", "update", {"review": True})  # returns at once
+        assert await asyncio.to_thread(started.wait, 20) and not recorder.ended("req_update")
+        # Meanwhile the window is answered: the library can be read, a task created.
+        await send("req_get", "get", {})
+        assert len(recorder.result("req_get")["library"]["tools"]) == 8
+        await host.router.handle_payload(client, {
+            "protocol_version": 2, "request_id": "req_task", "type": "task.create",
+            "payload": {"title": "meanwhile"}, "context": context})
+        assert recorder.result("req_task")["task"]["title"] == "meanwhile"
+        # The running update will write the library back, so a mark now would be lost: refused.
+        await send("req_mark", "mark", {"kind": "tool", "id": "small_sample", "verdict": "wrong"})
+        failed = recorder.failure("req_mark")
+        assert failed.error.code == "invalid_request" and "being updated" in failed.error.message
+        # The upkeep after a research request leaves the work to the update that is running,
+        # and a second "Update now" waits its turn.
+        assert await asyncio.to_thread(host.router._maintain_library, "ws_busy") is None
+        await send("req_again", "update", {"review": False})
+        await asyncio.sleep(0.05)
+        assert calls == [True] and not recorder.ended("req_again")
+
+        release.set()
+        await recorder.wait("req_update")
+        await recorder.wait("req_again")
+        assert recorder.result("req_update")["update"]["consolidation"] == {"digested": 0}
+        assert len(recorder.result("req_update")["library"]["tools"]) == 8 and calls == [True, False]
+        # With no update running the mark is made.
+        await send("req_mark_again", "mark", {"kind": "tool", "id": "small_sample", "verdict": "wrong"})
+        marked = {tool["name"]: tool for tool in recorder.result("req_mark_again")["library"]["tools"]}
+        assert marked["small_sample"]["human"] == "wrong"
+
+        # A model failure ends the request with an error the dialog shows, as before.
+        monkeypatch.setattr(ProjectResearch, "update", lambda self, stores, **options: (_ for _ in ()).throw(
+            RuntimeError("provider refused")))
+        await send("req_broken", "update", {"review": True})
+        await recorder.wait("req_broken")
+        broken = recorder.failure("req_broken")
+        assert (broken.error.code, broken.error.details["reason"]) == ("model_error", "provider refused")
+        assert not host.router._library_updates and not host.router._library_lock.locked()
+    finally:
+        release.set()
+        await host.close()
+
+
+@pytest.mark.asyncio
+async def test_closing_the_backend_does_not_wait_for_an_update(tmp_path: Path, monkeypatch):
+    from oceanx.research.review import ProjectResearch
+    started, release = threading.Event(), threading.Event()
+
+    def slow_update(self, stores, **options):
+        started.set()
+        release.wait(20)
+        return {}
+
+    monkeypatch.setattr(ProjectResearch, "update", slow_update)
+    host = OceanBackendHost(tmp_path / "state", write_frame=lambda _frame: None)
+    try:
+        client, recorder, context = await _open_project(host, tmp_path, "ws_close")
+        await host.router.handle_payload(client, {
+            "protocol_version": 2, "request_id": "req_update", "type": "research.library.update",
+            "payload": {"review": False}, "context": context})
+        assert await asyncio.to_thread(started.wait, 20)
+        await asyncio.wait_for(host.router.shutdown_active_analysis(), timeout=5)
+        assert not host.router._library_updates and not recorder.ended("req_update")
+        # Request recovery ends what was left in progress, as it does for a research request.
+        assert "req_update" in {event.request_id for event in host.router.interrupt_active_requests()}
+    finally:
+        release.set()
         await host.close()
 
 

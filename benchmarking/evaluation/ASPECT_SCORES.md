@@ -1,148 +1,114 @@
 # Six indicators per task type
 
-**Status: v1.2, fixed with the Owner on 2026-10-09.** v1.0 (2026-10-06) left two settings open until they
-had been tried: the mix of the parts inside an indicator, and whether repeated failures belong in
-robustness. Two provisional reviews settled them: the mix stays and repeated failures leave the indicator.
-v1.1 (2026-10-08) read delivery from each question's first attempt; v1.2 reads it from the attempt that is
-judged (see "Delivery" for the reason). Nothing here changes once formal judging has begun.
+**Status: v2.0, the Owner's rule of 2026-10-10.** A task type has six indicators. They count the same,
+each is one number from 0 to 100, and an attempt's score is their mean. v1.x (2026-10-06 to 2026-10-09)
+mixed a judged part, a counted part and delivery into every indicator, beside a rubric total with weights
+of its own. The Owner found that too complicated; what changed is listed at the end, and the old text is
+in git history.
 
-The rubric total says how good an attempt is. The six indicators say in what, on six axes that can be
-drawn as one chart per task type.
+## The rule
 
-## What does not change
+1. **One indicator, one number.** An indicator is the judge's level (0 to 4, in steps of a half) of the
+   criteria it names, as a share of the top level: `100 * level / 4`. One indicator is a count instead:
+   right verdicts.
+2. **The six count the same.** An attempt's score is the mean of its six indicators, so each is one sixth
+   of the score.
+3. **Averages.** Per arm and task type, an indicator is averaged over the questions, over the repeats of
+   a question first. The six means make up the arm's mean score in the same way.
+4. **Nothing executed.** An attempt without a score file counts 0 in every indicator.
 
-- The task rubrics `benchmarking/tasks/Q*/evaluator/rubric.json`: criteria, weights, anchors, answer keys,
-  probes. Nothing in them is edited for the indicators.
-- The rubric total, the score files, the run folders and `result.json`.
-- The judging procedure in `CODEX_JUDGE.md`. The judge scores the rubric criteria and records the counts
-  that procedure already asks for; no attempt is judged a second time.
-
-The rubric total stays the main result. The judged parts of the six indicators use up exactly the rubric's
-100 points, so the indicators are a division of that total, with counts and delivery added beside it.
-
-## How an indicator is built
-
-An indicator has up to three kinds of part, each a number from 0 to 100:
-
-- **judged**: `100 * sum(weight * score / 4) / sum(weight)` over the rubric criteria of the indicator;
-- **counted**: the share of listed items that the judge recorded as met;
-- **run**: delivery (below).
-
-`indicator = 0.50 * judged + 0.25 * counted + 0.25 * run`. A kind the indicator does not have gives its
-share to the judged part. So an indicator with a judged part and one other part is `0.75 * judged + 0.25 *
-that part`, one with only a judged part equals it, and robustness of paper verification, which has only a
-run part, equals that.
-
-Every part comes from each question's latest attempt, the one the evaluation reads. Every part is computed
-per question and averaged over the questions of the type, per arm; with repeats, over the repeats of a
-question first. An attempt without a score file (nothing was executed) counts 0 in every part.
+Nothing else enters a score: no count of answer-key items or probes, no delivery, and no weight of a
+rubric criterion except the weights of the findings among themselves. `evaluate.py` computes the scores
+from the levels. The judge adds nothing up.
 
 ## Open problems (Q11-Q30)
 
-| Indicator | Judged (rubric points) | Counted | Run |
+| Indicator | The question it answers | 一句话 | From the rubric |
 |---|---|---|---|
-| Framing (问题拆解) | `F` (10) | none | none |
-| Correctness (正确性) | `Q` (20) | answer-key items used by `Q`: pass 1, partial 0.5, otherwise 0; mean | none |
-| Depth (深度) | `M` (20) | depth probes addressed out of those listed; on disagreement questions the mean of that share and of candidate causes tested out of those listed | none |
-| Breadth (广度) | `B` (15) | breadth probes addressed out of those listed | none |
-| Robustness (稳健性) | `R` (15) | none | delivery |
-| Rigor (严谨性) | `A` + `I` (20) | none | none |
-
-Rigor has no count of untraceable numbers: the rubric's gate already lowers the criterion such a number
-supports, and one error is deducted once.
+| Framing (问题拆解) | Is the question turned into testable hypotheses? | 问题拆成可检验的假设了吗 | `F` |
+| Correctness (正确性) | Do the key results agree with the reference? | 关键结果与参考答案一致吗 | `Q` |
+| Depth (深度) | Is the mechanism tested in the data? | 机制用数据检验了吗 | `M` |
+| Breadth (广度) | Are related processes and published work connected? | 联系了相关过程和已有研究吗 | `B` |
+| Robustness (稳健性) | Does the conclusion hold under other choices? | 换一种设定结论还成立吗 | `R` |
+| Rigor (严谨性) | Are the data handled right and the limits stated? | 数据用得对、边界说得清吗 | the mean of `A` and `I` |
 
 ## Paper verification (Q01-Q10)
 
-Each finding's level is divided in two. Up to level 2 it says whether the finding was tested with an
-executed diagnostic (0 no executed analysis, 1 an analysis that cannot test it, 2 tested but with a
-material flaw). Above level 2 it says whether the test was sound and the verdict right (3 sound and in
-agreement with the reference, 4 also complete and compared quantitatively with the paper). The judge gives
-levels in steps of a half (`CODEX_JUDGE.md`); they divide in the same way.
-
-| Indicator | Judged (rubric points) | Counted | Run |
+| Indicator | The question it answers | 一句话 | From |
 |---|---|---|---|
-| Finding tests (命题检验) | `min(level, 2) / 2` of each `K`, by claim weight (35) | findings with a verdict (`agent_verdict` not `missing`) out of all | none |
-| Right verdicts (判定正确) | `max(level - 2, 0) / 2` of each `K`, by claim weight (35) | findings with `matches_reference` true out of all | none |
-| Method fidelity (方法忠实) | `M` (10) | none | none |
-| Differences explained (差异归因) | `D` (10) | none | none |
-| Traceability (可追溯) | `R` (10) | findings with `evidence_ok` true out of all | none |
-| Robustness (稳健性) | none | none | delivery |
+| Finding tests (命题检验) | Is each finding tested properly? | 每个命题都认真检验了吗 | the findings `K1`...`K5`, each by its weight in the rubric |
+| Right verdicts (判定正确) | Do the verdicts agree with the reference? | 判定与参考答案一致吗 | the share of findings with `matches_reference` true |
+| Method fidelity (方法忠实) | Are the paper's definitions and methods followed? | 按论文的定义和方法做了吗 | `M` |
+| Differences explained (差异归因) | Are the differences from the paper explained? | 与论文的差别解释了吗 | `D` |
+| Robustness (稳健性) | Do the verdicts hold under other choices? | 换一种设定判定还成立吗 | `S`, judged beside the rubric |
+| Rigor (严谨性) | Are the data handled right and fit for the findings? | 数据用得对、适合检验吗 | `A`, judged beside the rubric |
 
-The mean of the two `K` halves is the rubric's score for the findings. A finding the rubric marks as not
-testable follows its own anchors; stating plainly that it cannot be tested is both the sound handling and
-the right verdict. Method fidelity and differences have no count because the rubrics give their focus as
-one sentence, not as a list (Owner's decision: judged only, rubrics unchanged).
+No paper rubric holds a criterion for the last two. The judge scores them beside the rubric, with the
+level descriptions of the open problems' criteria `R` and `A` (`CODEX_JUDGE.md`, "Added criteria of paper
+verification"), in a file of their own. Until they are judged, the two indicators and the score of the
+attempt stay empty. Nothing is filled in for them.
+
+The report criterion `R` of the paper rubrics (report and traceability) enters no indicator (Owner's
+decision of 2026-10-10). The frozen rubrics hold it, so the judge still scores it. A number that cannot
+be traced still earns nothing: that is a gate of the rubric and a rule of the judging.
 
 ## Delivery
 
+Delivery is reported beside the scores and is part of none.
+
 **Delivered** means: the attempt that is judged ended with a final answer that rests on analysis executed
 in that attempt. A plan, a note that the work could not be done, or a message that work is still running
-is not a delivery, whatever the status says. Delivery is 100 or 0 per attempt; averaged over questions it
-is the share of questions an arm delivers.
+is not a delivery, whatever the status says.
 
 - **Who records it.** The judge, for the attempt it judges, as `delivered` in the score file
   (`CODEX_JUDGE.md`, "Delivery"). An attempt whose report is whole and rests on executed analysis is
-  delivered although its recorded status is not `completed` (an early Claude Code runner wrote
-  `needs_interaction` whenever a tool call had been refused).
-- **Void attempts.** An attempt that failed for a reason outside the method (a fault of the runner, the
-  sandbox, the data mount or the model provider) is void. The question is run again, and the void attempt
-  enters no indicator. The owner decides, and the reason is recorded.
-- **Why not the first attempt** (Owner's decision of 2026-10-09). v1.1 read delivery from each question's
-  first attempt, so that the axis would not be 100 for every method once failed questions had been run
-  again. But the first attempts of the first batch failed mostly for faults of the runners, which were
-  then corrected: a step limit without a warning, a prompt that did not say that a run is one turn, a
-  notebook replayed whole within the time limit. Counting them would have charged the methods with the
-  harness's faults.
+  delivered although its recorded status is not `completed`.
+- **Void attempts** (Owner's decision of 2026-10-09). An attempt that failed for a reason outside the
+  method (a fault of the runner, the sandbox, the data mount or the model provider) is void. The question
+  is run again, and the void attempt enters nothing. The owner decides, and the reason is recorded.
 - **Attempts that were replaced are listed beside the results**, void or not, each with its reason and
   without a score: a reader has to see that a question was run more than once.
-- **What follows.** In a batch where every failed question has been run again, delivery is 100 for every
-  method. Robustness of paper verification then does not separate the methods, and robustness of open
-  problems separates them through its judged part alone. Delivery separates methods in a comparison that
-  allows no rerun except of void attempts.
 
-**Repeated failures are not part of an indicator.** A repeated failure is an execution that fails with the
-same error as the failed execution just before it, by the same agent. The trial of 2026-10-06 showed that
-its denominators cannot be compared between methods: a sandbox that counts every shell command, a log of
-tool calls, and a notebook replayed whole on every edit. It is reported beside the chart as a diagnostic,
-with elapsed time, tokens and model calls.
-
-## What the judge must record
-
-The counts come from fields the score file already has (`CODEX_JUDGE.md`, "Score file"). They are needed
-for every attempt that gets a score file:
-
-- open problems: `answer_key[].result`, `probes.depth_addressed`, `probes.breadth_addressed`, and on
-  disagreement questions `causes[].tested`;
-- paper verification: `findings[].agent_verdict`, `findings[].matches_reference`, `findings[].evidence_ok`;
-- for every attempt: whether it delivered (`delivered`).
-
-Without frozen references (a provisional review) `answer_key[].result` and `matches_reference` cannot be
-recorded. Those two counted parts are then left out and their share returns to the judged part.
+Also beside the scores: what the judge records with the levels (answer-key results, probes, candidate
+causes), which is the evidence for the levels and is read when a level is disputed; hours and tokens; and
+repeated failures, whose counts cannot be compared between methods (trial of 2026-10-06).
 
 ## What is reported
 
-Per arm and task type: the six indicators, each with its parts, the number of attempts, and next to them
-the unscored diagnostics. One table and one six-axis chart for open problems, the same for paper
-verification. The two task types are never averaged into one chart: their axes are different things.
+```bash
+python benchmarking/evaluation/evaluate.py indicators --map <blind map> --scores <score files> \
+  --added <added files> --out <folder>
+```
 
-`evaluate.py indicators --map <blind map> --scores <score files> --out <folder>` computes them and writes
-`indicators.md` (the table, each indicator with its parts, and the numbers beside them), `indicators.json`
-and the chart `six-indicators.png` and `.svg`. An entry that a score file leaves out counts as not met;
-the command names every such entry and ends with status 1 until none is left. The chart shows three arms
-at most (`--arms` names them and their order) and carries no numbers: they are in the table. The list of
-replaced attempts is written by hand into the report of the batch: the run folders do not always hold
-them. The two provisional charts were made by the scripts in their review folders (below).
+It writes `indicators.md` (per task type: the six indicators and the score of every arm, and the numbers
+beside them), `indicators.json`, and the chart `six-indicators.png` and `.svg`: one six-axis chart per
+task type, every axis with the indicator's name and the question it answers, each arm's score under the
+title. The chart shows three arms at most (`--arms` names them and their order).
 
-## Rules that keep the comparison sound
+An indicator that is not judged yet is named, stays empty in the table and leaves a gap in the chart, and
+the command ends with status 1 until none is left. `evaluate.py summarize` compares arms on the same
+scores and refuses an attempt whose score is not complete.
 
-1. The rubric total stays the main result; the indicators explain it.
-2. The indicators were fixed after two provisional reviews had been seen. Those reviews can describe
-   differences between methods and cannot confirm them.
-3. All six axes are always shown, also where methods tie or one is behind.
+The two task types are never averaged into one chart: their indicators are different things. The list of
+replaced attempts is written by hand into the report of the batch.
 
-## Where they have been computed so far
+## Changes after the first formal judging
 
-- `benchmarking/reviews/2026-10-06-three-methods/aspect-trial/`: the trial by v1.0 on 51 attempts, with
-  all three kinds of part. It is why repeated failures left the indicator.
-- `benchmarking/reviews/2026-10-08-three-methods-r2/six-indicators/`: the judged parts and robustness by
-  v1.1 on the later review. The counted parts are missing there for the 11 attempts that had been run again.
+The 51 answers of the three-method comparison of 2026-10-10 were judged under v1.2. The Owner then changed
+how the levels are added up, having seen the results. The levels the judge gave are unchanged. A report of
+that comparison under v2.0 says so and names what changed:
+
+- **Weights.** Before, the weights of the rubric made the total: for open problems answer and mechanism
+  20 each, robustness and breadth 15, framing, data and insight 10; for paper verification the findings
+  70, and method, differences and report 10 each. Now the six indicators count the same.
+- **Parts.** The counts (answer-key items, probes, causes tested, verdicts given, evidence flags),
+  delivery and the two halves of a finding's level left the indicators.
+- **Traceability removed.** In that comparison it was 93.8, 100 and 100 for OceanX, Claude Code and
+  Finch: all twelve paper answers had level 3.5 or 4, and OceanX lost half a level on two questions for
+  figures left from abandoned analyses. The Owner took it out because it looks at the form of the report
+  and the methods hardly differ on it.
+- **Robustness and rigor added to paper verification,** judged for the twelve paper answers after the
+  other results were known, in the blind folders. On the open problems OceanX led on both.
+
+Earlier trials: `benchmarking/reviews/2026-10-06-three-methods/aspect-trial/` (v1.0) and
+`benchmarking/reviews/2026-10-08-three-methods-r2/six-indicators/` (v1.1).

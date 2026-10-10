@@ -164,8 +164,13 @@ Four rubrics also cite verified literature for judging the agent's comparison wi
 
 ## Rubrics: two designs
 
-Both types score each criterion 0-4. The total is `sum(weight * score / 4)` out of 100. Codex judges both
-(`evaluation/CODEX_JUDGE.md`).
+Both types score each criterion 0-4. Codex judges both (`evaluation/CODEX_JUDGE.md`).
+
+An attempt's score is the mean of the six indicators of its task type, which count the same
+(`evaluation/ASPECT_SCORES.md`, the Owner's rule of 2026-10-10). The weights in the two tables below are
+those written in the rubric files; they no longer decide the score, except the weights of the findings
+among themselves. For paper verification the report criterion `R` enters no indicator, and two criteria
+that no rubric holds are judged beside it: robustness `S` and data handling `A`.
 
 ### Paper verification: was each finding verified?
 

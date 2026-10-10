@@ -3,12 +3,14 @@
 
     blind      copy each attempt's answer, reports, figures, small outputs and code into a folder named
                by a random ID, so the judge cannot see the arm; the ID-to-arm map is written separately
-    validate   check score files against the task rubrics (criteria, levels 0 to 4, weighted total)
+    validate   check score files against the task rubrics (criteria, levels 0 to 4), and the files of
+               the two criteria of paper verification that are judged beside the rubric
     rubric-check  check frozen rubrics before judging: every reference value and tolerance filled, nothing
                else changed from the repository's draft, the hash of the reference outputs still right
     freeze     hash-lock a pre-registration file before any test run
     summarize  join scores with the map, apply the pre-registered comparisons, write report.md
-    indicators the six indicators per task type and arm (ASPECT_SCORES.md): a table and a chart
+    indicators the six indicators per task type and arm, whose mean is the score (ASPECT_SCORES.md):
+               a table and a chart
     process    measure how each attempt's research tree went (needs OceanX importable), compare arms
                on the pre-registered process metric, write process.md
     inventory  write run_record.json and run_record.md into every attempt (time, tokens, code runs, what
@@ -291,26 +293,35 @@ def usage(attempt: Path, result: dict, calls: list[dict] | None = None) -> dict:
 
 
 # ------------------------------------------------------------------------------------------ validate
-def validate_score(score: dict) -> list[str]:
+# Criteria of paper verification that no rubric holds: the judge scores them beside the rubric, in a file
+# of their own (CODEX_JUDGE.md, "Added criteria of paper verification"). Letter and indicator.
+ADDED_CRITERIA = {"S": "Robustness", "A": "Rigor"}
+
+
+def level_errors(given: dict) -> list[str]:
     errors = []
-    try:
-        ref = rubric(score["task_id"])
-    except (KeyError, FileNotFoundError):
-        return ["unknown task_id"]
-    weights = {c["id"]: c["weight"] for c in ref["criteria"]}
-    given = {c.get("id"): c for c in score.get("criteria", [])}
-    if set(given) != set(weights):
-        errors.append(f"criteria ids {sorted(given)} != rubric {sorted(weights)}")
     for cid, item in given.items():
         level = item.get("score")
         if isinstance(level, bool) or not isinstance(level, (int, float)) or level not in [n / 2 for n in range(9)]:
             errors.append(f"{cid}: score must be a level from 0 to 4 in steps of 0.5")
         if not str(item.get("evidence", "")).strip():
             errors.append(f"{cid}: evidence is required")
-    if not errors:
-        total = sum(weights[cid] * given[cid]["score"] / 4 for cid in weights)
-        if abs(total - float(score.get("total", -1))) > 0.01:
-            errors.append(f"total {score.get('total')} != weighted sum {total:.2f}")
+    return errors
+
+
+def validate_score(score: dict) -> list[str]:
+    """Problems of one score file. The score itself is not in it: evaluate.py computes it from the
+    levels (ASPECT_SCORES.md), so a `total` that an older file carries is not read."""
+    errors = []
+    try:
+        ref = rubric(score["task_id"])
+    except (KeyError, FileNotFoundError):
+        return ["unknown task_id"]
+    wanted = {c["id"] for c in ref["criteria"]}
+    given = {c.get("id"): c for c in score.get("criteria", [])}
+    if set(given) != wanted:
+        errors.append(f"criteria ids {sorted(given)} != rubric {sorted(wanted)}")
+    errors += level_errors(given)
     # Every score file, also that of an attempt without a final answer, judged on what it kept.
     if score.get("rubric_status") != "frozen":
         errors.append("rubric was not frozen when judged (references and tolerances must be frozen first)")
@@ -322,12 +333,70 @@ def validate_score(score: dict) -> list[str]:
     return errors
 
 
+def validate_added(added: dict, score: dict | None) -> list[str]:
+    """Problems of one file of added criteria, against the score file of the same attempt."""
+    if score is None:
+        return ["no valid score file with this blind_id"]
+    try:
+        kind = rubric(score["task_id"])["type"]
+    except (KeyError, FileNotFoundError):
+        return ["unknown task_id"]
+    if kind != "paper_reproduction":
+        return ["only paper verification has added criteria"]
+    errors = []
+    if added.get("task_id") != score["task_id"]:
+        errors.append(f"task_id {added.get('task_id')} != {score['task_id']} of the score file")
+    wanted = {f"{score['task_id']}-{letter}" for letter in ADDED_CRITERIA}
+    given = {c.get("id"): c for c in added.get("criteria", [])}
+    if set(given) != wanted:
+        errors.append(f"criteria ids {sorted(map(str, given))} != {sorted(wanted)}")
+    errors += level_errors(given)
+    if not added.get("judge"):
+        errors.append("missing judge")
+    return errors
+
+
 def validate(args) -> dict:
-    report = {}
+    report, scores = {}, {}
     for path in sorted(args.scores.glob("*.json")):
-        report[path.name] = validate_score(json.loads(path.read_text()))
-    bad = {k: v for k, v in report.items() if v}
-    return {"files": len(report), "invalid": bad}
+        score = json.loads(path.read_text())
+        report[path.name] = validate_score(score)
+        if not report[path.name]:
+            scores[score["blind_id"]] = score
+    result = {"files": len(report), "invalid": {k: v for k, v in report.items() if v}}
+    if args.added:
+        checked = {}
+        for path in sorted(args.added.glob("*.json")):
+            added = json.loads(path.read_text())
+            checked[path.name] = (added.get("blind_id"), validate_added(added, scores.get(added.get("blind_id"))))
+        paper = {blind_id for blind_id, score in scores.items()
+                 if rubric(score["task_id"])["type"] == "paper_reproduction"}
+        result["added"] = {"files": len(checked),
+                           "invalid": {name: errors for name, (_, errors) in checked.items() if errors},
+                           "paper_attempts_without": sorted(paper - {blind_id for blind_id, _ in checked.values()})}
+    return result
+
+
+def read_scores(folder: Path) -> dict:
+    """The score files of a folder by blind ID; every one must be valid."""
+    scores = {}
+    for path in sorted(folder.glob("*.json")):
+        score = json.loads(path.read_text())
+        if validate_score(score):
+            raise SystemExit(f"ERROR: invalid score file {path.name}; run validate first")
+        scores[score["blind_id"]] = score
+    return scores
+
+
+def read_added(folder: Path | None, scores: dict) -> dict:
+    """The files of added criteria of a folder by blind ID; every one must be valid."""
+    added = {}
+    for path in sorted(folder.glob("*.json")) if folder else ():
+        doc = json.loads(path.read_text())
+        if validate_added(doc, scores.get(doc.get("blind_id"))):
+            raise SystemExit(f"ERROR: invalid file of added criteria {path.name}; run validate first")
+        added[doc["blind_id"]] = doc
+    return added
 
 
 # ------------------------------------------------------------------------------------------ frozen rubrics
@@ -472,23 +541,24 @@ def frozen_prereg(path: Path) -> dict:
 def summarize(args) -> dict:
     prereg = frozen_prereg(args.prereg)
     mapping = json.loads(args.map.read_text())
-    scores = {}
-    for path in sorted(args.scores.glob("*.json")):
-        score = json.loads(path.read_text())
-        if validate_score(score):
-            raise SystemExit(f"ERROR: invalid score file {path.name}; run validate first")
-        scores[score["blind_id"]] = score
+    scores = read_scores(args.scores)
+    added = read_added(args.added, scores)
     failed_score = float(prereg.get("failed_attempt_score", 0))
     rows = []
     for blind_id, entry in mapping.items():
         score = scores.get(blind_id)
         if score is None and entry["status"] == "completed":
             raise SystemExit(f"ERROR: completed attempt {blind_id} has no score")
-        # An attempt without a final answer has a score file when it kept executed work to judge
-        # (CODEX_JUDGE.md, "Attempts that end without a final answer"); otherwise it scores as failed.
-        total = float(score["total"]) if score else failed_score
+        ref = rubric(entry["task_id"])
+        # A judged attempt scores the mean of its six indicators (ASPECT_SCORES.md). An attempt without
+        # a final answer has a score file when it kept executed work to judge (CODEX_JUDGE.md, "Attempts
+        # that end without a final answer"); otherwise it scores as failed.
+        total = whole_mean(indicator_scores(ref, score, added.get(blind_id)).values()) if score else failed_score
+        if total is None:
+            raise SystemExit(f"ERROR: attempt {blind_id} ({entry['task_id']}) has an indicator that is not judged "
+                             "yet; `evaluate.py indicators` names it")
         rows.append({**entry, "blind_id": blind_id, "total": total, "scored": score is not None,
-                     "type": rubric(entry["task_id"])["type"]})
+                     "type": ref["type"]})
     by = {}
     for row in rows:
         by.setdefault((row["arm"], row["task_id"]), []).append(row)
@@ -567,120 +637,75 @@ def summarize(args) -> dict:
 
 
 # ------------------------------------------------------------------------------------------ indicators
-# The six indicators of each task type in the order of the chart's axes, with the Chinese names of the
-# owner's charts (ASPECT_SCORES.md).
+# The six indicators of each task type in the order of the chart's axes (ASPECT_SCORES.md): English and
+# Chinese name, then the question the indicator answers, in both languages.
 INDICATORS = {
-    "open_problem": (("Framing", "问题拆解"), ("Correctness", "正确性"), ("Depth", "深度"),
-                     ("Breadth", "广度"), ("Robustness", "稳健性"), ("Rigor", "严谨性")),
-    "paper_reproduction": (("Finding tests", "命题检验"), ("Right verdicts", "判定正确"),
-                           ("Method fidelity", "方法忠实"), ("Differences explained", "差异归因"),
-                           ("Traceability", "可追溯"), ("Robustness", "稳健性")),
+    "open_problem": (
+        ("Framing", "问题拆解", "Is the question turned into testable hypotheses?", "问题拆成可检验的假设了吗"),
+        ("Correctness", "正确性", "Do the key results agree with the reference?", "关键结果与参考答案一致吗"),
+        ("Depth", "深度", "Is the mechanism tested in the data?", "机制用数据检验了吗"),
+        ("Breadth", "广度", "Are related processes and published work connected?", "联系了相关过程和已有研究吗"),
+        ("Robustness", "稳健性", "Does the conclusion hold under other choices?", "换一种设定结论还成立吗"),
+        ("Rigor", "严谨性", "Are the data handled right and the limits stated?", "数据用得对、边界说得清吗"),
+    ),
+    "paper_reproduction": (
+        ("Finding tests", "命题检验", "Is each finding tested properly?", "每个命题都认真检验了吗"),
+        ("Right verdicts", "判定正确", "Do the verdicts agree with the reference?", "判定与参考答案一致吗"),
+        ("Method fidelity", "方法忠实", "Are the paper's definitions and methods followed?", "按论文的定义和方法做了吗"),
+        ("Differences explained", "差异归因", "Are the differences from the paper explained?", "与论文的差别解释了吗"),
+        ("Robustness", "稳健性", "Do the verdicts hold under other choices?", "换一种设定判定还成立吗"),
+        ("Rigor", "严谨性", "Are the data handled right and fit for the findings?", "数据用得对、适合检验吗"),
+    ),
 }
 TYPE_NAMES = {"open_problem": ("Open problems", "开放题"),
               "paper_reproduction": ("Paper verification", "论文验证题")}
-PARTS = ("judged", "counted", "run", "combined")
-ANSWER_KEY_RESULTS = {"pass": 1, "partial": 0.5, "fail": 0, "not_reported": 0}
-AGENT_VERDICTS = {"reproduced", "partly_reproduced", "not_reproduced", "not_testable", "missing"}
 
 
-def combine(judged, counted=None, run=None):
-    """One indicator from its parts: 0.50 judged + 0.25 counted + 0.25 run. A part the indicator does
-    not have gives its share to the judged part; an indicator with a run part alone equals it."""
-    if judged is None:
-        return run
-    others = [part for part in (counted, run) if part is not None]
-    return (1 - 0.25 * len(others)) * judged + 0.25 * sum(others)
+def whole_mean(values) -> float | None:
+    """The mean of the values; None while one of them is missing."""
+    values = list(values)
+    return None if None in values else statistics.fmean(values)
 
 
-def indicator_parts(ref: dict, score: dict | None) -> tuple[dict, list[str]]:
-    """The parts of one attempt's six indicators, each 0-100, and the entries its score file leaves out.
+def indicator_scores(ref: dict, score: dict | None, added: dict | None = None) -> dict:
+    """The six indicators of one attempt, each 0-100: the judge's level of the criteria the indicator
+    names, as a share of the top level. The six count the same, and the attempt's score is their mean.
 
-    Every part comes from the score file of the attempt, the run part from the delivery the judge
-    records there. An attempt without a score file counts 0 in each.
+    None where the judge has not recorded what the indicator needs. An attempt without a score file
+    (nothing was executed) counts 0 in each.
     """
-    holes = []
-    weight = {c["id"].rsplit("-", 1)[-1]: c["weight"] for c in ref["criteria"]}
-    level = ({c["id"].rsplit("-", 1)[-1]: c["score"] for c in score["criteria"]} if score
-             else dict.fromkeys(weight, 0))
-
-    def judged(letters, part=lambda value: value / 4):
-        return 100 * sum(weight[k] * part(level[k]) for k in letters) / sum(weight[k] for k in letters)
-
-    def counted(field, listed, key, read):
-        """Share of the listed items that count, read from the score file's entry for each."""
-        entries = {entry.get("id"): entry for entry in (score or {}).get(field) or []}
-        values = []
-        for item in listed:
-            value = read(entries[item].get(key)) if item in entries else None
-            if value is None and score:
-                holes.append(f"{field}: {item} has no usable {key}")
-            values.append(value or 0)
-        return 100 * statistics.fmean(values) if values else None
-
-    def addressed(kind):
-        listed = set(range(1, len(ref.get(f"{kind}_probes", [])) + 1))
-        marked = ((score or {}).get("probes") or {}).get(f"{kind}_addressed")
-        if score and not (isinstance(marked, list) and set(marked) <= listed):
-            holes.append(f"probes: {kind}_addressed must list numbers from 1 to {len(listed)}")
-        marked = set(marked) & listed if isinstance(marked, list) else set()
-        return 100 * len(marked) / len(listed) if listed else None
-
-    def flag(value):
-        return value if isinstance(value, bool) else None
-
+    names = [indicator[0] for indicator in INDICATORS[ref["type"]]]
+    if score is None:
+        return dict.fromkeys(names, 0.0)
+    level = {c["id"].rsplit("-", 1)[-1]: c["score"] for c in score["criteria"]}
     if ref["type"] == "open_problem":
-        used_by_answer = [item["id"] for item in _items(ref, "answer_key")
-                          if item.get("used_by") == f"{ref['task_id']}-Q"]
-        depth = addressed("depth")
-        causes = counted("causes", [cause["id"] for cause in ref.get("candidate_causes", [])], "tested", flag)
-        if causes is not None:  # a disagreement question: probes and candidate causes count alike
-            depth = causes if depth is None else (depth + causes) / 2
-        parts = {"Framing": (judged("F"), None),
-                 "Correctness": (judged("Q"), counted("answer_key", used_by_answer, "result", ANSWER_KEY_RESULTS.get)),
-                 "Depth": (judged("M"), depth),
-                 "Breadth": (judged("B"), addressed("breadth")),
-                 "Robustness": (judged("R"), None),
-                 "Rigor": (judged("AI"), None)}
-    else:
-        findings = [c["id"] for c in ref["criteria"] if c.get("kind") == "claim"]
-        letters = [finding.rsplit("-", 1)[-1] for finding in findings]
-        parts = {  # a finding's level up to 2 says whether it was tested, above 2 whether the verdict is right
-            "Finding tests": (judged(letters, lambda value: min(value, 2) / 2),
-                              counted("findings", findings, "agent_verdict",
-                                      lambda value: value != "missing" if value in AGENT_VERDICTS else None)),
-            "Right verdicts": (judged(letters, lambda value: max(value - 2, 0) / 2),
-                               counted("findings", findings, "matches_reference", flag)),
-            "Method fidelity": (judged("M"), None),
-            "Differences explained": (judged("D"), None),
-            "Traceability": (judged("R"), counted("findings", findings, "evidence_ok", flag)),
-            "Robustness": (None, None)}
-    delivery = 100.0 if (score or {}).get("delivered") is True else 0.0
-    result = {}
-    for name, (judged_part, counted_part) in parts.items():
-        run = delivery if name == "Robustness" else None
-        result[name] = {"judged": judged_part, "counted": counted_part, "run": run,
-                        "combined": combine(judged_part, counted_part, run)}
-    return result, list(dict.fromkeys(holes))
-
-
-def mean_parts(rows: list[dict]) -> dict:
-    """Every part of every indicator, averaged over the rows that have it."""
-    return {name: {part: mean(row[name][part] for row in rows) for part in PARTS} for name in rows[0]}
+        levels = (level["F"], level["Q"], level["M"], level["B"], level["R"], (level["A"] + level["I"]) / 2)
+        return {name: 25.0 * value for name, value in zip(names, levels)}
+    # Paper verification: the findings by their weights in the rubric, the share of verdicts that agree
+    # with the reference, method, differences, and the two criteria judged beside the rubric.
+    weight = {c["id"].rsplit("-", 1)[-1]: c["weight"] for c in ref["criteria"] if c.get("kind") == "claim"}
+    agrees = {str(entry.get("id")).rsplit("-", 1)[-1]: entry.get("matches_reference")
+              for entry in score.get("findings") or []}
+    verdicts = [agrees.get(finding) for finding in weight]
+    beside = {c["id"].rsplit("-", 1)[-1]: c["score"] for c in (added or {}).get("criteria", [])}
+    values = {"Finding tests": 25.0 * sum(weight[k] * level[k] for k in weight) / sum(weight.values()),
+              "Right verdicts": (100.0 * sum(verdicts) / len(verdicts)
+                                 if all(isinstance(verdict, bool) for verdict in verdicts) else None),
+              "Method fidelity": 25.0 * level["M"], "Differences explained": 25.0 * level["D"],
+              **{indicator: 25.0 * beside[letter] if letter in beside else None
+                 for letter, indicator in ADDED_CRITERIA.items()}}
+    return {name: values[name] for name in names}
 
 
 def indicators(args) -> dict:
     mapping = json.loads(args.map.read_text())
-    scores = {}
-    for path in sorted(args.scores.glob("*.json")):
-        score = json.loads(path.read_text())
-        if validate_score(score):
-            raise SystemExit(f"ERROR: invalid score file {path.name}; run validate first")
-        scores[score["blind_id"]] = score
+    scores = read_scores(args.scores)
+    added = read_added(args.added, scores)
     arms = args.arms or sorted({entry["arm"] for entry in mapping.values()})
     unknown = set(arms) - {entry["arm"] for entry in mapping.values()}
     if unknown:
         raise SystemExit(f"ERROR: no attempt of arm {sorted(unknown)} in the map")
-    attempts, holes, unscored, status_differs = [], {}, [], []
+    attempts, not_judged, unscored, status_differs = [], {}, [], []
     for blind_id, entry in mapping.items():
         if entry["arm"] not in arms:
             continue
@@ -688,21 +713,21 @@ def indicators(args) -> dict:
         if score is None and entry["status"] == "completed":
             raise SystemExit(f"ERROR: completed attempt {blind_id} has no score")
         ref = rubric(entry["task_id"])
-        parts, missing = indicator_parts(ref, score)
-        if missing:
-            holes[blind_id] = missing
+        values = indicator_scores(ref, score, added.get(blind_id))
+        waiting = [name for name, value in values.items() if value is None]
+        if waiting:
+            not_judged[blind_id] = waiting
         if score is None:
             unscored.append(blind_id)
         elif score["delivered"] and entry["status"] != "completed":
             status_differs.append(blind_id)  # delivered although the runner did not record a completed run
         attempts.append({"blind_id": blind_id, "arm": entry["arm"], "task_id": entry["task_id"],
-                         "type": ref["type"], "total": float(score["total"]) if score else 0.0,
-                         "status": entry["status"], "scored": score is not None,
+                         "type": ref["type"], "status": entry["status"], "scored": score is not None,
                          "delivered": bool(score and score["delivered"]),
                          "elapsed_seconds": entry.get("elapsed_seconds"), "tokens": entry.get("tokens"),
-                         "indicators": parts})
+                         "indicators": values, "score": whole_mean(values.values())})
     summary, beside = {}, {}
-    for kind in INDICATORS:
+    for kind, listed in INDICATORS.items():
         for arm in arms:
             rows = [a for a in attempts if a["type"] == kind and a["arm"] == arm]
             if not rows:
@@ -710,14 +735,14 @@ def indicators(args) -> dict:
             by_task = {}
             for row in rows:
                 by_task.setdefault(row["task_id"], []).append(row)
-            # Repeats of a question are averaged first, then the questions of the type.
-            summary.setdefault(kind, {})[arm] = mean_parts(
-                [mean_parts([row["indicators"] for row in group]) for group in by_task.values()])
+            # Repeats of a question are averaged first, then the questions of the type. The six means
+            # then make up the arm's mean score as the six indicators make up an attempt's score.
+            means = {name: whole_mean(whole_mean(row["indicators"][name] for row in group)
+                                      for group in by_task.values()) for name, *_ in listed}
+            summary.setdefault(kind, {})[arm] = {"indicators": means, "score": whole_mean(means.values())}
             tokens = [row["tokens"] for row in rows]
             beside.setdefault(kind, {})[arm] = {
                 "questions": len(by_task), "attempts": len(rows),
-                "mean_total": statistics.fmean(statistics.fmean(row["total"] for row in group)
-                                               for group in by_task.values()),
                 "not_completed": sum(row["status"] != "completed" for row in rows),
                 "without_score_file": sum(not row["scored"] for row in rows),
                 "not_delivered": sum(not row["delivered"] for row in rows),
@@ -727,33 +752,30 @@ def indicators(args) -> dict:
     no_chart = indicator_chart(summary, beside, arms, out)
     write_json(out / "indicators.json", {
         "definition": "benchmarking/evaluation/ASPECT_SCORES.md", "arms": arms, "summary": summary,
-        "beside": beside, "attempts": attempts, "holes": holes, "without_score_file": unscored,
+        "beside": beside, "attempts": attempts, "not_judged": not_judged, "without_score_file": unscored,
         "delivered_with_other_status": status_differs, "chart": no_chart or "six-indicators.png"})
 
     def shown(value):
         return "" if value is None else f"{value:.1f}"
 
     lines = ["# Six indicators per task type", "",
-             ("Defined in `benchmarking/evaluation/ASPECT_SCORES.md`. Each indicator is 0-100: 0.50 judged + "
-              "0.25 counted + 0.25 run, and a part it does not have gives its share to the judged part."), ""]
-    for kind, names in INDICATORS.items():
+             ("Defined in `benchmarking/evaluation/ASPECT_SCORES.md`. Each indicator is 0-100: the judge's level "
+              "of the criteria it names. The six count the same, and the score is their mean."), ""]
+    for kind, listed in INDICATORS.items():
         if kind not in summary:
             continue
         present = [arm for arm in arms if arm in summary[kind]]
         lines += [f"## {TYPE_NAMES[kind][0]} ({TYPE_NAMES[kind][1]})", "",
-                  "| Indicator | " + " | ".join(present) + " |", "|---|" + "---|" * len(present)]
-        lines += [f"| {name} ({chinese}) | "
-                  + " | ".join(shown(summary[kind][arm][name]["combined"]) for arm in present) + " |"
-                  for name, chinese in names]
-        lines += ["", "The parts of each indicator, as judged / counted / run:", "",
-                  "| Indicator | " + " | ".join(present) + " |", "|---|" + "---|" * len(present)]
-        lines += [f"| {name} | "
-                  + " | ".join(" / ".join(shown(summary[kind][arm][name][part]) or "-" for part in PARTS[:3])
-                               for arm in present) + " |" for name, _ in names]
-        lines += ["", "Beside the indicators (not part of any of them):", "",
+                  "| Indicator | The question it answers | " + " | ".join(present) + " |",
+                  "|---|---|" + "---|" * len(present)]
+        lines += [f"| {name} ({chinese}) | {question} | "
+                  + " | ".join(shown(summary[kind][arm]["indicators"][name]) for arm in present) + " |"
+                  for name, chinese, question, _ in listed]
+        totals = [shown(summary[kind][arm]["score"]) for arm in present]
+        lines += ["| **Score (mean of the six)** | | " + " | ".join(f"**{total}**" if total else "" for total in totals) + " |",
+                  "", "Beside the scores (not part of them):", "",
                   "| | " + " | ".join(present) + " |", "|---|" + "---|" * len(present)]
         for key, label in (("questions", "Questions"), ("attempts", "Attempts judged"),
-                           ("mean_total", "Mean rubric total"),
                            ("not_completed", "Judged attempts not completed"),
                            ("without_score_file", "Attempts without a score file (count 0)"),
                            ("not_delivered", "Attempts that did not deliver"),
@@ -769,19 +791,26 @@ def indicators(args) -> dict:
         lines += [f"No chart: {no_chart}.", ""]
     else:
         lines += ["![six indicators](six-indicators.png)", ""]
-    if holes:
-        lines += ["## Entries the score files leave out", "",
-                  "Each counts as not met until the judge fills it in.", ""]
-        lines += [f"- `{blind_id}`: {'; '.join(missing)}" for blind_id, missing in holes.items()]
+    if not_judged:
+        lines += ["## Not judged yet", "",
+                  ("An indicator stays empty, and the score with it, until the judge has recorded what it needs "
+                   "(`CODEX_JUDGE.md`)."), ""]
+        lines += [f"- `{blind_id}`: {', '.join(waiting)}" for blind_id, waiting in not_judged.items()]
         lines.append("")
     if status_differs:
         lines += [("Recorded as delivered although the status is not `completed` (the judge's notes say why): ")
                   + ", ".join(f"`{b}`" for b in status_differs) + ".", ""]
     (out / "indicators.md").write_text("\n".join(lines), encoding="utf-8")
+
+    def rounded(value):
+        return None if value is None else round(value, 1)
+
     return {"report": str(out / "indicators.md"), "chart": None if no_chart else str(out / "six-indicators.png"),
-            "no_chart": no_chart, "holes": sum(len(v) for v in holes.values()),
-            "indicators": {kind: {arm: {name: round(parts["combined"], 1) for name, parts in by_arm.items()}
-                                  for arm, by_arm in arms_.items()} for kind, arms_ in summary.items()}}
+            "no_chart": no_chart, "not_judged": sum(len(v) for v in not_judged.values()),
+            "scores": {kind: {arm: rounded(of_arm["score"]) for arm, of_arm in by_arm.items()}
+                       for kind, by_arm in summary.items()},
+            "indicators": {kind: {arm: {name: rounded(value) for name, value in of_arm["indicators"].items()}
+                                  for arm, of_arm in by_arm.items()} for kind, by_arm in summary.items()}}
 
 
 # Categorical slots 1 to 3 of a palette checked for colour-vision deficiency with every pair side by side;
@@ -796,7 +825,8 @@ CJK_FONTS = ("PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans S
 
 def indicator_chart(summary: dict, beside: dict, arms: list[str], out: Path) -> str | None:
     """One six-axis chart per task type with the arms overlaid, as PNG and SVG. Returns why there is
-    no chart, or None. The values themselves are in the table of indicators.md, not on the chart."""
+    no chart, or None. Every axis carries the indicator's name and the question it answers, and each
+    arm's score stands under the title. The values of the axes are in the table of indicators.md."""
     if len(arms) > len(CHART_COLOURS):
         return "more than three arms; name the three to draw with --arms"
     try:
@@ -809,20 +839,22 @@ def indicator_chart(summary: dict, beside: dict, arms: list[str], out: Path) -> 
     except ImportError:
         return "matplotlib is not installed"
     import math
+    import textwrap
     kinds = [kind for kind in INDICATORS if kind in summary]
     if not kinds:
         return "no judged attempt"
+    # Chinese names and questions where the machine has a font for them.
     cjk = next((name for name in CJK_FONTS if name in {font.name for font in font_manager.fontManager.ttflist}), None)
-    language = 1 if cjk else 0  # Chinese names where the machine has a font for them
     with plt.rc_context({"font.family": "sans-serif", "axes.unicode_minus": False,
                          "font.sans-serif": [*([cjk] if cjk else []), "DejaVu Sans"]}):
-        fig, panels = plt.subplots(1, len(kinds), figsize=(6.4 * len(kinds), 6.6), squeeze=False,
+        fig, panels = plt.subplots(1, len(kinds), figsize=(7.6 * len(kinds), 7.8), squeeze=False,
                                    facecolor=CHART_SURFACE)
         for ax, kind in zip(panels[0], kinds):
-            names = INDICATORS[kind]
-            angles = [2 * math.pi * index / len(names) for index in range(len(names))]
+            listed = INDICATORS[kind]
+            present = [arm for arm in arms if arm in summary[kind]]
+            angles = [2 * math.pi * index / len(listed) for index in range(len(listed))]
             closed = [*angles, angles[0]]
-            between = math.pi / len(names)  # the scale is written between two axes, clear of the marks on them
+            between = math.pi / len(listed)  # the scale is written between two axes, clear of the marks on them
             for radius in (20, 40, 60, 80, 100):
                 ax.plot([radius * math.sin(a) for a in closed], [radius * math.cos(a) for a in closed],
                         color=CHART_RIM if radius == 100 else CHART_GRID, linewidth=0.8, zorder=1)
@@ -837,33 +869,55 @@ def indicator_chart(summary: dict, beside: dict, arms: list[str], out: Path) -> 
             for colour, marker, arm in reversed(list(zip(CHART_COLOURS, CHART_MARKERS, arms))):
                 if arm not in summary[kind]:
                     continue
-                values = [summary[kind][arm][name]["combined"] for name, _ in names]
-                x = [value * math.sin(angle) for value, angle in zip(values, angles)]
-                y = [value * math.cos(angle) for value, angle in zip(values, angles)]
-                ax.fill(x, y, color=colour, alpha=0.10, zorder=3)
-                ax.plot([*x, x[0]], [*y, y[0]], color=colour, linewidth=2, marker=marker, markersize=8,
-                        markeredgecolor=CHART_SURFACE, markeredgewidth=1.5, solid_joinstyle="round", zorder=4)
-            for angle, name in zip(angles, names):
-                side = math.sin(angle)
-                ax.text(112 * side, 110 * math.cos(angle), name[language], fontsize=12, color=CHART_INK, va="center",
-                        ha="center" if abs(side) < 0.3 else "left" if side > 0 else "right")
-            questions = max(beside[kind][arm]["questions"] for arm in arms if arm in beside[kind])
+                values = [summary[kind][arm]["indicators"][name] for name, *_ in listed]
+                points = [None if value is None else (value * math.sin(angle), value * math.cos(angle))
+                          for value, angle in zip(values, angles)]
+                if None not in points:
+                    ax.fill(*zip(*points), color=colour, alpha=0.10, zorder=3)
+                # An indicator that is not judged yet leaves a gap in the outline.
+                for here, there in zip(points, [*points[1:], points[0]]):
+                    if here and there:
+                        ax.plot(*zip(here, there), color=colour, linewidth=2, solid_capstyle="round", zorder=4)
+                known = [point for point in points if point]
+                if known:
+                    ax.plot(*zip(*known), linestyle="none", marker=marker, markersize=8, color=colour,
+                            markeredgecolor=CHART_SURFACE, markeredgewidth=1.5, zorder=5)
+            for angle, (name, chinese, question, asks) in zip(angles, listed):
+                side, up = math.sin(angle), math.cos(angle)
+                title, text = (chinese, asks) if cjk else (name, textwrap.fill(question, 24))
+                if any(summary[kind][arm]["indicators"][name] is None for arm in present):
+                    title, text = (f"{title}（待评）", text) if cjk else (title, f"{text}\n(not judged yet)")
+                align = "center" if abs(side) < 0.3 else "left" if side > 0 else "right"
+                x, y, rows = 112 * side, 108 * up, text.count("\n") + 1
+                # Over the chart both lines stand above the axis, under it below; beside it the name sits
+                # above the end of the axis and the question below.
+                name_y, name_va, text_y, text_va = ((y + 4 + 9 * rows, "bottom", y + 4, "bottom") if up > 0.9 else
+                                                    (y - 4, "top", y - 16, "top") if up < -0.9 else
+                                                    (y + 1.5, "bottom", y - 1.5, "top"))
+                ax.text(x, name_y, title, fontsize=13, color=CHART_INK, ha=align, va=name_va)
+                ax.text(x, text_y, text, fontsize=9, color=CHART_INK_2, ha=align, va=text_va, linespacing=1.3)
+            questions = max(beside[kind][arm]["questions"] for arm in present)
             ax.set_title(f"{TYPE_NAMES[kind][1]}（{questions} 题）" if cjk
-                         else f"{TYPE_NAMES[kind][0]} ({questions} questions)", fontsize=14, color=CHART_INK, pad=14)
-            ax.set_xlim(-170, 170)
-            ax.set_ylim(-128, 128)
+                         else f"{TYPE_NAMES[kind][0]} ({questions} questions)", fontsize=14.5, color=CHART_INK, pad=28)
+            waiting = "待评" if cjk else "not judged yet"
+            marks = " · ".join(f"{arm} " + (waiting if summary[kind][arm]["score"] is None
+                                           else format(summary[kind][arm]["score"], ".1f")) for arm in present)
+            ax.text(0.5, 1.0, ("总分（六项平均）  " if cjk else "Score (mean of the six)  ") + marks,
+                    transform=ax.transAxes, ha="center", va="bottom", fontsize=10.5, color=CHART_INK_2)
+            ax.set_xlim(-198, 198)
+            ax.set_ylim(-152, 152)
             ax.set_aspect("equal")
             ax.axis("off")
         handles = [Line2D([0], [0], color=colour, linewidth=2, marker=marker, markersize=8,
                           markeredgecolor=CHART_SURFACE, markeredgewidth=1.5, label=arm)
                    for colour, marker, arm in zip(CHART_COLOURS, CHART_MARKERS, arms)]
         fig.legend(handles=handles, loc="lower center", ncol=len(arms), frameon=False, fontsize=11.5,
-                   labelcolor=CHART_INK, bbox_to_anchor=(0.5, 0.07), handlelength=2.6, columnspacing=2.4)
-        note = ("各轴 0–100：0.50 判分 + 0.25 计数 + 0.25 运行（ASPECT_SCORES.md）；数值见 indicators.md。" if cjk
-                else "Each axis 0-100: 0.50 judged + 0.25 counted + 0.25 run (ASPECT_SCORES.md); "
-                     "the values are in indicators.md.")
-        fig.text(0.5, 0.03, note, ha="center", va="center", fontsize=8.5, color=CHART_INK_2)
-        fig.subplots_adjust(left=0.02, right=0.98, top=0.9, bottom=0.14, wspace=0.04)
+                   labelcolor=CHART_INK, bbox_to_anchor=(0.5, 0.06), handlelength=2.6, columnspacing=2.4)
+        note = ("每个轴 0–100，是裁判给这一项的等级；六项同等重要，平均就是总分（ASPECT_SCORES.md）。各轴数值见 indicators.md。"
+                if cjk else "Each axis 0-100: the judge's level of that indicator. The six count the same and "
+                            "their mean is the score (ASPECT_SCORES.md). The values are in indicators.md.")
+        fig.text(0.5, 0.025, note, ha="center", va="center", fontsize=8.5, color=CHART_INK_2)
+        fig.subplots_adjust(left=0.02, right=0.98, top=0.87, bottom=0.12, wspace=0.04)
         out.mkdir(parents=True, exist_ok=True)
         fig.savefig(out / "six-indicators.png", dpi=200, facecolor=CHART_SURFACE)
         fig.savefig(out / "six-indicators.svg", facecolor=CHART_SURFACE)
@@ -1388,16 +1442,22 @@ def main(argv=None):
     b.add_argument("--map", type=Path, required=True, help="Blind-ID map, kept outside --out")
     v = sub.add_parser("validate")
     v.add_argument("--scores", type=Path, required=True)
+    v.add_argument("--added", type=Path,
+                   help="Folder of the criteria of paper verification judged beside the rubric, one <blind_id>.json each")
     f = sub.add_parser("freeze")
     f.add_argument("--prereg", type=Path, required=True)
     s = sub.add_parser("summarize")
     s.add_argument("--prereg", type=Path, required=True)
     s.add_argument("--map", type=Path, required=True)
     s.add_argument("--scores", type=Path, required=True)
+    s.add_argument("--added", type=Path,
+                   help="Folder of the criteria of paper verification judged beside the rubric, one <blind_id>.json each")
     s.add_argument("--out", type=Path, required=True)
     x = sub.add_parser("indicators")
     x.add_argument("--map", type=Path, required=True)
     x.add_argument("--scores", type=Path, required=True)
+    x.add_argument("--added", type=Path,
+                   help="Folder of the criteria of paper verification judged beside the rubric, one <blind_id>.json each")
     x.add_argument("--out", type=Path, required=True)
     x.add_argument("--arms", nargs="+", help="Arms to show, in this order; by default every arm of the map")
     p = sub.add_parser("process")
@@ -1421,9 +1481,9 @@ def main(argv=None):
                "rubric-check": rubric_check}[args.command]
     result = handler(args)
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    # Not ready to judge with, or an indicator with entries the judge has still to fill in.
+    # Not ready to judge with, or an indicator that the judge has still to score.
     return 1 if (args.command == "rubric-check" and result["not_ready"]
-                 or args.command == "indicators" and result["holes"]) else 0
+                 or args.command == "indicators" and result["not_judged"]) else 0
 
 
 if __name__ == "__main__":

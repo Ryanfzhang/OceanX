@@ -28,7 +28,10 @@ describe('research library', () => {
     expect(library.skills.map((skill) => [skill.name, skill.limit, skill.reader, skill.lessons.length])).toEqual([
       ['research-trajectory-planning', 4, 'coordinator', 1], ['ocean-analysis-design', 6, 'expert', 0]]);
     const [kept] = library.skills[0].lessons;
-    expect([kept.id, kept.active, kept.human, kept.tasksShown, kept.tasksCited]).toEqual(['L001', true, 'right', 4, 1]);
+    expect([kept.id, kept.active, kept.shown, kept.human, kept.tasksShown, kept.tasksCited]).toEqual(['L001', true, true, 'right', 4, 1]);
+    // A skill keeps every lesson that passed and shows a task its best few: the others say so.
+    const full = parseLibrary({library: {skills: [{name: 'ocean-analysis-design', limit: 1, lessons: [lesson, {...lesson, id: 'L009', shown: false}]}]}})!;
+    expect(full.skills[0].lessons.map((item) => [item.id, item.active, item.shown])).toEqual([['L001', true, true], ['L009', true, false]]);
     expect(kept.evidence_tasks.supporting).toEqual([{task_key: 'k1', question: 'Q1'}]);
     // Retired lessons are listed newest first, with why they went.
     expect(library.retired.map((item) => [item.id, item.active, item.human, item.retiredReason])).toEqual([
@@ -48,11 +51,18 @@ describe('research library', () => {
     expect(summarizeUpdate({update: {
       consolidation: {digested: 3}, tool_usage: {tasks_counted: 3, removed: ['small_sample']},
       lessons: {changes: [{lesson: 'L001', change: 'added'}], rejected: [{reason: 'too long'}], skills_reviewed: 6, questions: 4, new_tasks: 3},
-      tools: {created: ['area_mean'], rejected: [{name: 'x', reason: 'test failed'}], candidates: 2},
-    }})).toEqual({digested: 3, reviewed: true, questions: 4, lessonChanges: 1, toolsAdded: ['area_mean'], toolsRemoved: ['small_sample'], refused: 2});
-    // Nothing finished since the last review: the meta-agent was not asked.
-    expect(summarizeUpdate({update: {consolidation: {digested: 0}, tool_usage: {removed: []},
-      lessons: {changes: [], rejected: [], skills_reviewed: 0, questions: 2, new_tasks: 0}}})).toMatchObject({reviewed: false, questions: 2, lessonChanges: 0});
+      tools: {created: ['area_mean'], rejected: [{name: 'x', reason: 'test failed'}], candidates: 2, new_tasks: 3},
+    }})).toEqual({digested: 3, reviewed: true, questions: 4, tasksLeft: 0, lessonChanges: 1, toolsAdded: ['area_mean'], toolsRemoved: ['small_sample'], refused: 2});
+    // Nothing finished since the last update: the meta-agent was not asked. The backend still
+    // reports both steps, each with the number of finished tasks that were new to it.
+    const quiet = {changes: [], rejected: [], skills_reviewed: 0, questions: 2, new_tasks: 0, tasks_left: 0};
+    expect(summarizeUpdate({update: {consolidation: {digested: 0}, tool_usage: {removed: []}, lessons: quiet,
+      tools: {created: [], rejected: [], candidates: 0, new_tasks: 0}}})).toMatchObject({reviewed: false, questions: 2, lessonChanges: 0});
+    // A tool step that got no readable reply is tried again although the lessons have nothing new;
+    // and a review whose prompt could not hold every task says how many are left.
+    expect(summarizeUpdate({update: {lessons: quiet, tools: {created: ['area_mean'], rejected: [{name: '', reason: 'could not be read', round: 1, reply: '...'}],
+      candidates: 4, new_tasks: 4}}})).toMatchObject({reviewed: true, toolsAdded: ['area_mean'], refused: 1});
+    expect(summarizeUpdate({update: {lessons: {...quiet, skills_reviewed: 6, new_tasks: 12, tasks_left: 2}}})).toMatchObject({reviewed: true, tasksLeft: 2});
   });
 
   it('marks one lesson or tool right or wrong', () => {

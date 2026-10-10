@@ -442,7 +442,7 @@ def test_external_inventory_does_not_require_oceanx_tree(setup):
 
 def test_external_missing_usage_still_allows_score_summary(tmp_path):
     import evaluate
-    from test_evaluate import make_arm, score_file
+    from test_evaluate import make_arm, write_scores
     folder = make_arm(tmp_path / "runs", "F", None, {"Q01": 2})
     attempt = folder / "Q01/attempt-1"
     result = json.loads((attempt / "result.json").read_text())
@@ -450,15 +450,12 @@ def test_external_missing_usage_still_allows_score_summary(tmp_path):
     (attempt / "result.json").write_text(json.dumps(result))
     mapping, blind = tmp_path / "mapping.json", tmp_path / "blind"
     evaluate.main(["blind", "--runs", str(folder), "--out", str(blind), "--map", str(mapping)])
-    [(blind_id, _entry)] = json.loads(mapping.read_text()).items()
-    scores = tmp_path / "scores"
-    scores.mkdir()
-    (scores / f"{blind_id}.json").write_text(json.dumps(score_file(blind_id, "Q01", 2)))
+    scores, added = write_scores(tmp_path, mapping, lambda entry: 2)
     prereg = tmp_path / "prereg.yaml"
     prereg.write_text("experiment: external\ncomparisons: []\n")
     evaluate.main(["freeze", "--prereg", str(prereg)])
     evaluate.main(["summarize", "--prereg", str(prereg), "--map", str(mapping),
-                   "--scores", str(scores), "--out", str(tmp_path / "report")])
+                   "--scores", str(scores), "--added", str(added), "--out", str(tmp_path / "report")])
     summary = json.loads((tmp_path / "report/summary.json").read_text())
     assert summary["arms"]["F"]["tokens"] is None
     assert "n/a" in (tmp_path / "report/report.md").read_text()

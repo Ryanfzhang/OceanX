@@ -25,7 +25,7 @@ only the example is committed. Then launch each method with no arguments (RUNNIN
 | [EVALUATION.md](EVALUATION.md) | How results are stored and judged; run settings to disclose; how lessons and tools are learned; what to check before a reported comparison |
 | [evaluation/CODEX_REFERENCES.md](evaluation/CODEX_REFERENCES.md) | How Codex computes the reference answers and freezes a rubric, before any judging |
 | [evaluation/CODEX_JUDGE.md](evaluation/CODEX_JUDGE.md) | How Codex scores one answer, and the score-file format |
-| [evaluation/ASPECT_SCORES.md](evaluation/ASPECT_SCORES.md) | The six indicators per task type that the rubric total is divided into |
+| [evaluation/ASPECT_SCORES.md](evaluation/ASPECT_SCORES.md) | The six indicators per task type, which count the same; their mean is an attempt's score |
 | [DESIGN.md](DESIGN.md) | What is tested: allocation, the 30 + 24 questions, verified papers, design rules |
 | [summary.md](summary.md) | All 54 questions, required data (type, time, space, variables), and brief assessment criteria |
 | [DATA.md](DATA.md) | Data groups, server layout, CMOMS staging, the extra CMOMS variables to request, download commands |

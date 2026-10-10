@@ -37,7 +37,32 @@ def score_file(blind_id, task, level):
             "rubric_status": "frozen", "references_sha256": "x" * 64, "judge": {"name": "codex"},
             "delivered": True,
             "criteria": [{"id": c["id"], "score": level, "evidence": "evidence/answer.md"} for c in criteria],
-            "total": sum(c["weight"] * level / 4 for c in criteria)}
+            # Paper verification: every finding has a verdict that agrees with the reference.
+            "findings": [{"id": c["id"], "agent_verdict": "reproduced", "matches_reference": True}
+                         for c in criteria if c.get("kind") == "claim"]}
+
+
+def added_file(blind_id, task, level):
+    """The two criteria of paper verification that are judged beside the rubric: one level, or one per letter."""
+    levels = level if isinstance(level, dict) else dict.fromkeys(evaluate.ADDED_CRITERIA, level)
+    return {"blind_id": blind_id, "task_id": task, "judge": {"name": "codex"},
+            "criteria": [{"id": f"{task}-{letter}", "score": levels[letter], "evidence": "evidence/answer.md"}
+                         for letter in evaluate.ADDED_CRITERIA]}
+
+
+def write_scores(eval_root, mapping, level_of):
+    """Score files for the attempts that `level_of(entry)` gives a level, and the added files of the paper tasks."""
+    scores, added = eval_root / "scores", eval_root / "added"
+    scores.mkdir()
+    added.mkdir()
+    for blind_id, entry in json.loads(mapping.read_text()).items():
+        level, task = level_of(entry), entry["task_id"]
+        if level is None:
+            continue
+        (scores / f"{blind_id}.json").write_text(json.dumps({**score_file(blind_id, task, level), "status": entry["status"]}))
+        if evaluate.rubric(task)["type"] == "paper_reproduction":
+            (added / f"{blind_id}.json").write_text(json.dumps(added_file(blind_id, task, level)))
+    return scores, added
 
 
 def test_blind_hides_the_arm_and_the_tree(tmp_path):
@@ -110,7 +135,7 @@ def test_blind_keeps_a_large_notebook_and_names_what_it_leaves_out(tmp_path, mon
 def test_validate_catches_bad_scores():
     good = score_file("b1", "Q17", 3)
     assert evaluate.validate_score(good) == []
-    assert evaluate.validate_score({**good, "total": 50})
+    assert evaluate.validate_score({**good, "total": 50}) == []  # the score is computed; an older file's total is not read
     assert evaluate.validate_score({**good, "rubric_status": "draft"})
     # An attempt without a final answer, judged on what it kept, needs the frozen rubric like any other.
     assert evaluate.validate_score({**good, "status": "failed", "rubric_status": "draft"})
@@ -123,7 +148,7 @@ def test_validate_catches_bad_scores():
     assert evaluate.validate_score(wrong)
     # Half levels are allowed, nothing finer, and nothing that is not a number.
     half = judged_file("b1", "Q17", {"F": 2.5, "A": 0.5, "Q": 3, "M": 3.5, "R": 4, "B": 0, "I": 1.5})
-    assert evaluate.validate_score(half) == [] and half["total"] == 58.75  # 6.25 + 1.25 + 15 + 17.5 + 15 + 0 + 3.75
+    assert evaluate.validate_score(half) == []
     for bad in (2.25, 4.5, -0.5, "3", True, None):
         wrong["criteria"][0]["score"] = bad
         assert any("steps of 0.5" in error for error in evaluate.validate_score(wrong)), bad
@@ -131,6 +156,22 @@ def test_validate_catches_bad_scores():
     assert evaluate.validate_score({key: value for key, value in good.items() if key != "delivered"})
     assert evaluate.validate_score({**good, "delivered": "yes"})
     assert evaluate.validate_score({**good, "delivered": False}) == []
+
+
+def test_validate_checks_the_criteria_judged_beside_the_rubric():
+    """Robustness and data handling of paper verification: two levels in a file beside the score file."""
+    paper, beside = score_file("b2", "Q09", 3), added_file("b2", "Q09", {"S": 2.5, "A": 4})
+    assert evaluate.validate_added(beside, paper) == []
+    assert evaluate.validate_added(beside, None) == ["no valid score file with this blind_id"]
+    assert evaluate.validate_added(added_file("b1", "Q17", 3), score_file("b1", "Q17", 3)) == [
+        "only paper verification has added criteria"]
+    assert any("task_id" in error for error in evaluate.validate_added({**beside, "task_id": "Q08"}, paper))
+    assert any("criteria ids" in error for error in evaluate.validate_added({**beside, "criteria": beside["criteria"][:1]}, paper))
+    assert any("steps of 0.5" in error for error in evaluate.validate_added(added_file("b2", "Q09", 5), paper))
+    unsupported = json.loads(json.dumps(beside))
+    unsupported["criteria"][1]["evidence"] = " "
+    assert evaluate.validate_added(unsupported, paper) == ["Q09-A: evidence is required"]
+    assert evaluate.validate_added({key: value for key, value in beside.items() if key != "judge"}, paper) == ["missing judge"]
 
 
 def test_freeze_summarize_and_decisions(tmp_path):
@@ -141,25 +182,26 @@ def test_freeze_summarize_and_decisions(tmp_path):
     eval_root = tmp_path / "eval"
     mapping = eval_root / "blind_map.json"
     evaluate.main(["blind", "--runs", *map(str, runs), "--out", str(eval_root / "blind"), "--map", str(mapping)])
-    scores = eval_root / "scores"
-    scores.mkdir()
-    for blind_id, entry in json.loads(mapping.read_text()).items():
-        level = (better if entry["arm"] == "B" else tasks)[entry["task_id"]]
-        if level is not None:
-            (scores / f"{blind_id}.json").write_text(json.dumps(score_file(blind_id, entry["task_id"], level)))
+    scores, added = write_scores(eval_root, mapping, lambda entry: (better if entry["arm"] == "B" else tasks)[entry["task_id"]])
     prereg = eval_root / "preregistration.yaml"
     prereg.write_text("experiment: unit\nfailed_attempt_score: 0\nbootstrap: {resamples: 200, seed: 1}\n"
                       "comparisons:\n  - name: policy\n    treatment: B\n    control: A\n"
                       "    rule: {type: noninferior_and_better_or_cheaper, margin: -2, token_reduction: 0.15}\n")
+    judged = ["--map", str(mapping), "--scores", str(scores), "--added", str(added)]
     with pytest.raises(SystemExit):  # not frozen yet
+        evaluate.main(["summarize", "--prereg", str(prereg), *judged, "--out", str(eval_root / "report")])
+    evaluate.main(["freeze", "--prereg", str(prereg)])
+    with pytest.raises(SystemExit, match="not judged yet"):  # the paper task lacks its two added criteria
         evaluate.main(["summarize", "--prereg", str(prereg), "--map", str(mapping), "--scores", str(scores),
                        "--out", str(eval_root / "report")])
-    evaluate.main(["freeze", "--prereg", str(prereg)])
-    evaluate.main(["summarize", "--prereg", str(prereg), "--map", str(mapping), "--scores", str(scores),
-                   "--out", str(eval_root / "report")])
+    evaluate.main(["summarize", "--prereg", str(prereg), *judged, "--out", str(eval_root / "report")])
     summary = json.loads((eval_root / "report" / "summary.json").read_text())
     policy = summary["comparisons"][0]
     assert policy["tasks"] == 4 and policy["mean_diff"] > 0 and policy["decision"] is True
+    # A score is the mean of six indicators that count the same. Open problem: every level 2 gives 50.
+    # Paper task: five indicators at 50 and every verdict in agreement with the reference.
+    assert summary["cells"]["A|Q17"]["score"] == 50 and summary["cells"]["B|Q17"]["score"] == 75
+    assert summary["cells"]["A|Q07"]["score"] == pytest.approx((5 * 50 + 100) / 6) and summary["cells"]["B|Q07"]["score"] == 100
     assert policy["token_reduction"] == 0 and policy["time_reduction"] == 0  # both arms cost the same here
     assert set(policy["by_type"]) == {"paper_reproduction", "open_problem"}
     assert policy["by_data"]["public"]["tasks"] == 2 and policy["by_data"]["private"]["tasks"] == 2
@@ -167,8 +209,7 @@ def test_freeze_summarize_and_decisions(tmp_path):
     assert "meets rule" in (eval_root / "report" / "report.md").read_text()
     prereg.write_text(prereg.read_text() + "# edited\n")
     with pytest.raises(SystemExit):  # changed after freezing
-        evaluate.main(["summarize", "--prereg", str(prereg), "--map", str(mapping), "--scores", str(scores),
-                       "--out", str(eval_root / "report2")])
+        evaluate.main(["summarize", "--prereg", str(prereg), *judged, "--out", str(eval_root / "report2")])
 
 
 def test_library_check(tmp_path, capsys):
@@ -447,24 +488,21 @@ def test_an_attempt_without_a_final_answer_is_scored_on_what_it_kept(tmp_path):
     mapping = eval_root / "blind_map.json"
     evaluate.main(["blind", "--runs", *map(str, runs), "--out", str(eval_root / "blind"), "--map", str(mapping)])
     entries = json.loads(mapping.read_text())
-    scores = eval_root / "scores"
-    scores.mkdir()
     for blind_id, entry in entries.items():
         # What the failed attempt kept reached the judge: the Expert's report and its figure.
         if entry["task_id"] == "Q17":
             assert list((eval_root / "blind" / blind_id).rglob("report.md"))
             assert list((eval_root / "blind" / blind_id).rglob("map.preview.png"))
-        if entry["status"] == "completed" or (entry["task_id"], entry["arm"]) == ("Q17", "A"):
-            (scores / f"{blind_id}.json").write_text(json.dumps(
-                {**score_file(blind_id, entry["task_id"], 2), "status": entry["status"]}))
+    scores, added = write_scores(eval_root, mapping, lambda entry: 2 if (
+        entry["status"] == "completed" or (entry["task_id"], entry["arm"]) == ("Q17", "A")) else None)
     prereg = eval_root / "preregistration.yaml"
     prereg.write_text("experiment: unit\nfailed_attempt_score: 0\nbootstrap: {resamples: 200, seed: 1}\n"
                       "comparisons:\n  - name: kept\n    treatment: A\n    control: B\n"
                       "    rule: {type: superior, margin: 0}\n")
     evaluate.main(["freeze", "--prereg", str(prereg)])
-    assert evaluate.main(["validate", "--scores", str(scores)]) == 0
+    assert evaluate.main(["validate", "--scores", str(scores), "--added", str(added)]) == 0
     evaluate.main(["summarize", "--prereg", str(prereg), "--map", str(mapping), "--scores", str(scores),
-                   "--out", str(eval_root / "report")])
+                   "--added", str(added), "--out", str(eval_root / "report")])
     summary = json.loads((eval_root / "report" / "summary.json").read_text())
     assert summary["cells"]["A|Q17"]["score"] == 50 and summary["cells"]["B|Q17"]["score"] == 0
     assert summary["arms"]["A"]["failures"] == 2 and summary["arms"]["A"]["failures_scored"] == 1
@@ -637,82 +675,48 @@ def test_rubric_check_notices_a_question_reworded_after_its_rubric(tmp_path, cap
 
 
 def judged_file(blind_id, task, levels, **fields):
-    """A score file with one level per criterion letter and the counts the indicators read."""
+    """A score file with one level per criterion letter."""
     criteria = evaluate.rubric(task)["criteria"]
-    given = {c["id"]: levels[c["id"].rsplit("-", 1)[-1]] for c in criteria}
     return {**score_file(blind_id, task, 0), **fields,
-            "criteria": [{"id": cid, "score": level, "evidence": "evidence/answer.md"} for cid, level in given.items()],
-            "total": sum(c["weight"] * given[c["id"]] / 4 for c in criteria)}
+            "criteria": [{"id": c["id"], "score": levels[c["id"].rsplit("-", 1)[-1]], "evidence": "evidence/answer.md"}
+                         for c in criteria]}
 
 
 OPEN_LEVELS = {"F": 4, "A": 2, "Q": 3, "M": 2, "R": 4, "B": 1, "I": 4}
 PAPER_LEVELS = {"K1": 4, "K2": 3, "K3": 2, "K4": 1, "K5": 0, "M": 2, "D": 4, "R": 3}
 
 
-def test_indicator_parts_follow_the_definition():
-    """ASPECT_SCORES.md: judged parts divide the rubric total; counts and delivery stand beside them."""
-    checkable = evaluate.rubric("Q21")  # answer key A1, A2 used by Q; three depth probes, two breadth probes
+def test_the_six_indicators_are_the_judges_levels_and_their_mean_is_the_score():
+    """ASPECT_SCORES.md: six indicators that count the same, each one plain number."""
+    checkable = evaluate.rubric("Q21")
+    # Nothing but the levels enters: not the delivery, not the counts the judge records beside them.
     score = judged_file("b1", "Q21", OPEN_LEVELS, delivered=False,
-                        answer_key=[{"id": "Q21-A1", "result": "pass"}, {"id": "Q21-A2", "result": "fail"},
-                                    {"id": "Q21-A3", "result": "pass"}],  # A3 belongs to M and is not counted
-                        probes={"depth_addressed": [1, 3], "breadth_addressed": [2]})
-    parts, holes = evaluate.indicator_parts(checkable, score)
-    assert holes == []
-    assert parts["Framing"] == {"judged": 100, "counted": None, "run": None, "combined": 100}
-    assert parts["Correctness"] == {"judged": 75, "counted": 50, "run": None, "combined": 68.75}
-    assert parts["Depth"]["counted"] == pytest.approx(200 / 3)
-    assert parts["Depth"]["combined"] == pytest.approx(0.75 * 50 + 0.25 * 200 / 3)
-    assert parts["Breadth"] == {"judged": 25, "counted": 50, "run": None, "combined": 31.25}
-    assert parts["Robustness"] == {"judged": 100, "counted": None, "run": 0.0, "combined": 75.0}
-    assert parts["Rigor"]["combined"] == 75  # A and I together
-    points = {"Framing": 10, "Correctness": 20, "Depth": 20, "Breadth": 15, "Robustness": 15, "Rigor": 20}
-    assert sum(parts[name]["judged"] * weight / 100 for name, weight in points.items()) == pytest.approx(score["total"])
-
-    disagreement = evaluate.rubric("Q20")  # two depth probes and four candidate causes
-    causes = [{"id": f"Q20-H{n}", "tested": n != 4} for n in (1, 2, 3, 4)]
-    score = judged_file("b2", "Q20", OPEN_LEVELS, causes=causes, probes={"depth_addressed": [1], "breadth_addressed": []},
-                        answer_key=[{"id": "Q20-A1", "result": "partial"}, {"id": "Q20-A2", "result": "not_reported"}])
-    parts, holes = evaluate.indicator_parts(disagreement, score)
-    assert holes == [] and parts["Depth"]["counted"] == (50 + 75) / 2  # probes and causes count alike
-    assert parts["Correctness"]["counted"] == 25 and parts["Breadth"]["counted"] == 0
-    assert parts["Robustness"]["combined"] == 100  # judged 100 and the attempt delivered
+                        answer_key=[{"id": "Q21-A1", "result": "fail"}], probes={"depth_addressed": [], "breadth_addressed": []})
+    values = evaluate.indicator_scores(checkable, score)
+    assert values == {"Framing": 100, "Correctness": 75, "Depth": 50, "Breadth": 25, "Robustness": 100,
+                      "Rigor": 75}  # rigor: data handling (A) and insight (I) together
+    assert evaluate.whole_mean(values.values()) == pytest.approx(425 / 6)
 
     paper = evaluate.rubric("Q09")  # findings K1, K2 (20 points each), K3 to K5 (10 each); M, D, R
-    findings = [{"id": f"Q09-K{n}", "agent_verdict": "missing" if n == 5 else "reproduced",
-                 "matches_reference": n <= 2, "evidence_ok": n <= 3} for n in range(1, 6)]
-    score = judged_file("b3", "Q09", PAPER_LEVELS, findings=findings)
-    parts, holes = evaluate.indicator_parts(paper, score)
-    assert holes == []
-    assert parts["Finding tests"]["judged"] == pytest.approx(100 * 55 / 70) and parts["Finding tests"]["counted"] == 80
-    assert parts["Right verdicts"]["judged"] == pytest.approx(100 * 30 / 70) and parts["Right verdicts"]["counted"] == 40
-    assert parts["Right verdicts"]["combined"] == pytest.approx(0.75 * 100 * 30 / 70 + 10)
-    assert parts["Method fidelity"]["combined"] == 50 and parts["Differences explained"]["combined"] == 100
-    assert parts["Traceability"] == {"judged": 75, "counted": 60, "run": None, "combined": 71.25}
-    assert parts["Robustness"] == {"judged": None, "counted": None, "run": 100.0, "combined": 100.0}
-    points = {"Finding tests": 35, "Right verdicts": 35, "Method fidelity": 10, "Differences explained": 10,
-              "Traceability": 10}
-    assert sum(parts[name]["judged"] * weight / 100 for name, weight in points.items()) == pytest.approx(score["total"])
+    findings = [{"id": f"Q09-K{n}", "agent_verdict": "reproduced", "matches_reference": n <= 2} for n in range(1, 6)]
+    score, beside = judged_file("b3", "Q09", PAPER_LEVELS, findings=findings), added_file("b3", "Q09", {"S": 3, "A": 1.5})
+    values = evaluate.indicator_scores(paper, score, beside)
+    assert values == {"Finding tests": pytest.approx(25 * 170 / 70),  # the findings by their weights in the rubric
+                      "Right verdicts": 40, "Method fidelity": 50, "Differences explained": 100,
+                      "Robustness": 75, "Rigor": 37.5}
+    # The report criterion of the rubric enters no indicator.
+    assert evaluate.indicator_scores(paper, judged_file("b3", "Q09", {**PAPER_LEVELS, "R": 0}, findings=findings), beside) == values
 
-    # Half levels divide in the same way: 2.5 is fully tested and a quarter of the way to a right verdict.
-    halves = judged_file("b3", "Q09", {**dict.fromkeys(("K1", "K2", "K3", "K4", "K5"), 2.5), "M": 3.5, "D": 0.5, "R": 4},
-                         findings=findings)
-    parts, _ = evaluate.indicator_parts(paper, halves)
-    assert (parts["Finding tests"]["judged"], parts["Right verdicts"]["judged"]) == (100, 25)
-    assert (parts["Method fidelity"]["judged"], parts["Differences explained"]["judged"]) == (87.5, 12.5)
+    # An indicator stays empty, and the score with it, until the judge has recorded what it needs.
+    waiting = evaluate.indicator_scores(paper, score)
+    assert (waiting["Robustness"], waiting["Rigor"], waiting["Method fidelity"]) == (None, None, 50)
+    assert evaluate.whole_mean(waiting.values()) is None
+    unfinished = judged_file("b3", "Q09", PAPER_LEVELS, findings=[*findings[:4], {"id": "Q09-K5", "agent_verdict": "missing"}])
+    assert evaluate.indicator_scores(paper, unfinished, beside)["Right verdicts"] is None
 
-    # An attempt without a score file counts 0 in every part; nothing is reported as left out.
-    parts, holes = evaluate.indicator_parts(checkable, None)
-    assert holes == [] and {name: value["combined"] for name, value in parts.items()} == dict.fromkeys(parts, 0)
-    assert parts["Correctness"]["counted"] == 0 and parts["Framing"]["counted"] is None
-
-    # A score file that leaves counts out: each counts as not met and is named.
-    bare = judged_file("b4", "Q20", OPEN_LEVELS, causes=causes[:2], probes={"depth_addressed": [1, 9]})
-    parts, holes = evaluate.indicator_parts(disagreement, bare)
-    assert parts["Correctness"]["counted"] == 0 and parts["Depth"]["counted"] == (50 + 50) / 2
-    assert holes == ["probes: depth_addressed must list numbers from 1 to 2",
-                     "causes: Q20-H3 has no usable tested", "causes: Q20-H4 has no usable tested",
-                     "answer_key: Q20-A1 has no usable result", "answer_key: Q20-A2 has no usable result",
-                     "probes: breadth_addressed must list numbers from 1 to 1"]
+    # An attempt without a score file counts 0 in every indicator.
+    assert evaluate.indicator_scores(paper, None) == dict.fromkeys(values, 0)
+    assert evaluate.indicator_scores(checkable, None)["Framing"] == 0
 
 
 def test_indicators_average_questions_and_repeats_per_arm(tmp_path):
@@ -723,56 +727,68 @@ def test_indicators_average_questions_and_repeats_per_arm(tmp_path):
     relabelled = runs[2] / "Q09" / "attempt-1" / "result.json"
     relabelled.write_text(json.dumps({**json.loads(relabelled.read_text()), "status": "needs_interaction"}))
     eval_root = tmp_path / "eval"
-    mapping, scores, out = eval_root / "blind_map.json", eval_root / "scores", eval_root / "indicators"
+    mapping, scores, added, out = (eval_root / name for name in ("blind_map.json", "scores", "added", "indicators"))
     evaluate.main(["blind", "--runs", *map(str, runs), "--out", str(eval_root / "blind"), "--map", str(mapping)])
     scores.mkdir()
-    counts = {"Q21": {"answer_key": [{"id": "Q21-A1", "result": "pass"}, {"id": "Q21-A2", "result": "pass"}],
-                      "probes": {"depth_addressed": [1, 2, 3], "breadth_addressed": [1, 2]}},
-              "Q20": {"answer_key": [{"id": "Q20-A1", "result": "pass"}, {"id": "Q20-A2", "result": "pass"}],
-                      "probes": {"depth_addressed": [1, 2], "breadth_addressed": [1]},
-                      "causes": [{"id": f"Q20-H{n}", "tested": True} for n in (1, 2, 3, 4)]},
-              "Q09": {"findings": [{"id": f"Q09-K{n}", "agent_verdict": "reproduced", "matches_reference": True,
-                                    "evidence_ok": True} for n in range(1, 6)]}}
+    added.mkdir()
+    findings = [{"id": f"Q09-K{n}", "agent_verdict": "reproduced", "matches_reference": n <= 2} for n in range(1, 6)]
     for blind_id, entry in json.loads(mapping.read_text()).items():
         task, repeat = entry["task_id"], "r2" in entry["arm_dir"]
         if entry["status"] == "failed":
             continue
-        levels = PAPER_LEVELS if task == "Q09" else {**OPEN_LEVELS, "F": 0 if repeat else 4}
-        (scores / f"{blind_id}.json").write_text(json.dumps(judged_file(
-            blind_id, task, levels, **counts[task], delivered=not repeat)))
-    assert evaluate.main(["indicators", "--map", str(mapping), "--scores", str(scores), "--out", str(out),
-                          "--arms", "B", "A"]) == 0
+        if task == "Q09":
+            score = judged_file(blind_id, task, PAPER_LEVELS, findings=findings)
+            (added / f"{blind_id}.json").write_text(json.dumps(added_file(blind_id, task, {"S": 3, "A": 1.5})))
+        else:
+            score = judged_file(blind_id, task, {**OPEN_LEVELS, "F": 0 if repeat else 4}, delivered=not repeat)
+        (scores / f"{blind_id}.json").write_text(json.dumps(score))
+    judged = ["--map", str(mapping), "--scores", str(scores), "--added", str(added), "--out", str(out)]
+    assert evaluate.main(["indicators", *judged, "--arms", "B", "A"]) == 0
     result = json.loads((out / "indicators.json").read_text())
-    assert result["arms"] == ["B", "A"] and result["holes"] == {} and len(result["without_score_file"]) == 1
+    assert result["arms"] == ["B", "A"] and result["not_judged"] == {} and len(result["without_score_file"]) == 1
     a, b = result["summary"]["open_problem"]["A"], result["summary"]["open_problem"]["B"]
-    # Arm A: the two runs of Q21 are averaged first (framing 100 and 0, delivery 100 and 0), then with Q20.
-    assert a["Framing"]["combined"] == pytest.approx((50 + 100) / 2)
-    assert a["Robustness"]["run"] == pytest.approx((50 + 100) / 2)
-    assert a["Robustness"]["combined"] == pytest.approx(0.75 * 100 + 0.25 * 75)
-    assert a["Correctness"] == {"judged": 75, "counted": 100, "run": None, "combined": 81.25}
+    # Arm A: the two runs of Q21 are averaged first (framing 100 and 0), then with Q20.
+    assert a["indicators"] == {"Framing": 75, "Correctness": 75, "Depth": 50, "Breadth": 25, "Robustness": 100, "Rigor": 75}
+    # The six means make up the arm's score as the six indicators make up an attempt's score.
+    assert a["score"] == pytest.approx(400 / 6)
+    assert a["score"] == pytest.approx(evaluate.statistics.fmean([(425 / 6 + 325 / 6) / 2, 425 / 6]))
     # Arm B: its only open problem was not scored and counts 0 everywhere.
-    assert {name: parts["combined"] for name, parts in b.items()} == dict.fromkeys(b, 0)
+    assert b == {"indicators": dict.fromkeys(a["indicators"], 0), "score": 0}
     beside = result["beside"]["open_problem"]
     assert (beside["A"]["questions"], beside["A"]["attempts"], beside["A"]["not_delivered"]) == (2, 3, 1)
     assert (beside["B"]["without_score_file"], beside["B"]["not_completed"], beside["B"]["not_delivered"]) == (1, 1, 1)
+    paper = result["summary"]["paper_reproduction"]
+    assert paper["A"] == paper["B"] and paper["A"]["score"] == pytest.approx((25 * 170 / 70 + 40 + 50 + 100 + 75 + 37.5) / 6)
     # Delivery is the judge's record for the attempt it judged, whatever status the runner wrote.
-    assert result["summary"]["paper_reproduction"]["B"]["Robustness"]["combined"] == 100
     [flagged] = result["delivered_with_other_status"]
     assert json.loads(mapping.read_text())[flagged]["task_id"] == "Q09" and result["beside"]["paper_reproduction"]["B"]["not_completed"] == 1
     report = (out / "indicators.md").read_text()
-    assert "| Framing (问题拆解) | 0.0 | 75.0 |" in report and "## Paper verification (论文验证题)" in report
+    assert "| Framing (问题拆解) | Is the question turned into testable hypotheses? | 0.0 | 75.0 |" in report
+    assert "| **Score (mean of the six)** | | **0.0** | **66.7** |" in report and "## Paper verification (论文验证题)" in report
     import importlib.util
-    if importlib.util.find_spec("matplotlib"):
+    drawn = importlib.util.find_spec("matplotlib")
+    if drawn:
         assert (out / "six-indicators.png").stat().st_size > 10_000 and (out / "six-indicators.svg").is_file()
     # Three arms at most are drawn; the table does not depend on the chart.
     assert "three" in evaluate.indicator_chart(result["summary"], result["beside"], ["A", "B", "C", "D"], out)
     with pytest.raises(SystemExit):
-        evaluate.main(["indicators", "--map", str(mapping), "--scores", str(scores), "--out", str(out), "--arms", "Z"])
-    # A count the judge left out is reported, and the command says so by its exit status.
-    blind_id = next(path.stem for path in scores.glob("*.json") if json.loads(path.read_text())["task_id"] == "Q20")
-    score = json.loads((scores / f"{blind_id}.json").read_text())
-    del score["probes"]
-    (scores / f"{blind_id}.json").write_text(json.dumps(score))
-    assert evaluate.main(["indicators", "--map", str(mapping), "--scores", str(scores), "--out", str(out)]) == 1
-    assert list(json.loads((out / "indicators.json").read_text())["holes"]) == [blind_id]
-    assert "Entries the score files leave out" in (out / "indicators.md").read_text()
+        evaluate.main(["indicators", *judged, "--arms", "Z"])
+    # A paper attempt whose two added criteria are not judged yet: named, no score, and the exit status says so.
+    (added / f"{flagged}.json").unlink()
+    assert evaluate.main(["indicators", *judged]) == 1
+    result = json.loads((out / "indicators.json").read_text())
+    assert result["not_judged"] == {flagged: ["Robustness", "Rigor"]}
+    waiting = result["summary"]["paper_reproduction"]["B"]
+    assert waiting["score"] is None and waiting["indicators"]["Rigor"] is None and waiting["indicators"]["Right verdicts"] == 40
+    assert result["summary"]["paper_reproduction"]["A"]["score"] is not None
+    report = (out / "indicators.md").read_text()
+    assert "## Not judged yet" in report
+    assert "| Rigor (严谨性) | Are the data handled right and fit for the findings? | 37.5 |  |" in report  # empty, not 0
+    if drawn:  # the chart is still drawn, with a gap where the indicator is missing
+        assert (out / "six-indicators.png").stat().st_size > 10_000
+    checked = evaluate.validate(evaluate.argparse.Namespace(scores=scores, added=added))
+    assert checked["invalid"] == {} and checked["added"] == {"files": 1, "invalid": {}, "paper_attempts_without": [flagged]}
+    # A file of added criteria that is not valid stops the command; it is not read as far as it goes.
+    (added / f"{flagged}.json").write_text(json.dumps(added_file(flagged, "Q09", 5)))
+    with pytest.raises(SystemExit, match="invalid file of added criteria"):
+        evaluate.main(["indicators", *judged])

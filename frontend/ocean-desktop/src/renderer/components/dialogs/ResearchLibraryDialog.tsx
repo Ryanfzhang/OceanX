@@ -32,7 +32,7 @@ function LessonRow({lesson, busy, onMark}: {lesson: Lesson; busy: boolean; onMar
   const {supporting, counter} = lesson.evidence_tasks;
   return <li className="lesson-active">
     <div>
-      <strong>{lesson.id}</strong> {lesson.text}<br />
+      <strong>{lesson.id}</strong> {lesson.text}{lesson.active && !lesson.shown ? <> <span className="lesson-kind">{text('Kept, not shown to tasks now', '已保留，目前不展示给任务')}</span></> : null}<br />
       <small>{text('Applies when', '适用条件')}: {lesson.applies_when}</small><br />
       <small>{lesson.active
         ? text(`Shown in ${lesson.tasksShown} tasks, named in ${lesson.tasksCited}`, `在 ${lesson.tasksShown} 个任务中展示，被引用 ${lesson.tasksCited} 次`)
@@ -93,16 +93,27 @@ export function ResearchLibraryDialog({open, onClose, request}: {
   useEffect(() => {if (open) send('get', {});}, [open, send]);
   if (!open) return null;
 
-  const update = () => send('update', {review: true}, (result) => {
+  const report = (result: EventPayload) => {
     const done = summarizeUpdate(result);
     if (!done) return;
     const needed = library?.minSupport ?? 3;
-    if (!done.reviewed) setNotice(text('No research task finished since the last update.', '上次更新之后没有新完成的研究任务。'));
-    else if (done.questions !== null && done.questions < needed) setNotice(text(`Lessons and tools need finished tasks on at least ${needed} different questions; this project has ${done.questions}.`, `经验和工具需要至少 ${needed} 个不同问题的已完成任务；当前项目只有 ${done.questions} 个。`));
-    else setNotice(text(
+    if (!done.reviewed) {setNotice(text('No research task finished since the last update.', '上次更新之后没有新完成的研究任务。')); return;}
+    // Lessons and tools ask for different numbers of questions, so the tools are always reported.
+    const few = done.questions !== null && done.questions < needed
+      ? text(`Lessons need finished tasks on at least ${needed} different questions; this project has ${done.questions}. `, `经验需要至少 ${needed} 个不同问题的已完成任务；当前项目只有 ${done.questions} 个。`)
+      : '';
+    const left = done.tasksLeft
+      ? text(` ${done.tasksLeft} finished tasks did not fit this review; the next update reads them first.`, `还有 ${done.tasksLeft} 个已完成的任务这次没读到，下次更新会先读它们。`)
+      : '';
+    setNotice(few + text(
       `${done.lessonChanges} lesson changes; tools added: ${done.toolsAdded.join(', ') || 'none'}; tools taken off the list: ${done.toolsRemoved.join(', ') || 'none'}; ${done.refused} proposals refused by the rules.`,
-      `经验变更 ${done.lessonChanges} 条；新增工具：${done.toolsAdded.join('、') || '无'}；移出清单的工具：${done.toolsRemoved.join('、') || '无'}；${done.refused} 条提议未通过规则。`));
-  });
+      `经验变更 ${done.lessonChanges} 条；新增工具：${done.toolsAdded.join('、') || '无'}；移出清单的工具：${done.toolsRemoved.join('、') || '无'}；${done.refused} 条提议未通过规则。`) + left);
+  };
+  const update = () => {
+    send('update', {review: true}, report);
+    // The backend runs the update beside its other work and replies when it is done.
+    setNotice(text('Reviewing the finished tasks. This can take several minutes; you can close this dialog and keep working.', '正在审查已完成的任务，可能需要几分钟；可以关闭这个对话框继续使用。'));
+  };
   const markItem = (kind: 'lesson' | 'tool', id: string) => (verdict: Mark) => send('mark', markPayload(kind, id, verdict));
 
   const lessonCount = library?.skills.reduce((total, skill) => total + skill.lessons.length, 0) ?? 0;
@@ -124,7 +135,7 @@ export function ResearchLibraryDialog({open, onClose, request}: {
       <nav className="review-tabs" role="tablist">{tabs.map((item) => <button key={item.key} role="tab" aria-selected={tab === item.key} className={tab === item.key ? 'primary' : ''} onClick={() => setTab(item.key)}>{item.label}</button>)}</nav>
       {tab === 'lessons' ? <>
         {lessonCount ? library.skills.filter((skill) => skill.lessons.length).map((skill) => <section key={skill.name} aria-label={skill.name}>
-          <h3><code>{skill.name}</code> <small>{skill.lessons.length}/{skill.limit} · {readers[skill.reader]}</small></h3>
+          <h3><code>{skill.name}</code> <small>{text(`${skill.lessons.length} lessons, a task is shown up to ${skill.limit}`, `${skill.lessons.length} 条，每个任务最多展示 ${skill.limit} 条`)} · {readers[skill.reader]}</small></h3>
           <ul className="lesson-active-list">{skill.lessons.map((lesson) => <LessonRow key={lesson.id} lesson={lesson} busy={busy} onMark={markItem('lesson', lesson.id)} />)}</ul>
         </section>) : <p className="lessons-empty">{text(`No lessons yet. They need finished research tasks on at least ${library.minSupport} different questions.`, `还没有经验。需要至少 ${library.minSupport} 个不同问题的已完成研究任务。`)}</p>}
         {library.retired.length ? <section aria-label={text('Removed lessons', '已移除的经验')}>
