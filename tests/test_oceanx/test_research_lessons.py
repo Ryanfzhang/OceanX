@@ -212,7 +212,7 @@ def test_the_meta_agent_reads_each_skill_as_its_readers_get_it(tmp_path, memory)
 def test_only_skills_with_a_lessons_region_take_lessons():
     regions = LessonBook.regions()
     assert {skill: region.limit for skill, region in regions.items()} == {
-        "claim-grounded-writing": 4, DESIGN: 3, "ocean-analysis-design": 6,
+        "claim-grounded-writing": 8, DESIGN: 3, "ocean-analysis-design": 6,
         "ocean-dataset-diagnosis": 4, PHYSICS: 6, PLANNING: 8}
     readers = {skill: LessonBook.reader(skill, region) for skill, region in regions.items()}
     # The Coordinator plans the tree and writes the final answer; the other four are for Experts.

@@ -490,8 +490,10 @@ Arms B, C1 and C2 run the same commit and differ only in what stands in those tw
 **Where.** A skill reserves a region with a marker line, for example
 `<!-- oceanx:lessons max=8 for="coordinator" about="..." -->`. The marker says how many lessons of the
 skill a run is shown, whose they are and what they are about. Six skills take lessons: two for the
-Coordinator (planning, read at the start, 8 lessons; writing, read before the final answer, 4) and four
-analysis skills for Experts. `xarray-array-ops` has the tools region, which lists the helper functions that
+Coordinator (planning, read at the start; writing, read before the final answer; 8 lessons each) and four
+analysis skills for Experts. The writing skill first showed 4: the first relearning kept 8 lessons for it
+and hid the four on yearly values, on what a null result could have detected, on published values and on
+out-of-sample results, so its region was made as large as the planning skill's. `xarray-array-ops` has the tools region, which lists the helper functions that
 analysis code calls as `ao.<name>`. A skill without a region takes nothing.
 
 The Coordinator is the reader that learns most (Owner, 2026-10-10). The first library held 19 lessons,

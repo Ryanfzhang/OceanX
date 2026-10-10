@@ -148,8 +148,8 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   It judges every current lesson (keep, revise, retire) and may add at most 4 to a Coordinator
   skill and 1 to an Expert skill (`MAX_NEW_PER_REVIEW`). The Coordinator is the reader that
   learns most: it decides which analyses are asked for and writes the final answer, in two
-  skills, planning (read at the start, 8 lessons shown) and writing (read before the final
-  answer, 4). The first library, mostly cautions for Experts, left the judged answers unchanged.
+  skills, planning (read at the start) and writing (read before the final answer), each showing
+  8 lessons. The first library, mostly cautions for Experts, left the judged answers unchanged.
   Code enforces:
   - a new lesson needs supporting tasks from at least 3 different questions (with fewer, a skill
     without lessons is not reviewed at all);
