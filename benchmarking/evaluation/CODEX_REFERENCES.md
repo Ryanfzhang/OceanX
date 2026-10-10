@@ -48,6 +48,20 @@ nothing.
    remember an agent's number, do not use it to choose a definition or to decide that a result looks right.
 3. **The same inputs as the agents.** Only the data folders the task binds (`data_groups` in its
    `task_info.json`, resolved through `download/data_manifest.json`). No other product and no download.
+
+   Two clarifications (Owner, 2026-10-10).
+
+   *After the runs, the inputs are fixed.* The reference uses what the agents had and nothing about the
+   dataset that they lacked: no native grid, forcing or averaging convention from a provider, and no
+   change to the bound folders. Where the files do not state a convention, check it on the bound fields
+   where that is possible (the orientation of velocity against the thermal wind) and say "checked on the
+   data". Otherwise compute each reading the files allow, one of them primary. Where none can be called
+   primary, an answer that says the supplied data cannot settle it, and why, agrees with the reference.
+   No answer is marked down for lacking what was not supplied.
+
+   *Public constants are not extra inputs.* What the question itself permits or names (a published
+   ENSO classification, the landfall day of a typhoon it names) and method constants from the literature
+   (a detection threshold, a published formula) may be used. `spec.md` names each with its source.
 4. **Tolerances are fixed before any score is known.** The rubric's suggested tolerance is frozen as it is
    written. Propose another only when the reference work itself shows that it cannot be applied as
    written, for example a relative tolerance ("+/-30%") on a reference value that does not differ from
@@ -286,6 +300,11 @@ State on 2026-10-09: the 17 questions with public data (Q07 to Q10, Q15, Q18 to 
 and `rubric-check` lists all of them as ready, after four review rounds. The owner waived the spot check
 and let the reviewer's verdict stand. The 13 questions that need CMOMS data (Q01 to Q06, Q11 to Q14, Q16,
 Q17, Q22) are not started.
+
+State on 2026-10-10: eleven CMOMS questions (Q01 to Q06, Q11 to Q13, Q17, Q22) have their `spec.md`
+reviewed once; nothing is computed or frozen. The three methods ran them before the references existed,
+with a grid derived from `temp` and no statement of the averaging interval, so the two clarifications
+of rule 3 apply to all of them. Q14 and Q16 wait for their diagnostics.
 
 ## Reports
 
