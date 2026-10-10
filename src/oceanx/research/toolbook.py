@@ -23,6 +23,7 @@ Layout under ``<project>/.oceanx/research/tools/``::
 
     tools.json     state of every tool: status, call counts, the owner's mark, learned code
     changes.jsonl  every change, with its reason
+    learn_state.json  the tasks whose code the learning step has read
     learned/       the learned functions and their tests, exported for reading
 """
 from __future__ import annotations
@@ -34,6 +35,7 @@ import os
 import re
 import shutil
 import tempfile
+import textwrap
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -53,6 +55,7 @@ MAX_PROPOSALS = 8  # proposals one review tries, in the meta-agent's order, unti
 MAX_TOOL_LINES = 60
 MAX_CANDIDATES = 96  # functions shown to the meta-agent, the most rewritten first
 MAX_PER_TASK = 8  # of them from one task, so that one long task does not fill the list
+REPLY_KEPT = 2000  # characters kept of a reply that could not be read, for the owner to see
 # Questions whose repeated code a learned tool must replace: two in everyday use. A benchmark's
 # learning step has one review of a dozen tasks, so it sets one (Owner, 2026-10-10: with three
 # required, 12 tasks gave no tool). A tool no task calls is retired after IDLE_TASKS.
@@ -133,33 +136,49 @@ Each function needs a test: plain `assert` statements that call `{alias}.<name>`
 with a known answer, and one input the function must refuse. At least one case must use values
 that differ from one another, with the expected result worked out by hand, so that a wrong
 weight, grouping, axis or sign would fail it. A constant field that gives back the constant may
-be added, but proves little by itself. `np` and `{alias}` are already imported in the test.
+be added, but proves little by itself. `np` and `{alias}` are already imported in the test. It
+may not print and cannot import pytest: check the refused input with try/except.
 
 Do not propose: a function the module already has, even under another name; anything specific to
 one region, dataset or variable name; plotting; reading or writing files.
 
-"replaces" lists the ids (such as C07) of every entry the function replaces, from all tasks.
-Together they must come from {min_support} or more research questions; a calculation that
+The "replaces" line lists the ids (such as C07) of every entry the function replaces, from all
+tasks. Together they must come from {min_support} or more research questions; a calculation that
 several tasks needed is the better choice.
 
-Return JSON only:
-{{"tools": [{{"name": "...", "code": "def ...", "test": "...", "replaces": ["..."],
-  "rationale": "..."}}]}}
+Reply with one section per function in exactly this form and nothing else. The first code block
+of a section is the function, the second is its test. Do not put code in JSON.
+
+### tool: <name>
+replaces: C03, C17
+rationale: <one sentence>
+```python
+def <name>(...):
+    ...
+```
+```python
+assert ...
+```
+
+If no function is worth adding, reply with the two words: no tools
 """
 
 REVISION_INSTRUCTIONS = """\
 
 # Refused
 The proposals below were refused, each for the reason given. Return a corrected version of those
-that can be corrected, under the same name, and leave the others out. Do not return a proposal
-that was accepted, and do not add a new one.
+that can be corrected, under the same name and in the same form, and leave the others out. Do
+not return a proposal that was accepted, and do not add a new one. If none can be corrected,
+reply with the two words: no tools
 """
 
 REVIEW_INSTRUCTIONS = """\
 You review one helper function before ocean scientists' analysis code may call it. You did not
-write it. Look for a numerical or scientific error: a wrong formula, a wrong unit conversion, a
-mask or weight applied to the wrong values, a denominator that counts invalid cells, a silent
-assumption the docstring does not state, or a test that would pass even if the function were wrong.
+write it. Its test has been run and passes. Look for a numerical or scientific error: a wrong
+formula, a wrong unit conversion, a mask or weight applied to the wrong values, a denominator
+that counts invalid cells, a silent assumption the docstring does not state, or a test that
+would pass even if the function were wrong. Reject only for such a defect, and name it; a
+missing feature, a point of style or an input the function already refuses is not one.
 
 Reply with JSON only: {{"verdict": "accept" | "reject", "reason": "<one sentence>"}}
 
@@ -177,6 +196,40 @@ def min_support() -> int:
         return max(1, int(os.environ.get(MIN_SUPPORT_ENV) or DEFAULT_MIN_SUPPORT))
     except ValueError:
         return DEFAULT_MIN_SUPPORT
+
+
+# A heading as asked for, or as models vary it ("## Tool 2: `name`", "**tool:** name"). Two or
+# more "#": a single one starts a comment in the code a reply carries.
+_SECTION = re.compile(r"^[ \t]*(?:#{2,6}[ \t]*|\*\*)tool(?:[ \t]*\d+)?[ \t]*:\W{0,3}([A-Za-z_]\w*).*$",
+                      re.MULTILINE | re.IGNORECASE)
+_BLOCK = re.compile(r"^[ \t]*```[^\n`]*\n(.*?)^[ \t]*```[ \t]*$", re.MULTILINE | re.DOTALL)
+_FIELD = re.compile(r"^[ \t>*-]*(replaces|rationale)\**[ \t]*:\**[ \t]*(.*)$",
+                    re.MULTILINE | re.IGNORECASE)
+
+
+def read_proposals(reply: str) -> list[dict]:
+    """The functions one reply proposes: per function a heading, what it replaces, and two
+    fenced code blocks, the function and then its test.
+
+    Code is not carried in JSON strings. There every quote and line break must be escaped, and
+    one slip made a whole reply of proposals unreadable (server review of 2026-10-10). Here a
+    section that is incomplete is still returned, so that it is refused by itself."""
+    reply = reply.replace("\r\n", "\n")
+    marks = list(_SECTION.finditer(reply))
+    if not marks:
+        if re.search(r"\bno tools\b", reply, re.IGNORECASE):
+            return []
+        raise ValueError("it has no section that starts with '### tool: <name>'.")
+    proposals = []
+    for mark, following in zip(marks, [*marks[1:], None], strict=True):
+        body = reply[mark.end():following.start() if following else len(reply)]
+        blocks = [textwrap.dedent(block).strip("\n") for block in _BLOCK.findall(body)]
+        fields = {key.lower(): value.strip() for key, value in _FIELD.findall(body.split("```", 1)[0])}
+        proposals.append({"name": mark.group(1), "code": blocks[0] if blocks else "",
+                          "test": blocks[1] if len(blocks) > 1 else "",
+                          "replaces": re.findall(r"[A-Za-z_]\w*", fields.get("replaces", "")),
+                          "rationale": fields.get("rationale", "")})
+    return proposals
 
 
 def packaged_source() -> str:
@@ -509,7 +562,9 @@ class ToolBook:
             max_lines=MAX_TOOL_LINES, min_support=min_support())
             + "\n# The helper module now\n```python\n" + self.source().rstrip()
             + "\n```\n\n# Code the Experts wrote repeatedly\nEach entry is one function as the Experts of "
-            "one task wrote it.\n\n" + groups)
+            "one task wrote it.\n\n" + groups
+            + "\n\n# Your reply\nOne `### tool: <name>` section per function in the form given above, or "
+            "the two words: no tools\n")
 
     def admit(self, raw: dict, candidates: list[dict], *, reviewer: Callable[[str], str] | None = None,
               run_test: Callable[[str, str], str | None] | None = None) -> dict:
@@ -518,6 +573,8 @@ class ToolBook:
         name, code, test = (str(raw.get(key) or "").strip() for key in ("name", "code", "test"))
         if not _NAME.fullmatch(name):
             raise ValueError("A tool needs a lower-case name of 3 to 40 letters, digits or underscores.")
+        if not code or not test:
+            raise ValueError("A proposal needs its function and its test, each in a code block of its own.")
         saved = self._load()
         taken = {tool["name"] for tool in describe_functions(packaged_source())} | set(saved["tools"])
         if name in taken:
@@ -536,7 +593,7 @@ class ToolBook:
         if failure:
             raise ValueError(f"Its test failed: {failure}")
         if reviewer is not None:
-            review = parse_json_object(reviewer(REVIEW_INSTRUCTIONS.format(code=code, test=test)))
+            review = self._verdict(reviewer, REVIEW_INSTRUCTIONS.format(code=code, test=test))
             if review.get("verdict") != "accept":
                 raise ValueError(f"The reviewer refused it: {str(review.get('reason') or '')[:300]}")
         described = describe_functions(code)[0]
@@ -554,13 +611,20 @@ class ToolBook:
         return {"name": name, **entry}
 
     @staticmethod
-    def _refusal(raw, reason: str, attempt: int) -> dict:
+    def _verdict(reviewer: Callable[[str], str], prompt: str) -> dict:
+        """The reviewer's verdict. A reply that is not the JSON asked for is asked for once more."""
+        for _ in range(2):
+            try:
+                return parse_json_object(reviewer(prompt))
+            except ValueError:
+                continue
+        raise ValueError("The reviewer's reply could not be read, so the function was not reviewed.")
+
+    @staticmethod
+    def _refusal(raw: dict, reason: str, attempt: int) -> dict:
         """One refused proposal as the owner can read it: what was proposed, and why not."""
-        proposal = raw if isinstance(raw, dict) else {"name": raw}
-        replaces = proposal.get("replaces")
-        return {"name": str(proposal.get("name") or "")[:60], "reason": reason, "round": attempt,
-                "code": str(proposal.get("code") or "")[:4000], "test": str(proposal.get("test") or "")[:4000],
-                "replaces": [str(item)[:60] for item in (replaces if isinstance(replaces, list) else [])][:40]}
+        return {"name": raw["name"][:60], "reason": reason, "round": attempt, "code": raw["code"][:4000],
+                "test": raw["test"][:4000], "replaces": [item[:60] for item in raw["replaces"]][:40]}
 
     @staticmethod
     def _refused_section(refused: list[dict]) -> str:
@@ -568,45 +632,69 @@ class ToolBook:
         if not refused:
             return ""
         return REVISION_INSTRUCTIONS + "".join(
-            f"\n## {r['name']}\nRefused: {r['reason']}\n\"replaces\": {json.dumps(r['replaces'])}\n"
-            f"```python\n{r['code']}\n```\nIts test:\n```python\n{r['test']}\n```\n" for r in refused)
+            f"\n### tool: {r['name']}\nrefused: {r['reason']}\nreplaces: {', '.join(r['replaces'])}\n"
+            f"```python\n{r['code']}\n```\n```python\n{r['test']}\n```\n" for r in refused)
+
+    @staticmethod
+    def _proposals(llm: Callable[[str], str], prompt: str, rejected: list[dict], attempt: int) -> list[dict] | None:
+        """What one round proposes; None when the reply could not be read. Such a reply is asked
+        for once more, and the start of each is kept so that the owner can see what came back."""
+        for _ in range(2):
+            reply = llm(prompt)
+            try:
+                return read_proposals(reply)
+            except ValueError as exc:
+                rejected.append({"name": "", "reason": f"The meta-agent's reply could not be read: {exc}",
+                                 "round": attempt, "reply": reply[:REPLY_KEPT]})
+        return None
 
     def learn(self, llm: Callable[[str], str], stores: list[Path], *,
               reviewer: Callable[[str], str] | None = None,
-              run_test: Callable[[str, str], str | None] | None = None) -> dict:
+              run_test: Callable[[str, str], str | None] | None = None, force: bool = False) -> dict:
         """Ask the meta-agent for functions that replace repeated code; mount those that pass.
         A proposal a gate refuses goes back once with the reason, so that a weak test or an
-        incomplete list of what it replaces can be put right; the gates themselves do not move."""
-        questions = {d["task_key"]: d.get("question") or "" for d in self.memory.load_digests()}
-        candidates = repeated_functions(stores, questions)
+        incomplete list of what it replaces can be put right; the gates themselves do not move.
+
+        The step keeps its own list of the tasks whose code it has read and runs when a task
+        finished since (or with ``force``). The list is not brought up to date when the first
+        reply could not be read, so the next update tries again."""
+        digests = self.memory.load_digests()
+        finished = {d["task_key"] for d in digests if d.get("finished")}
+        path = self.root / "learn_state.json"
+        seen = set(json.loads(path.read_text(encoding="utf-8")).get("tasks", [])) if path.is_file() else set()
         created, rejected = [], []
+        result = {"created": [], "rejected": rejected, "candidates": 0, "new_tasks": len(finished - seen)}
+        if not result["new_tasks"] and not force:
+            return result
+        candidates = repeated_functions(stores, {d["task_key"]: d.get("question") or "" for d in digests})
+        result["candidates"], read = len(candidates), True
         # A tool may replace several entries; with code from fewer questions nothing could pass.
         if len({q for c in candidates for q in c["question_set"]}) >= min_support():
             refused: list[dict] = []
             for attempt in (1, 2):
-                try:
-                    proposals = parse_json_object(llm(
-                        self.writing_prompt(candidates) + self._refused_section(refused))).get("tools") or []
-                except ValueError as exc:  # an unreadable reply adds nothing
-                    rejected.append({"name": "", "reason": f"The meta-agent's reply could not be read: {exc}"})
+                proposals = self._proposals(
+                    llm, self.writing_prompt(candidates) + self._refused_section(refused), rejected, attempt)
+                if proposals is None:
+                    read = attempt > 1  # nothing came of the first round: the tasks stay unread
                     break
                 made = {tool["name"] for tool in created}
-                fresh = [raw for raw in proposals if not (isinstance(raw, dict) and raw.get("name") in made)]
                 refused = []
-                for raw in fresh[:MAX_PROPOSALS]:
+                for raw in [raw for raw in proposals if raw["name"] not in made][:MAX_PROPOSALS]:
                     if len(created) >= MAX_NEW_PER_REVIEW:
                         break
                     try:
                         created.append(self.admit(raw, candidates, reviewer=reviewer, run_test=run_test))
-                    except (ValueError, TypeError, AttributeError) as exc:
+                    except ValueError as exc:
                         refused.append(self._refusal(raw, str(exc), attempt))
                 rejected += refused
                 if not refused or len(created) >= MAX_NEW_PER_REVIEW:
                     break
-        return {"created": [tool["name"] for tool in created], "rejected": rejected,
-                "candidates": len(candidates)}
+        if read:
+            atomic_write_text(path, json.dumps({"at": datetime.now(UTC).isoformat(), "tasks": sorted(finished)}))
+        result["created"] = [tool["name"] for tool in created]
+        return result
 
 
 __all__ = ["IDLE_TASKS", "MODULE", "PROBATION_TASKS", "SKILL", "TOOL_LOG_ENV", "ToolBook",
-           "check_test_code", "check_tool_code", "packaged_source", "repeated_functions",
-           "run_tool_test"]
+           "check_test_code", "check_tool_code", "packaged_source", "read_proposals",
+           "repeated_functions", "run_tool_test"]

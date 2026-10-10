@@ -550,6 +550,13 @@ to the meta-agent once with the reason, so that a weak test or an incomplete lis
 be put right; the checks themselves do not move. `review.json` keeps every refused proposal with its code,
 its test and the reason.
 
+The meta-agent writes each function and its test in a code block of its own, not inside JSON: on
+2026-10-10 one reply of proposals could not be read as JSON and all of them were lost. A reply that cannot
+be read is asked for once more, and `review.json` keeps how it began. The tool step keeps its own list of
+the runs whose code it has read (`tools/learn_state.json`). If no readable reply came, the runs stay
+unread, and running `consolidate --review` again does the tool step alone; the lessons are not reviewed
+again.
+
 A review prompt holds about 200,000 characters of records, which was 10 of 12 runs in the first trial. A
 run that did not fit is not counted as read: `lessons.tasks_left` in `review.json` says how many remain,
 and running `consolidate --review` again reads those first.

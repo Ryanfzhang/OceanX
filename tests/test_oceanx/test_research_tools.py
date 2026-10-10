@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 
 import pytest
 
@@ -11,7 +12,13 @@ from oceanx.expert_execution import read_tool_log
 from oceanx.research import toolbook
 from oceanx.research.memory import ResearchMemory, build_digest, task_key
 from oceanx.research.outcomes import record_task_outcomes
-from oceanx.research.toolbook import ToolBook, check_test_code, check_tool_code, repeated_functions
+from oceanx.research.toolbook import (
+    ToolBook,
+    check_test_code,
+    check_tool_code,
+    read_proposals,
+    repeated_functions,
+)
 from oceanx.research.tree import ResearchTree
 from oceanx.skill_regions import SkillRegionError, describe_functions, fill_regions, find_regions
 
@@ -294,6 +301,14 @@ def main():
 '''
 
 
+def reply(*tools):
+    """A meta-agent reply in the form the writing instructions ask for."""
+    return "\n".join(
+        f"### tool: {tool['name']}\nreplaces: {', '.join(tool.get('replaces', []))}\n"
+        f"rationale: {tool.get('rationale', '')}\n```python\n{tool['code']}```\n```python\n{tool['test']}```\n"
+        for tool in tools) or "no tools"
+
+
 def project_with_repeated_code(tmp_path, tasks=4):
     memory = ResearchMemory(tmp_path / ".oceanx" / "research")
     stores = []
@@ -349,9 +364,8 @@ def test_a_proposed_tool_is_mounted_only_through_every_gate(tmp_path):
 
     def llm(prompt):
         prompts.append(prompt)
-        return json.dumps({"tools": [
-            proposal, {**proposal, "name": "weighted_mean"}, {**proposal, "name": "departure", "replaces": []},
-            {**proposal, "name": "fourth"}]})
+        return reply(proposal, {**proposal, "name": "weighted_mean"},
+                     {**proposal, "name": "departure", "replaces": []}, {**proposal, "name": "fourth"})
 
     def run_test(module, test):
         tested.append((module, test))
@@ -368,9 +382,11 @@ def test_a_proposed_tool_is_mounted_only_through_every_gate(tmp_path):
             ("weighted_mean", "The helper module already has, or once had, weighted_mean."),
             ("departure", "The code must be exactly one function named departure."),
             ("fourth", "The code must be exactly one function named fourth."))]
-    assert result["rejected"][0]["code"] == ANOMALY and result["rejected"][0]["replaces"] == ["area_mean"]
+    assert result["rejected"][0]["code"] == ANOMALY.strip() and result["rejected"][0]["replaces"] == ["area_mean"]
     assert len(prompts) == 2 and "# Refused" not in prompts[0]
-    assert "# Refused" in prompts[1] and "## departure\nRefused: The code must be exactly one function" in prompts[1]
+    assert "# Refused" in prompts[1]
+    assert "### tool: departure\nrefused: The code must be exactly one function" in prompts[1]
+    assert read_proposals(prompts[1].split("# Refused")[1])[0]["code"] == ANOMALY.strip()  # in the form it is to return
     assert "def anomaly(" in prompts[1].split("# Code the Experts wrote repeatedly")[0]  # now in the module
     # The meta-agent saw the module as it is and the repeated code, without the call counter.
     assert "# The helper module now" in prompts[0] and "def weighted_mean(" in prompts[0]
@@ -404,26 +420,26 @@ def test_a_refused_proposal_can_be_corrected_once(tmp_path):
     book, stores = project_with_repeated_code(tmp_path)
     weak = "assert ao.anomaly(1.0, 1.0, dim='t') == 0.0"
     replies = iter([
-        {"tools": [{"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": []},
-                   {"name": "departure", "code": ANOMALY.replace("def anomaly(", "def departure("),
-                    "test": weak.replace("anomaly", "departure"), "replaces": ["area_mean"]}]},
-        {"tools": [{"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": ["C01", "C02"]},
-                   {"name": "departure", "code": ANOMALY.replace("def anomaly(", "def departure("),
-                    "test": ANOMALY_TEST.replace("anomaly", "departure"), "replaces": ["area_mean"]}]}])
+        reply({"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": []},
+              {"name": "departure", "code": ANOMALY.replace("def anomaly(", "def departure("),
+               "test": weak.replace("anomaly", "departure") + "\n", "replaces": ["area_mean"]}),
+        reply({"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": ["C01", "C02"]},
+              {"name": "departure", "code": ANOMALY.replace("def anomaly(", "def departure("),
+               "test": ANOMALY_TEST.replace("anomaly", "departure"), "replaces": ["area_mean"]})])
     prompts = []
 
     def reviewer(prompt):  # refuses a test that could not tell a wrong function from a right one
         strong = ANOMALY_TEST.strip() in prompt or ANOMALY_TEST.replace("anomaly", "departure").strip() in prompt
         return json.dumps({"verdict": "accept" if strong else "reject", "reason": "The test proves nothing."})
 
-    result = book.learn(lambda prompt: prompts.append(prompt) or json.dumps(next(replies)), stores,
+    result = book.learn(lambda prompt: prompts.append(prompt) or next(replies), stores,
                         reviewer=reviewer, run_test=lambda module, test: None)
     assert result["created"] == ["anomaly", "departure"]
     assert [(r["round"], r["name"], r["reason"][:48]) for r in result["rejected"]] == [
         (1, "anomaly", "A tool must replace repeated code from 2 or more"),
         (1, "departure", "The reviewer refused it: The test proves nothing")]
     assert result["rejected"][1]["test"] == weak.replace("anomaly", "departure")  # kept for the owner
-    assert "Refused: The reviewer refused it: The test proves nothing." in prompts[1]
+    assert "refused: The reviewer refused it: The test proves nothing." in prompts[1]
     assert "At least one case must use values\nthat differ from one another" in prompts[0]
     assert {"anomaly", "departure"} <= {tool["name"] for tool in book.mounted()}
     assert next(tool for tool in book.tools() if tool["name"] == "anomaly")["evidence"]["questions"] == 2
@@ -448,10 +464,11 @@ def test_a_benchmark_learning_step_takes_the_repeated_code_of_one_question(tmp_p
     code.mkdir(parents=True)
     (code / "analysis.py").write_text(AREA_MEAN.format(variant=""))  # the task wrote it a second time
     asked = []
-    result = single.learn(lambda prompt: asked.append(prompt) or "{}", single_stores)
+    result = single.learn(lambda prompt: asked.append(prompt) or "no tools", single_stores)
     assert len(asked) == 1 and result["candidates"] == 1
     monkeypatch.delenv(toolbook.MIN_SUPPORT_ENV)
-    assert single.learn(lambda prompt: pytest.fail("two questions are needed"), single_stores)["created"] == []
+    again = single.learn(lambda prompt: pytest.fail("two questions are needed"), single_stores, force=True)
+    assert again["candidates"] == 1 and again["created"] == []
     monkeypatch.setenv(toolbook.MIN_SUPPORT_ENV, "nonsense")
     assert toolbook.min_support() == 2
 
@@ -473,10 +490,82 @@ def test_a_failed_test_or_a_refusing_reviewer_keeps_a_tool_out(tmp_path):
     # Where no task wrote a function again there is nothing to replace, so the model is not asked.
     few, few_stores = project_with_repeated_code(tmp_path / "few", tasks=1)
     result = few.learn(lambda prompt: pytest.fail("the model must not be asked"), few_stores)
-    assert result == {"created": [], "rejected": [], "candidates": 0}
-    # A reply that cannot be read adds nothing and does not stop the update.
-    unreadable = book.learn(lambda prompt: "I could not decide.", stores)
-    assert unreadable["created"] == [] and "could not be read" in unreadable["rejected"][0]["reason"]
+    assert result == {"created": [], "rejected": [], "candidates": 0, "new_tasks": 1}
+    # A reviewer whose reply is not the JSON asked for is asked once more.
+    verdicts = iter(["Looks fine to me.", json.dumps({"verdict": "reject", "reason": "Divides by the wrong count."}),
+                     "Hm.", "Hm."])
+    for problem in ("The reviewer refused it: Divides by the wrong count.", "The reviewer's reply could not be read"):
+        with pytest.raises(ValueError, match=problem):
+            book.admit(proposal, candidates, run_test=lambda module, test: None,
+                       reviewer=lambda prompt: next(verdicts))
+
+
+TRICKY = r"""def tricky(label, *, sep="/"):
+    '''Join "a" and {b}: quotes, braces and a backslash, which JSON would need escaped.'''
+    return f"{label}{sep}\n"
+"""
+
+
+def test_the_proposals_of_a_reply_are_read_one_by_one():
+    """Code travels in fenced blocks, not in JSON strings, and a broken section costs only itself."""
+    text = (
+        "Here are the helpers.\n\n"
+        "### tool: anomaly\nreplaces: C01, C02 and area_mean\nrationale: Written in four tasks.\n"
+        f"```python\n{ANOMALY}```\n\nIts test:\n\n```python\n{ANOMALY_TEST}```\n\n"
+        "## Tool: `tricky`\n- **replaces:** C07\n- **rationale**: Nothing here needs escaping.\n"
+        f"   ```py\n{textwrap.indent(TRICKY, '   ')}   ```\n```\nassert ao.tricky('a') == 'a/' + chr(10)\n```\n"
+        "### tool: cut_short\nreplaces: C09\n```python\ndef cut_short(x):\n    return x\n```\n"
+        "```python\nassert ao.cut_short(1) ==")  # the reply ended here
+    first, second, third = read_proposals(text)
+    assert first == {"name": "anomaly", "code": ANOMALY.strip(), "test": ANOMALY_TEST.strip(),
+                     "replaces": ["C01", "C02", "and", "area_mean"], "rationale": "Written in four tasks."}
+    assert second == {"name": "tricky", "code": TRICKY.strip(), "test": "assert ao.tricky('a') == 'a/' + chr(10)",
+                      "replaces": ["C07"], "rationale": "Nothing here needs escaping."}
+    check_tool_code(second["code"], name="tricky")
+    assert third == {"name": "cut_short", "code": "def cut_short(x):\n    return x", "test": "",
+                     "replaces": ["C09"], "rationale": ""}
+    # A comment in code is not a heading, and a reply may say that nothing is worth adding.
+    assert len(read_proposals("### tool: one\n```python\n# tool: not a section\nx = 1\n```\n")) == 1
+    assert [p["name"] for p in read_proposals("## Tool 1: `one`\n\n**tool:** two\n### TOOL : <three>\n")] == [
+        "one", "two", "three"]
+    assert read_proposals("No tools.") == [] and read_proposals("no tools") == []
+    for unreadable in ("I could not decide.", json.dumps({"tools": [{"name": "anomaly", "code": ANOMALY}]}), ""):
+        with pytest.raises(ValueError, match="no section that starts with"):
+            read_proposals(unreadable)
+
+
+def test_a_reply_that_cannot_be_read_is_asked_for_again_and_the_tasks_stay_unread(tmp_path):
+    book, stores = project_with_repeated_code(tmp_path)
+    proposal = {"name": "anomaly", "code": ANOMALY, "test": ANOMALY_TEST, "replaces": ["area_mean"]}
+    asked = []
+    unreadable = book.learn(lambda prompt: asked.append(prompt) or "I could not decide.", stores)
+    assert unreadable["created"] == [] and unreadable["new_tasks"] == 4 and asked[0] == asked[1]
+    assert unreadable["rejected"] == [
+        {"name": "", "round": 1, "reply": "I could not decide.",
+         "reason": "The meta-agent's reply could not be read: it has no section that starts with "
+                   "'### tool: <name>'."}] * 2
+    assert not (book.root / "learn_state.json").exists()
+    # So the next update tries again, with no task finished since. A reply that is cut off
+    # still gives the proposals that are whole; the one that is not is refused by itself.
+    cut = "### tool: cut_short\nreplaces: C01\n```python\ndef cut"
+    replies = iter(["Let me think.", reply(proposal) + cut, cut])
+    second = book.learn(lambda prompt: next(replies), stores, run_test=lambda module, test: None)
+    assert second["created"] == ["anomaly"] and second["new_tasks"] == 4
+    assert [(r["name"], r["round"], r["reason"][:44]) for r in second["rejected"]] == [
+        ("", 1, "The meta-agent's reply could not be read: it"),
+        ("cut_short", 1, "A proposal needs its function and its test, "),
+        ("cut_short", 2, "A proposal needs its function and its test, ")]
+    assert len(json.loads((book.root / "learn_state.json").read_text())["tasks"]) == 4
+    # Now the code of every finished task has been read: nothing is asked until another finishes.
+    quiet = book.learn(lambda prompt: pytest.fail("the model must not be asked"), stores)
+    assert quiet == {"created": [], "rejected": [], "candidates": 0, "new_tasks": 0}
+    later = finished_task(tmp_path, "t9", code=AREA_MEAN.format(variant=""))
+    book.memory.digest(later.store.path)
+    asked.clear()
+    result = book.learn(lambda prompt: asked.append(prompt) or "no tools", [*stores, later.store.path])
+    assert (result["new_tasks"], result["candidates"], len(asked)) == (1, 5, 1)
+    # ``force`` reads the code again although no task finished.
+    assert book.learn(lambda prompt: asked.append(prompt) or "no tools", stores, force=True)["candidates"] == 4
 
 
 def test_a_learned_tool_nobody_calls_is_retired(tmp_path, monkeypatch):

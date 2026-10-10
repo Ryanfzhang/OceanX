@@ -167,7 +167,12 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
     and math, no file, network, printing or global state), its test run in the sandbox, and a
     review by a second model call that looks for a numerical or scientific error. A proposal a
     gate refuses goes back to the meta-agent once with the reason; the update's result keeps
-    every refused proposal with its code, its test and the reason.
+    every refused proposal with its code, its test and the reason. The meta-agent writes each
+    function and its test in a code block of its own (code inside JSON strings made a whole
+    reply unreadable once); a reply that cannot be read is asked for once more. The step keeps
+    its own list of the tasks whose code it has read (`tools/learn_state.json`) and runs when
+    a task finished since, so a step that got no readable reply is tried again at the next
+    update, whether or not the lessons have anything new to review.
 - **The owner.** **Review** in the desktop lists every lesson and tool with its evidence, how
   often it was shown, named or called, and the latest changes. Two buttons mark an item right (it
   stays whatever later records say; a retired one comes back) or wrong (it goes and is not

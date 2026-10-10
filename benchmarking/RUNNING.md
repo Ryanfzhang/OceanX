@@ -124,6 +124,9 @@ python benchmarking/server/research_cli.py snapshot --project "$EVO" --output "$
 - 工具：这里一道题里反复写的代码就可以提成工具（`research_cli.py` 设了 `OCEANX_TOOL_MIN_SUPPORT=1`）；
   日常使用的 OceanX 要两道题。`review.json` 的 `tools` 一项里，`created` 是装上的工具，`rejected` 是被拒的
   和原因。
+- 工具这一步自己记着读过哪些题的代码（`$EVO/.oceanx/research/tools/learn_state.json`）。模型的回复读不
+  出来时这些题不算读过，再执行一遍同样的 `consolidate --review` 就只补做工具这一步，经验不会再动。想对
+  已经读过的题重做工具这一步，先删掉这个文件再执行。
 - 这几条用 `benchmarking/.env` 里的模型和 key。
 - `--retention-days 3650` 不能省。默认是 30 天，更早的研究树记录会被移出 attempt 目录。
 - `--project` 只指向进化实验的目录，不要指向放测试题结果的目录。

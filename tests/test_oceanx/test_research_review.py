@@ -153,6 +153,8 @@ def test_the_policy_is_v2_nested_unless_an_experiment_selects_another(tmp_path, 
 CODE = "def area_mean(field, lat):\n    weights = np.cos(np.deg2rad(lat))\n    return (field * weights).sum() / weights.sum()\n"
 TOOL = ('def area_mean(field, weights, *, dims):\n    """Mean of a field over named dimensions with explicit '
         'weights, in the field\'s units."""\n    return (field * weights).sum(dims) / weights.sum(dims)\n')
+TOOL_REPLY = ("### tool: area_mean\nreplaces: area_mean\nrationale: Repeated.\n"
+              f"```python\n{TOOL}```\n```python\nassert ao.area_mean is not None\n```\n")
 
 
 def finished_project(tmp_path, tasks=4):
@@ -176,6 +178,28 @@ def finished_project(tmp_path, tasks=4):
     return project, stores
 
 
+def test_a_tool_step_that_failed_is_tried_again_without_another_lessons_review(tmp_path, monkeypatch):
+    """Server review of 2026-10-10: the lessons were made, the reply with the tools could not be
+    read, and nothing would have asked for tools again before another task finished."""
+    from oceanx.research import toolbook
+    monkeypatch.setattr(toolbook, "run_tool_test", lambda module, test: None)
+    project, stores = finished_project(tmp_path)
+    prompts = []
+
+    def llm(tool_reply):
+        return lambda prompt: prompts.append(prompt) or ("{}" if "<skill name=" in prompt else tool_reply)
+
+    broken = json.dumps({"tools": [{"name": "area_mean", "code": TOOL}]})[:-9]
+    first = project.update(stores, llm=llm(broken))
+    assert first["lessons"]["new_tasks"] == 4 and first["tools"]["created"] == []
+    assert [(r["round"], r["reply"]) for r in first["tools"]["rejected"]] == [(1, broken), (1, broken)]
+    asked = len(prompts)  # six skills, and the tools twice
+    second = project.update(stores, llm=llm(TOOL_REPLY))
+    assert second["lessons"]["new_tasks"] == 0 and second["lessons"]["skills_reviewed"] == 0
+    assert second["tools"]["created"] == ["area_mean"] and second["tools"]["new_tasks"] == 4
+    assert (asked, len(prompts)) == (8, 9) and "<skill name=" not in prompts[-1]
+
+
 def test_the_periodic_update_counts_calls_and_lets_the_meta_agent_revise_the_library(tmp_path, monkeypatch):
     from oceanx.research import toolbook
     monkeypatch.setattr(toolbook, "run_tool_test", lambda module, test: None)  # the sandbox run
@@ -194,8 +218,7 @@ def test_the_periodic_update_counts_calls_and_lets_the_meta_agent_revise_the_lib
         prompts.append(prompt)
         skill = re.search(r'<skill name="([^"]+)">', prompt)
         if skill is None:  # the tool-writing prompt
-            return json.dumps({"tools": [{"name": "area_mean", "code": TOOL, "replaces": ["area_mean"],
-                                          "test": "assert ao.area_mean is not None", "rationale": "Repeated."}]})
+            return TOOL_REPLY
         if skill.group(1) != "research-trajectory-planning":
             return "{}"
         return json.dumps({"add": [{"text": "Ask the heat budget before the eddies.",
@@ -225,7 +248,7 @@ def test_the_periodic_update_counts_calls_and_lets_the_meta_agent_revise_the_lib
     assert "(L001)" not in bounded["research-trajectory-planning"] and "ao.area_mean" in bounded["xarray-array-ops"]
     # Nothing finished since: the next update asks no model.
     quiet = project.update(stores, llm=lambda prompt: pytest.fail("the model must not be asked"))
-    assert quiet["lessons"]["new_tasks"] == 0 and "tools" not in quiet
+    assert quiet["lessons"]["new_tasks"] == 0 and quiet["tools"]["new_tasks"] == 0
 
     overview = project.overview()
     assert overview["version"] == version and len(overview["skills"]) == 6 and len(overview["tools"]) == 9
