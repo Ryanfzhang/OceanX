@@ -129,6 +129,10 @@ python benchmarking/server/research_cli.py snapshot --project "$EVO" --output "$
   提纲一起放进记录，学经验时优先参考。`review.json` 的 `referee.compared` 是这次对照了几份答案。
   只能给进化题写，只看题目和数据说明，不能出现测试题、rubric 或参考答案的内容。用了提纲学出来的库
   要标明是"有 critic 给提纲"学出来的。
+- critic 不为这套题特调：不管谁来当、哪道题，拿到的都是产品里固定的同一段说明。
+  `python benchmarking/server/research_cli.py critic-brief --project "$EVO" --task <task key>` 会打印这段说明
+  和完整题目。让更强的模型写提纲时，开一个全新的会话，只给它这段输出和这道题的数据说明，不加任何别的
+  要求，不给 `DESIGN.md`、rubric、以前的提纲或答案；报告里写明是哪个模型写的。
 - 懂行的人也可以给某道进化题的答案写评审意见，下次学习会优先参考：
   `python benchmarking/server/research_cli.py review --project "$EVO" --task <task key> --notes <文件> --reviewer <名字>`。
   只能评进化题，意见里不能出现测试题、rubric 或参考答案的内容。

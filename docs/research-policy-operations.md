@@ -110,8 +110,18 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   `.oceanx/research/reviews/outlines/<question_key>.json`):
 
   ```bash
+  ocean research critic-brief --project <folder> --task <task key>
   ocean research outline --project <folder> --task <task key> --text outline.txt --critic <name>
   ```
+
+  Every critic is asked in the same words, a person and a stronger model alike, for whatever
+  question (`reviews.CRITIC_GUIDE`): say what should be done to answer the question and how to
+  investigate it, name the quantities that decide it, the explanations that compete and how to
+  tell them apart, and what the result should be compared with. `critic-brief` prints this
+  guide with the task's question in full, and that is all a critic is given beside the
+  description of the data. The guide belongs to OceanX and is not adjusted to a set of
+  questions: a critic instructed specially for the questions at hand teaches what those
+  instructions hold (the Owner, 2026-10-11).
 
   `--task` names any finished task on the question, and `outline.txt` holds at most 2,000
   characters. At the next update the meta-agent compares every finished answer to that

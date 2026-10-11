@@ -569,9 +569,15 @@ counterpart are in no note, and the links to climate modes, extremes, ecosystem 
 and no lesson. The 16 gaps the judge added as a free reader of the answers hold none of the four either:
 a reader of one answer notes what is wrong in it, not what the work should have been.
 
-In the benchmark the judge stands in for the user who knows the field and writes one outline per
-evolution question, from the question and its data description alone. An outline names no test question
-and holds nothing from a rubric or a reference. The released OceanX has an outline only where its user
+In the benchmark a stronger model stands in for the user who knows the field and writes one outline per
+evolution question. It is no critic made for these questions (Owner, 2026-10-11). It gets what any
+critic of OceanX gets, the product's brief (`research_cli.py critic-brief`: one fixed guide and the
+question in full) and the description of that question's data, in a session that holds nothing else:
+no instruction about this benchmark, its rubrics or its design, no earlier outline, no answer. The
+report names the model. The outlines of the rounds L1K-r1 to r3 were written to instructions made for
+this benchmark, the second set after looking at where its answers lose points; they are kept as a
+record and no result rests on them. An outline names no test question and holds nothing from a rubric
+or a reference. The released OceanX has an outline only where its user or a model the user asks
 writes one, so a library learned with outlines shows what OceanX learns from a critic, not what it
 learns alone, and is reported so.
 

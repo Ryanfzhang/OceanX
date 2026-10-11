@@ -27,6 +27,12 @@ system's own notes, and a reviewer's free notes too, left out three of the four 
 analysis an outside judge missed most often in the answers (2026-10-11): a reader of one answer
 notes what is wrong in it, not what the work should have been.
 
+Every critic is asked in the same words (``CRITIC_GUIDE``), a person and a stronger model
+alike, for whatever question: the guide belongs to OceanX, not to a set of questions. A critic
+instructed specially for the questions at hand teaches what those instructions hold, and what
+the system then learns says nothing about a critic it meets elsewhere (the Owner, 2026-10-11,
+after the first outlines of a benchmark round had been written to instructions made for it).
+
 Layout under ``<project>/.oceanx/research/reviews/``::
 
     <task_key>.json                 a reviewer's notes on one task's final answer
@@ -45,6 +51,15 @@ from oceanx.research.tree_store import atomic_write_text
 REVIEW_SCHEMA = "oceanx-answer-review/v1"
 OUTLINE_SCHEMA = "oceanx-critic-outline/v1"
 MAX_OUTLINE_CHARS = 2000  # an outline is brief: what to do and how to investigate, not an answer
+# What a critic is asked for: one text for every question and every critic. It is not adjusted to
+# a set of questions; whoever wants a different critic changes it here, for all of them.
+CRITIC_GUIDE = f"""\
+You are the critic of an ocean research system: you know the field better than the model that does its
+work. For the research question below, write a brief outline in plain language, as a knowledgeable user
+would say it to the system: what should be done to answer the question and how to investigate it. Name
+the quantities that decide the question, the explanations that compete and how to tell them apart, and
+what the result should be compared with. At most {MAX_OUTLINE_CHARS:,} characters. Give no value and no
+result. Use only the question and the description of its data."""
 
 
 def review_lines(review: dict) -> list[str]:
@@ -97,6 +112,15 @@ class Reviews:
         atomic_write_text(self.root / f"{task_key}.json", json.dumps(review, ensure_ascii=False, indent=1))
         return review
 
+    def critic_brief(self, task_key: str) -> str:
+        """All a critic is given to write the outline for the question of one finished task: the
+        guide, and the question in full."""
+        question = Referee(self.memory).question(self._finished(task_key))
+        if not question.strip():
+            raise ValueError("This task's research question is no longer on record in full; "
+                             "name another finished task on the question.")
+        return f"{CRITIC_GUIDE}\n\nQuestion:\n{question.strip()}\n"
+
     def record_outline(self, task_key: str, text: str, *, critic: str) -> dict:
         """Keep a critic's outline for the research question of one finished task: what should
         be done for it and how to investigate it, in plain language. It counts for every task
@@ -120,4 +144,4 @@ class Reviews:
         return outline
 
 
-__all__ = ["MAX_OUTLINE_CHARS", "OUTLINE_SCHEMA", "REVIEW_SCHEMA", "Reviews", "review_lines"]
+__all__ = ["CRITIC_GUIDE", "MAX_OUTLINE_CHARS", "OUTLINE_SCHEMA", "REVIEW_SCHEMA", "Reviews", "review_lines"]

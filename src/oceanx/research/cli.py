@@ -173,6 +173,20 @@ def review_answer(
     typer.echo(f"kept {len(kept['notes'])} notes on {task}")
 
 
+@research_app.command("critic-brief")
+def critic_brief(
+    project: Path = typer.Option(..., "--project"),
+    task: str = typer.Option(..., "--task", help="The key of a finished task on the question."),
+) -> None:
+    """Print all a critic is given to write the outline for one research question: the same
+    instruction for every question and every critic, and the question in full. Record what the
+    critic writes with `outline`."""
+    try:
+        typer.echo(_project(project).reviews.critic_brief(task), nl=False)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
 @research_app.command("outline")
 def outline(
     project: Path = typer.Option(..., "--project"),
@@ -182,8 +196,9 @@ def outline(
     critic: str = typer.Option(..., "--critic", help="Who wrote it: a person or a stronger model."),
 ) -> None:
     """Record a critic's outline for one research question: what should be done for it and how
-    to investigate it, briefly and in plain language. The next `consolidate --review` compares
-    every finished answer to the question with it and learns from what they did not do."""
+    to investigate it, briefly and in plain language (`critic-brief` prints what the critic is
+    asked). The next `consolidate --review` compares every finished answer to the question with
+    it and learns from what they did not do."""
     try:
         kept = _project(project).reviews.record_outline(
             task, text.read_text(encoding="utf-8", errors="replace"), critic=critic)

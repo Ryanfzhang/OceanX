@@ -2,6 +2,7 @@
 reader's notes as a reviewer, a critic's outline, a reviewer's own notes, failed calls, and what
 the meta-agent and the periodic update do with them."""
 import json
+import re
 import time
 from types import SimpleNamespace
 
@@ -389,6 +390,38 @@ def test_a_critic_says_what_should_be_done_and_every_answer_to_the_question_is_c
     left = project.referee.readings()[gone]
     assert left["answer_gone"] is True and "against_outline" not in left and left["expected"] == NOTES
     assert calls == [] and project.update(stores, llm=llm)["referee"]["without_answer"] == 0
+
+
+def test_every_critic_is_asked_in_the_same_words_for_whatever_question(tmp_path):
+    """The critic's guide belongs to OceanX, not to a set of questions (Owner, 2026-10-11): a
+    person and a stronger model get the same brief, which is the guide and the question in full."""
+    from typer.testing import CliRunner
+
+    from oceanx.research.cli import research_app
+    from oceanx.research.reviews import CRITIC_GUIDE, MAX_OUTLINE_CHARS
+    project = ProjectResearch(SimpleNamespace(root=tmp_path / ".oceanx"))
+    long_question = "How strong is the upwelling in each year? " + "Use the daily fields supplied. " * 9
+    stores = [finished_task(tmp_path, "long", question=long_question).store.path,
+              finished_task(tmp_path, "short").store.path]
+    project.update(stores)
+    first, second = (project.reviews.critic_brief(task_key(store)) for store in stores)
+    assert first == f"{CRITIC_GUIDE}\n\nQuestion:\n{long_question.strip()}\n" and len(long_question) > 240
+    assert second == f"{CRITIC_GUIDE}\n\nQuestion:\nHow strong is short in each year?\n"
+    # What the guide asks for, and what it must not hold: anything of one benchmark or one question.
+    guide = " ".join(CRITIC_GUIDE.split())
+    for asked in ("what should be done to answer the question and how to investigate it",
+                  "the quantities that decide the question, the explanations that compete and how to tell them apart",
+                  "what the result should be compared with", f"At most {MAX_OUTLINE_CHARS:,} characters",
+                  "Give no value and no result", "Use only the question and the description of its data"):
+        assert asked in guide
+    assert not re.search(r"benchmark|rubric|DESIGN|answer key|reference|evolution|\bE\d\d\b|\bQ\d\d\b", CRITIC_GUIDE)
+    with pytest.raises(ValueError, match="No finished task has this key"):
+        project.reviews.critic_brief("0" * 16)
+    printed = CliRunner().invoke(research_app, ["critic-brief", "--project", str(tmp_path),
+                                                "--task", task_key(stores[0])])
+    assert printed.exit_code == 0 and printed.output == first
+    assert CliRunner().invoke(research_app, ["critic-brief", "--project", str(tmp_path),
+                                             "--task", "0" * 16]).exit_code != 0
 
 
 def test_an_outline_is_brief_plain_language_and_only_the_points_the_reader_judged_are_kept(tmp_path):
