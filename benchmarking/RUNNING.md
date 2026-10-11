@@ -24,6 +24,7 @@ chmod 600 benchmarking/.env
 | `BENCH_RESUME` | `true`：跳过已完成的题，其余的跑。`false`：选中的题全部重跑 |
 | `BENCH_TIMEOUT_SECONDS` | 每题的时限，默认 10800 秒。它也是 OceanX 的研究预算：用掉 75% 后不再派新任务，开始写最终报告 |
 | `BENCH_OCEANX_EXPERT_CALL_LIMIT` | 每个 Expert 一次任务可用的模型调用数（10–60）。要比较的几组必须相同 |
+| `BENCH_OCEANX_PARALLEL_TASKS` | OceanX 同时跑几道题（1–3，默认 1，即一题一题跑）。要比较的几组必须相同，见第 1 节 |
 | `BENCH_OCEANX_LIBRARY` | 学到的库的路径。留空就是未进化 |
 
 - **每个 runner 可以有自己的设置文件。** 默认都读 `benchmarking/.env`；旁边有 `.env.oceanx`、`.env.claude`、
@@ -63,7 +64,15 @@ python benchmarking/server/run_claude.py
 python benchmarking/server/run_finch.py
 ```
 
-每个方法按顺序一题一题跑。
+每个方法按顺序一题一题跑。OceanX 可以同时跑两到三题：在它的设置文件里把 `BENCH_OCEANX_PARALLEL_TASKS`
+设成 2 或 3。
+
+- 每道题有自己的后端进程、状态目录和 Expert，互不相干。它们共用这台机器和模型接口，而每题的时限照旧
+  各算各的，所以同时跑的题越多，一道题在时限内能做的事可能越少。要比较的几组用同一个值。
+- 先看内存：3 道题、每题 3 个数据 Expert，就是最多 9 个沙箱同时读数据。第一次用先设 2。
+- 题目按顺序开始，先结束的先写进 `results.jsonl`。Ctrl+C 或 `kill` 会结束正在跑的几题，还没轮到的不再
+  开始；再跑同一条命令就接着跑。
+- 每次启动用的值记在 `launches.jsonl` 里。Claude Code 和 Finch 仍是一题一题跑。
 
 ## 2. 继续、补跑、重跑
 

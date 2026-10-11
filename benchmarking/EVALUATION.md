@@ -49,6 +49,12 @@ helped can only be read from the process measures (lessons named, helper calls, 
   (`BENCH_OCEANX_MAX_PARALLEL_SEARCH_EXPERTS=1`), so up to four Experts run together. Watch memory in the first run
   with this setting; `arm.json` records both. The desktop has the same setting under Settings, Research runtime
   (1 to 4, default 2); it travels with each request (`session.submit.max_parallel_experts`).
+- `BENCH_OCEANX_PARALLEL_TASKS` (1 to 3, default 1): questions one OceanX launch runs at once. Each question has
+  a backend process, a state folder and Experts of its own, and its own time limit, which is also its research
+  budget. The questions share the machine and the model endpoint, so above 1 a question may get less done within
+  its limit, and three questions with three data Experts each can load arrays in nine sandboxes together. Claude
+  Code and Finch run one question at a time. `launches.jsonl` records the value of every launch; disclose it with
+  the other run settings and compare arms that ran with the same value.
 - Experts work in the background of the Coordinator's run. A `task` call returns when the next running Expert
   finishes, not when the slowest of its batch has, and `await_experts` is how the Coordinator waits: for the next
   one, for named nodes, or for all. The Coordinator decides whether to continue one node's own line at once or to
@@ -119,8 +125,9 @@ $EVAL_ROOT/library/L2/     frozen after round 2, same files
 ```
 
 `arm.json` records arm, policy, the version and SHA-256 of the library snapshot, git commit (and whether the
-tree was dirty), OceanX version, package versions and the parallel-Expert limit. It is written when the arm
-folder is first used; `launches.jsonl` beside it has one line per launch (commit, settings, questions).
+tree was dirty), OceanX version, package versions, the parallel-Expert limit and the number of questions run at
+once. It is written when the arm folder is first used; `launches.jsonl` beside it has one line per launch
+(commit, settings, questions).
 
 Launched from a settings file (RUNNING.md), an arm folder is `BENCH_OUTPUT_ROOT/<experiment>/runs/<arm>/`,
 with the same `<question>/attempt-*/` folders inside.

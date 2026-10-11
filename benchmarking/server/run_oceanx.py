@@ -160,7 +160,8 @@ def arm_record(args) -> dict:
             "max_parallel_experts": os.environ.get("OCEANX_MAX_PARALLEL_EXPERTS", "2"),
             "max_parallel_search_experts": os.environ.get(
                 "OCEANX_MAX_PARALLEL_SEARCH_EXPERTS", "1"),
-            "expert_call_limit": os.environ.get("OCEANX_EXPERT_CALL_LIMIT", "60")}
+            "expert_call_limit": os.environ.get("OCEANX_EXPERT_CALL_LIMIT", "60"),
+            "parallel_tasks": getattr(args, "parallel_tasks", 1)}
 
 
 def check_arm(output: Path) -> None:
@@ -178,23 +179,37 @@ def write_arm(attempt: Path) -> None:
         batch._write_json(path, {**ARM, "started_utc": dt.datetime.now(dt.UTC).isoformat()})
 
 
-async def run_cases(todo, output: Path) -> list[dict]:
-    """Run the questions one after another. SIGTERM ends the running one as Ctrl+C does."""
+async def run_cases(todo, output: Path, parallel: int = 1) -> list[dict]:
+    """Run the questions, at most ``parallel`` at once, and return their results in the given order.
+
+    Every question has a backend process, a state folder and a port of its own, so questions that
+    run together share only the machine and the model endpoint. A question is taken from ``todo``
+    when its turn comes, as when they ran one after another, and its result is kept as soon as it
+    ends. SIGTERM ends the running ones as Ctrl+C does, and so does an error that no attempt could
+    record; a question still waiting for its turn is then not started.
+    """
     from benchmark_run import append_result
 
-    results = []
-    loop, current = asyncio.get_running_loop(), asyncio.current_task()
-    loop.add_signal_handler(signal.SIGTERM, current.cancel)
-    try:
-        for case, directory in todo:
+    todo, results = enumerate(todo), {}
+
+    async def take_turns():
+        for place, (case, directory) in todo:  # shared: whoever is free takes the next question
             print(f"[{case.id}] running", file=sys.stderr, flush=True)
-            result = await batch.run_case(case, directory)
-            results.append(result)
+            result = results[place] = await batch.run_case(case, directory)
             append_result(output, result)
             print(f"[{case.id}] {result['status']}", file=sys.stderr, flush=True)
+
+    loop, current = asyncio.get_running_loop(), asyncio.current_task()
+    loop.add_signal_handler(signal.SIGTERM, current.cancel)
+    running = [asyncio.ensure_future(take_turns()) for _ in range(parallel)]
+    try:
+        await asyncio.gather(*running)
     finally:
+        for task in running:
+            task.cancel()
+        await asyncio.wait(running)  # each stopped question closes its backend and saves what it has
         loop.remove_signal_handler(signal.SIGTERM)
-    return results
+    return [results[place] for place in sorted(results)]
 
 
 def main(argv=None):
@@ -261,7 +276,8 @@ def main(argv=None):
     with runner_lock(output):  # held while collecting too: the collector reads and tidies this folder
         record_launch(output, 'OceanX', config, cases, args.resume, arm=ARM)
         try:
-            results = asyncio.run(run_cases(attempts(cases, output, args.resume), output))
+            results = asyncio.run(run_cases(attempts(cases, output, args.resume), output,
+                                            parallel=args.parallel_tasks))
         finally:
             from collect_oceanx import collect_run
 

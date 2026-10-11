@@ -199,6 +199,8 @@ def configure_run(args, config, method):
         os.environ['OCEANX_EXPERT_CALL_LIMIT'] = str(number(
             config, 'BENCH_OCEANX_EXPERT_CALL_LIMIT', integer=True, minimum=10, maximum=60,
             inclusive_min=True))
+        # Questions run at once, each in a backend of its own (Owner, 2026-10-11: two or three).
+        args.parallel_tasks = number(config, 'BENCH_OCEANX_PARALLEL_TASKS', integer=True, maximum=3)
         if args.timeout is None:
             args.timeout = number(config, 'BENCH_TIMEOUT_SECONDS', maximum=604800)
     elif method == 'Claude':

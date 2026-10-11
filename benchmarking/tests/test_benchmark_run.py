@@ -503,3 +503,212 @@ def test_explicit_cli_still_works_without_shared_roots(configured):
     args.resume = False  # --no-resume on the command line wins over the file
     configure_run(args, load_config(file), 'Claude')
     assert args.resume is False
+
+
+# ---------------------------------------------------------------- several OceanX questions at once
+def test_template_runs_one_oceanx_question_at_a_time():
+    template = ROOT / 'benchmarking/.env.example'
+    assert 'BENCH_OCEANX_PARALLEL_TASKS=1' in template.read_text().splitlines()  # written out, not defaulted
+    assert load_config(template).run['BENCH_OCEANX_PARALLEL_TASKS'] == '1'
+
+
+@pytest.fixture
+def backend_settings(monkeypatch):
+    """configure_run writes these into the environment; give them back afterwards."""
+    for name in ('OCEANX_EXPERT_CALL_LIMIT', 'OCEANX_MAX_PARALLEL_EXPERTS', 'OCEANX_MAX_PARALLEL_SEARCH_EXPERTS'):
+        monkeypatch.setenv(name, os.environ.get(name, '1'))
+
+
+@pytest.mark.parametrize('line, expected', [('', 1), ('BENCH_OCEANX_PARALLEL_TASKS=2\n', 2),
+                                            ('BENCH_OCEANX_PARALLEL_TASKS=3\n', 3)])
+def test_how_many_oceanx_questions_run_at_once_is_a_setting(configured, backend_settings, line, expected):
+    configured.write_text(configured.read_text() + line)
+    args = oceanx_args()
+    configure_run(args, load_config(configured), 'OceanX')
+    assert args.parallel_tasks == expected  # one at a time unless the settings say otherwise
+
+
+@pytest.mark.parametrize('value', ['0', '4', '1.5', 'many'])
+def test_oceanx_runs_one_to_three_questions_at_once_and_no_more(configured, backend_settings, value):
+    configured.write_text(configured.read_text() + f'BENCH_OCEANX_PARALLEL_TASKS={value}\n')
+    with pytest.raises(ValueError, match='BENCH_OCEANX_PARALLEL_TASKS'):
+        configure_run(oceanx_args(), load_config(configured), 'OceanX')
+
+
+def six_questions(tmp_path):
+    return [(SimpleNamespace(id=f'Q{n:02d}'), tmp_path / f'Q{n:02d}') for n in range(1, 7)]
+
+
+@pytest.mark.parametrize('parallel', [1, 2, 3])
+def test_oceanx_questions_overlap_only_as_far_as_the_setting_allows(tmp_path, monkeypatch, parallel):
+    """At most `parallel` at once, each taken when its turn comes; each result kept when its question ends."""
+    import asyncio
+
+    import run_oceanx
+    cases, active, seen = six_questions(tmp_path), set(), {'peak': 0, 'started': [], 'taken': []}
+
+    def todo():
+        for case, directory in cases:
+            seen['taken'].append(case.id)  # where benchmark_run.attempts names the folder of the new attempt
+            yield case, directory
+
+    async def run_case(case, directory):
+        gate = seen.setdefault('last_started', asyncio.Event())
+        assert seen['taken'][-1] == case.id  # no question after this one has been taken yet
+        active.add(case.id)
+        seen['started'].append(case.id)
+        seen['peak'] = max(seen['peak'], len(active))
+        if case.id == 'Q06':
+            gate.set()
+        if case.id == 'Q01' and parallel > 1:
+            await asyncio.wait_for(gate.wait(), timeout=5)  # ends only after the last one started beside it
+        await asyncio.sleep(0)
+        active.discard(case.id)
+        return {'id': case.id, 'status': 'completed'}
+
+    monkeypatch.setattr(run_oceanx.batch, 'run_case', run_case)
+    results = asyncio.run(run_oceanx.run_cases(todo(), tmp_path, parallel=parallel))
+    names = [case.id for case, _ in cases]
+    kept = [result['id'] for result in records(tmp_path / 'results.jsonl')]
+    assert seen['peak'] == parallel and seen['started'] == names
+    assert [result['id'] for result in results] == names  # returned in the order given, whatever ended first
+    assert sorted(kept) == names and (kept == names if parallel == 1 else kept.index('Q01') > kept.index('Q05'))
+
+
+def held_questions(monkeypatch, on_start=None):
+    """In place of OceanX's function for one question: each works until it is stopped, and says so."""
+    import asyncio
+
+    import run_oceanx
+    started, stopped = [], []
+
+    async def run_case(case, directory):
+        started.append(case.id)
+        try:
+            if on_start:
+                await on_start(case, started)
+            await asyncio.wait_for(asyncio.Event().wait(), timeout=5)
+        except asyncio.CancelledError:
+            stopped.append(case.id)
+            raise
+
+    monkeypatch.setattr(run_oceanx.batch, 'run_case', run_case)
+    return run_oceanx, started, stopped
+
+
+def test_an_interrupted_oceanx_launch_starts_no_question_that_was_still_waiting(tmp_path, monkeypatch):
+    import asyncio
+    run_oceanx, started, stopped = held_questions(monkeypatch)
+
+    async def launch_and_interrupt():
+        work = asyncio.ensure_future(run_oceanx.run_cases(iter(six_questions(tmp_path)), tmp_path, parallel=2))
+        for _ in range(10):
+            await asyncio.sleep(0)
+        work.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await work
+
+    asyncio.run(launch_and_interrupt())
+    assert started == ['Q01', 'Q02'] and sorted(stopped) == ['Q01', 'Q02']
+    assert not (tmp_path / 'results.jsonl').exists()
+
+
+def test_sigterm_ends_the_running_oceanx_questions_as_ctrl_c_does(tmp_path, monkeypatch):
+    import asyncio
+    import signal
+
+    async def terminate_when_two_run(case, started):
+        if len(started) == 2:
+            os.kill(os.getpid(), signal.SIGTERM)  # as `kill` or a scheduler does
+
+    run_oceanx, started, stopped = held_questions(monkeypatch, terminate_when_two_run)
+    before = signal.signal(signal.SIGTERM, lambda *_: None)  # were the launch deaf to it, the test would fail, not die
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(run_oceanx.run_cases(iter(six_questions(tmp_path)), tmp_path, parallel=2))
+        assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL  # the launch's own handler is gone again
+    finally:
+        signal.signal(signal.SIGTERM, before)
+    assert started == ['Q01', 'Q02'] and sorted(stopped) == ['Q01', 'Q02']
+
+
+def test_an_error_no_attempt_could_record_ends_the_oceanx_launch_and_the_questions_beside_it(tmp_path, monkeypatch):
+    """OceanX's function for one question records a failed attempt and returns; what it still raises
+    (the attempt folder could not be written, say) ended the launch before, and does now."""
+    import asyncio
+
+    async def disk_full_in_the_second(case, started):
+        if case.id == 'Q02':
+            await asyncio.sleep(0)  # the third question has started by then
+            raise OSError(28, 'No space left on device')
+
+    run_oceanx, started, stopped = held_questions(monkeypatch, disk_full_in_the_second)
+
+    async def launch():
+        with pytest.raises(OSError, match='No space left'):
+            await run_oceanx.run_cases(iter(six_questions(tmp_path)), tmp_path, parallel=3)
+        return sorted(stopped)  # by the launch itself, before the event loop ends
+
+    assert asyncio.run(launch()) == ['Q01', 'Q03'] and started == ['Q01', 'Q02', 'Q03']
+
+
+def test_a_launch_runs_oceanx_questions_together_when_the_settings_say_so(configured, monkeypatch, oceanx):
+    import asyncio
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(configured))
+    edit(configured, 'BENCH_OCEANX_PARALLEL_TASKS=2')
+    seen = {'started': []}
+
+    async def run_case(case, directory):
+        beside = seen.setdefault('beside', asyncio.Event())
+        seen['started'].append(case.id)
+        if case.id == 'Q07':
+            await asyncio.wait_for(beside.wait(), timeout=5)  # ends only once Q08 has started beside it
+        else:
+            beside.set()
+        return {'id': case.id, 'status': 'completed'}
+
+    monkeypatch.setattr(oceanx.module.batch, 'run_case', run_case)
+    assert oceanx.run() == 0
+    output = configured.parent / 'results/pilot-r1/runs/OceanX'
+    assert seen['started'] == ['Q07', 'Q08']
+    assert [result['id'] for result in records(output / 'results.jsonl')] == ['Q08', 'Q07']  # kept as each ends
+    [said] = records(output / 'launches.jsonl')  # what a reader needs to tell how these attempts ran
+    assert said['settings']['BENCH_OCEANX_PARALLEL_TASKS'] == '2' and said['arm']['parallel_tasks'] == 2
+
+
+def test_two_oceanx_questions_at_once_each_keep_an_attempt_of_their_own(configured, monkeypatch, oceanx_entry):
+    """Through OceanX's own function for one question; only the backend process is replaced. One backend
+    is lost while the other question is being analysed beside it."""
+    import asyncio
+    monkeypatch.setenv('OCEAN_BENCH_CONFIG', str(configured))
+    edit(configured, 'BENCH_OCEANX_PARALLEL_TASKS=2')
+    analysed, together = {}, []
+
+    class BesideAnother(FakeBackend):
+        async def analyze(self):
+            analysed[self.case.id] = asyncio.Event()
+            if self.case.id == 'Q07':
+                for _ in range(100):  # until Q08 is being analysed too
+                    if 'Q08' in analysed:
+                        break
+                    await asyncio.sleep(0.01)
+                together.append('Q08' in analysed)
+                analysed['Q07'].set()
+                raise RuntimeError('backend disconnected')
+            await asyncio.wait_for(analysed['Q07'].wait(), timeout=5)  # Q08 answers after Q07 lost its backend
+            return {'type': 'request.completed', 'payload': {'result': {'assistant_text': 'Answer to Q08'}}}
+
+    monkeypatch.setattr(oceanx_entry.module, 'BenchmarkClient', BesideAnother)
+    assert oceanx_entry.run() == 1 and together == [True]
+    output = configured.parent / 'results/pilot-r1/runs/OceanX'
+    first, second = records(output / 'results.jsonl')
+    assert (first['id'], first['status'], second['id'], second['status']) == ('Q07', 'failed', 'Q08', 'completed')
+    assert 'backend disconnected' in first['error']  # a lost backend does not stop the question beside it
+    for result in (first, second):
+        attempt = Path(result['directory'])
+        assert attempt.parent == output / result['id']
+        assert json.loads((attempt / 'result.json').read_text())['status'] == result['status']
+        assert json.loads((attempt / 'query.json').read_text())['id'] == result['id']
+    assert (Path(second['directory']) / 'answer.md').read_text() == 'Answer to Q08'
+    assert not (Path(first['directory']) / 'answer.md').exists()
+    assert oceanx_entry.collected == [output]
