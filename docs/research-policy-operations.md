@@ -56,7 +56,8 @@ default, is a code change reviewed like any other, then compared with paired run
 | `outcomes.py` | Per-node cost, code runs, citation, children, proposals made/adopted, reopen/conflict, skills opened; the Coordinator's own calls count on the root |
 | `labels.py` | Auto and judge labels, the small human review set, judge–human agreement |
 | `memory.py` | Per-task digests (outline, decision history, outcomes, labels), process measures of a finished tree (`run_measures`), weekly consolidation and archiving |
-| `referee.py` | An independent reading of each finished task's final answer (what the question asks for and the answer lacks, conclusions stronger than their support), kept as evidence for the lesson review |
+| `referee.py` | An independent reading of each finished task's final answer (what the question asks for and the answer lacks, conclusions stronger than their support, and the meta-agent's notes as a reviewer on what a complete answer would also hold), kept as evidence for the lesson review |
+| `reviews.py` | A reviewer's notes on a finished task's final answer, written by the owner or someone the owner asked; the lesson review weighs them above the system's own reading |
 | `lessons.py` | The meta-agent's review of each skill's lessons (keep, revise, retire, add), the rules code enforces, the owner's marks and the change log |
 | `toolbook.py` | The helper functions a task mounts, the call counter, usage statistics, and tools learned from repeated code (static check, sandboxed test, independent review) |
 | `../skill_regions.py` | The marked regions of a SKILL.md (`oceanx:lessons`, `oceanx:tools`) and how they are filled |
@@ -89,15 +90,35 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   (`.oceanx/research/referee/<task_key>.json`). One call lists what the question asks for, from
   the question alone and once per question; a second reads the answer against that list and
   notes what is missing or partial, conclusions stronger than the support the answer gives, and
-  superseded numbers still used; a third asks six questions a careful reader asks of any
-  research answer (`referee.ASPECTS`: framing, results, depth, breadth, robustness, rigor) and
-  says, for each the answer does not fully meet, what a stronger answer would have contained.
-  The first two say what an answer got wrong or left out; the third says what would have made
-  it better research, and the Coordinator's lessons are learned from it. A reading made before
-  the third call existed is completed by that call alone. A reading is evidence, not a rule: in a hand check of five
+  superseded numbers still used; a third reviews the answer as a specialist would for a
+  journal: up to 10 notes on what a complete answer to a question of this kind would also hold,
+  each under one aspect (`referee.ASPECTS`: framing, results, depth, breadth, robustness, rigor)
+  and marked as expected of such answers in general or as particular to this question.
+  The first two say what an answer got wrong or left out of its question; the third says what
+  would have made it better research, and the Coordinator's lessons are learned from it (asked
+  only whether an answer "does" each aspect, the model said yes to 61 of 72). A reading made
+  before the third call existed is completed by that call alone. A reading is evidence, not a rule: in a hand check of five
   answers about one finding in three was wrong, so a lesson still needs the same kind of finding
   in tasks on 3 different questions. At most 20 tasks are read in one update; a call that fails
   twice or does not return in 300 s leaves its task for the next update.
+- **A reviewer's notes.** The meta-agent reviews with the model it is given and does not know
+  a field as a specialist does. The owner, or someone the owner asks, can add notes of the same
+  form on any finished task's final answer (`reviews.py`, kept under
+  `.oceanx/research/reviews/<task_key>.json`):
+
+  ```bash
+  ocean research review --project <folder> --task <task key> --notes notes.json --reviewer <name>
+  ```
+
+  `notes.json` is `{"notes": [{"aspect": "depth", "text": "...", "general": true}]}`: at most 16
+  notes of at most 400 characters, each saying what the answer lacks, gets wrong or overstates.
+  The task counts as new for the next lesson review, which shows the notes in the task's record
+  and weighs them above the meta-agent's own. A later review of the same task replaces the
+  earlier one. The desktop has no form for this yet.
+- **The meta-agent's model.** Readings, the lesson review, tool learning and node labels use the
+  `meta` role (`llm.default_llm`): the profile `role_profiles.meta` of the model settings when
+  there is one, otherwise the Experts' model. The desktop's settings do not offer a third model
+  yet; the benchmark sets one in its own file (`BENCH_META_*`).
 - **Marked regions.** A skill reserves a place for what the project learns:
 
   ```text
@@ -126,8 +147,9 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   of 468. So a research task names to each reader the skills that now carry something learned
   (`ProjectResearch.learned_in`): a data Expert is told, before its first calculation, to read
   in one step every skill of its role that holds a lesson written for Experts, and
-  `xarray-array-ops` when it lists a learned function; the Coordinator reads `claim-grounded-writing` before the final answer when it
-  holds a lesson (its planning skill is always named). A model call that only reads files under
+  `xarray-array-ops` when it lists a learned function; the Coordinator reads `claim-grounded-writing` when it
+  holds a lesson, and is told to read it again when it starts the final answer (its planning
+  skill is always named). A model call that only reads files under
   `/skills` is not counted in an Expert's call budget, up to six such calls a run, so reading
   what was learned takes nothing from the analysis. A project that has learned nothing names no
   skill.

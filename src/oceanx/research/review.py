@@ -17,6 +17,7 @@ from oceanx.research.lessons import READERS, LessonBook
 from oceanx.research.memory import ResearchMemory
 from oceanx.research.policy import active_policy
 from oceanx.research.referee import Referee
+from oceanx.research.reviews import Reviews
 from oceanx.research.toolbook import MODULE as TOOL_MODULE
 from oceanx.research.toolbook import SKILL as TOOL_SKILL
 from oceanx.research.toolbook import ToolBook
@@ -40,6 +41,7 @@ class ProjectResearch:
         self.lessons = LessonBook(self.memory)
         self.tools = ToolBook(self.memory)
         self.referee = Referee(self.memory)
+        self.reviews = Reviews(self.memory)
 
     @staticmethod
     def policy():

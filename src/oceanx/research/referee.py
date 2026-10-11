@@ -10,11 +10,14 @@ reads the research question and the final answer, in three calls:
 2. the final answer against that list: what is missing or partial, which conclusions are
    stronger than the support the answer itself gives, and which superseded numbers it still
    uses;
-3. the final answer along six questions a careful reader asks of any research answer
-   (``ASPECTS``): for each one the answer does not fully meet, what a stronger answer would
-   have contained. The first two parts say what an answer got wrong or left out; this part
-   says what would have made it better research, which is what the Coordinator's lessons
-   are learned from.
+3. the final answer as a reviewer of such answers would read it: notes on what a complete
+   answer to a question of this kind would also hold, by aspect (``ASPECTS``), each marked
+   general or particular to the question. The first two parts say what an answer got wrong
+   or left out of its question; this part says what would have made it better research,
+   which is what the Coordinator's lessons are learned from. Asked only whether the answer
+   "does" each aspect, the same model said yes to 61 of 72 (2026-10-11), so it is asked for
+   what is missing instead. A reviewer who knows the field can add notes of the same form
+   (``reviews.py``).
 
 A reading is evidence for the lesson review (``lessons.py``), never a rule or a score. In a
 hand check of five answers (2026-10-09) about one finding in three was wrong, which is why a
@@ -52,6 +55,9 @@ MAX_NEW_PER_UPDATE = 20  # tasks read in one update, newest first; the rest wait
 CALL_SECONDS = 300  # one model call; the slowest of 33 trial calls took 95 s, one never returned
 # What a task record shows the meta-agent of one reading (the file keeps all of it).
 SHOWN_ASKED, SHOWN_CLAIMS, SHOWN_SUPERSEDED = 6, 5, 3
+MAX_NOTES = 16  # notes in one review
+MAX_NOTE_CHARS = 400
+OWN_NOTES = 10  # notes the system's own reviewer may give on one answer
 # What a careful reader asks of a research answer. Each can be judged from the question and the
 # answer alone: no data, no code and no reference result.
 ASPECTS = {
@@ -119,22 +125,27 @@ Final answer:
 {answer}
 """
 
-QUALITY_PROMPT = """\
-You read a research answer as someone who saw none of the work behind it. You see only the
-question and the final answer: no data, no code and no reference result.
+EXPECTED_PROMPT = """\
+You review a research answer for a journal, as a specialist in the ocean phenomenon it is about.
+You saw none of the work behind it. You see only the question and the final answer: no data, no
+code and no reference result.
 
-For each of the six questions below, say whether the answer does it: "yes", "partly" or "no".
-For "partly" and "no", say in one sentence what a stronger answer to this research question
-would have contained. Name the missing analysis or content itself; do not repeat the question.
+Judge it against what a complete answer to a question of this kind holds, not against what its
+authors chose to do. Name what such an answer would also contain and this one lacks: an
+analysis, a comparison, a table, a quantity or a test. Name the thing itself in one or two
+sentences, so that someone could carry it out with data of the kind the question supplies.
 
+Each note belongs to one of these aspects:
 {aspects}
 
-Judge only what the answer shows. Where the answer says the supplied data cannot decide
-something and names the data that would, count that part as done. Do not ask for data the
-question says are not supplied.
+Give at most {limit} notes, the most valuable first. Give none for an aspect in which a
+specialist would miss nothing. Mark a note "general": true when answers to questions of this
+kind are generally expected to hold it, and false when it concerns this question only.
+Do not ask for data the question says are not supplied. Do not repeat what the answer already
+does, or already states as a limit.
 
 Return JSON only:
-{{"quality": [{{"aspect": "<name>", "status": "yes" | "partly" | "no", "gap": "<one sentence, or empty>"}}]}}
+{{"notes": [{{"aspect": "<name>", "text": "<one or two sentences>", "general": true | false}}]}}
 
 Question:
 {question}
@@ -224,19 +235,60 @@ def read_answer(question: str, asked: list[str], answer: str, llm: Callable[[str
     }
 
 
-def read_quality(question: str, answer: str, llm: Callable[[str], str]) -> list[dict]:
-    """One final answer along the six questions: what a stronger answer would have contained."""
-    reply = _ask(llm, QUALITY_PROMPT.format(
-        aspects="\n".join(f"{name}: {text}" for name, text in ASPECTS.items()),
+def check_notes(raw) -> list[dict]:
+    """A list of notes as it is kept: each with its aspect, its text and whether it is general.
+    A ValueError says what is wrong."""
+    if isinstance(raw, dict):
+        raw = raw.get("notes")
+    raw = raw if isinstance(raw, list) else []
+    if not raw:
+        raise ValueError("A review needs a list of notes.")
+    if len(raw) > MAX_NOTES:
+        raise ValueError(f"A review has at most {MAX_NOTES} notes; this one has {len(raw)}.")
+    notes = []
+    for number, entry in enumerate(raw, 1):
+        entry = entry if isinstance(entry, dict) else {}
+        text = " ".join(str(entry.get("text") or "").split())
+        if entry.get("aspect") not in ASPECTS:
+            raise ValueError(f"Note {number} needs an aspect: one of {', '.join(ASPECTS)}.")
+        if not text or len(text) > MAX_NOTE_CHARS:
+            raise ValueError(f"Note {number} needs a text of 1-{MAX_NOTE_CHARS} characters.")
+        general = entry.get("general")
+        if general is not True and general is not False:
+            raise ValueError(f"Note {number} must say whether it is general: true or false.")
+        notes.append({"aspect": entry["aspect"], "text": text, "general": general})
+    return notes
+
+
+def note_lines(notes: list[dict]) -> list[str]:
+    """Notes as a task record shows them: what is expected of such answers, then the rest."""
+    lines = []
+    for general, heading in ((True, "expected of answers to such questions"),
+                             (False, "particular to this question")):
+        chosen = [note for note in notes if note["general"] is general]
+        if chosen:
+            lines.append(f"  {heading}: " + " | ".join(f"{note['aspect']}: {note['text']}" for note in chosen))
+    return lines
+
+
+def read_expected(question: str, answer: str, llm: Callable[[str], str]) -> list[dict]:
+    """One final answer as a reviewer of such answers reads it: what a complete answer would
+    also hold. A note the model wrote badly is dropped; an answer may get no note at all."""
+    reply = _ask(llm, EXPECTED_PROMPT.format(
+        aspects="\n".join(f"{name}: {text}" for name, text in ASPECTS.items()), limit=OWN_NOTES,
         question=question, answer=answer[:MAX_ANSWER_CHARS]))
-    found = {}
-    for entry in reply.get("quality") or []:
-        if isinstance(entry, dict) and entry.get("aspect") in ASPECTS and entry.get("status") in STATUSES:
-            found[entry["aspect"]] = {"aspect": entry["aspect"], "status": entry["status"],
-                                      "gap": "" if entry["status"] == "yes" else _clip(entry.get("gap"), 240)}
-    if len(found) < len(ASPECTS):
-        raise ValueError(f"The reader left out {', '.join(sorted(set(ASPECTS) - set(found)))}.")
-    return [found[name] for name in ASPECTS]
+    if "notes" not in reply:
+        raise ValueError("The reviewer returned no list of notes.")
+    raw = reply["notes"] if isinstance(reply["notes"], list) else []
+    notes = []
+    for entry in raw[:OWN_NOTES]:
+        try:
+            notes += check_notes([{**entry, "text": _clip(entry.get("text"), MAX_NOTE_CHARS)}])
+        except (ValueError, TypeError):
+            continue
+    if raw and not notes:
+        raise ValueError("None of the reviewer's notes names an aspect, a text and whether it is general.")
+    return notes
 
 
 def reading_lines(reading: dict) -> list[str]:
@@ -261,10 +313,10 @@ def reading_lines(reading: dict) -> list[str]:
     if stale:
         lines.append("  superseded but still used: " + listed(stale, SHOWN_SUPERSEDED, lambda e: (
             f"\"{_clip(e['stale'], 110)}\", corrected to \"{_clip(e.get('corrected'), 110)}\"")))
-    gaps = [entry for entry in reading.get("quality") or [] if entry.get("status") in ("partly", "no")]
-    if gaps:
-        lines.append("  a stronger answer would have contained: " + " | ".join(
-            f"{entry['aspect']} ({entry['status']}): {entry.get('gap') or 'not said'}" for entry in gaps))
+    notes = reading.get("expected") or []
+    if notes:
+        lines.append(f"  the same reader as a reviewer of such answers ({len(notes)} notes):")
+        lines += ["  " + line for line in note_lines(notes)]
     return lines
 
 
@@ -319,14 +371,14 @@ class Referee:
         question, answer = self._task(store_path)
         if not question.strip() or len(answer.strip()) < MIN_ANSWER_CHARS:
             if earlier is not None:  # its answer is no longer kept: there is nothing to add to
-                self._keep({**earlier, "quality": []})
+                self._keep({**earlier, "expected": []})
             return None
         reading = earlier or {
             "schema": READING_SCHEMA, "task_key": task_key(store_path), "question_key": question_key(question),
             "read_at": datetime.now(UTC).isoformat(), "answer_chars": len(answer),
             **read_answer(question, self._asked(question, llm), answer, llm)}
         self._keep(reading)
-        reading = {**reading, "quality": read_quality(question, answer, llm)}
+        reading = {**reading, "expected": read_expected(question, answer, llm)}
         self._keep(reading)
         return reading
 
@@ -337,7 +389,7 @@ class Referee:
         have = self.readings()
         waiting = [path for path in map(Path, store_paths)
                    if path.is_file() and task_key(path) in finished
-                   and "quality" not in have.get(task_key(path), {})]
+                   and "expected" not in have.get(task_key(path), {})]
         waiting.sort(key=lambda path: finished[task_key(path)].get("started_at") or "", reverse=True)
         result = {"read": 0, "completed": 0, "without_answer": 0, "failed": [],
                   "left_for_later": max(len(waiting) - MAX_NEW_PER_UPDATE, 0)}
@@ -352,5 +404,5 @@ class Referee:
         return result
 
 
-__all__ = ["ASPECTS", "READING_SCHEMA", "Referee", "asked_items", "question_key", "read_answer",
-           "read_quality", "reading_lines"]
+__all__ = ["ASPECTS", "MAX_NOTES", "MAX_NOTE_CHARS", "READING_SCHEMA", "Referee", "asked_items",
+           "check_notes", "note_lines", "question_key", "read_answer", "read_expected", "reading_lines"]

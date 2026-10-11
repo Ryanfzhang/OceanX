@@ -601,7 +601,11 @@ DATA_EXPERT_ROLES = frozenset({"ocean_process_expert", "statistical_inference_ex
 # names to each reader the skills that now carry something learned (ProjectResearch.learned_in),
 # as the Coordinator's planning skill always is. A project that has learned nothing names none.
 WRITING_SKILL = "claim-grounded-writing"  # the Coordinator reads its lessons before the final answer
-FINAL_ANSWER_SKILL_RULE = f"Before you write the final answer, read /skills/{WRITING_SKILL}/SKILL.md once. "
+# "Before you write the final answer, read it once" was met by reading it at the start, an hour
+# and more before the answer was written (three test runs, 2026-10-11).
+FINAL_ANSWER_SKILL_RULE = (
+    f"When the research is done and you start on the final answer, read /skills/{WRITING_SKILL}/SKILL.md "
+    "again, also if you read it earlier: its lessons say what a final answer must contain and check. ")
 
 
 def learned_skills_rule(skills: list[str]) -> str:

@@ -155,6 +155,24 @@ def mark(
     typer.echo(f"marked {kind} {item}: {'right' if right else 'wrong'}")
 
 
+@research_app.command("review")
+def review_answer(
+    project: Path = typer.Option(..., "--project"),
+    task: str = typer.Option(..., "--task", help="The task's key: the name of its digest file."),
+    notes: Path = typer.Option(..., "--notes", exists=True, dir_okay=False,
+                               help='JSON: {"notes": [{"aspect": "depth", "text": "...", "general": true}]}'),
+    reviewer: str = typer.Option(..., "--reviewer"),
+) -> None:
+    """Record a reviewer's notes on one finished task's final answer: what it lacks, gets wrong
+    or overstates. The next `consolidate --review` learns from them."""
+    try:
+        kept = _project(project).reviews.record(task, json.loads(notes.read_text(encoding="utf-8")),
+                                                reviewer=reviewer)
+    except ValueError as exc:  # also a notes file that is not JSON
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"kept {len(kept['notes'])} notes on {task}")
+
+
 @research_app.command("snapshot")
 def snapshot(
     project: Path = typer.Option(..., "--project"),

@@ -15,7 +15,8 @@ chmod 600 benchmarking/.env
 
 | 设置 | 含义 |
 |---|---|
-| `DEEPSEEK_API_KEY`、`BENCH_MODEL` | 三个方法和离线的学习步骤共用一个模型和一个 key；桌面端自己的设置不受影响 |
+| `DEEPSEEK_API_KEY`、`BENCH_MODEL` | 三个方法共用一个模型和一个 key；桌面端自己的设置不受影响 |
+| `BENCH_META_MODEL`、`BENCH_META_API`、`BENCH_META_BASE_URL`、`BENCH_META_API_KEY` | meta-agent 自己的 API。它在跑完题之后工作：以审稿人的身份读答案、学经验、学工具、给研究树打标签，不参与答题。四项都留空就用 `BENCH_MODEL` |
 | `BENCH_DATA_ROOT` | 数据根目录，里面要有下载好的数据和 `_download_all/` |
 | `BENCH_OUTPUT_ROOT` | 结果根目录，必须和数据、代码仓库分开 |
 | `BENCH_EXPERIMENT` | 结果文件夹的名字。代码、设置、数据变了都可以不换 |
@@ -116,9 +117,15 @@ python benchmarking/server/research_cli.py snapshot --project "$EVO" --output "$
 ```
 
 - 三步依次是：让模型给每棵研究树打标签；读这些记录学习一次（经验和工具）；把学到的冻结成库。
-- 学习那一步会先让模型把每道题的最终答案单独读一遍（只给题目和答案），列出题目要的哪些没给、哪些结论
-  超出了证据、一份更强的答案还应该包含什么，再和研究树记录一起交给元代理。12 道题大约多花 20 分钟；
-  `review.json` 里的 `referee` 一项是读了几道（`read`）、给旧的阅读补了几道（`completed`）、哪几道没读成。
+- 学习那一步会先让 meta-agent 把每道题的最终答案单独读一遍（只给题目和答案）：列出题目要的哪些没给、
+  哪些结论超出了证据；再以审稿人的身份写最多 10 条意见，说一份完整的答案还应该有哪些分析或量。这些和
+  研究树记录一起用来学经验。12 道题大约多花 20 分钟；`review.json` 里的 `referee` 一项是读了几道
+  （`read`）、给旧的阅读补了几道（`completed`）、哪几道没读成。
+- meta-agent 用哪个模型由 `.env` 里的 `BENCH_META_*` 决定，留空就是 `BENCH_MODEL`。命令开头会在屏幕上
+  打一行 `meta-agent model: ...`，写报告时把它记下来。
+- 懂行的人也可以给某道进化题的答案写评审意见，下次学习会优先参考：
+  `python benchmarking/server/research_cli.py review --project "$EVO" --task <task key> --notes <文件> --reviewer <名字>`。
+  只能评进化题，意见里不能出现测试题、rubric 或参考答案的内容。
 - 经验以协调者为主：每次学习给协调者的两个 skill 各最多加 4 条，给专家的四个 skill 各最多加 1 条。新提的
   经验和已有的说的是同一件事时不新增，它的依据并到已有那条上，`lessons.rejected` 里会写明并到了哪一条。
 - 想让经验按新策略从头学一遍：把 `$EVO/.oceanx/research/lessons` 改名留作备份，再执行 `consolidate --review`。

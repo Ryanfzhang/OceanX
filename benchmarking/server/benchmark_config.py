@@ -11,6 +11,7 @@ DEFAULT_CONFIG = ROOT / 'benchmarking' / '.env'
 DEFAULT_MODEL = 'deepseek-flash'
 DEFAULT_ENDPOINTS = {'openai': 'https://api.deepseek.com',
                      'anthropic': 'https://api.deepseek.com/anthropic'}
+META_FIELDS = ('BENCH_META_MODEL', 'BENCH_META_API', 'BENCH_META_BASE_URL', 'BENCH_META_API_KEY')
 RUN_DEFAULTS = {
     'BENCH_DATA_ROOT': '', 'BENCH_OUTPUT_ROOT': '', 'BENCH_EXPERIMENT': 'methods-public-r1',
     'BENCH_SUITE': 'test', 'BENCH_EVOLUTION_SET': '', 'BENCH_TASKS': 'available',
@@ -33,6 +34,24 @@ class Endpoint:
 
 
 @dataclass(frozen=True)
+class MetaModel:
+    """The meta-agent's own model (BENCH_META_*). It reads finished answers as a reviewer, reviews
+    the lessons, learns tools and labels tree nodes; it takes no part in answering a question."""
+    model: str
+    api: str
+    endpoint: Endpoint = field(repr=False)
+
+
+def _checked(e, missing, setting):
+    if not e or not e.url or not e.api_key or e.api_key.startswith('REPLACE_'):
+        raise ValueError(f'benchmarking/.env: fill {missing}')
+    u = urlsplit(e.url)
+    if u.scheme not in ('https', 'http') or not u.hostname or u.username or u.password or u.query or u.fragment:
+        raise ValueError(f'benchmarking/.env: invalid {setting}')
+    return e
+
+
+@dataclass(frozen=True)
 class Config:
     model: str
     oceanx_api: str
@@ -40,19 +59,23 @@ class Config:
     max_tokens: int = 32768
     run: dict[str, str] = field(default_factory=dict, repr=False)
     source: Path | None = field(default=None, repr=False)
+    meta: MetaModel | None = None  # None: the meta-agent uses the model above
 
     def endpoint(self, protocol):
-        e = self.endpoints.get(protocol)
-        if not e or not e.url or not e.api_key or e.api_key.startswith('REPLACE_'):
-            raise ValueError('benchmarking/.env: fill DEEPSEEK_API_KEY')
-        u = urlsplit(e.url)
-        if u.scheme not in ('https', 'http') or not u.hostname or u.username or u.password or u.query or u.fragment:
-            raise ValueError(f'benchmarking/.env: invalid BENCH_{protocol.upper()}_BASE_URL')
-        return e
+        return _checked(self.endpoints.get(protocol), 'DEEPSEEK_API_KEY', f'BENCH_{protocol.upper()}_BASE_URL')
+
+    def meta_endpoint(self):
+        """Where the meta-agent's calls go: its own API when it has one."""
+        if self.meta is None:
+            return self.endpoint(self.oceanx_api)
+        return _checked(self.meta.endpoint, 'BENCH_META_API_KEY', 'BENCH_META_BASE_URL')
 
     def public(self):
-        return {'model': self.model, 'oceanx_api': self.oceanx_api, 'max_tokens': self.max_tokens,
-                'endpoints': {k: {'url': v.url} for k, v in self.endpoints.items()}}
+        shown = {'model': self.model, 'oceanx_api': self.oceanx_api, 'max_tokens': self.max_tokens,
+                 'endpoints': {k: {'url': v.url} for k, v in self.endpoints.items()}}
+        if self.meta is not None:
+            shown['meta'] = {'model': self.meta.model, 'api': self.meta.api, 'url': self.meta.endpoint.url}
+        return shown
 
 
 def load_config(path=None):
@@ -70,7 +93,7 @@ def load_config(path=None):
                     raise ValueError(f'Duplicate benchmark .env field at line {binding.original.line}')
                 raw[binding.key] = binding.value or ''
     allowed = {'DEEPSEEK_API_KEY', 'BENCH_MODEL', 'BENCH_OCEANX_API', 'BENCH_MAX_TOKENS',
-               'BENCH_OPENAI_BASE_URL', 'BENCH_ANTHROPIC_BASE_URL'} | set(RUN_DEFAULTS)
+               'BENCH_OPENAI_BASE_URL', 'BENCH_ANTHROPIC_BASE_URL', *META_FIELDS} | set(RUN_DEFAULTS)
     if set(raw) - allowed:
         raise ValueError('benchmark .env has unsupported fields; use the fields in benchmarking/.env.example')
     model = raw.get('BENCH_MODEL', DEFAULT_MODEL).strip()
@@ -89,7 +112,24 @@ def load_config(path=None):
     endpoints = {name: Endpoint(raw.get(f'BENCH_{name.upper()}_BASE_URL', url).strip(), key)
                  for name, url in DEFAULT_ENDPOINTS.items()}
     return Config(model, protocol, endpoints, tokens,
-                  {k: raw.get(k, v).strip() for k, v in RUN_DEFAULTS.items()}, path)
+                  {k: raw.get(k, v).strip() for k, v in RUN_DEFAULTS.items()}, path,
+                  _meta_model(raw, protocol, endpoints, key))
+
+
+def _meta_model(raw, protocol, endpoints, key):
+    """The meta-agent's own API (Owner, 2026-10-11). Without BENCH_META_MODEL it has none and uses
+    the model of the runs. A model alone is another model of the same service and key."""
+    model, api, url, own_key = (raw.get(name, '').strip() for name in META_FIELDS)
+    if not model:
+        if api or url or own_key:
+            raise ValueError('benchmarking/.env: the BENCH_META_* fields need BENCH_META_MODEL')
+        return None
+    api = api or protocol
+    if api not in ('openai', 'anthropic'):
+        raise ValueError('benchmarking/.env: BENCH_META_API must be openai or anthropic')
+    if bool(url) != bool(own_key):
+        raise ValueError('benchmarking/.env: BENCH_META_BASE_URL and BENCH_META_API_KEY go together')
+    return MetaModel(model, api, Endpoint(url or endpoints[api].url, own_key or key))
 
 
 def load_runner_config(method, path=None):

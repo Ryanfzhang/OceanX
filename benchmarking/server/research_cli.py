@@ -15,7 +15,9 @@ def main():
     # One review of a dozen tasks is all a benchmark round gets, so the repeated code of one
     # question is enough for a tool here; everyday OceanX asks for two (toolbook.py).
     os.environ.setdefault("OCEANX_TOOL_MIN_SUPPORT", "1")
-    install_oceanx_models()
+    models = install_oceanx_models() or {}
+    # Beside the command's own output, so that a report can name the model that learned a library.
+    print("meta-agent model:", (models.get("meta") or models).get("model"), file=sys.stderr)
     from oceanx.research.cli import research_app
     research_app(args=sys.argv[1:], prog_name="research_cli.py")
 

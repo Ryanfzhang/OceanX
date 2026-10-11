@@ -3,15 +3,18 @@
 A skill reserves a place for lessons with a marked region (``skill_regions.py``): how many it
 may hold and what they are about. The meta-agent maintains the lessons of each such skill. At
 every review it reads the skill as its readers get it, and the saved records of finished
-tasks, each with an independent reading of its final answer where one exists (``referee.py``);
-it judges every current lesson (keep, revise or retire) and may add new ones. Only the
+tasks, each with an independent reading of its final answer where one exists (``referee.py``)
+and with a reviewer's notes on that answer where someone wrote them (``reviews.py``); it
+judges every current lesson (keep, revise or retire) and may add new ones. Only the
 region is rewritten. The rest of the skill, and the packaged files, never change.
 
 The Coordinator is the reader that learns most (``MAX_NEW_PER_REVIEW``). It decides which
 sub-questions are asked and writes the final answer, and that is where answers fell short: the
 first library, mostly cautions for Experts, left the judged answers unchanged (2026-10-10).
-Its lessons are learned from the trees' decisions and from what the independent reading says
-a stronger final answer would have contained.
+Its lessons are learned from the trees' decisions, from what the independent reading says a
+stronger final answer would have contained, and above all from what a reviewer found missing:
+most of the points an outside judge took were for analyses that nothing in the question named
+and that only someone who knows what a complete answer holds could ask for (2026-10-11).
 
 What the meta-agent decides takes effect at once. These rules are enforced by code, not by
 the model:
@@ -45,6 +48,7 @@ from pathlib import Path
 from oceanx.research.llm import parse_json_object
 from oceanx.research.memory import ResearchMemory
 from oceanx.research.referee import Referee, reading_lines
+from oceanx.research.reviews import Reviews, review_lines
 from oceanx.research.tree_store import atomic_write_text
 from oceanx.skill_regions import Region, fill_regions, find_regions
 
@@ -93,7 +97,8 @@ when the task did the opposite and that went well.
 the skill does not already say: propose nothing it already says, even in other words, and nothing
 the records show already being done. A lesson is worth proposing only when the records show a
 contrast: a choice that cost effort without changing the answer, one that went well in some
-places and badly in others, or the same kind of gap left in the final answers of several tasks.
+places and badly in others, or the same kind of gap left in the final answers of several tasks,
+as the independent reading or a reviewer's notes show it.
 Prefer no lesson over a weak one.
 
 {scope}
@@ -133,9 +138,10 @@ the question is answered well enough, and what the final answer must contain and
 Judge a decision by what it cost and gained in the records: minutes and tokens, whether the node
 changed the conclusion (its label) and is cited, what was asked after a result that could not decide
 the question, and which follow-ups were dropped.
-Judge the whole tree by its final answer: what the question asks for that the answer does not give,
-and what a stronger answer would have contained (the independent reading). A lesson that closes
-such a gap names the sub-question that was never asked, or what the final answer left unchecked.
+Judge the whole tree by its final answer: what a reviewer found missing in it, what the question
+asks for that it does not give, and what a stronger answer would have contained (the independent
+reading). A lesson that closes such a gap names the sub-question that was never asked, or what the
+final answer left unchecked.
 It says what to do, not what to avoid, and asks for nothing that the tasks' data, Experts and time
 could not have done.""", """\
 Each task lists its questions in the order the Coordinator created them. An ID shows the parent:
@@ -153,8 +159,8 @@ a method assumption that did not hold; a test that caught an error, or whose abs
 through; how a result the data cannot decide was reported; or a conclusion stated more strongly
 than the analysis behind it supports.
 The evidence is in each node's result and limits, in later questions that had to re-examine an
-earlier result, and in the independent reading of the final answer. Each node names the Expert
-that analysed it.""", """\
+earlier result, in the independent reading of the final answer and in a reviewer's notes on it.
+Each node names the Expert that analysed it.""", """\
 Each task lists the questions its Experts answered, in order. An ID shows the parent: B1.3.2 is under
 B1.3. A task "run with lessons" had lessons in its skills when it ran. "found" is the Expert's
 result and "limits" the limitations it reported. "why" is the Coordinator's reason for asking, which
@@ -168,11 +174,27 @@ READING_NOTE = """\
 "Independent reading" comes from a model that saw only the research question and the final
 answer, none of the work. It lists what the question asks for and the answer does not give,
 conclusions stronger than the support the answer states, and superseded numbers the answer
-still uses. "A stronger answer would have contained" is the same reader on six questions it
-asks of any research answer (framing, results, depth, breadth, robustness, rigor); only those
-the answer did not fully meet are listed. About one such finding in three is wrong. Use a
-finding only where the task's own results bear it out, and build a lesson on a kind of finding
-that recurs in tasks on different questions, never on one finding."""
+still uses. "The same reader as a reviewer of such answers" then notes what a complete answer
+to a question of this kind would also hold, by aspect (framing, results, depth, breadth,
+robustness, rigor), and whether the point is expected of such answers in general or particular
+to this question. About one such finding in three is wrong, and this reader does not know the
+field as a specialist does. Use a finding only where the task's own results bear it out, and
+build a lesson on a kind of finding that recurs in tasks on different questions, never on one
+finding."""
+
+# How every reader's records show a reviewer's notes (reviews.py).
+REVIEW_NOTE = """\
+"Reviewer's notes" come from an independent reviewer who knows what a complete answer to such a
+question holds: the owner, or someone the owner asked. A note names what the final answer lacks,
+gets wrong or overstates. Weigh it above the independent reading. A record without them was not
+reviewed by anyone.
+
+In both kinds of notes, "expected of answers to such questions" is the writer's own judgement
+that the point is general, and "particular to this question" speaks of one task only. A lesson
+still needs the same kind of note in tasks on different questions. Where several tasks lack the
+same kind of analysis or content, the lesson says what to ask for or what the answer must
+contain, in words that hold for other ocean questions: never the regions, variables or
+processes of these tasks."""
 
 SAME_PROMPT = """\
 You check new lessons against the lessons OceanX's skills already carry, so that no idea is
@@ -378,10 +400,10 @@ class LessonBook:
             question = _norm(digest.get("question"))
             (repeats if question in seen else firsts).append(digest)
             seen.add(question)
-        readings = Referee(self.memory).readings()
+        readings, reviews = Referee(self.memory).readings(), Reviews(self.memory).all()
         fitted, size = [], 0
         for digest in firsts + repeats:
-            record = _record(digest, role, readings.get(digest["task_key"]))
+            record = _record(digest, role, readings.get(digest["task_key"]), reviews.get(digest["task_key"]))
             if fitted and size + len(record) > MAX_PROMPT_CHARS:
                 break
             fitted.append((digest, record))
@@ -414,7 +436,7 @@ class LessonBook:
                 f"- {l['skill']}: {l['text']} Applies when: {l['applies_when']}" for l in elsewhere) or "None.")
             + "\n\n# Lessons the owner marked wrong\n" + ("\n".join(f"- {text}" for text in wrong) or "None.")
             + "\n\n# Already in place\n" + _in_place(role, skill)
-            + "\n\n# How to read a record\n" + reading + "\n" + READING_NOTE
+            + "\n\n# How to read a record\n" + reading + "\n" + READING_NOTE + "\n" + REVIEW_NOTE
             + "\n\n# Records\n" + "\n\n".join(records))
         return prompt
 
@@ -569,8 +591,13 @@ class LessonBook:
         questions = len({_norm(d.get("question")) for d in digests.values()})
         result = {"changes": [], "rejected": [], "skills_reviewed": 0, "tasks_considered": 0,
                   "questions": questions, "new_tasks": 0, "tasks_left": 0}
-        read = set(self._state().get("tasks", [])) & set(digests)
-        unread = frozenset(set(digests) - read)
+        state = self._state()
+        read = set(state.get("tasks", [])) & set(digests)
+        # A reviewer's notes that no review has read make their task new again.
+        noted = {f"{key}@{review.get('noted_at')}": key for key, review in Reviews(self.memory).all().items()
+                 if key in digests}
+        seen = set(state.get("reviews", [])) & set(noted)
+        unread = frozenset((set(digests) - read) | {noted[mark] for mark in set(noted) - seen})
         result["new_tasks"] = result["tasks_left"] = len(unread)
         if not unread and not force:
             return result  # nothing happened since the last review
@@ -598,10 +625,12 @@ class LessonBook:
             self._save(lessons)  # a later skill's prompt sees what this one changed
         # A prompt holds a limited number of records. A task that did not fit stays unread, so
         # the next review runs for it and reads it first.
-        read |= set(digests) if held is None else held
-        result["tasks_left"] = len(set(digests) - read)
+        held = set(digests) if held is None else held
+        read |= held
+        seen |= {mark for mark, key in noted.items() if key in held}
+        result["tasks_left"] = len((set(digests) - read) | {noted[mark] for mark in set(noted) - seen})
         atomic_write_text(self.root / "review_state.json",
-                          json.dumps({"at": _now(), "tasks": sorted(read)}))
+                          json.dumps({"at": _now(), "tasks": sorted(read), "reviews": sorted(seen)}))
         return result
 
     # --- the owner's view --------------------------------------------------------------
@@ -713,9 +742,10 @@ def _attempts(node: dict) -> str:
         for i, run in enumerate(runs, 1))
 
 
-def _record(digest: dict, role: str, reading: dict | None = None) -> str:
+def _record(digest: dict, role: str, reading: dict | None = None, review: dict | None = None) -> str:
     """One task as the meta-agent reads it: its decisions for the Coordinator skill, its
-    analyses for the Expert skill, and for both the referee's reading of its final answer."""
+    analyses for the Expert skill, and for both the referee's reading of its final answer and
+    a reviewer's notes on it."""
     outline, outcomes = digest.get("outline", {}), digest.get("outcomes", {})
     questions = {n: node for n, node in outline.items() if node.get("parent") is not None}
     proposals = [p for node in outline.values() for p in node.get("proposals") or []]
@@ -729,7 +759,8 @@ def _record(digest: dict, role: str, reading: dict | None = None) -> str:
               f"min, {_millions(int(digest.get('tokens', 0)))}, {answered} questions answered, "
               f"{adopted} of {len(proposals)} proposed follow-ups adopted")
     lines = [header, f"Question: {digest.get('question')}",
-             f"Final answer: {answer or 'none recorded'}", *(reading_lines(reading) if reading else [])]
+             f"Final answer: {answer or 'none recorded'}", *(reading_lines(reading) if reading else []),
+             *(review_lines(review) if review else [])]
     for node_id, node in questions.items():
         outcome = outcomes.get(node_id, {})
         runs = node.get("attempts") or []

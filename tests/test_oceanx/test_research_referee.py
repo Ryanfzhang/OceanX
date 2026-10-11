@@ -1,6 +1,6 @@
-"""The independent reading of a final answer: one list per question, bounded readings, what a
-stronger answer would have contained, failed calls, and what the meta-agent and the periodic
-update do with it."""
+"""The independent reading of a final answer: one list per question, bounded readings, the
+reader's notes as a reviewer, a reviewer's own notes, failed calls, and what the meta-agent and
+the periodic update do with them."""
 import json
 import time
 from types import SimpleNamespace
@@ -44,22 +44,22 @@ READING = {"asked": [{"item": 1, "status": "partly", "missing": "Only the strong
            "superseded": []}
 
 
-QUALITY = [{"aspect": name, "status": "yes", "gap": ""} for name in referee.ASPECTS]
-QUALITY[2] = {"aspect": "depth", "status": "partly", "gap": "A test that could have refuted the wind."}
-QUALITY[3] = {"aspect": "breadth", "status": "no", "gap": "A comparison with published upwelling indices."}
+NOTES = [{"aspect": "depth", "text": "A ranking of the candidate drivers on one annual index.", "general": True},
+         {"aspect": "results", "text": "The strength at the second cape.", "general": False},
+         {"aspect": "breadth", "text": "The yearly values set against published indices.", "general": True}]
 
 
 def reader(asked=("the strength, for each year", "the main driver"), reading=READING, calls=None,
-           quality=QUALITY):
-    """A model that lists what a question asks for, reads an answer against the list, and
-    says what a stronger answer would have contained."""
+           notes=NOTES):
+    """A model that lists what a question asks for, reads an answer against the list, and then
+    reviews it: what a complete answer would also hold (``notes=None``: a reply without notes)."""
     def reply(prompt):
         kind = ("asked" if prompt.startswith("You prepare the list")
-                else "quality" if "For each of the six questions below" in prompt else "reading")
+                else "review" if prompt.startswith("You review a research answer") else "reading")
         if calls is not None:
             calls.append(kind)
         return json.dumps({"asked": {"asked": list(asked)}, "reading": reading,
-                           "quality": {"quality": quality}}[kind])
+                           "review": {} if notes is None else {"notes": notes}}[kind])
     return reply
 
 
@@ -76,11 +76,11 @@ def test_a_finished_task_is_read_once_and_the_reading_is_kept(tmp_path, memory):
         {"item": "the main driver", "status": "yes", "missing": ""}]
     assert reading["overclaims"] == [{"claim": "The wind is excluded.", "why": "The test is not significant."}]
     assert reading["answer_chars"] == len(ANSWER) and reading["superseded"] == []
-    assert reading["quality"] == QUALITY and list(referee.ASPECTS) == [
+    assert reading["expected"] == NOTES and list(referee.ASPECTS) == [
         "framing", "results", "depth", "breadth", "robustness", "rigor"]
-    assert calls == ["asked", "reading", "quality"]
+    assert calls == ["asked", "reading", "review"]
     assert book.read_new([tree.store.path], memory.load_digests(), reader(calls=calls))["read"] == 0
-    assert calls == ["asked", "reading", "quality"]  # nothing is read twice
+    assert calls == ["asked", "reading", "review"]  # nothing is read twice
 
 
 def test_the_reader_sees_only_the_question_the_list_and_the_answer(tmp_path, memory):
@@ -89,14 +89,16 @@ def test_the_reader_sees_only_the_question_the_list_and_the_answer(tmp_path, mem
     prompts = []
     Referee(memory).read_new([tree.store.path], memory.load_digests(),
                              lambda prompt: prompts.append(prompt) or reader()(prompt))
-    listing, reading, quality = prompts
+    listing, reading, review = prompts
     assert "How strong is the upwelling in each year?" in listing and ANSWER.strip() not in listing
     assert "1. the strength, for each year\n2. the main driver" in reading and ANSWER.strip() in reading
     assert "Flux explains onset" not in reading  # no Expert result, only the final answer
-    # The third call asks six things of the answer, with nothing but the question beside it.
-    assert "How strong is the upwelling in each year?" in quality and ANSWER.strip() in quality
-    assert all(f"{name}: {question}" in quality for name, question in referee.ASPECTS.items())
-    assert "Flux explains onset" not in quality and "the main driver" not in quality
+    # The third call reviews the answer, with nothing but the question beside it: what a complete
+    # answer to such a question would also hold, not whether this one "does" each aspect.
+    assert "How strong is the upwelling in each year?" in review and ANSWER.strip() in review
+    assert all(f"{name}: {question}" in review for name, question in referee.ASPECTS.items())
+    assert "Flux explains onset" not in review and "the main driver" not in review
+    assert "what a complete answer to a question of this kind holds" in review and "at most 10 notes" in review
 
 
 def test_every_run_of_a_question_is_read_against_the_same_list(tmp_path, memory):
@@ -108,7 +110,7 @@ def test_every_run_of_a_question_is_read_against_the_same_list(tmp_path, memory)
     calls = []
     result = Referee(memory).read_new([t.store.path for t in trees], memory.load_digests(), reader(calls=calls))
     assert result["read"] == 3 and calls.count("asked") == 2
-    assert calls.count("reading") == calls.count("quality") == 3
+    assert calls.count("reading") == calls.count("review") == 3
     assert question_key("How strong  is the Upwelling, in each year") == question_key(question)
 
 
@@ -151,7 +153,7 @@ def test_a_call_that_fails_is_tried_twice_and_the_task_is_left_for_the_next_upda
     # The list of the question was made and is kept; the next update reads the answer against it.
     calls = []
     assert book.read_new([tree.store.path], memory.load_digests(), reader(calls=calls))["read"] == 1
-    assert calls == ["reading", "quality"]
+    assert calls == ["reading", "review"]
     assert [entry["item"] for entry in book.readings()[task_key(tree.store.path)]["asked"]] == ["the strength"]
 
     monkeypatch.setattr(referee, "CALL_SECONDS", 0.05)
@@ -162,46 +164,120 @@ def test_a_call_that_fails_is_tried_twice_and_the_task_is_left_for_the_next_upda
     assert result["failed"][0]["reason"] == "no reply within 0.05 s" and time.monotonic() - started < 2
 
 
-def test_what_a_stronger_answer_would_have_contained_is_added_to_readings_made_before(tmp_path, memory):
-    """The third part of a reading. A reading without it is completed by one call, and a
-    third call that fails costs only itself."""
+def test_the_reader_also_reviews_the_answer_and_older_readings_are_completed(tmp_path, memory):
+    """The third part of a reading: notes on what a complete answer would also hold. A reading
+    made before it existed is completed by one call, and a third call that fails costs only
+    itself."""
     tree = finished_task(tmp_path, "t1")
     memory.digest(tree.store.path)
     book, key = Referee(memory), task_key(tree.store.path)
     stores, digests = [tree.store.path], memory.load_digests()
-    # The reader leaves out five of the six questions: the first two parts are kept anyway.
-    partial = book.read_new(stores, digests, reader(quality=QUALITY[:1]))
-    assert partial["read"] == 0 and partial["failed"] == [{"task_key": key, "reason": (
-        "The reader left out breadth, depth, results, rigor, robustness.")}]
+    # The reviewer's reply holds no notes at all: the first two parts are kept anyway.
+    partial = book.read_new(stores, digests, reader(notes=None))
+    assert partial["read"] == 0 and partial["failed"] == [
+        {"task_key": key, "reason": "The reviewer returned no list of notes."}]
     kept = book.readings()[key]
-    assert "quality" not in kept and kept["overclaims"] and len(reading_lines(kept)) == 3
+    assert "expected" not in kept and kept["overclaims"] and len(reading_lines(kept)) == 3
     # The next update makes the third call only.
     calls = []
     result = book.read_new(stores, digests, reader(calls=calls))
     assert result == {"read": 0, "completed": 1, "without_answer": 0, "failed": [], "left_for_later": 0}
-    assert calls == ["quality"]
+    assert calls == ["review"]
     completed = book.readings()[key]
-    assert completed["quality"] == QUALITY and completed["read_at"] == kept["read_at"]
-    assert reading_lines(completed)[-1] == (
-        "  a stronger answer would have contained: depth (partly): A test that could have refuted the "
-        "wind. | breadth (no): A comparison with published upwelling indices.")
-    assert book.read_new(stores, digests, reader(calls=calls))["completed"] == 0 and calls == ["quality"]
-    # A status the reader made up is not kept, and an answer that meets all six adds no line.
-    with pytest.raises(ValueError, match="left out depth"):
-        referee.read_quality("Q?", "answer", lambda prompt: json.dumps({"quality": [
-            *QUALITY[:2], {"aspect": "depth", "status": "mostly", "gap": "x"}, *QUALITY[3:]]}))
-    met = [{"aspect": name, "status": "yes", "gap": "ignored"} for name in referee.ASPECTS]
-    assert referee.read_quality("Q?", "answer", lambda prompt: json.dumps({"quality": met}))[0]["gap"] == ""
-    assert len(reading_lines({**kept, "quality": met})) == 3
+    assert completed["expected"] == NOTES and completed["read_at"] == kept["read_at"]
+    assert reading_lines(completed)[-3:] == [
+        "  the same reader as a reviewer of such answers (3 notes):",
+        ("    expected of answers to such questions: depth: A ranking of the candidate drivers on one "
+         "annual index. | breadth: The yearly values set against published indices."),
+        "    particular to this question: results: The strength at the second cape."]
+    assert book.read_new(stores, digests, reader(calls=calls))["completed"] == 0 and calls == ["review"]
+    # A note the model wrote badly is dropped, a long one is cut, and at most OWN_NOTES are kept.
+    wordy = [{"aspect": "depth", "text": "word " * 200, "general": True},
+             {"aspect": "style", "text": "No such aspect.", "general": True},
+             {"aspect": "rigor", "text": "Whether it is general is not said."}, "junk",
+             *({"aspect": "rigor", "text": f"Note {n}.", "general": False} for n in range(20))]
+    read = referee.read_expected("Q?", "answer", lambda prompt: json.dumps({"notes": wordy}))
+    assert len(read) == referee.OWN_NOTES - 3 and len(read[0]["text"]) == referee.MAX_NOTE_CHARS
+    assert referee.read_expected("Q?", "answer", lambda prompt: json.dumps({"notes": []})) == []  # nothing missed
+    with pytest.raises(ValueError, match="None of the reviewer's notes"):
+        referee.read_expected("Q?", "answer", lambda prompt: json.dumps({"notes": wordy[1:4]}))
+    assert len(reading_lines({**kept, "expected": []})) == 3
     # An old reading whose answer is no longer kept is left as it is and not asked for again.
     gone = finished_task(tmp_path, "gone")
     memory.digest(gone.store.path)
-    book.read_new([gone.store.path], memory.load_digests(), reader(quality=QUALITY[:1]))
+    book.read_new([gone.store.path], memory.load_digests(), reader(notes=None))
     gone.path.with_name("report.md").unlink()
     result = book.read_new([gone.store.path], memory.load_digests(), reader(calls=calls))
-    assert (result["without_answer"], result["completed"]) == (1, 0) and calls == ["quality"]
-    assert book.readings()[task_key(gone.store.path)]["quality"] == []
+    assert (result["without_answer"], result["completed"]) == (1, 0) and calls == ["review"]
+    assert book.readings()[task_key(gone.store.path)]["expected"] == []
     assert book.read_new([gone.store.path], memory.load_digests(), reader(calls=calls))["without_answer"] == 0
+
+
+def test_a_reviewer_who_knows_the_field_adds_notes_and_the_next_review_learns_from_them(tmp_path):
+    """Notes by the owner or someone the owner asked (reviews.py): kept per task, shown in the
+    task's record above the system's own, and a reason to review the lessons again."""
+    from typer.testing import CliRunner
+
+    from oceanx.research.cli import research_app
+    from oceanx.research.reviews import Reviews
+    project = ProjectResearch(SimpleNamespace(root=tmp_path / ".oceanx"))
+    stores = [finished_task(tmp_path, f"t{i}").store.path for i in range(3)]
+    prompts = []
+
+    def llm(prompt):
+        prompts.append(prompt)
+        return "{}" if "<skill name=" in prompt else reader()(prompt)
+
+    assert project.update(stores, llm=llm)["lessons"]["new_tasks"] == 3
+    assert project.update(stores, llm=llm)["lessons"]["new_tasks"] == 0
+    key = task_key(stores[0])
+    notes = [{"aspect": "depth", "text": "A ranking of  every candidate driver on one annual index.",
+              "general": True},
+             {"aspect": "results", "text": "The heat content of the upper 100 m beside the surface index.",
+              "general": False}]
+    kept = project.reviews.record(key, {"notes": notes}, reviewer="  the owner ")
+    assert kept["reviewer"] == "the owner" and kept["notes"][0]["text"] == (
+        "A ranking of every candidate driver on one annual index.")
+    assert Reviews(project.memory).all() == {key: kept}
+    # The task is new again for the lesson review, once.
+    prompts.clear()
+    again = project.update(stores, llm=llm)["lessons"]
+    assert (again["new_tasks"], again["tasks_left"], again["skills_reviewed"]) == (1, 0, 6)
+    record = prompts[0].split("# Records")[1]
+    assert record.index(f"## Task {key}") < record.index("## Task ", record.index(f"## Task {key}") + 1)  # first
+    assert ("Reviewer's notes on the final answer (2, by the owner):\n"
+            "  expected of answers to such questions: depth: A ranking of every candidate driver on one annual "
+            "index.\n  particular to this question: results: The heat content of the upper 100 m beside the "
+            "surface index.") in record
+    assert record.count("Reviewer's notes on the final answer") == 1  # the other tasks have none
+    assert "Weigh it above the independent reading" in prompts[0] and "what a reviewer found missing" in prompts[0]
+    assert project.update(stores, llm=llm)["lessons"]["new_tasks"] == 0
+    # A later review of the same task replaces the earlier one and is read in its turn.
+    project.reviews.record(key, notes[:1], reviewer="a colleague")
+    assert project.update(stores, llm=llm)["lessons"]["new_tasks"] == 1
+    # What cannot be kept is refused with the reason.
+    for bad, problem in (([], "needs a list of notes"), ([{**notes[0], "aspect": "style"}], "needs an aspect"),
+                         ([{**notes[0], "text": "x" * 401}], "1-400 characters"),
+                         ([{"aspect": "depth", "text": "No word on whether it is general."}], "true or false"),
+                         (notes * 9, "at most 16 notes")):
+        with pytest.raises(ValueError, match=problem):
+            project.reviews.record(key, bad, reviewer="the owner")
+    with pytest.raises(ValueError, match="No finished task has this key"):
+        project.reviews.record("0" * 16, notes, reviewer="the owner")
+    with pytest.raises(ValueError, match="names its reviewer"):
+        project.reviews.record(key, notes, reviewer=" ")
+    # The command a reviewer uses.
+    file = tmp_path / "notes.json"
+    file.write_text(json.dumps({"notes": notes}))
+    other = task_key(stores[1])
+    done = CliRunner().invoke(research_app, ["review", "--project", str(tmp_path), "--task", other,
+                                             "--notes", str(file), "--reviewer", "codex"])
+    assert done.exit_code == 0 and done.output.strip() == f"kept 2 notes on {other}"
+    assert Reviews(project.memory).all()[other]["reviewer"] == "codex"
+    file.write_text("not json")
+    refused = CliRunner().invoke(research_app, ["review", "--project", str(tmp_path), "--task", other,
+                                                "--notes", str(file), "--reviewer", "codex"])
+    assert refused.exit_code != 0
 
 
 def test_a_reading_keeps_only_what_was_asked_and_stays_bounded():
@@ -238,8 +314,9 @@ def test_the_meta_agent_reads_the_reading_with_the_task_record(tmp_path, memory)
         assert ("  not given: the strength, for each year (partly: Only the strongest year has a value.)"
                 in prompt)
         assert '  stronger than its support: "The wind is excluded.": The test is not significant.' in prompt
-        assert ("  a stronger answer would have contained: depth (partly): A test that could have "
-                "refuted the wind. | breadth (no): A comparison with published upwelling indices.") in prompt
+        assert ("  the same reader as a reviewer of such answers (3 notes):\n    expected of answers to such "
+                "questions: depth: A ranking of the candidate drivers on one annual index.") in prompt
+        assert "this reader does not know the\nfield as a specialist does" in prompt
         assert "About one such finding in three is wrong" in prompt
         assert "the same kind of gap left in the final answers of several tasks" in prompt
         # Both skills are the Coordinator's: it plans the tree and writes the final answer.

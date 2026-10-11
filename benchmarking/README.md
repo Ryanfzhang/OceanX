@@ -15,7 +15,8 @@ Catalogue `2026-10-02-v7`:
   surface air-sea CO2 flux/pCO2 diagnostics (Q16), both for 2011-2020.
 
 Everything runs on the Linux server.
-All runner/meta models use DeepSeek Flash via `benchmarking/.env`. Copy `.env.example`
+All runners use DeepSeek Flash via `benchmarking/.env`; so does OceanX's meta-agent unless the
+`BENCH_META_*` settings give it an API of its own. Copy `.env.example`
 to `.env` on the server and fill the single key, data/output paths and task selection;
 only the example is committed. Then launch each method with no arguments (RUNNING.md).
 

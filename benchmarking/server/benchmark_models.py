@@ -1,4 +1,5 @@
-"""One benchmark model for Coordinator, Experts and offline meta/labels; do not save settings."""
+"""One benchmark model for Coordinator and Experts; the offline meta-agent uses it too unless
+benchmarking/.env gives it an API of its own (BENCH_META_*). Nothing is saved to OceanX's settings."""
 import asyncio
 from pathlib import Path
 
@@ -9,22 +10,29 @@ def install_oceanx_models(config=None):
     from oceanx import model_config
     config = config or load_config()
     endpoint = config.endpoint(config.oceanx_api)
-    slot = 'benchmark-env'
+    slot, meta_slot = 'benchmark-env', 'benchmark-meta'
     original_key = model_config._stored_api_key
+    meta_endpoint = config.meta_endpoint()  # fails here, before any model call, when it is incomplete
 
     def profile(settings, *, role='coordinator'):
+        if role == 'meta' and config.meta is not None:
+            return meta_slot, {'provider': config.meta.api, 'last_model': config.meta.model,
+                               'base_url': meta_endpoint.url, 'credential_slot': meta_slot}
         return slot, {'provider': config.oceanx_api, 'last_model': config.model,
                       'base_url': endpoint.url, 'credential_slot': slot}
 
     def key(*, provider, slot):
         if slot == 'benchmark-env':
             return endpoint.api_key
+        if slot == meta_slot:
+            return meta_endpoint.api_key
         return original_key(provider=provider, slot=slot)
 
     model_config._profile_payload = profile
     model_config._stored_api_key = key
     model_config._load_settings_payload = lambda: {
-        'max_tokens': config.max_tokens, 'role_profiles': {'meta': slot}}
+        'max_tokens': config.max_tokens,
+        'role_profiles': {'meta': slot if config.meta is None else meta_slot}}
     return {**config.public(), 'roles': ['coordinator', 'expert', 'meta'],
             'api_profile': 'benchmarking/.env', 'scope': 'benchmark_process_only'}
 

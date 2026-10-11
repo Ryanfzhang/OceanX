@@ -506,8 +506,9 @@ What stands in a region reaches an agent only when it opens the skill, and an ag
 when it is told to. So a run names to each reader the skills that hold something learned for it: a data
 Expert is told, before its first calculation, to read every skill of its role that holds a lesson for
 Experts and `xarray-array-ops` when it lists a learned function; the Coordinator reads
-`claim-grounded-writing` before the final answer when it holds a lesson (its planning skill is always
-named). A model call that only reads
+`claim-grounded-writing` when it holds a lesson (its planning skill is always
+named). It is told to read it again when it starts the final answer: told to read it "before" the answer,
+it read it at the start, 66 to 104 minutes before it wrote (three runs, 2026-10-11). A model call that only reads
 skill files is not counted in an Expert's call limit (up to six such calls a run). An arm without a library
 names no skill. In the runs up to 2026-10-08 nothing named
 the Experts' skills and they opened them in about 2% of their questions, so those runs say little about
@@ -523,16 +524,41 @@ wrote the answer also wrote the record. So `consolidate --review` first has the 
 run's research question and final answer, and nothing else: no tree, no code, no rubric and no reference.
 One call lists what the question asks for, from the question alone and once per question. A second call
 reads the answer against that list and notes what is missing or partial, conclusions stronger than the
-support the answer gives, and superseded numbers still used. A third call asks six questions of the
-answer and says, for each one it does not fully meet, what a stronger answer would have contained:
-hypotheses that could be refuted, results under one stated definition with numbers that agree, mechanisms
-tested by something that could have refuted them, links to related processes and published work,
-conclusions that hold under other choices, and data handled to fit the conclusions. These are the six
-indicators of `evaluation/ASPECT_SCORES.md` as a reader without a reference can ask them (agreed
-with the Owner on 2026-10-10). No rubric of a question and no reference answer is read, and only
-evolution runs are read. The reading is kept under `.oceanx/research/referee/` and shown with the run's
-record. It is evidence, not a rule: in a hand check of five answers about one finding in three was wrong.
-A reading made before the third call existed is completed by that call alone.
+support the answer gives, and superseded numbers still used. In a third call the meta-agent reviews the
+answer as a specialist would for a journal: up to ten notes on what a complete answer to a question of
+this kind would also hold (an analysis, a comparison, a table, a quantity, a test), each under one of six
+aspects and marked as expected of such answers in general or as particular to this question. The aspects
+are the six indicators of `evaluation/ASPECT_SCORES.md` as a reader without a reference can ask them
+(agreed with the Owner on 2026-10-10): hypotheses that could be refuted, results under one stated
+definition with numbers that agree, mechanisms tested by something that could have refuted them, links
+to related processes and published work, conclusions that hold under other choices, and data handled to
+fit the conclusions. No rubric of a question and no reference answer is read, and only evolution runs
+are read. The reading is kept under `.oceanx/research/referee/` and shown with the run's record. It is
+evidence, not a rule: in a hand check of five answers about one finding in three was wrong. A reading
+made before the third call existed is completed by that call alone.
+
+**Why the third call reviews.** On the 13 open problems OceanX without a library lost 17.9 points
+(official scores of 2026-10-10, sorted by cause by the judge on 2026-10-11). 11 of them involve an
+analysis or quantity that only the reference answer names: nothing in the question asks for it. About
+8 of those 11 are of four kinds that recur from question to question: the candidate controls ranked on
+one annual index, an integrated or same-depth counterpart of a surface index, a complete table over the
+breakdowns the question names, and a quantified link to climate modes, extreme events, ecosystem or use.
+Overstated conclusions, missing uncertainty and inconsistent numbers together are under 3 points alone,
+and those are what three earlier libraries taught. So lessons can raise a score only if the learning
+step sees what a complete answer holds. The first form of the third call asked whether the answer
+"does" each aspect, and the model said yes to 61 of 72; it now has to name what is missing.
+
+**The meta-agent and its model.** Every step after the runs is the meta-agent's: the three calls above,
+the lesson review, tool learning and node labels. It may have an API of its own (`BENCH_META_*` in
+`benchmarking/.env`, Owner, 2026-10-11); empty, it is the model of the runs. Coordinator and Experts
+never use it. A library is reported with the model that learned it.
+
+**A reviewer's notes.** Someone who knows the field can add notes of the same form on a finished run's
+final answer: `research_cli.py review --project <evolution project> --task <task key> --notes <file>
+--reviewer <name>`, with the file `{"notes": [{"aspect": "depth", "text": "...", "general": true}]}`.
+The run counts as new for the next lesson review, which weighs these notes above the meta-agent's own.
+In the benchmark only evolution runs may be reviewed, and a note names no test question, rubric or
+reference.
 
 The same reading can be applied to the test answers of every arm (`server/read_answers.py`, the only
 step after the runs that calls a model). It reads each arm against one list per question and counts, per
