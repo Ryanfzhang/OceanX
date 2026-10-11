@@ -173,6 +173,25 @@ def review_answer(
     typer.echo(f"kept {len(kept['notes'])} notes on {task}")
 
 
+@research_app.command("outline")
+def outline(
+    project: Path = typer.Option(..., "--project"),
+    task: str = typer.Option(..., "--task", help="The key of a finished task on the question."),
+    text: Path = typer.Option(..., "--text", exists=True, dir_okay=False,
+                              help="A text file: a few sentences of plain language, no results."),
+    critic: str = typer.Option(..., "--critic", help="Who wrote it: a person or a stronger model."),
+) -> None:
+    """Record a critic's outline for one research question: what should be done for it and how
+    to investigate it, briefly and in plain language. The next `consolidate --review` compares
+    every finished answer to the question with it and learns from what they did not do."""
+    try:
+        kept = _project(project).reviews.record_outline(
+            task, text.read_text(encoding="utf-8", errors="replace"), critic=critic)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"kept {kept['critic']}'s outline ({len(kept['text'])} characters) for the question of {task}")
+
+
 @research_app.command("snapshot")
 def snapshot(
     project: Path = typer.Option(..., "--project"),

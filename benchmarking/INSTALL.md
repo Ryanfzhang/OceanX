@@ -31,15 +31,10 @@ BENCH_OPENAI_BASE_URL=https://api.deepseek.com
 BENCH_ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 ```
 
-- **One model/key for answering:** OceanX Coordinator/Experts, Claude Code (including subagents) and
-  Finch all use `BENCH_MODEL` and the same `DEEPSEEK_API_KEY`. No role that answers a question can have
-  another model. Model metadata omits the key. `--config <path>` can select another explicit `.env` for a
+- **One model/key:** OceanX Coordinator/Experts, the meta-agent/node labels, Claude Code (including
+  subagents) and Finch all use `BENCH_MODEL` and the same `DEEPSEEK_API_KEY`. There is no per-role model
+  override. Model metadata omits the key. `--config <path>` can select another explicit `.env` for a
   separate experiment; it cannot override one role inside a run.
-- **The meta-agent may have its own API** (Owner, 2026-10-11): `BENCH_META_MODEL`, `BENCH_META_API`,
-  `BENCH_META_BASE_URL`, `BENCH_META_API_KEY`. It works after the runs (it reads finished answers as a
-  reviewer, reviews the lessons, learns tools, labels nodes) and answers no question. All four empty: it
-  uses `BENCH_MODEL`. `research_cli.py` and `read_answers.py` say on the console which model the
-  meta-agent uses, and `check_setup.py` shows it; a report on a library names the model that learned it.
 - **Two wire formats, one service:** OceanX/Finch/meta default to DeepSeek's OpenAI-compatible endpoint;
   Claude Code uses its Anthropic-compatible endpoint. See the
   [official DeepSeek integration](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/).

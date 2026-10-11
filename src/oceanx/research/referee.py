@@ -3,7 +3,8 @@
 A research tree records what a task did. It cannot show what the final answer left out or
 overstated: the agents that wrote the answer also wrote those records, and an error nobody
 caught leaves no trace in them. So after a task finishes, a model that saw none of the work
-reads the research question and the final answer, in three calls:
+reads the research question and the final answer, in three calls, and in a fourth where a
+critic gave an outline for the question:
 
 1. from the question alone, the list of what it asks for. The list is kept per question text,
    so every run of a question is read against the same list;
@@ -17,7 +18,14 @@ reads the research question and the final answer, in three calls:
    which is what the Coordinator's lessons are learned from. Asked only whether the answer
    "does" each aspect, the same model said yes to 61 of 72 (2026-10-11), so it is asked for
    what is missing instead. A reviewer who knows the field can add notes of the same form
-   (``reviews.py``).
+   (``reviews.py``);
+4. the final answer against a critic's outline for its question (``reviews.py``): which of
+   the outline's points the answer does. The outline is a few sentences by someone who
+   knows better than the model that did the work, a person or a stronger model: what
+   should be done for the question and how to investigate it. Reviewing in the third call,
+   the model left out three of the four kinds of analysis an outside judge missed most
+   often (2026-10-11): it does not know what the work should have been. It can tell
+   whether an answer does what a critic says should be done.
 
 A reading is evidence for the lesson review (``lessons.py``), never a rule or a score. In a
 hand check of five answers (2026-10-09) about one finding in three was wrong, which is why a
@@ -58,6 +66,7 @@ SHOWN_ASKED, SHOWN_CLAIMS, SHOWN_SUPERSEDED = 6, 5, 3
 MAX_NOTES = 16  # notes in one review
 MAX_NOTE_CHARS = 400
 OWN_NOTES = 10  # notes the system's own reviewer may give on one answer
+MAX_POINTS = 12  # points of a critic's outline that one answer is judged on
 # What a careful reader asks of a research answer. Each can be judged from the question and the
 # answer alone: no data, no code and no reference result.
 ASPECTS = {
@@ -149,6 +158,39 @@ Return JSON only:
 
 Question:
 {question}
+
+Final answer:
+{answer}
+"""
+
+OUTLINE_PROMPT = """\
+You compare a research answer with a critic's outline. You saw none of the work behind the
+answer. You see only the question, the outline and the final answer: no data, no code and no
+reference result.
+
+The critic knows the field. The outline says, briefly and in the critic's own words, what
+should be done for this question and how to investigate it. Take it apart into its separate
+points, at most {limit}, keeping its words. For each point: does the final answer show it
+done? "yes", "partly" or "no"; for "partly" and "no", one sentence on what the answer does
+instead or what is missing.
+- An analysis is done when the answer reports its result in numbers. One the answer only names
+  as possible, as future work or as a limit is "no".
+- A table or breakdown is there only when the answer states the value for each of its entries.
+  A range, a mean, a few of the entries or a figure alone is "partly".
+- A comparison or a ranking is there when every side of it is given as a number under one
+  stated definition. Sides measured in different ways are "partly".
+- A point the answer says could not be done is "no"; give the answer's reason in the sentence.
+Judge every point by what the answer states, never by what its authors probably did, and add
+no point of your own.
+
+Return JSON only:
+{{"points": [{{"point": "<the point, in the outline's words>", "status": "yes" | "partly" | "no", "missing": "<one sentence or empty>"}}]}}
+
+Question:
+{question}
+
+The critic's outline:
+{outline}
 
 Final answer:
 {answer}
@@ -291,6 +333,45 @@ def read_expected(question: str, answer: str, llm: Callable[[str], str]) -> list
     return notes
 
 
+def read_against(question: str, outline: str, answer: str, llm: Callable[[str], str]) -> list[dict]:
+    """One final answer against a critic's outline for its question: the outline's points, each
+    with whether the answer does it and, where it does not, what is missing."""
+    reply = _ask(llm, OUTLINE_PROMPT.format(limit=MAX_POINTS, question=question, outline=outline,
+                                            answer=answer[:MAX_ANSWER_CHARS]))
+    points = []
+    for entry in reply.get("points") if isinstance(reply.get("points"), list) else []:
+        entry = entry if isinstance(entry, dict) else {}
+        if entry.get("status") in STATUSES and _clip(entry.get("point"), 200):
+            points.append({"point": _clip(entry["point"], 200), "status": entry["status"],
+                           "missing": "" if entry["status"] == "yes" else _clip(entry.get("missing"), 200)})
+    if not points:
+        raise ValueError("The reader judged no point of the critic's outline.")
+    return points[:MAX_POINTS]
+
+
+def outline_lines(reading: dict) -> list[str]:
+    """What a task record shows of a critic's outline: the outline itself, and which of its
+    points the final answer does not do. Nothing when no critic gave one for the question."""
+    compared = reading.get("against_outline") or {}
+    points = compared.get("points") or []
+    if not points:
+        return []
+    short = [point for point in points if point["status"] in ("partly", "no")]
+    lines = [(f"A critic's outline of what should be done for this question and how to investigate it "
+              f"(by {compared.get('by') or 'a critic'}): {' '.join(str(compared.get('text') or '').split())}"),
+             (f"  compared with the final answer: {len(short)} of {len(points)} points missing or partial.")]
+    if short:
+        lines.append("  not done: " + " | ".join(
+            f"{point['point']} ({point['status']}{': ' + point['missing'] if point['missing'] else ''})"
+            for point in short))
+    return lines
+
+
+def _waits_for(reading: dict, outline: dict | None) -> bool:
+    """Whether a reading has still to be compared with the outline its question has now."""
+    return bool(outline) and (reading.get("against_outline") or {}).get("noted_at") != outline["noted_at"]
+
+
 def reading_lines(reading: dict) -> list[str]:
     """One reading as the meta-agent sees it in a task record."""
     asked = reading.get("asked") or []
@@ -363,46 +444,74 @@ class Referee:
         atomic_write_text(self.root / f"{reading['task_key']}.json",
                           json.dumps(reading, ensure_ascii=False, indent=1))
 
-    def read(self, store_path: Path, llm: Callable[[str], str], *, earlier: dict | None = None) -> dict | None:
+    def read(self, store_path: Path, llm: Callable[[str], str], *, earlier: dict | None = None,
+             outlines: dict[str, dict] | None = None) -> dict | None:
         """Read one task's final answer and keep the reading. None when it has no answer.
-        ``earlier`` is a reading made before the third part existed: only that part is added.
-        The first two parts are kept as soon as they are made, so a third call that fails
-        costs only itself and is made again at the next update."""
+        ``earlier`` is a reading that lacks its third part, or that has not been compared with
+        the outline a critic has since given for its question (``outlines``, by question key):
+        only that is added. Every part is kept as soon as it is made, so a later call that
+        fails costs only itself and is made again at the next update."""
         question, answer = self._task(store_path)
         if not question.strip() or len(answer.strip()) < MIN_ANSWER_CHARS:
-            if earlier is not None:  # its answer is no longer kept: there is nothing to add to
-                self._keep({**earlier, "expected": []})
+            if earlier is not None:  # its answer is no longer kept: nothing can be added to its reading
+                self._keep({**earlier, "expected": earlier.get("expected", []), "answer_gone": True})
             return None
         reading = earlier or {
             "schema": READING_SCHEMA, "task_key": task_key(store_path), "question_key": question_key(question),
             "read_at": datetime.now(UTC).isoformat(), "answer_chars": len(answer),
             **read_answer(question, self._asked(question, llm), answer, llm)}
         self._keep(reading)
-        reading = {**reading, "expected": read_expected(question, answer, llm)}
-        self._keep(reading)
+        if "expected" not in reading:
+            reading = {**reading, "expected": read_expected(question, answer, llm)}
+            self._keep(reading)
+        outline = (outlines or {}).get(reading.get("question_key"))
+        if _waits_for(reading, outline):
+            reading = {**reading, "against_outline": {
+                "noted_at": outline["noted_at"], "by": outline["critic"], "text": outline["text"],
+                "points": read_against(question, outline["text"], answer, llm)}}
+            self._keep(reading)
         return reading
 
-    def read_new(self, store_paths: list[Path], digests: list[dict], llm: Callable[[str], str]) -> dict:
-        """Read the finished tasks whose reading is missing or lacks its third part, newest first.
-        A task whose reading fails is left for the next update; nothing else depends on it."""
+    def read_new(self, store_paths: list[Path], digests: list[dict], llm: Callable[[str], str], *,
+                 outlines: dict[str, dict] | None = None) -> dict:
+        """Read the finished tasks whose reading is missing, lacks its third part or has not been
+        compared with the outline a critic has since given for its question, newest first. A task
+        whose reading fails is left for the next update; nothing else depends on it."""
         finished = {d["task_key"]: d for d in digests if d.get("finished")}
         have = self.readings()
+
+        def waits(key: str) -> bool:
+            reading = have.get(key)
+            if reading is None:
+                return True
+            if reading.get("answer_gone"):
+                return False
+            return "expected" not in reading or _waits_for(reading, (outlines or {}).get(reading.get("question_key")))
+
         waiting = [path for path in map(Path, store_paths)
-                   if path.is_file() and task_key(path) in finished
-                   and "expected" not in have.get(task_key(path), {})]
+                   if path.is_file() and task_key(path) in finished and waits(task_key(path))]
         waiting.sort(key=lambda path: finished[task_key(path)].get("started_at") or "", reverse=True)
-        result = {"read": 0, "completed": 0, "without_answer": 0, "failed": [],
+        result = {"read": 0, "completed": 0, "compared": 0, "without_answer": 0, "failed": [],
                   "left_for_later": max(len(waiting) - MAX_NEW_PER_UPDATE, 0)}
         for path in waiting[:MAX_NEW_PER_UPDATE]:
             earlier = have.get(task_key(path))
             try:
-                reading = self.read(path, llm, earlier=earlier)
+                reading = self.read(path, llm, earlier=earlier, outlines=outlines)
             except ValueError as exc:
                 result["failed"].append({"task_key": task_key(path), "reason": _clip(exc, 300)})
                 continue
-            result["without_answer" if reading is None else "completed" if earlier else "read"] += 1
+            if reading is None:
+                result["without_answer"] += 1
+                continue
+            if earlier is None:
+                result["read"] += 1
+            elif "expected" not in earlier:
+                result["completed"] += 1
+            # Answers compared with a critic's outline in this update, whenever they were first read.
+            result["compared"] += reading.get("against_outline") not in (None, (earlier or {}).get("against_outline"))
         return result
 
 
 __all__ = ["ASPECTS", "MAX_NOTES", "MAX_NOTE_CHARS", "READING_SCHEMA", "Referee", "asked_items",
-           "check_notes", "note_lines", "question_key", "read_answer", "read_expected", "reading_lines"]
+           "check_notes", "note_lines", "outline_lines", "question_key", "read_against", "read_answer",
+           "read_expected", "reading_lines"]

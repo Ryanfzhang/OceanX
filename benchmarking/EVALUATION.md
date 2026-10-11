@@ -548,10 +548,32 @@ and those are what three earlier libraries taught. So lessons can raise a score 
 step sees what a complete answer holds. The first form of the third call asked whether the answer
 "does" each aspect, and the model said yes to 61 of 72; it now has to name what is missing.
 
-**The meta-agent and its model.** Every step after the runs is the meta-agent's: the three calls above,
-the lesson review, tool learning and node labels. It may have an API of its own (`BENCH_META_*` in
-`benchmarking/.env`, Owner, 2026-10-11); empty, it is the model of the runs. Coordinator and Experts
-never use it. A library is reported with the model that learned it.
+**The meta-agent and the critic.** Every step after the runs is the meta-agent's: the calls above, the
+lesson review, tool learning and node labels. It is the model of the runs and has no API of its own
+(Owner, 2026-10-11). What someone knows who is better than that model reaches the learning step from
+outside, as a critic's outline: the critic is a person, or a stronger model.
+
+**A critic's outline.** A few sentences in plain language on what should be done for one question and
+how to investigate it, as a user who knows the field would say it. It holds no value and no result.
+`research_cli.py outline --project <evolution project> --task <task key> --text <file> --critic <name>`
+records one for the question of that run (at most 2,000 characters). At the next `consolidate --review`
+the meta-agent compares every finished answer to that question with the outline, in one call per
+answer: it takes the outline apart into its points and says for each whether the answer shows it done.
+The run then counts as new for the lesson review, which reads the outline and the points not done above
+everything else in the run's record.
+
+It exists because the model does not see these gaps by itself. Reviewing the 12 evolution answers it
+wrote 100 notes (library L1S, 2026-10-11). The lessons learned from them hold one of the four recurring
+kinds named above, the complete table. The ranking of the candidate controls and the integrated
+counterpart are in no note, and the links to climate modes, extremes, ecosystem or use are in a few notes
+and no lesson. The 16 gaps the judge added as a free reader of the answers hold none of the four either:
+a reader of one answer notes what is wrong in it, not what the work should have been.
+
+In the benchmark the judge stands in for the user who knows the field and writes one outline per
+evolution question, from the question and its data description alone. An outline names no test question
+and holds nothing from a rubric or a reference. The released OceanX has an outline only where its user
+writes one, so a library learned with outlines shows what OceanX learns from a critic, not what it
+learns alone, and is reported so.
 
 **A reviewer's notes.** Someone who knows the field can add notes of the same form on a finished run's
 final answer: `research_cli.py review --project <evolution project> --task <task key> --notes <file>

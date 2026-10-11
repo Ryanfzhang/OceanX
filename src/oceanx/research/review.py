@@ -89,14 +89,15 @@ class ProjectResearch:
                retention_days: int | None = None) -> dict:
         """The periodic update. Without a model it only brings the records and the call counts
         up to date; with one, the final answers of newly finished tasks are read first
-        (referee.py), then the meta-agent reviews the lessons and learns tools. Each of the
+        (referee.py) and compared with a critic's outline where their question has one
+        (reviews.py); then the meta-agent reviews the lessons and learns tools. Each of the
         two steps knows which tasks it has read, so one that failed is tried again."""
         options = {} if retention_days is None else {"retention_days": retention_days}
         result = {"consolidation": self.memory.consolidate(stores, **options)}
         digests = self.memory.load_digests()
         result["tool_usage"] = self.tools.record_usage(digests)
         if llm is not None:
-            result["referee"] = self.referee.read_new(stores, digests, llm)
+            result["referee"] = self.referee.read_new(stores, digests, llm, outlines=self.reviews.outlines())
             result["lessons"] = self.lessons.review(llm, force=force)
             result["tools"] = self.tools.learn(llm, stores, reviewer=reviewer, force=force)
         return result

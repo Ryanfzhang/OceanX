@@ -56,8 +56,8 @@ default, is a code change reviewed like any other, then compared with paired run
 | `outcomes.py` | Per-node cost, code runs, citation, children, proposals made/adopted, reopen/conflict, skills opened; the Coordinator's own calls count on the root |
 | `labels.py` | Auto and judge labels, the small human review set, judge–human agreement |
 | `memory.py` | Per-task digests (outline, decision history, outcomes, labels), process measures of a finished tree (`run_measures`), weekly consolidation and archiving |
-| `referee.py` | An independent reading of each finished task's final answer (what the question asks for and the answer lacks, conclusions stronger than their support, and the meta-agent's notes as a reviewer on what a complete answer would also hold), kept as evidence for the lesson review |
-| `reviews.py` | A reviewer's notes on a finished task's final answer, written by the owner or someone the owner asked; the lesson review weighs them above the system's own reading |
+| `referee.py` | An independent reading of each finished task's final answer (what the question asks for and the answer lacks, conclusions stronger than their support, the meta-agent's notes as a reviewer on what a complete answer would also hold, and the answer compared with a critic's outline where the question has one), kept as evidence for the lesson review |
+| `reviews.py` | What someone gives who knows better than the model that did the work: a critic's outline for a research question (what should be done and how to investigate it, in plain language) and a reviewer's notes on a finished task's final answer; the lesson review weighs both above the system's own reading |
 | `lessons.py` | The meta-agent's review of each skill's lessons (keep, revise, retire, add), the rules code enforces, the owner's marks and the change log |
 | `toolbook.py` | The helper functions a task mounts, the call counter, usage statistics, and tools learned from repeated code (static check, sandboxed test, independent review) |
 | `../skill_regions.py` | The marked regions of a SKILL.md (`oceanx:lessons`, `oceanx:tools`) and how they are filled |
@@ -101,6 +101,26 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   answers about one finding in three was wrong, so a lesson still needs the same kind of finding
   in tasks on 3 different questions. At most 20 tasks are read in one update; a call that fails
   twice or does not return in 300 s leaves its task for the next update.
+- **A critic's outline.** The meta-agent is the model that did the work, and it does not see
+  what the work should have been: reviewing twelve answers it left out three of the four kinds
+  of analysis an outside judge missed most often (2026-10-11). A critic can say it: a person,
+  usually the owner, or a stronger model the owner asks. The critic writes a few sentences in
+  plain language on what should be done for one research question and how to investigate it,
+  with no value and no result, and need not read any answer (`reviews.py`, kept under
+  `.oceanx/research/reviews/outlines/<question_key>.json`):
+
+  ```bash
+  ocean research outline --project <folder> --task <task key> --text outline.txt --critic <name>
+  ```
+
+  `--task` names any finished task on the question, and `outline.txt` holds at most 2,000
+  characters. At the next update the meta-agent compares every finished answer to that
+  question, and every later one, with the outline: a fourth call of the reading takes the
+  outline apart into its points (at most 12) and says for each whether the answer shows it
+  done, partly done or not, with what the answer does instead. Those tasks count as new for
+  the lesson review, which reads the outline and the points not done above everything else in
+  a task's record. A later outline for the question replaces the earlier one. The desktop has
+  no form for this yet.
 - **A reviewer's notes.** The meta-agent reviews with the model it is given and does not know
   a field as a specialist does. The owner, or someone the owner asks, can add notes of the same
   form on any finished task's final answer (`reviews.py`, kept under
@@ -116,9 +136,10 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
   and weighs them above the meta-agent's own. A later review of the same task replaces the
   earlier one. The desktop has no form for this yet.
 - **The meta-agent's model.** Readings, the lesson review, tool learning and node labels use the
-  `meta` role (`llm.default_llm`): the profile `role_profiles.meta` of the model settings when
-  there is one, otherwise the Experts' model. The desktop's settings do not offer a third model
-  yet; the benchmark sets one in its own file (`BENCH_META_*`).
+  Experts' model. The meta-agent needs no model of its own: what a stronger model or a person
+  knows comes in as a critic's outline (the Owner, 2026-10-11). `llm.default_llm` still reads a
+  profile `role_profiles.meta` from the settings file when someone wrote one there by hand; the
+  desktop's settings offer no such entry, and the benchmark points it at the model of its runs.
 - **Marked regions.** A skill reserves a place for what the project learns:
 
   ```text

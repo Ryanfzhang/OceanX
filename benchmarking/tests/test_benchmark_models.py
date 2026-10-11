@@ -77,45 +77,11 @@ def test_single_key_defaults_to_flash_for_both_protocols(tmp_path, monkeypatch):
     assert 'test-shared-key' not in repr(c)
 
 
-def test_the_meta_agent_may_have_an_api_of_its_own_and_unknown_credentials_are_rejected(tmp_path, monkeypatch):
-    """Owner, 2026-10-11: the agent that reviews finished answers and learns from them gets its
-    own API; which model it is can change. No role that answers a question can."""
-    for name in ['_profile_payload', '_stored_api_key', '_load_settings_payload']:
-        monkeypatch.setattr(model_config, name, getattr(model_config, name))
+def test_separate_meta_model_or_unknown_credentials_are_rejected(tmp_path):
     p = tmp_path / '.env'
-    # A model alone: another model of the same service, with the same key.
     p.write_text('DEEPSEEK_API_KEY=private-shared\nBENCH_META_MODEL=another-model\n')
-    c = load_config(p)
-    assert (c.meta.model, c.meta.api, c.meta_endpoint().url) == ('another-model', 'openai', 'https://api.deepseek.com')
-    install_oceanx_models(c)
-    meta, expert = imported_loader('meta'), imported_loader('expert')
-    assert (meta.model, meta.api_key, meta.base_url) == ('another-model', 'private-shared', 'https://api.deepseek.com')
-    assert (expert.model, imported_loader('coordinator').model) == ('deepseek-flash', 'deepseek-flash')
-    # Another service: its own URL, key and API format.
-    p.write_text('DEEPSEEK_API_KEY=private-shared\nBENCH_META_MODEL=reviewer-1\nBENCH_META_API=anthropic\n'
-                 'BENCH_META_BASE_URL=https://reviewer.example\nBENCH_META_API_KEY=private-meta\n')
-    c = load_config(p)
-    policy = install_oceanx_models(c)
-    meta = imported_loader('meta')
-    assert (meta.model, meta.provider, meta.base_url, meta.api_key) == (
-        'reviewer-1', 'anthropic', 'https://reviewer.example', 'private-meta')
-    assert imported_loader('expert').api_key == 'private-shared' and imported_loader('expert').provider == 'openai'
-    assert policy['meta'] == {'model': 'reviewer-1', 'api': 'anthropic', 'url': 'https://reviewer.example'}
-    assert 'private-' not in json.dumps(policy) and 'private-' not in repr(c)
-    assert model_config._load_settings_payload()['role_profiles']['meta'] == 'benchmark-meta'
-    # Half a setting fails before any model call, without showing a key.
-    for body, problem in (('BENCH_META_API=openai', 'need BENCH_META_MODEL'),
-                          ('BENCH_META_MODEL=m\nBENCH_META_API=grpc', 'openai or anthropic'),
-                          ('BENCH_META_MODEL=m\nBENCH_META_BASE_URL=https://x.example', 'go together'),
-                          ('BENCH_META_MODEL=m\nBENCH_META_API_KEY=private-meta', 'go together')):
-        p.write_text('DEEPSEEK_API_KEY=private-shared\n' + body + '\n')
-        with pytest.raises(ValueError, match=problem) as exc:
-            load_config(p)
-        assert 'private-' not in str(exc.value)
-    p.write_text('DEEPSEEK_API_KEY=private-shared\nBENCH_META_MODEL=m\nBENCH_META_BASE_URL=ftp://x.example\n'
-                 'BENCH_META_API_KEY=private-meta\n')
-    with pytest.raises(ValueError, match='invalid BENCH_META_BASE_URL'):
-        install_oceanx_models(load_config(p))
+    with pytest.raises(ValueError, match='unsupported'):
+        load_config(p)
     p.write_text('DEEPSEEK_API_KEY=private-shared\nOPENAI_API_KEY=private-other\n')
     with pytest.raises(ValueError, match='unsupported') as exc:
         load_config(p)

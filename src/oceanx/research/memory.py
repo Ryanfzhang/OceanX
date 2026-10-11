@@ -7,6 +7,7 @@ Layout under ``<project>/.oceanx/research/``::
     lessons/                   lessons, their change log and the rendered skills (lessons.py)
     tools/                     learned helper functions and call counts (toolbook.py)
     referee/                   independent readings of final answers (referee.py)
+    reviews/                   a critic's outlines for questions, a reviewer's notes on answers (reviews.py)
     state.json                 last consolidation time and counters
 
 Raw per-task stores keep full events and attempts for as long as they are useful;

@@ -16,7 +16,6 @@ chmod 600 benchmarking/.env
 | 设置 | 含义 |
 |---|---|
 | `DEEPSEEK_API_KEY`、`BENCH_MODEL` | 三个方法共用一个模型和一个 key；桌面端自己的设置不受影响 |
-| `BENCH_META_MODEL`、`BENCH_META_API`、`BENCH_META_BASE_URL`、`BENCH_META_API_KEY` | meta-agent 自己的 API。它在跑完题之后工作：以审稿人的身份读答案、学经验、学工具、给研究树打标签，不参与答题。四项都留空就用 `BENCH_MODEL` |
 | `BENCH_DATA_ROOT` | 数据根目录，里面要有下载好的数据和 `_download_all/` |
 | `BENCH_OUTPUT_ROOT` | 结果根目录，必须和数据、代码仓库分开 |
 | `BENCH_EXPERIMENT` | 结果文件夹的名字。代码、设置、数据变了都可以不换 |
@@ -121,8 +120,15 @@ python benchmarking/server/research_cli.py snapshot --project "$EVO" --output "$
   哪些结论超出了证据；再以审稿人的身份写最多 10 条意见，说一份完整的答案还应该有哪些分析或量。这些和
   研究树记录一起用来学经验。12 道题大约多花 20 分钟；`review.json` 里的 `referee` 一项是读了几道
   （`read`）、给旧的阅读补了几道（`completed`）、哪几道没读成。
-- meta-agent 用哪个模型由 `.env` 里的 `BENCH_META_*` 决定，留空就是 `BENCH_MODEL`。命令开头会在屏幕上
-  打一行 `meta-agent model: ...`，写报告时把它记下来。
+- meta-agent 就是跑题用的那个模型（`BENCH_MODEL`），没有单独的 API。`.env` 里如果还留着 `BENCH_META_*`
+  这几行，要删掉，否则读设置时会报"unsupported fields"。
+- 比这个模型更懂的人或更强的模型（critic）可以给某道进化题写一段提纲：用平常的话说这道题该做哪些事、
+  该怎么探究，几句话，不写数值和结论，最多 2000 个字符。存成文本文件后执行
+  `python benchmarking/server/research_cli.py outline --project "$EVO" --task <task key> --text <文件> --critic <名字>`。
+  下次学习时 meta-agent 会把这道题的每份答案和提纲对照一遍（每份答案一次模型调用），把没做到的几点和
+  提纲一起放进记录，学经验时优先参考。`review.json` 的 `referee.compared` 是这次对照了几份答案。
+  只能给进化题写，只看题目和数据说明，不能出现测试题、rubric 或参考答案的内容。用了提纲学出来的库
+  要标明是"有 critic 给提纲"学出来的。
 - 懂行的人也可以给某道进化题的答案写评审意见，下次学习会优先参考：
   `python benchmarking/server/research_cli.py review --project "$EVO" --task <task key> --notes <文件> --reviewer <名字>`。
   只能评进化题，意见里不能出现测试题、rubric 或参考答案的内容。

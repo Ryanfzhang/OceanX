@@ -148,8 +148,7 @@ def main(argv=None) -> int:
     parser.add_argument("--parallel", type=int, default=4, help="Answers read at the same time")
     args = parser.parse_args(argv)
     from benchmark_models import install_oceanx_models
-    models = install_oceanx_models()
-    print("meta-agent model:", (models.get("meta") or models).get("model"), file=sys.stderr)
+    install_oceanx_models()
     from oceanx.research.llm import default_llm
     result = read_runs(args.runs, args.out.expanduser().resolve(), default_llm("meta"), parallel=args.parallel)
     print(json.dumps({key: result[key] for key in ("arms", "totals", "skipped", "failed")},

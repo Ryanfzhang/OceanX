@@ -3,18 +3,20 @@
 A skill reserves a place for lessons with a marked region (``skill_regions.py``): how many it
 may hold and what they are about. The meta-agent maintains the lessons of each such skill. At
 every review it reads the skill as its readers get it, and the saved records of finished
-tasks, each with an independent reading of its final answer where one exists (``referee.py``)
-and with a reviewer's notes on that answer where someone wrote them (``reviews.py``); it
-judges every current lesson (keep, revise or retire) and may add new ones. Only the
-region is rewritten. The rest of the skill, and the packaged files, never change.
+tasks, each with an independent reading of its final answer where one exists (``referee.py``),
+with a critic's outline of what should have been done where one was given, and with a
+reviewer's notes on the answer where someone wrote them (``reviews.py``); it judges every
+current lesson (keep, revise or retire) and may add new ones. Only the region is rewritten.
+The rest of the skill, and the packaged files, never change.
 
 The Coordinator is the reader that learns most (``MAX_NEW_PER_REVIEW``). It decides which
 sub-questions are asked and writes the final answer, and that is where answers fell short: the
 first library, mostly cautions for Experts, left the judged answers unchanged (2026-10-10).
 Its lessons are learned from the trees' decisions, from what the independent reading says a
-stronger final answer would have contained, and above all from what a reviewer found missing:
-most of the points an outside judge took were for analyses that nothing in the question named
-and that only someone who knows what a complete answer holds could ask for (2026-10-11).
+stronger final answer would have contained, and above all from what a critic's outline says
+should have been done and was not, and from what a reviewer found missing: most of the points
+an outside judge took were for analyses that nothing in the question named and that only
+someone who knows what the work should have been could ask for (2026-10-11).
 
 What the meta-agent decides takes effect at once. These rules are enforced by code, not by
 the model:
@@ -47,7 +49,7 @@ from pathlib import Path
 
 from oceanx.research.llm import parse_json_object
 from oceanx.research.memory import ResearchMemory
-from oceanx.research.referee import Referee, reading_lines
+from oceanx.research.referee import Referee, outline_lines, reading_lines
 from oceanx.research.reviews import Reviews, review_lines
 from oceanx.research.tree_store import atomic_write_text
 from oceanx.skill_regions import Region, fill_regions, find_regions
@@ -98,7 +100,7 @@ the skill does not already say: propose nothing it already says, even in other w
 the records show already being done. A lesson is worth proposing only when the records show a
 contrast: a choice that cost effort without changing the answer, one that went well in some
 places and badly in others, or the same kind of gap left in the final answers of several tasks,
-as the independent reading or a reviewer's notes show it.
+as a critic's outline, a reviewer's notes or the independent reading show it.
 Prefer no lesson over a weak one.
 
 {scope}
@@ -138,10 +140,10 @@ the question is answered well enough, and what the final answer must contain and
 Judge a decision by what it cost and gained in the records: minutes and tokens, whether the node
 changed the conclusion (its label) and is cited, what was asked after a result that could not decide
 the question, and which follow-ups were dropped.
-Judge the whole tree by its final answer: what a reviewer found missing in it, what the question
-asks for that it does not give, and what a stronger answer would have contained (the independent
-reading). A lesson that closes such a gap names the sub-question that was never asked, or what the
-final answer left unchecked.
+Judge the whole tree by its final answer: what a critic's outline says should have been done and
+was not, what a reviewer found missing in it, what the question asks for that it does not give, and
+what a stronger answer would have contained (the independent reading). A lesson that closes such a
+gap names the sub-question that was never asked, or what the final answer left unchecked.
 It says what to do, not what to avoid, and asks for nothing that the tasks' data, Experts and time
 could not have done.""", """\
 Each task lists its questions in the order the Coordinator created them. An ID shows the parent:
@@ -159,7 +161,8 @@ a method assumption that did not hold; a test that caught an error, or whose abs
 through; how a result the data cannot decide was reported; or a conclusion stated more strongly
 than the analysis behind it supports.
 The evidence is in each node's result and limits, in later questions that had to re-examine an
-earlier result, in the independent reading of the final answer and in a reviewer's notes on it.
+earlier result, in the independent reading of the final answer, in the points of a critic's
+outline that were not done and in a reviewer's notes on the answer.
 Each node names the Expert that analysed it.""", """\
 Each task lists the questions its Experts answered, in order. An ID shows the parent: B1.3.2 is under
 B1.3. A task "run with lessons" had lessons in its skills when it ran. "found" is the Expert's
@@ -182,19 +185,28 @@ field as a specialist does. Use a finding only where the task's own results bear
 build a lesson on a kind of finding that recurs in tasks on different questions, never on one
 finding."""
 
-# How every reader's records show a reviewer's notes (reviews.py).
+# How every reader's records show what a critic or a reviewer gave (reviews.py).
 REVIEW_NOTE = """\
+"A critic's outline" appears where someone who knows better than the model that did the work, a
+person or a stronger model, said in a few sentences what should be done for the question and how
+to investigate it. It was written for the question, not about this task. "Compared with the final
+answer" is the independent reader's count of the outline's points the answer does, and "not done"
+lists the others, each with what the reader found in its place. This is the strongest evidence a
+record has of what the task should have done: weigh it above every kind of note. The outline is
+the critic's; whether one point was done is the reader's judgement and can be wrong, so check it
+against the task's own questions and results.
+
 "Reviewer's notes" come from an independent reviewer who knows what a complete answer to such a
 question holds: the owner, or someone the owner asked. A note names what the final answer lacks,
-gets wrong or overstates. Weigh it above the independent reading. A record without them was not
-reviewed by anyone.
+gets wrong or overstates. Weigh it above the independent reading. A record with neither an
+outline nor such notes was not reviewed by anyone.
 
 In both kinds of notes, "expected of answers to such questions" is the writer's own judgement
 that the point is general, and "particular to this question" speaks of one task only. A lesson
-still needs the same kind of note in tasks on different questions. Where several tasks lack the
-same kind of analysis or content, the lesson says what to ask for or what the answer must
-contain, in words that hold for other ocean questions: never the regions, variables or
-processes of these tasks."""
+still needs the same kind of note, or of point not done, in tasks on different questions. Where
+several tasks lack the same kind of analysis or content, the lesson says what to ask for or
+what the answer must contain, in words that hold for other ocean questions: never the regions,
+variables or processes of these tasks."""
 
 SAME_PROMPT = """\
 You check new lessons against the lessons OceanX's skills already carry, so that no idea is
@@ -593,9 +605,13 @@ class LessonBook:
                   "questions": questions, "new_tasks": 0, "tasks_left": 0}
         state = self._state()
         read = set(state.get("tasks", [])) & set(digests)
-        # A reviewer's notes that no review has read make their task new again.
+        # A reviewer's notes that no review has read make their task new again, and so does an
+        # answer compared with a critic's outline since the last review.
         noted = {f"{key}@{review.get('noted_at')}": key for key, review in Reviews(self.memory).all().items()
                  if key in digests}
+        noted |= {f"{key}@outline@{reading['against_outline']['noted_at']}": key
+                  for key, reading in Referee(self.memory).readings().items()
+                  if key in digests and (reading.get("against_outline") or {}).get("points")}
         seen = set(state.get("reviews", [])) & set(noted)
         unread = frozenset((set(digests) - read) | {noted[mark] for mark in set(noted) - seen})
         result["new_tasks"] = result["tasks_left"] = len(unread)
@@ -744,8 +760,8 @@ def _attempts(node: dict) -> str:
 
 def _record(digest: dict, role: str, reading: dict | None = None, review: dict | None = None) -> str:
     """One task as the meta-agent reads it: its decisions for the Coordinator skill, its
-    analyses for the Expert skill, and for both the referee's reading of its final answer and
-    a reviewer's notes on it."""
+    analyses for the Expert skill, and for both the referee's reading of its final answer, a
+    critic's outline with the points the answer did not do, and a reviewer's notes on it."""
     outline, outcomes = digest.get("outline", {}), digest.get("outcomes", {})
     questions = {n: node for n, node in outline.items() if node.get("parent") is not None}
     proposals = [p for node in outline.values() for p in node.get("proposals") or []]
@@ -760,7 +776,7 @@ def _record(digest: dict, role: str, reading: dict | None = None, review: dict |
               f"{adopted} of {len(proposals)} proposed follow-ups adopted")
     lines = [header, f"Question: {digest.get('question')}",
              f"Final answer: {answer or 'none recorded'}", *(reading_lines(reading) if reading else []),
-             *(review_lines(review) if review else [])]
+             *(outline_lines(reading) if reading else []), *(review_lines(review) if review else [])]
     for node_id, node in questions.items():
         outcome = outcomes.get(node_id, {})
         runs = node.get("attempts") or []

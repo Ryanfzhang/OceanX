@@ -1,6 +1,6 @@
 """The independent reading of a final answer: one list per question, bounded readings, the
-reader's notes as a reviewer, a reviewer's own notes, failed calls, and what the meta-agent and
-the periodic update do with them."""
+reader's notes as a reviewer, a critic's outline, a reviewer's own notes, failed calls, and what
+the meta-agent and the periodic update do with them."""
 import json
 import time
 from types import SimpleNamespace
@@ -49,17 +49,27 @@ NOTES = [{"aspect": "depth", "text": "A ranking of the candidate drivers on one 
          {"aspect": "breadth", "text": "The yearly values set against published indices.", "general": True}]
 
 
+POINTS = [{"point": "Rank every candidate driver on the same annual index", "status": "no",
+           "missing": "Each driver is tested alone."},
+          {"point": "Give the strength for every year in one table", "status": "yes", "missing": "It is all there."},
+          {"point": "Set the yearly values beside a published index", "status": "partly",
+           "missing": "Two of five years."}]
+
+
 def reader(asked=("the strength, for each year", "the main driver"), reading=READING, calls=None,
-           notes=NOTES):
-    """A model that lists what a question asks for, reads an answer against the list, and then
-    reviews it: what a complete answer would also hold (``notes=None``: a reply without notes)."""
+           notes=NOTES, points=POINTS):
+    """A model that lists what a question asks for, reads an answer against the list, reviews
+    it: what a complete answer would also hold (``notes=None``: a reply without notes), and
+    compares it with a critic's outline (``points=None``: a reply that judges no point)."""
     def reply(prompt):
         kind = ("asked" if prompt.startswith("You prepare the list")
-                else "review" if prompt.startswith("You review a research answer") else "reading")
+                else "review" if prompt.startswith("You review a research answer")
+                else "outline" if prompt.startswith("You compare a research answer") else "reading")
         if calls is not None:
             calls.append(kind)
         return json.dumps({"asked": {"asked": list(asked)}, "reading": reading,
-                           "review": {} if notes is None else {"notes": notes}}[kind])
+                           "review": {} if notes is None else {"notes": notes},
+                           "outline": {"points": points or []}}[kind])
     return reply
 
 
@@ -68,7 +78,7 @@ def test_a_finished_task_is_read_once_and_the_reading_is_kept(tmp_path, memory):
     memory.digest(tree.store.path)
     book, calls = Referee(memory), []
     result = book.read_new([tree.store.path], memory.load_digests(), reader(calls=calls))
-    assert result == {"read": 1, "completed": 0, "without_answer": 0, "failed": [], "left_for_later": 0}
+    assert result == {"read": 1, "completed": 0, "compared": 0, "without_answer": 0, "failed": [], "left_for_later": 0}
     reading = book.readings()[task_key(tree.store.path)]
     assert reading["asked"] == [
         {"item": "the strength, for each year", "status": "partly",
@@ -122,7 +132,7 @@ def test_a_task_without_a_final_answer_or_still_running_is_not_read(tmp_path, me
         memory.digest(tree.store.path)
     book, stores = Referee(memory), [t.store.path for t in (silent, running, kept)]
     result = book.read_new(stores, memory.load_digests(), reader())
-    assert result == {"read": 1, "completed": 0, "without_answer": 1, "failed": [], "left_for_later": 0}
+    assert result == {"read": 1, "completed": 0, "compared": 0, "without_answer": 1, "failed": [], "left_for_later": 0}
     assert set(book.readings()) == {task_key(kept.store.path)}
     # One update reads a bounded number of tasks; the others wait for the next.
     more = [finished_task(tmp_path, name) for name in ("m1", "m2", "m3")]
@@ -181,7 +191,7 @@ def test_the_reader_also_reviews_the_answer_and_older_readings_are_completed(tmp
     # The next update makes the third call only.
     calls = []
     result = book.read_new(stores, digests, reader(calls=calls))
-    assert result == {"read": 0, "completed": 1, "without_answer": 0, "failed": [], "left_for_later": 0}
+    assert result == {"read": 0, "completed": 1, "compared": 0, "without_answer": 0, "failed": [], "left_for_later": 0}
     assert calls == ["review"]
     completed = book.readings()[key]
     assert completed["expected"] == NOTES and completed["read_at"] == kept["read_at"]
@@ -209,7 +219,8 @@ def test_the_reader_also_reviews_the_answer_and_older_readings_are_completed(tmp
     gone.path.with_name("report.md").unlink()
     result = book.read_new([gone.store.path], memory.load_digests(), reader(calls=calls))
     assert (result["without_answer"], result["completed"]) == (1, 0) and calls == ["review"]
-    assert book.readings()[task_key(gone.store.path)]["expected"] == []
+    left = book.readings()[task_key(gone.store.path)]
+    assert left["expected"] == [] and left["answer_gone"] is True
     assert book.read_new([gone.store.path], memory.load_digests(), reader(calls=calls))["without_answer"] == 0
 
 
@@ -280,6 +291,147 @@ def test_a_reviewer_who_knows_the_field_adds_notes_and_the_next_review_learns_fr
     assert refused.exit_code != 0
 
 
+OUTLINE = ("Give the strength for every year in one table. Rank every candidate driver on the same annual index.\n"
+           "Then set the yearly values beside a published index.")
+OUTLINE_LINE = "A critic's outline of what should be done for this question and how to investigate it"
+
+
+def test_a_critic_says_what_should_be_done_and_every_answer_to_the_question_is_compared_with_it(tmp_path):
+    """A critic's outline (reviews.py): a few sentences on what should be done for a question and
+    how to investigate it, by a person or a stronger model. The meta-agent compares every answer
+    to that question with it, and the lesson review reads what the answers did not do."""
+    project = ProjectResearch(SimpleNamespace(root=tmp_path / ".oceanx"))
+    question = "How strong is the upwelling in each year?"
+    trees = [finished_task(tmp_path, name, question=question) for name in ("a", "b")]
+    trees += [finished_task(tmp_path, name) for name in ("c", "d")]
+    stores = [tree.store.path for tree in trees]
+    first, second, other, gone = (task_key(store) for store in stores)
+    calls, prompts = [], []
+
+    def llm(prompt):
+        prompts.append(prompt)
+        return "{}" if "<skill name=" in prompt else reader(calls=calls)(prompt)
+
+    # Nobody gave an outline: nothing is compared, and no call is made for it.
+    assert project.update(stores, llm=llm)["referee"]["compared"] == 0 and "outline" not in calls
+    assert "against_outline" not in project.referee.readings()[first]
+    kept = project.reviews.record_outline(first, "  " + OUTLINE.replace("\n", "   \n  ") + "\n\n", critic=" codex ")
+    assert (kept["critic"], kept["question"], kept["text"]) == ("codex", question, OUTLINE)
+    assert project.reviews.outlines() == {question_key(question): kept} and project.reviews.all() == {}
+    # The next update compares both answers to that question with it, one call each, and the
+    # lessons are reviewed again for those two tasks.
+    calls.clear()
+    prompts.clear()
+    result = project.update(stores, llm=llm)
+    assert result["referee"] == {"read": 0, "completed": 0, "compared": 2, "without_answer": 0, "failed": [],
+                                 "left_for_later": 0}
+    assert calls == ["outline", "outline"]
+    compare = prompts[0]
+    assert question in compare and OUTLINE in compare and ANSWER.strip() in compare
+    assert "Flux explains onset" not in compare and "the main driver" not in compare  # no tree, no other list
+    assert "what should be done for this question and how to investigate it" in " ".join(compare.split())
+    reading = project.referee.readings()[first]
+    assert reading["against_outline"] == {
+        "noted_at": kept["noted_at"], "by": "codex", "text": OUTLINE,
+        "points": [POINTS[0], {**POINTS[1], "missing": ""}, POINTS[2]]}
+    assert reading["expected"] == NOTES and "against_outline" not in project.referee.readings()[other]
+    lessons = result["lessons"]
+    assert (lessons["new_tasks"], lessons["tasks_left"], lessons["skills_reviewed"]) == (2, 0, 6)
+    review = next(prompt for prompt in prompts if "<skill name=" in prompt)
+    records = review.split("# Records")[1]
+    shown = (f"{OUTLINE_LINE} (by codex): Give the strength for every year in one table. Rank every candidate "
+             "driver on the same annual index. Then set the yearly values beside a published index.\n"
+             "  compared with the final answer: 2 of 3 points missing or partial.\n"
+             "  not done: Rank every candidate driver on the same annual index (no: Each driver is tested alone.) | "
+             "Set the yearly values beside a published index (partly: Two of five years.)\n")
+    assert records.count(shown) == 2 == records.count(OUTLINE_LINE)  # both tasks on the question, no other
+    assert records.index(OUTLINE_LINE) < records.index(f"## Task {other}")  # the tasks compared anew come first
+    assert "weigh it above every kind of note" in review
+    assert "what a critic's outline says should have been done" in review
+    # Nothing is compared or reviewed twice.
+    calls.clear()
+    again = project.update(stores, llm=llm)
+    assert (again["referee"]["compared"], again["lessons"]["new_tasks"], calls) == (0, 0, [])
+    # A later task on the question is read and compared with the same outline.
+    stores.append(finished_task(tmp_path, "later", question=question).store.path)
+    later = project.update(stores, llm=llm)
+    assert calls == ["reading", "review", "outline"]
+    assert (later["referee"]["read"], later["referee"]["compared"], later["lessons"]["new_tasks"]) == (1, 1, 1)
+    # A new outline for the question replaces the old one, and its three answers are compared again.
+    calls.clear()
+    project.reviews.record_outline(second, "Rank the drivers first.", critic="the owner")
+    replaced = project.update(stores, llm=llm)
+    assert calls == ["outline"] * 3 and replaced["referee"]["compared"] == 3
+    assert replaced["lessons"]["new_tasks"] == 3
+    assert [r["against_outline"]["by"] for r in project.referee.readings().values()
+            if "against_outline" in r] == ["the owner"] * 3
+    # A reply that judges no point fails that answer only: the rest of its reading stays, and the
+    # next update asks again.
+    project.reviews.record_outline(other, OUTLINE, critic="codex")
+    failed = project.update(stores, llm=lambda prompt: (
+        "{}" if "<skill name=" in prompt else reader(points=None)(prompt)))["referee"]
+    assert failed["failed"] == [{"task_key": other, "reason": "The reader judged no point of the critic's outline."}]
+    assert (failed["compared"], "against_outline" in project.referee.readings()[other]) == (0, False)
+    assert project.update(stores, llm=llm)["referee"]["compared"] == 1
+    # An answer that is no longer kept cannot be compared: its reading stays and is left alone.
+    trees[3].path.with_name("report.md").unlink()
+    project.reviews.record_outline(gone, OUTLINE, critic="codex")
+    calls.clear()
+    lost = project.update(stores, llm=llm)
+    assert (lost["referee"]["without_answer"], lost["referee"]["compared"], lost["lessons"]["new_tasks"]) == (1, 0, 0)
+    left = project.referee.readings()[gone]
+    assert left["answer_gone"] is True and "against_outline" not in left and left["expected"] == NOTES
+    assert calls == [] and project.update(stores, llm=llm)["referee"]["without_answer"] == 0
+
+
+def test_an_outline_is_brief_plain_language_and_only_the_points_the_reader_judged_are_kept(tmp_path):
+    from typer.testing import CliRunner
+
+    from oceanx.research.cli import research_app
+    from oceanx.research.reviews import MAX_OUTLINE_CHARS
+    project = ProjectResearch(SimpleNamespace(root=tmp_path / ".oceanx"))
+    store = finished_task(tmp_path, "t1").store.path
+    project.update([store])
+    key = task_key(store)
+    for bad in ("", "  \n ", "x" * (MAX_OUTLINE_CHARS + 1)):
+        with pytest.raises(ValueError, match=f"1-{MAX_OUTLINE_CHARS} characters of plain language"):
+            project.reviews.record_outline(key, bad, critic="codex")
+    with pytest.raises(ValueError, match="No finished task has this key"):
+        project.reviews.record_outline("0" * 16, OUTLINE, critic="codex")
+    with pytest.raises(ValueError, match="An outline names its critic"):
+        project.reviews.record_outline(key, OUTLINE, critic=" ")
+    assert project.reviews.outlines() == {}
+    # The reader's reply: a point without a verdict is dropped, a long text is cut, and at most
+    # MAX_POINTS are kept. A reply without a judged point is a failed call.
+    wordy = [{"point": "word " * 100, "status": "no", "missing": "x " * 400}, {"point": "", "status": "no"},
+             {"point": "No verdict.", "status": "maybe"}, "junk",
+             *({"point": f"Point {n}.", "status": "yes", "missing": "ignored"} for n in range(20))]
+    points = referee.read_against("Q?", OUTLINE, "answer", lambda prompt: json.dumps({"points": wordy}))
+    assert len(points) == referee.MAX_POINTS and len(points[0]["point"]) == 200 == len(points[0]["missing"])
+    assert points[1] == {"point": "Point 0.", "status": "yes", "missing": ""}
+    for empty in ({"points": wordy[1:4]}, {"points": "none"}, {}):
+        with pytest.raises(ValueError, match="judged no point of the critic's outline"):
+            referee.read_against("Q?", OUTLINE, "answer", lambda prompt, reply=empty: json.dumps(reply))
+    # What a record shows: the outline, the count, and only the points not done.
+    assert referee.outline_lines({"against_outline": {"by": "", "text": "Do  it\nall.", "points": [points[1]]}}) == [
+        f"{OUTLINE_LINE} (by a critic): Do it all.",
+        "  compared with the final answer: 0 of 1 points missing or partial."]
+    bare = {"by": "codex", "text": "Do it.", "points": [{"point": "Do it", "status": "no", "missing": ""}]}
+    assert referee.outline_lines({"against_outline": bare})[1:] == [
+        "  compared with the final answer: 1 of 1 points missing or partial.", "  not done: Do it (no)"]
+    assert referee.outline_lines({}) == [] == referee.outline_lines({"against_outline": {"points": []}})
+    # The command a critic uses.
+    file = tmp_path / "outline.txt"
+    file.write_text(OUTLINE + "\n", encoding="utf-8")
+    command = ["outline", "--project", str(tmp_path), "--task", key, "--text", str(file), "--critic", "codex"]
+    done = CliRunner().invoke(research_app, command)
+    assert done.exit_code == 0 and done.output.strip() == (
+        f"kept codex's outline ({len(OUTLINE)} characters) for the question of {key}")
+    assert next(iter(project.reviews.outlines().values()))["text"] == OUTLINE
+    file.write_text("x" * (MAX_OUTLINE_CHARS + 1), encoding="utf-8")
+    assert CliRunner().invoke(research_app, command).exit_code != 0
+
+
 def test_a_reading_keeps_only_what_was_asked_and_stays_bounded():
     reply = {"asked": [{"item": "2", "status": "no", "missing": "x " * 400}, {"item": 9, "status": "no"},
                        {"item": 1, "status": "maybe"}, "junk"],
@@ -343,7 +495,7 @@ def test_the_periodic_update_reads_final_answers_before_the_review(tmp_path):
         return reader()(prompt)
 
     result = project.update(stores, llm=llm)
-    assert result["referee"] == {"read": 3, "completed": 0, "without_answer": 0, "failed": [],
+    assert result["referee"] == {"read": 3, "completed": 0, "compared": 0, "without_answer": 0, "failed": [],
                                  "left_for_later": 0}
     first_review = next(i for i, prompt in enumerate(seen) if "<skill name=" in prompt)
     assert first_review == 9  # per task its list, its reading and what it lacked; then the skills
