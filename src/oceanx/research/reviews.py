@@ -39,7 +39,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from oceanx.research.memory import ResearchMemory
-from oceanx.research.referee import check_notes, note_lines, question_key
+from oceanx.research.referee import Referee, check_notes, note_lines, question_key
 from oceanx.research.tree_store import atomic_write_text
 
 REVIEW_SCHEMA = "oceanx-answer-review/v1"
@@ -102,9 +102,11 @@ class Reviews:
         be done for it and how to investigate it, in plain language. It counts for every task
         on that question, also later ones. A later outline for the question replaces the
         earlier one, and the next update compares the answers with it again."""
-        question = self._finished(task_key).get("question") or ""
+        # The question in full, as the readings key it: a digest keeps only its first characters.
+        question = Referee(self.memory).question(self._finished(task_key))
         if not question.strip():
-            raise ValueError("This task has no research question on record.")
+            raise ValueError("This task's research question is no longer on record in full; "
+                             "name another finished task on the question.")
         if not critic.strip():
             raise ValueError("An outline names its critic.")
         text = "\n".join(line.strip() for line in str(text or "").strip().splitlines())

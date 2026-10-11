@@ -301,11 +301,15 @@ def test_a_critic_says_what_should_be_done_and_every_answer_to_the_question_is_c
     how to investigate it, by a person or a stronger model. The meta-agent compares every answer
     to that question with it, and the lesson review reads what the answers did not do."""
     project = ProjectResearch(SimpleNamespace(root=tmp_path / ".oceanx"))
-    question = "How strong is the upwelling in each year?"
+    # A question is usually longer than the 240 characters a digest keeps of it, and two questions
+    # can begin alike. An outline belongs to the whole text, as a reading does.
+    opening = "How strong is the upwelling in each year? " + "Use the daily and the monthly fields supplied. " * 6
+    question = opening + "Say which driver explains the strongest year."
     trees = [finished_task(tmp_path, name, question=question) for name in ("a", "b")]
+    trees.append(finished_task(tmp_path, "twin", question=opening + "Say how deep it reaches."))
     trees += [finished_task(tmp_path, name) for name in ("c", "d")]
     stores = [tree.store.path for tree in trees]
-    first, second, other, gone = (task_key(store) for store in stores)
+    first, second, twin, other, gone = (task_key(store) for store in stores)
     calls, prompts = [], []
 
     def llm(prompt):
@@ -315,6 +319,8 @@ def test_a_critic_says_what_should_be_done_and_every_answer_to_the_question_is_c
     # Nobody gave an outline: nothing is compared, and no call is made for it.
     assert project.update(stores, llm=llm)["referee"]["compared"] == 0 and "outline" not in calls
     assert "against_outline" not in project.referee.readings()[first]
+    kept_of = {d["task_key"]: d["question"] for d in project.memory.load_digests()}
+    assert kept_of[first] == kept_of[twin] != question and len(kept_of[first]) == 240
     kept = project.reviews.record_outline(first, "  " + OUTLINE.replace("\n", "   \n  ") + "\n\n", critic=" codex ")
     assert (kept["critic"], kept["question"], kept["text"]) == ("codex", question, OUTLINE)
     assert project.reviews.outlines() == {question_key(question): kept} and project.reviews.all() == {}
@@ -334,7 +340,8 @@ def test_a_critic_says_what_should_be_done_and_every_answer_to_the_question_is_c
     assert reading["against_outline"] == {
         "noted_at": kept["noted_at"], "by": "codex", "text": OUTLINE,
         "points": [POINTS[0], {**POINTS[1], "missing": ""}, POINTS[2]]}
-    assert reading["expected"] == NOTES and "against_outline" not in project.referee.readings()[other]
+    assert reading["expected"] == NOTES
+    assert not any("against_outline" in project.referee.readings()[key] for key in (twin, other, gone))
     lessons = result["lessons"]
     assert (lessons["new_tasks"], lessons["tasks_left"], lessons["skills_reviewed"]) == (2, 0, 6)
     review = next(prompt for prompt in prompts if "<skill name=" in prompt)
@@ -374,7 +381,7 @@ def test_a_critic_says_what_should_be_done_and_every_answer_to_the_question_is_c
     assert (failed["compared"], "against_outline" in project.referee.readings()[other]) == (0, False)
     assert project.update(stores, llm=llm)["referee"]["compared"] == 1
     # An answer that is no longer kept cannot be compared: its reading stays and is left alone.
-    trees[3].path.with_name("report.md").unlink()
+    trees[4].path.with_name("report.md").unlink()
     project.reviews.record_outline(gone, OUTLINE, critic="codex")
     calls.clear()
     lost = project.update(stores, llm=llm)
@@ -401,6 +408,21 @@ def test_an_outline_is_brief_plain_language_and_only_the_points_the_reader_judge
     with pytest.raises(ValueError, match="An outline names its critic"):
         project.reviews.record_outline(key, OUTLINE, critic=" ")
     assert project.reviews.outlines() == {}
+    # The question in full comes from the task's own record. Once that is gone it comes from an
+    # earlier reading, and with neither the outline is refused: a digest keeps only its beginning.
+    long_question = "How deep does it reach? " + "Use every field that is supplied. " * 9
+    read_store, unread_store = (finished_task(tmp_path, name, question=long_question + name).store.path
+                                for name in ("read", "unread"))
+    project.update([read_store], llm=lambda prompt: "{}" if "<skill name=" in prompt else reader()(prompt))
+    project.update([read_store, unread_store])
+    read_store.unlink()
+    unread_store.unlink()
+    kept = project.reviews.record_outline(task_key(read_store), OUTLINE, critic="codex")
+    assert kept["question"] == long_question + "read" and len(kept["question"]) > 240
+    assert kept["question_key"] == project.referee.readings()[task_key(read_store)]["question_key"]
+    with pytest.raises(ValueError, match="no longer on record in full"):
+        project.reviews.record_outline(task_key(unread_store), OUTLINE, critic="codex")
+    (project.reviews.root / "outlines" / f"{kept['question_key']}.json").unlink()
     # The reader's reply: a point without a verdict is dropped, a long text is cut, and at most
     # MAX_POINTS are kept. A reply without a judged point is a failed call.
     wordy = [{"point": "word " * 100, "status": "no", "missing": "x " * 400}, {"point": "", "status": "no"},

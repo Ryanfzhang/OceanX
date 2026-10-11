@@ -440,6 +440,25 @@ class Referee:
             answer = (root.get("result") or {}).get("summary") or ""
         return root.get("question") or "", answer
 
+    def question(self, digest: dict) -> str:
+        """A finished task's research question in full; empty when it is no longer on record.
+        A digest keeps only the beginning of a question, and a reading is filed under the key
+        of the whole text, so whatever is kept per question must be keyed from this. It comes
+        from the task's own record while that exists, otherwise from the list an earlier
+        reading made of what the question asks for."""
+        source = Path(digest.get("source") or "")
+        if digest.get("source") and source.is_file():
+            question = self._task(source)[0]
+            if question.strip():
+                return question
+        reading = self.readings().get(digest.get("task_key")) or {}
+        try:
+            listed = json.loads((self.root / "asked" / f"{reading.get('question_key')}.json")
+                                .read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return ""
+        return str(listed.get("question") or "")
+
     def _keep(self, reading: dict) -> None:
         atomic_write_text(self.root / f"{reading['task_key']}.json",
                           json.dumps(reading, ensure_ascii=False, indent=1))
