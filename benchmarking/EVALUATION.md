@@ -601,6 +601,15 @@ What it decides takes effect at once. Code, not the model, enforces these rules:
   the skills already carry and with each other. A proposal that says what a lesson already says is not
   added; its supporting runs are added to that lesson. The first library held twelve lessons that were five
   ideas, although the instructions said not to repeat;
+- a critic is answered (Owner, 2026-10-11): where critics' outlines found points not done in runs on at
+  least three questions, the review of each of the Coordinator's two skills lists those points for every
+  such run and has to say, for each kind found in three questions, which lesson answers it: a current one,
+  a new one, or "elsewhere" with the reason. A new lesson for such a kind is taken before any other, and
+  `lessons.critic_gaps` in `review.json` lists the kinds with their answers. The first learning with
+  outlines (2026-10-11) showed why: the comparison found two kinds of gap most often, a quantified
+  comparison with related processes and published work (in all 12 questions) and a controlled test that
+  separates the candidate explanations (in 8), yet of the 14 new lessons proposed 9 rested on the
+  meta-agent's own notes and 4 on the outlines, and neither kind became a lesson for planning;
 - every lesson that passed is kept; a run is shown at most as many lessons of a skill as its region
   allows, the best supported first;
 - a lesson is at most 40 words with an explicit "applies when" condition, and names no task or node.

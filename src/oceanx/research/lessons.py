@@ -27,6 +27,12 @@ the model:
 * one idea is kept once: a proposal that says what a lesson already says, in any skill, is
   not added, and its supporting tasks are added to that lesson (one model call compares
   them; the first library held twelve lessons that were five ideas);
+* a critic is answered: where critics' outlines exist, the review of a Coordinator skill lists
+  the points that the answers of all tasks did not do, and the meta-agent has to say for every
+  kind found in ``MIN_SUPPORT`` questions which lesson answers it. A new lesson for such a kind
+  comes before any other. Left to weigh the outlines itself, the meta-agent built 9 of 14
+  proposals on its own notes and 4 on the outlines, and the two kinds the outlines found
+  missing most often became no lesson for planning (2026-10-11);
 * the project keeps every lesson that passed; a region's ``max`` is how many of a skill's
   lessons a task is shown, the best supported first, so the library can go on growing while
   what a reader sees stays short;
@@ -49,7 +55,7 @@ from pathlib import Path
 
 from oceanx.research.llm import parse_json_object
 from oceanx.research.memory import ResearchMemory
-from oceanx.research.referee import Referee, outline_lines, reading_lines
+from oceanx.research.referee import Referee, not_done, outline_lines, reading_lines
 from oceanx.research.reviews import Reviews, review_lines
 from oceanx.research.tree_store import atomic_write_text
 from oceanx.skill_regions import Region, fill_regions, find_regions
@@ -66,6 +72,8 @@ MIN_SUPPORT = 3  # different research questions, not repeated runs of one
 # New lessons one review may add to a skill, by the skill's reader.
 MAX_NEW_PER_REVIEW = {"coordinator": 4, "expert": 1}
 MAX_PROMPT_CHARS = 200_000  # task records in one review prompt (about 50k tokens)
+MAX_GAP_CHARS = 60_000  # the critics' section of one review prompt; twelve tasks took about 25,000
+CRITIC_ANSWERS = ("lesson", "add", "elsewhere")
 VERDICTS = ("right", "wrong")
 
 REVIEW_INSTRUCTIONS = """\
@@ -82,7 +90,7 @@ This skill takes lessons about: {about}
 A task is shown at most {limit} of its lessons, the best supported first. The project keeps the
 others, and their support goes on being counted.
 
-Do two things.
+Do {count} things.
 
 1. Judge every current lesson against the records ("lessons"):
 - "keep": the records support it, or say nothing about it;
@@ -121,14 +129,35 @@ A new lesson has:
   different task questions (the "Question:" line); repeated runs of one question count once;
 - "counter": keys of the tasks whose records contradict it;
 - "rationale": what happened in the records, naming task keys and node IDs.
-
+{critics}
 Return JSON only:
 {{"lessons": [{{"id": "<id>", "verdict": "keep"|"revise"|"retire", "text": null|"...",
    "applies_when": null|"...", "supporting": ["<task_key>"], "counter": ["<task_key>"],
    "reason": "..."}}],
  "add": [{{"text": "...", "applies_when": "...", "supporting": ["<task_key>"],
-   "counter": ["<task_key>"], "rationale": "..."}}]}}
+   "counter": ["<task_key>"], "rationale": "..."}}]{critic_field}}}
 """
+
+# The third thing a Coordinator skill's review does when critics' outlines found points not done.
+CRITIC_INSTRUCTIONS = """
+3. Answer the critics ("critic_gaps"). The section "What the critics' outlines found not done" lists
+every finished task whose final answer was compared with a critic's outline, with the points of the
+outline it did not do. Read it before the records. Sort its points into kinds: the kind of analysis,
+comparison or content that was missing, in words that hold for other ocean questions. For every kind
+found in tasks on at least {min_support} different questions, say how this skill answers it:
+- "lesson": a current lesson of this skill already says it. Give its id in "ref". The tasks you name
+  for the kind are added to its support;
+- "add": a new lesson says it. Give in "ref" its position in your "add" list (1 for the first). The
+  tasks you name for the kind count as its support;
+- "elsewhere": it is not this skill's subject (the line "This skill takes lessons about" decides), or
+  the skill's own text or a lesson of another skill already says it, or the tasks' data, Experts and
+  time could not have done it. Say which in "why".
+Leave no such kind without an answer. A critic knows what the work should have been, so a new lesson
+that answers a critics' kind comes before every other new lesson: of your {max_new}, propose those first.
+"""
+CRITIC_FIELD = """,
+ "critic_gaps": [{"kind": "...", "tasks": ["<task_key>"], "answer": "lesson"|"add"|"elsewhere",
+   "ref": "<lesson id, or position in add>", "why": "..."}]"""
 
 # Per reader: who reads the lessons, what a lesson must be about, and how to read a task record.
 REVIEW_SCOPE = {
@@ -428,10 +457,41 @@ class LessonBook:
         fitted = self._fitting(skill, digests, unread)
         return self._prompt(skill, digests, [record for _, record in fitted]), len(fitted)
 
-    def _prompt(self, skill: str, digests: list[dict], records: list[str]) -> str:
+    def critic_section(self, skill: str, digests: list[dict]) -> str:
+        """What the critics' outlines found not done, for the review of a Coordinator skill:
+        every finished task whose final answer was compared with an outline, with the points
+        it did not do. The records of a prompt hold only the tasks that fit; this holds all of
+        them, because a kind of gap is counted over all. Empty for an Expert skill, and while
+        such tasks cover fewer than ``MIN_SUPPORT`` questions: no kind could then ask for an
+        answer."""
+        if self.reader(skill, self.regions()[skill]) != "coordinator":
+            return ""
+        readings = Referee(self.memory).readings()
+        lines, questions = [], set()
+        for digest in sorted(digests, key=_task_time, reverse=True):
+            short = not_done(readings.get(digest["task_key"]))
+            if not short:
+                continue
+            asked = " ".join(str(digest.get("question") or "").split())
+            line = (f"- {digest['task_key']} (\"{asked[:90]}{'…' if len(asked) > 90 else ''}\"): "
+                    + " | ".join(short))
+            if lines and sum(map(len, lines)) + len(line) > MAX_GAP_CHARS:
+                break
+            lines.append(line)
+            questions.add(_norm(digest.get("question")))
+        if len(questions) < MIN_SUPPORT:
+            return ""
+        return "\n".join([
+            f"{len(lines)} finished tasks on {len(questions)} different questions did not do, or did only "
+            "partly, these points of the outline a critic gave for their question. Each line is one task: "
+            "its key, the beginning of its question, and the points with what the reader found in their place.",
+            *lines])
+
+    def _prompt(self, skill: str, digests: list[dict], records: list[str], gaps: str | None = None) -> str:
         region = self.regions()[skill]
         role = self.reader(skill, region)
         reader, scope, reading = REVIEW_SCOPE[role]
+        gaps = self.critic_section(skill, digests) if gaps is None else gaps
         questions = self._questions()
         current = self.active(skill)
         elsewhere = [l for l in self.active() if l.get("skill") != skill]
@@ -439,7 +499,10 @@ class LessonBook:
         prompt = (REVIEW_INSTRUCTIONS.format(
             reader=reader, about=region.about, limit=region.limit, max_new=MAX_NEW_PER_REVIEW[role],
             scope=scope, max_words=MAX_WORDS, max_condition=MAX_CONDITION_WORDS,
-            min_support=MIN_SUPPORT)
+            min_support=MIN_SUPPORT, count="three" if gaps else "two",
+            critics=CRITIC_INSTRUCTIONS.format(
+                min_support=MIN_SUPPORT, max_new=MAX_NEW_PER_REVIEW[role]) if gaps else "",
+            critic_field=CRITIC_FIELD if gaps else "")
             + f'\n# The skill\nIts lessons carry their id, such as (L003).\n\n<skill name="{skill}">\n'
             + _body(self.skill_text(skill)) + "\n</skill>"
             + "\n\n# Its lessons now\n" + ("\n".join(self._facts(l, questions, digests) for l in current)
@@ -449,6 +512,7 @@ class LessonBook:
             + "\n\n# Lessons the owner marked wrong\n" + ("\n".join(f"- {text}" for text in wrong) or "None.")
             + "\n\n# Already in place\n" + _in_place(role, skill)
             + "\n\n# How to read a record\n" + reading + "\n" + READING_NOTE + "\n" + REVIEW_NOTE
+            + ("\n\n# What the critics' outlines found not done\n" + gaps if gaps else "")
             + "\n\n# Records\n" + "\n\n".join(records))
         return prompt
 
@@ -515,12 +579,17 @@ class LessonBook:
                    "reason": reason[:600], "text": lesson["text"]})
 
     def _apply(self, skill: str, region: Region, reply: dict, digests: dict[str, dict],
-               lessons: list[dict], llm: Callable[[str], str] | None = None) -> tuple[list[dict], list[dict]]:
+               lessons: list[dict], llm: Callable[[str], str] | None = None, *,
+               answers: list[dict] | None = None) -> tuple[list[dict], list[dict]]:
         """Carry out one skill's review. Returns what changed and what was refused. With ``llm``
-        the proposals are first compared with the lessons already kept (``_repeats``)."""
+        the proposals are first compared with the lessons already kept (``_repeats``). With
+        ``answers`` (a list to fill) the reply also says how the skill answers the critics: a
+        new lesson for a critics' kind is taken before the others, the kind's tasks count as
+        support for the lesson that answers it, and the list gets one entry per kind."""
         role, changed, rejected = self.reader(skill, region), [], []
         questions = {k: _norm(d.get("question")) for k, d in digests.items()}
         current = {l["id"]: l for l in lessons if l["status"] == "active" and l.get("skill") == skill}
+        kinds = _critic_kinds(reply, digests) if answers is not None else []
         for item in reply.get("lessons") or []:
             lesson = current.get(item.get("id")) if isinstance(item, dict) else None
             if lesson is None:
@@ -550,6 +619,12 @@ class LessonBook:
                                "before": lesson["text"], "after": text})
                     lesson.update(text=text, applies_when=condition, updated_at=_now())
                     changed.append({"lesson": lesson["id"], "change": "revised"})
+        for kind in kinds:  # a lesson named as the answer to a critics' kind gains the kind's tasks
+            lesson = current.get(kind["ref"]) if kind["answer"] == "lesson" else None
+            if lesson is not None and lesson["status"] == "active":
+                evidence = lesson.setdefault("evidence", {"supporting": [], "counter": []})
+                evidence["supporting"] = list(dict.fromkeys([*evidence.get("supporting", []), *kind["tasks"]]))
+                lesson["updated_at"] = _now()
         for lesson in current.values():  # what the records say, whatever the model said
             evidence = lesson.get("evidence", {})
             support = {questions.get(k) or k for k in evidence.get("supporting", [])}
@@ -560,18 +635,38 @@ class LessonBook:
                     f"contradicted: {len(counter)} questions against it, {len(support)} for it"))
                 changed.append({"lesson": lesson["id"], "change": "retired"})
 
-        proposed = []
-        for raw in (reply.get("add") or [])[:MAX_NEW_PER_REVIEW[role]]:
+        # The proposals in the order they are taken: those that answer a critics' kind first, each
+        # with the kind's tasks as support. ``fate`` says by position in the reply what became of one.
+        adds = [dict(raw) if isinstance(raw, dict) else raw for raw in reply.get("add") or []]
+        first: list[int] = []
+        for kind in kinds:
+            position = kind["position"]
+            if kind["answer"] == "add" and position is not None and position < len(adds) and isinstance(
+                    adds[position], dict):
+                adds[position]["supporting"] = list(dict.fromkeys(
+                    [*(adds[position].get("supporting") or []), *kind["tasks"]]))
+                if position not in first:
+                    first.append(position)
+        order = [*first, *(i for i in range(len(adds)) if i not in first)]
+        fate: dict[int, dict | str] = {
+            position: f"More than {MAX_NEW_PER_REVIEW[role]} new lessons were proposed for this skill."
+            for position in order[MAX_NEW_PER_REVIEW[role]:]}
+        proposed, places = [], []
+        for position in order[:MAX_NEW_PER_REVIEW[role]]:
+            raw = adds[position]
             try:
                 proposed.append((raw, self._new_lesson(raw, skill, role, digests, lessons)))
+                places.append(position)
             except (ValueError, TypeError, AttributeError) as exc:
                 text = raw.get("text", "") if isinstance(raw, dict) else raw
                 rejected.append({"skill": skill, "text": str(text)[:200], "reason": str(exc)})
+                fate[position] = str(exc)
         try:
             repeats = self._repeats(llm, [lesson for _, lesson in proposed], lessons) if llm else {}
         except ValueError as exc:  # nothing unchecked is added: one idea is kept once
             rejected += [{"skill": skill, "text": lesson["text"][:200], "reason": (
                 f"It could not be compared with the lessons already kept: {exc}")} for _, lesson in proposed]
+            fate.update(dict.fromkeys(places, "It could not be compared with the lessons already kept."))
             proposed = []
         became: dict[int, dict] = {}  # by position, the lesson a proposal became or was counted for
         for number, (raw, lesson) in enumerate(proposed, 1):
@@ -593,6 +688,25 @@ class LessonBook:
             self._log({"lesson": lesson["id"], "skill": skill, "change": "added", "by": "meta-agent",
                        "reason": str(raw.get("rationale") or "")[:600], "text": lesson["text"]})
             changed.append({"lesson": lesson["id"], "change": "added"})
+        fate.update({places[number - 1]: lesson for number, lesson in became.items()})
+        for kind in kinds:  # how each critics' kind ended up answered, for whoever reads the result
+            answer = {"skill": skill, "kind": kind["kind"], "questions": kind["questions"], "answer": kind["answer"]}
+            if kind["answer"] == "elsewhere":
+                answer["why"] = kind["why"]
+            elif kind["answer"] == "lesson":
+                lesson = current.get(kind["ref"])
+                if lesson is not None and lesson["status"] == "active":
+                    answer["lesson"] = lesson["id"]
+                else:  # the lesson named is not there: the kind is left open
+                    answer.update(answer="unanswered", why=(
+                        f"No current lesson of this skill is called {kind['ref'] or '(none)'}."))
+            else:
+                became_of = fate.get(kind["position"], "The reply holds no new lesson at this position.")
+                if isinstance(became_of, dict):  # added, or counted for the lesson that already says it
+                    answer["lesson"] = became_of["id"]
+                else:
+                    answer.update(answer="unanswered", why=became_of)
+            answers.append(answer)
         return changed, rejected
 
     def review(self, llm: Callable[[str], str], *, task_keys: set[str] | None = None,
@@ -626,7 +740,8 @@ class LessonBook:
             fitted = self._fitting(skill, list(digests.values()), unread)
             keys = {digest["task_key"] for digest, _ in fitted}
             held = keys if held is None else held & keys
-            prompt = self._prompt(skill, list(digests.values()), [record for _, record in fitted])
+            gaps = self.critic_section(skill, list(digests.values()))
+            prompt = self._prompt(skill, list(digests.values()), [record for _, record in fitted], gaps)
             result["skills_reviewed"] += 1
             result["tasks_considered"] = max(result["tasks_considered"], len(fitted))
             try:
@@ -635,9 +750,16 @@ class LessonBook:
                 result["rejected"].append({"skill": skill, "text": "",
                                            "reason": f"The meta-agent's reply could not be read: {exc}"})
                 continue
-            changed, rejected = self._apply(skill, region, reply, digests, lessons, llm)
+            answers: list[dict] | None = [] if gaps else None
+            changed, rejected = self._apply(skill, region, reply, digests, lessons, llm, answers=answers)
             result["changes"] += changed
             result["rejected"] += rejected
+            if answers is not None:  # what became of the critics' points, kind by kind
+                result.setdefault("critic_gaps", []).extend(answers)
+                if not answers:
+                    result["rejected"].append({"skill": skill, "text": "", "reason": (
+                        "The meta-agent named no kind of gap that the critics' outlines found in tasks on "
+                        f"{MIN_SUPPORT} different questions, so the critics are unanswered for this skill.")})
             self._save(lessons)  # a later skill's prompt sees what this one changed
         # A prompt holds a limited number of records. A task that did not fit stays unread, so
         # the next review runs for it and reads it first.
@@ -706,6 +828,28 @@ class LessonBook:
                 "lessons_version": self.version(), "digests": len(digests),
                 "last_reviewed_at": state.get("at"),
                 "last_consolidated_at": self.memory.state().get("last_consolidated_at")}
+
+
+def _critic_kinds(reply: dict, digests: dict[str, dict]) -> list[dict]:
+    """The kinds of gap the meta-agent sorted the critics' points into, as far as its reply can be
+    read: each with its tasks, the number of different questions they cover, and how the skill
+    answers it (``position`` is the place of a new lesson in the reply's "add" list, from 0). A
+    kind found in fewer than ``MIN_SUPPORT`` questions asks for no answer and is left out."""
+    kinds = []
+    for entry in reply.get("critic_gaps") if isinstance(reply.get("critic_gaps"), list) else []:
+        entry = entry if isinstance(entry, dict) else {}
+        named = entry.get("tasks") if isinstance(entry.get("tasks"), list) else []
+        tasks = [key for key in dict.fromkeys(k for k in named if isinstance(k, str)) if key in digests]
+        text = " ".join(str(entry.get("kind") or "").split())[:200]
+        asked = len({_norm(digests[key].get("question")) for key in tasks})
+        if not text or entry.get("answer") not in CRITIC_ANSWERS or asked < MIN_SUPPORT:
+            continue
+        ref = str(entry.get("ref") or "").strip()
+        number = re.search(r"\d+", ref) if entry["answer"] == "add" else None
+        kinds.append({"kind": text, "tasks": tasks, "questions": asked, "answer": entry["answer"], "ref": ref,
+                      "position": int(number.group()) - 1 if number and int(number.group()) > 0 else None,
+                      "why": " ".join(str(entry.get("why") or "").split())[:300]})
+    return kinds
 
 
 def _in_place(role: str, skill: str) -> str:

@@ -349,6 +349,14 @@ def read_against(question: str, outline: str, answer: str, llm: Callable[[str], 
     return points[:MAX_POINTS]
 
 
+def not_done(reading: dict | None) -> list[str]:
+    """The points of a critic's outline that a final answer does not do or does only partly,
+    each with what the reader found in its place."""
+    points = ((reading or {}).get("against_outline") or {}).get("points") or []
+    return [f"{point['point']} ({point['status']}{': ' + point['missing'] if point.get('missing') else ''})"
+            for point in points if point.get("status") in ("partly", "no")]
+
+
 def outline_lines(reading: dict) -> list[str]:
     """What a task record shows of a critic's outline: the outline itself, and which of its
     points the final answer does not do. Nothing when no critic gave one for the question."""
@@ -356,14 +364,12 @@ def outline_lines(reading: dict) -> list[str]:
     points = compared.get("points") or []
     if not points:
         return []
-    short = [point for point in points if point["status"] in ("partly", "no")]
+    short = not_done(reading)
     lines = [(f"A critic's outline of what should be done for this question and how to investigate it "
               f"(by {compared.get('by') or 'a critic'}): {' '.join(str(compared.get('text') or '').split())}"),
              (f"  compared with the final answer: {len(short)} of {len(points)} points missing or partial.")]
     if short:
-        lines.append("  not done: " + " | ".join(
-            f"{point['point']} ({point['status']}{': ' + point['missing'] if point['missing'] else ''})"
-            for point in short))
+        lines.append("  not done: " + " | ".join(short))
     return lines
 
 
@@ -532,5 +538,5 @@ class Referee:
 
 
 __all__ = ["ASPECTS", "MAX_NOTES", "MAX_NOTE_CHARS", "READING_SCHEMA", "Referee", "asked_items",
-           "check_notes", "note_lines", "outline_lines", "question_key", "read_against", "read_answer",
-           "read_expected", "reading_lines"]
+           "check_notes", "not_done", "note_lines", "outline_lines", "question_key", "read_against",
+           "read_answer", "read_expected", "reading_lines"]

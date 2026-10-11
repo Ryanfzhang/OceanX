@@ -398,6 +398,108 @@ def test_a_proposal_that_repeats_a_kept_lesson_adds_its_support_instead(tmp_path
     assert alone["changes"] == [{"lesson": "L001", "change": "added"}]
 
 
+WRITING = "claim-grounded-writing"
+
+
+def compared(memory, keys):
+    """Readings of final answers that were compared with a critic's outline: none of them ranked
+    the drivers, all of them gave the table."""
+    from oceanx.research.referee import READING_SCHEMA, Referee
+    for key in keys:
+        Referee(memory)._keep({
+            "schema": READING_SCHEMA, "task_key": key, "question_key": key, "asked": [], "overclaims": [],
+            "superseded": [], "expected": [], "against_outline": {
+                "noted_at": "2026-10-11T00:00:00+00:00", "by": "codex", "text": "Rank the drivers on one index.",
+                "points": [{"point": "Rank every candidate driver on one index", "status": "no",
+                            "missing": "Each is tested alone."},
+                           {"point": "Give every year in one table", "status": "yes", "missing": ""}]}})
+
+
+def test_what_the_critics_found_not_done_in_three_questions_must_be_answered_by_a_lesson(tmp_path, memory):
+    """A critic is answered (Owner, 2026-10-11). Left to weigh the outlines itself, the meta-agent
+    built most new lessons on its own notes. So a Coordinator skill's review lists what the answers
+    of all tasks did not do, and has to say for every recurring kind which lesson answers it."""
+    keys = mined(memory, tmp_path, n=5)
+    book = LessonBook(memory)
+    compared(memory, keys[:2])
+    # Two questions are too few for any kind to ask for an answer: nothing is added to the review.
+    assert book.critic_section(PLANNING, memory.load_digests()) == ""
+    assert "critic_gaps" not in book.review_prompt(PLANNING, memory.load_digests())[0]
+    compared(memory, keys[:4])
+    section = book.critic_section(PLANNING, memory.load_digests())
+    assert section.startswith("4 finished tasks on 4 different questions did not do")
+    assert (f'- {keys[0]} ("Why is t0 warm?"): Rank every candidate driver on one index '
+            "(no: Each is tested alone.)") in section
+    assert "Give every year in one table" not in section  # a point that was done is not listed
+    assert book.critic_section(PHYSICS, memory.load_digests()) == ""  # an Expert skill is not asked
+    prompt, _ = book.review_prompt(PLANNING, memory.load_digests())
+    assert "Do three things." in prompt and '3. Answer the critics ("critic_gaps")' in prompt
+    assert '"critic_gaps": [{"kind": "...", "tasks": ["<task_key>"], "answer": "lesson"|"add"|"elsewhere"' in prompt
+    assert prompt.index('3. Answer the critics') < prompt.index("Return JSON only") < prompt.index(
+        "# What the critics' outlines found not done") < prompt.index("# Records")
+    assert section in prompt and "of your 4, propose those first" in prompt
+    expert_prompt, _ = book.review_prompt(PHYSICS, memory.load_digests())
+    assert "Do two things." in expert_prompt and "critic_gaps" not in expert_prompt
+
+    def proposal(text, supporting):
+        return {"text": text, "applies_when": "A question asks what drives a change.",
+                "supporting": supporting, "rationale": "Seen across tasks."}
+
+    # The reply proposes five lessons for a skill that takes four. The one that answers a critics'
+    # kind stands last and names no support of its own: it is taken first, on the kind's tasks.
+    fillers = [proposal(f"Check unit number {n} of every figure before delivery.", keys[:3]) for n in range(4)]
+    ranking = proposal("Add a sub-question that puts every candidate driver on one index and ranks them.", [])
+    reply = {"add": [*fillers, ranking], "critic_gaps": [
+        {"kind": "No  ranking of the candidate drivers on one index", "tasks": keys[:4], "answer": "add", "ref": "5"},
+        {"kind": "Found in two questions only", "tasks": keys[:2], "answer": "add", "ref": "1"},
+        {"kind": "Tables", "tasks": [*keys[:4], "no-such-task"], "answer": "elsewhere",
+         "why": "The writing skill's subject."},
+        {"kind": "Uncertainty", "tasks": keys[:4], "answer": "lesson", "ref": "L999"},
+        {"kind": "Limits", "tasks": keys[:4], "answer": "add", "ref": "position 4"},
+        {"kind": "Nothing there", "tasks": keys[:4], "answer": "add", "ref": "9"},
+        "junk", {"kind": "", "tasks": keys[:4], "answer": "add"}, {"kind": "No answer", "tasks": keys[:4]},
+        {"kind": "Tasks are no list", "tasks": keys[0], "answer": "elsewhere"}]}
+    result = book.review(fake_llm({PLANNING: reply}))
+    ranked = next(l for l in book.lessons() if l["text"] == ranking["text"])
+    assert ranked["evidence"]["supporting"] == keys[:4] and ranked["skill"] == PLANNING
+    # The fourth proposal answers a kind too, so it is taken second; two of the other three follow.
+    assert [l["text"] for l in book.active(PLANNING)] == [
+        ranking["text"], fillers[3]["text"], fillers[0]["text"], fillers[1]["text"]]
+    assert result["critic_gaps"] == [
+        {"skill": PLANNING, "kind": "No ranking of the candidate drivers on one index", "questions": 4,
+         "answer": "add", "lesson": ranked["id"]},
+        {"skill": PLANNING, "kind": "Tables", "questions": 4, "answer": "elsewhere",
+         "why": "The writing skill's subject."},
+        {"skill": PLANNING, "kind": "Uncertainty", "questions": 4, "answer": "unanswered",
+         "why": "No current lesson of this skill is called L999."},
+        {"skill": PLANNING, "kind": "Limits", "questions": 4, "answer": "add",
+         "lesson": next(l["id"] for l in book.lessons() if l["text"] == fillers[3]["text"])},
+        {"skill": PLANNING, "kind": "Nothing there", "questions": 4, "answer": "unanswered",
+         "why": "The reply holds no new lesson at this position."}]
+    # The writing skill's reply said nothing of the critics: that is reported, not passed over.
+    assert {"skill": WRITING, "text": "", "reason": (
+        "The meta-agent named no kind of gap that the critics' outlines found in tasks on 3 different "
+        "questions, so the critics are unanswered for this skill.")} in result["rejected"]
+    # Later the kind is answered by the lesson that now says it: its tasks become that lesson's support.
+    compared(memory, keys)
+    again = book.review(fake_llm({PLANNING: {"critic_gaps": [
+        {"kind": "No ranking of the candidate drivers", "tasks": keys, "answer": "lesson", "ref": ranked["id"]}]}}))
+    assert again["critic_gaps"] == [{"skill": PLANNING, "kind": "No ranking of the candidate drivers",
+                                     "questions": 5, "answer": "lesson", "lesson": ranked["id"]}]
+    assert next(l for l in book.lessons() if l["id"] == ranked["id"])["evidence"]["supporting"] == keys
+    # A new lesson for a kind still has to pass the rules; what is refused leaves the kind open.
+    refused = book.review(fake_llm({PLANNING: {"add": [proposal("word " * 60, keys[:4])], "critic_gaps": [
+        {"kind": "Another kind", "tasks": keys[:4], "answer": "add", "ref": "1"}]}}), force=True)
+    assert refused["critic_gaps"] == [{"skill": PLANNING, "kind": "Another kind", "questions": 4,
+                                       "answer": "unanswered", "why": "Lesson text must be 1-40 words."}]
+    # Without outlines a review is what it was: no section, no third thing to do, no such result.
+    plain = LessonBook(ResearchMemory(memory.root.parent / "plain"))
+    for digest in memory.load_digests():
+        (plain.memory.digests / f"{digest['task_key']}.json").parent.mkdir(parents=True, exist_ok=True)
+        (plain.memory.digests / f"{digest['task_key']}.json").write_text(json.dumps(digest))
+    assert "critic_gaps" not in plain.review(fake_llm({PLANNING: reply}))
+
+
 def test_the_owner_marks_a_lesson_right_or_wrong(tmp_path, memory):
     keys = mined(memory, tmp_path)
     book = LessonBook(memory)

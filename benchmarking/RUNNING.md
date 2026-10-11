@@ -134,6 +134,11 @@ python benchmarking/server/research_cli.py snapshot --project "$EVO" --output "$
   只能评进化题，意见里不能出现测试题、rubric 或参考答案的内容。
 - 经验以协调者为主：每次学习给协调者的两个 skill 各最多加 4 条，给专家的四个 skill 各最多加 1 条。新提的
   经验和已有的说的是同一件事时不新增，它的依据并到已有那条上，`lessons.rejected` 里会写明并到了哪一条。
+- 有 critic 提纲时，协调者两个 skill 的学习提示词里会多一段，列出所有题里没做到的提纲要点。同一类缺口
+  在 3 道题以上出现的，meta-agent 必须说明由哪条经验回答：已有的、新增的，或者"不归这个 skill"并写明理由。
+  回答这类缺口的新经验排在其它新经验前面。`review.json` 的 `lessons.critic_gaps` 逐类列出回答，`answer`
+  是 `unanswered` 的就是还没有经验回答。
+- 没有新题、只想让它按现有记录再学一遍：在命令后面加 `--force`。
 - 想让经验按新策略从头学一遍：把 `$EVO/.oceanx/research/lessons` 改名留作备份，再执行 `consolidate --review`。
   工具不受影响。
 - 一次学习的提示词装不下所有题目的记录时（12 题里装了 10 题），`review.json` 里 `lessons.tasks_left`

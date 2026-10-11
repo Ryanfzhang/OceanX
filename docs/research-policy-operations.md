@@ -201,6 +201,16 @@ optional, and the desktop no longer asks for it. Effective label: human > judge 
     skills carry and with each other, and a proposal that says what a lesson already says is not
     added; its supporting tasks are added to that lesson. A comparison that cannot be read adds
     nothing;
+  - a critic is answered: where critics' outlines found points not done in tasks on at least 3
+    different questions, the review of each Coordinator skill gets a section that lists those
+    points for every such task, also for tasks whose records did not fit the prompt. The
+    meta-agent sorts them into kinds and says for each kind found in 3 questions how the skill
+    answers it: a current lesson, a new lesson, or "elsewhere" with the reason. A new lesson for
+    a critics' kind is taken before any other and the kind's tasks count as its support; a
+    current lesson named as the answer gains them. The update's result lists the kinds with
+    their answers (`lessons.critic_gaps`), and one left open is marked "unanswered". Left to
+    weigh the outlines itself, the meta-agent built 9 of 14 proposals on its own notes and 4 on
+    the outlines (2026-10-11);
   - the project keeps every lesson that passed; a task is shown at most the region's `max` of a
     skill's lessons, so the library can go on growing while a reader's page stays short;
   - ≤40 words with no task keys or node IDs, and an applies-when of ≤25 words.
