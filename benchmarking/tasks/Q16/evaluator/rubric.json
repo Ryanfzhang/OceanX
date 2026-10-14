@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.1",
+  "rubric_version": "4.0",
   "task_id": "Q16",
   "type": "open_problem",
   "open_kind": "checkable",
-  "title": "Seasonal and interannual air-sea CO2 exchange on the Pearl River adjacent shelf",
+  "title": "Inorganic carbon and phosphate beyond water-mass mixing on the Pearl River adjacent shelf",
   "status": "draft",
-  "query_sha256": "02e11253e445787e8cc95a91718a5e289dc9b959a44dc6ac57fa250e88c0c267",
+  "query_sha256": "18a7726a269e542141970b2558166ef48ce09be3127c204aa1414c5c45d4f8a9",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -44,7 +44,7 @@
       "title": "Quantitative answer against the answer key",
       "uses": [
         "Q16-A1",
-        "Q16-A3"
+        "Q16-A2"
       ],
       "anchors": {
         "0": "Key quantities are missing, or wrong relative to the frozen answer key.",
@@ -60,15 +60,15 @@
       "weight": 20,
       "title": "Mechanistic depth",
       "uses": [
-        "Q16-A2",
+        "Q16-A3",
         "depth_probes"
       ],
       "anchors": {
-        "0": "No tested interpretation, or assertions contradicted by the available process diagnostics.",
-        "1": "An interpretation asserted from intuition or literature without a test in the supplied data.",
-        "2": "One relevant association tested, with limited process reasoning or unresolved alternatives ignored.",
-        "3": "An interpretation supported by quantitative process diagnostics and at least one targeted test of an alternative; missing inputs limit causal claims.",
-        "4": "Coherent quantitative tests distinguish supported interpretations from unresolved alternatives, agree with frozen checks under stated definitions, and address the depth probes without overstating causal identification."
+        "0": "Description only, or process claims contradicted by independently computed reference diagnostics.",
+        "1": "A biological or physical cause asserted from literature or intuition without a test in the supplied fields.",
+        "2": "Departures from mixing are computed, but their cause is tested one way only; air-sea exchange, changing end-members or exchange between layers are not examined.",
+        "3": "Carbon, phosphate and oxygen departures are compared quantitatively with a stated stoichiometry and agree with reference diagnostics; at least one alternative to biology is tested; unresolved parts are stated.",
+        "4": "Competing causes (uptake and respiration of organic matter, air-sea exchange, changing end-members, transport between layers) are tested with quantitative diagnostics and uncertainty, consistent with independent references; the plume-to-bottom estimate states its assumptions; conclusions the data support are kept apart from unresolved alternatives; depth probes addressed. A justified finding that the data cannot separate two causes can receive full credit."
       }
     },
     {
@@ -120,38 +120,102 @@
     "items": [
       {
         "id": "Q16-A1",
-        "quantity": "CO2 source/sink seasonality and annual exchange",
-        "procedure": "On valid wet cells in 112-116 E, 20-23 N with bathymetry <=200 m, establish CO2_airsea sign from provider metadata. Compute monthly area-weighted flux, annual time-and-area-integrated net exchange for 2011-2020, and source/sink area fractions with temporal coverage reported. Convert native mmol C m-2 day-1 and pCO2 in atm to stated output units.",
+        "quantity": "Surface departures from mixing per summer",
+        "procedure": "On valid wet cells in 112-116 E, 20-23 N with water depth <=200 m, for June-August of each year 2011-2020: predict conservative TIC and PO4 with a three end-member mixing model on potential temperature and salinity (Pearl River plume water, offshore surface water, offshore subsurface water, each defined from the bound fields and recorded in spec.md). Report the departure (supplied minus predicted) in the surface plume (salinity below a stated threshold, 33.5 by default), its area-weighted mean, the area with a deficit and the ranking of the ten summers, in stated units.",
         "used_by": "Q16-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: annual source/sink classification exact except near-zero uncertain years; integrals within 10% with matched masks and intervals; area fractions within 0.10)"
+        "tolerance": "to freeze before judging (suggested: sign of the mean departure exact; magnitude within 30% under matched end-members, or a difference explained by a stated end-member choice that the evaluator recomputed; Spearman of the yearly ranking at least 0.6)"
       },
       {
         "id": "Q16-A2",
-        "quantity": "Flux-pCO2 and ocean-state relationships",
-        "procedure": "Align pCO2 and CO2_airsea intervals with core temperature, salinity, chlorophyll and circulation. Compare seasons and years using anomalies, lag or conditional comparisons and alternative explanations. With no atmospheric CO2, wind, DIC or alkalinity, score evidence-supported associations and explicitly unresolved mechanisms rather than demand a complete thermal/biological flux decomposition.",
-        "used_by": "Q16-M",
+        "quantity": "Bottom-water departures per summer",
+        "procedure": "With the same mixing model, departures of TIC, PO4 and oxygen in the bottom water (the deepest valid level, with the treatment of the level marked 9999 stated) on the same cells and summers: where and when the TIC and PO4 additions and the oxygen deficit are largest, their area-weighted means and the ranking of the ten summers.",
+        "used_by": "Q16-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (relationship signs and source/sink transitions match recomputed evidence; alternative defensible analyses accepted)"
+        "tolerance": "to freeze before judging (suggested: sign exact; magnitude within 30% under matched end-members and bottom definition; Spearman at least 0.6; the largest addition in the same part of the shelf)"
       },
       {
         "id": "Q16-A3",
-        "quantity": "Robustness of net source/sink verdict",
-        "procedure": "Repeat source/sink classification with modest box and shelf-depth variations, matched fixed wet masks and explicit missing-interval handling. Quantify interannual uncertainty and flag annual net exchanges close to zero.",
-        "used_by": "Q16-Q",
+        "quantity": "Stoichiometry and plume-to-bottom coupling",
+        "procedure": "Regress TIC departures on PO4 departures and on oxygen departures, surface and bottom separately, and compare the slopes with organic-matter ratios (C:P about 106; oxygen to carbon about -1.3 in respiration). Report the part of the surface TIC deficit that phosphate does not match (air-sea exchange or another non-biological cause), which the supplied fields cannot confirm without pCO2 or a flux. Estimate the share of the bottom TIC addition that the surface deficit could supply over a stated residence time. Associations alone do not establish a dominant cause.",
+        "used_by": "Q16-M",
+        "oracle": "Independent reference diagnostics from the C_CORE and C_CARBON fields bound to this task",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (robust years retain sign; fragile classifications must be identified)"
+        "tolerance": "to freeze before judging (suggested: slopes within 25% of the reference or both consistent within uncertainty; the coupling share within a factor of two with its assumptions stated; alternative defensible analyses accepted)"
       }
     ]
   },
   "depth_probes": [
-    "Confirms the model's native flux sign and pCO2 convention before source/sink interpretation, and converts surface rates with cell area and averaging duration.",
-    "Separates gross positive and negative exchange from annual net exchange, with sensitivity near zero.",
-    "Tests ocean-state associations without claiming a closed carbon budget or identifying thermal versus biological causes from correlations alone."
+    "Defines the three end-members from the supplied fields, checks that the mixing fractions stay between 0 and 1, and tests other defensible end-members and end-members that change between summers.",
+    "Separates the surface plume from the bottom water with a stated vertical criterion and treats the level marked 9999 explicitly.",
+    "Uses phosphate, which has no gas phase, to separate the biological part of the carbon departure from air-sea exchange, and oxygen as an independent check, without claiming a measured air-sea flux.",
+    "States how missing alkalinity, pCO2, nitrate, river loads and winds limit attribution; a departure from mixing is not a closed carbon budget."
   ],
   "breadth_probes": [
-    "Connects coastal salinity structure, temperature, chlorophyll and circulation with carbon-exchange variability.",
-    "Compares with relevant shelf air-sea carbon studies while distinguishing model results from observations and identifying missing forcing and carbon-system variables."
+    "Compares surface deficits, bottom additions and their ratios with published Pearl River plume and shelf studies, distinguishing a ten-summer model record from single-summer cruise observations.",
+    "Links the carbon and phosphate signals to chlorophyll, stratification and bottom hypoxia on the same shelf."
+  ],
+  "literature_context": [
+    {
+      "citation": "Zhao et al. (2020)",
+      "title": "Dynamics of inorganic carbon and pH in a large subtropical continental shelf system: Interaction between eutrophication, hypoxia, and ocean acidification",
+      "journal": "Limnology and Oceanography",
+      "year": 2020,
+      "volume": "65",
+      "pages": "1359-1379",
+      "doi": "10.1002/lno.11393",
+      "url": "https://doi.org/10.1002/lno.11393",
+      "verification": "Crossref metadata and abstract checked 2026-10-14",
+      "use": "Summer observations in the Pearl River Estuary and on the adjacent shelf with multiple end-member mixing models: a DIC deficit of -191 +/- 54 umol/kg in the surface plume and an addition of about 139 +/- 21 umol/kg in the bottom hypoxic zone; a two-layer box model links at least 45 +/- 13% of the organic matter produced in the plume to 67 +/- 18% of the bottom DIC addition and oxygen consumption. Use it to judge the literature comparison only."
+    },
+    {
+      "citation": "Cao et al. (2011)",
+      "title": "Dynamics of the carbonate system in a large continental shelf system under the influence of both a river plume and coastal upwelling",
+      "journal": "Journal of Geophysical Research: Biogeosciences",
+      "year": 2011,
+      "volume": "116",
+      "pages": "G02010",
+      "doi": "10.1029/2010JG001596",
+      "url": "https://doi.org/10.1029/2010JG001596",
+      "verification": "Crossref metadata and abstract checked 2026-10-14",
+      "use": "Northern South China Sea shelf in summer: mixing of plume water, offshore surface water and offshore subsurface water shapes DIC, with biological consumption visible in the plume and in coastal upwelling; a three end-member mixing model gives net community production of 36 +/- 19 (plume) and 23 +/- 26 (upwelled water) mmol C m-2 d-1. Use it to judge the literature comparison only."
+    },
+    {
+      "citation": "Han et al. (2012)",
+      "title": "Nutrient dynamics and biological consumption in a large continental shelf system under the influence of both a river plume and coastal upwelling",
+      "journal": "Limnology and Oceanography",
+      "year": 2012,
+      "volume": "57",
+      "pages": "486-502",
+      "doi": "10.4319/lo.2012.57.2.0486",
+      "url": "https://doi.org/10.4319/lo.2012.57.2.0486",
+      "verification": "Crossref metadata and abstract checked 2026-10-14",
+      "use": "The same shelf in summer: a three end-member mixing model on potential temperature and salinity gives nutrient consumption as departures from conservative mixing; DIN:DIP consumption is 16.7 in the upwelling zone and the subsurface chlorophyll maximum and 61.3 +/- 8.7 in the plume. Use it to judge the literature comparison only."
+    },
+    {
+      "citation": "Su et al. (2017)",
+      "title": "Tracing the origin of the oxygen-consuming organic matter in the hypoxic zone in a large eutrophic estuary: the lower reach of the Pearl River Estuary, China",
+      "journal": "Biogeosciences",
+      "year": 2017,
+      "volume": "14",
+      "pages": "4085-4099",
+      "doi": "10.5194/bg-14-4085-2017",
+      "url": "https://doi.org/10.5194/bg-14-4085-2017",
+      "verification": "Crossref metadata and the final abstract on the article page checked 2026-10-14",
+      "use": "July 2014, hypoxic zone of the lower Pearl River Estuary: a three end-member mixing model with the DIC mass balance and its carbon isotopes attributes about two thirds of the oxygen-consuming organic matter to marine production. Use it to judge the literature comparison only."
+    },
+    {
+      "citation": "Gan et al. (2014)",
+      "title": "Assessing ecosystem response to phosphorus and nitrogen limitation in the Pearl River plume using the Regional Ocean Modeling System (ROMS)",
+      "journal": "Journal of Geophysical Research: Oceans",
+      "year": 2014,
+      "volume": "119",
+      "pages": "8858-8877",
+      "doi": "10.1002/2014JC009951",
+      "url": "https://doi.org/10.1002/2014JC009951",
+      "verification": "Crossref metadata and abstract checked 2026-10-14",
+      "use": "A ROMS nitrogen-phosphorus ecosystem model of the Pearl River plume: phosphorus limits production in the near and middle field and nitrogen in the far field; the N:P ratio falls from about 120 near the mouth to below 13.3 downstream. Use it to judge the literature comparison only."
+    }
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",

@@ -11,8 +11,8 @@ Catalogue `2026-10-02-v7`:
   observing-system design), so what is learned has to transfer across problems, not only across regions.
   OceanX learns lessons and tools from these runs in two rounds: set A yields the library L1, and set B,
   run with L1, yields L2.
-- **Requested inputs:** small-region CMOMS primary-production/nitrate-uptake diagnostics (Q14) and
-  surface air-sea CO2 flux/pCO2 diagnostics (Q16), both for 2011-2020.
+- **Extra CMOMS inputs:** primary-production/nitrate-uptake diagnostics (Q14) and dissolved inorganic
+  carbon/phosphate (Q16), 2011-2020, supplied by the provider and staged by the owner (DATA.md).
 
 Everything runs on the Linux server.
 All runner/meta models use DeepSeek Flash via `benchmarking/.env`. Copy `.env.example`

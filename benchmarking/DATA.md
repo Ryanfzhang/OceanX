@@ -36,8 +36,8 @@ The machine-readable source is `download/data_manifest.json`. Every task file li
 | Group | Phase | Product | Variables | Period | Region | Used by | On the server |
 |---|---|---|---|---|---|---|---|
 | C_CORE | private | CMOMS model output (owner) | temp, salt, u, v, oxygen, chlorophyll + grid | daily, 2011-2020, full depth | CMOMS domain | Q01-Q06, Q11-Q14, Q16, Q17, Q22 | have; stage as below |
-| C_PRODUCTION | private, agent-visible | CMOMS primary-production diagnostics (dia file) | P_Production, NO3_uptake | 2011-2020; native interval averages, daily requested; 0-100 m | 116-120 E, 16-20 N, wet cells northwest of Luzon | Q14 | **request; not yet staged** |
-| C_CARBON | private, agent-visible | CMOMS surface air-sea carbon diagnostics (dia file) | CO2_airsea, pCO2 | 2011-2020; native interval averages, daily requested; surface | 112-116 E, 20-23 N; Q16 uses wet shelf cells with depth <=200 m | Q16 | **request; not yet staged** |
+| C_PRODUCTION | private, agent-visible | CMOMS primary-production diagnostics (dia file) | P_Production, NO3_uptake | 2011-2020; native interval averages, daily requested; 0-100 m | 116-120 E, 16-20 N, wet cells northwest of Luzon | Q14 | **supplied; stage as below** |
+| C_CARBON | private, agent-visible | CMOMS dissolved inorganic carbon and phosphate (model state variables) | TIC, PO4 | 2011-2020; sampling as supplied, documented before any run; surface to bottom | 112-116 E, 20-23 N; Q16 uses wet shelf cells with depth <=200 m | Q16 | **supplied; stage as below** |
 | P_MODIS | public | MODIS-Aqua monthly chlorophyll (ERDDAP `erdMH1chlamday_R2022SQ`) | chlor_a | 2003-2020 | 104-122 E, 1-25 N | Q22 | 2003-2017 likely present; adds 2018-2020 |
 | P_GULF | services | GLORYS12 daily `cmems_mod_glo_phy_my_0.083deg_P1D-m`, version 202311 | thetao, so, zos | 2011-2017, 0-2000 m | 98-80 W, 18-31 N | Q07-Q09, Q23-Q26 | present, unchanged |
 | P_OISST | public | NOAA OISST v2.1 daily (NCEI originals, cropped) | sst, ice | 1982-2023 | 120-128 E, 25-34 N | Q10, Q27, Q30 | present, unchanged |
@@ -205,39 +205,49 @@ folders while a download runs breaks the saved plans.
 | Old acquisition metadata | `_download_all.backup-20260909T125735Z` | Retain as recovery metadata; not current input bindings. |
 | Current inventory | `_inventory/` | Human-readable status only; never bind the whole data root to an agent. |
 | Private input staging | `CMOMS/<variable>/<year>/*.nc`, `CMOMS/grid/` | Stage only the required years; never mix evaluator references or results here. |
-| Requested diagnostics | `CMOMS_DIA/P_Production`, `NO3_uptake`, `CO2_airsea`, `pCO2` | Keep Q14/Q16 excluded until received and checked. |
+| Extra CMOMS fields | `CMOMS_DIA/P_Production`, `NO3_uptake`, `TIC`, `PO4` | Keep Q14/Q16 excluded until staged and checked. |
 
-## Requesting extra CMOMS variables
+## Extra CMOMS variables (Q14, Q16)
 
-The variable lists in `avg_info.cdl` (32 variables) and `dia_info.cdl` (174 terms) offer much more. The
-agent-visible request adds two small regional groups for 2011-2020. Native heat and oxygen budget
-archives are not requested; Q05 and Q11-Q13 use independent reference diagnostics from their core inputs:
+The variable lists in `avg_info.cdl` (32 variables) and `dia_info.cdl` (174 terms) offer much more. Two
+small regional groups for 2011-2020 were requested; native heat and oxygen budget archives were not,
+because Q05 and Q11-Q13 use independent reference diagnostics from their core inputs. The provider
+supplied `P_Production`, `NO3_uptake`, `TIC` and `PO4`, but not the `CO2_airsea` and `pCO2` diagnostics
+first requested for Q16, so Q16 was rewritten for `TIC` and `PO4` on 2026-10-14 (DESIGN.md):
 
-| Priority | Variables (dia file) | Why | If not granted |
+| Group | Variables | Why | Before a run |
 |---|---|---|---|
-| Required for Q14 | `P_Production, NO3_uptake` | Winter chlorophyll versus measured primary production and nitrate uptake, northwest of Luzon (116-120 E, 16-20 N), upper 100 m; retain all months to evaluate seasonality | Do not run Q14 until both fields are staged and their sampling is documented. |
-| Required for Q16 | `CO2_airsea, pCO2` | Seasonal and annual source/sink exchange on the Pearl River adjacent shelf (112-116 E, 20-23 N); surface fields only | Do not run Q16 until both fields, sign conventions and sampling are documented. |
+| C_PRODUCTION (Q14) | `P_Production, NO3_uptake` (dia file) | Winter chlorophyll versus primary production and nitrate uptake, northwest of Luzon (116-120 E, 16-20 N), upper 100 m; all months, to evaluate seasonality | Both fields staged; averaging interval documented. |
+| C_CARBON (Q16) | `TIC, PO4` (model state variables) | Summer departures of inorganic carbon and phosphate from water-mass mixing on the Pearl River adjacent shelf (112-116 E, 20-23 N, water depth <=200 m), surface to bottom | Both fields staged; units and time sampling documented. |
 
-The requests use the same grid, depth layout and sampling as the core archive. For Q05 and Q11-Q13,
+Check that the extra fields use the grid, depth levels (including the level marked 9999) and time axis of
+the core archive; document any difference before a run. For Q05 and Q11-Q13,
 freeze independent event, transport, stratification and association diagnostics before judging. These
 references do not establish a closed heat or oxygen budget. A residual is unresolved; oxygen decline
 is not measured respiration, and ocean currents alone do not establish wind forcing. Keep the
 reference calculations private under EVAL_ROOT even though they use the same core inputs as the agent.
 
-For the two new groups, stage each field as `$DATA_ROOT/CMOMS_DIA/<variable>/<year>/*.nc` for every
-year 2011-2020. Include a provider-conventions file with each bound variable folder: units, the meaning
-and direction of positive `CO2_airsea`, the definition of `pCO2`, averaging intervals, time bounds,
-coordinates, masks and vertical geometry. The supplied CDL labels `P_Production` and `NO3_uptake` in
-mmol N m-3 day-1, `CO2_airsea` in mmol C m-2 day-1, and `pCO2` in atm; verify the actual files and
-convert explicitly. A volumetric production rate requires depth integration; a surface flux does not.
+Stage each field as `$DATA_ROOT/CMOMS_DIA/<variable>/<year>/*.nc` for every year 2011-2020. The NetCDF
+variable must have the folder's name (`P_Production`, `NO3_uptake`, `TIC`, `PO4`); if a file names it
+otherwise, stop and tell the owner. Use hard links or copies, never symlinks, and never change the
+provider's files; the warnings of the core staging above apply. Put a `README.md` in each of the four
+folders with what the provider states or the file headers show: units, time stamps and averaging
+interval, coordinates, masks, depth levels and the level marked 9999. Mark each statement "from the
+provider" or "read from the file", and leave out what neither says. The CDL labels `P_Production` and
+`NO3_uptake` in mmol N m-3 day-1; verify the actual files and convert explicitly. A volumetric
+production rate requires depth integration. Then check both groups; each must print `complete`:
 
-Daily diagnostic averages are requested. If the provider supplies another frequency, document it before
-freezing references and align core fields to those intervals. Do not invent daily values by upsampling,
-interpret uptake/production as an observed export fraction, or claim a closed carbon budget from these
-four fields. Neither group is evaluator-only; independent reference calculations remain private.
+```bash
+python benchmarking/download/download_all.py private --output "$DATA_ROOT" --groups C_PRODUCTION C_CARBON
+```
 
-Not requested in this step: nutrient concentrations, complete plankton or carbon budgets, momentum terms
-and mixing coefficients. The extra-variable request is limited to these four fields on the two boxes.
+If the files are not daily, document their interval before any run and align the core fields to it. Do
+not invent daily values by upsampling, interpret uptake/production as an observed export fraction, or
+claim a closed carbon budget from these fields. Neither group is evaluator-only; independent reference
+calculations remain private.
+
+Not supplied: nitrate and every other nutrient concentration except phosphate, alkalinity, pCO2, air-sea
+fluxes, complete plankton or carbon budgets, momentum terms and mixing coefficients.
 
 ## Commands (repository root, `oceanx-bench` environment)
 

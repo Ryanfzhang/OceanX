@@ -89,12 +89,12 @@
    "adapter": "private",
    "data_type": "CMOMS_DIA",
    "variables": [
-    "CO2_airsea",
-    "pCO2"
+    "TIC",
+    "PO4"
    ],
    "folders": [
-    "CO2_airsea",
-    "pCO2"
+    "TIC",
+    "PO4"
    ],
    "years": [
     2011,
@@ -114,13 +114,13 @@
     20,
     23
    ],
+   "depth": [
+    0,
+    200
+   ],
    "availability": "requested",
-   "sampling": "Interval-averaged surface diagnostics; daily means requested, native averaging interval must be documented.",
-   "units": {
-    "CO2_airsea": "millimole_carbon meter-2 day-1",
-    "pCO2": "atm"
-   },
-   "note": "Agent-visible dia-file diagnostics for Q16 only, Pearl River adjacent shelf. Request surface fields for 2011-2020. Provider must state CO2_airsea sign, pCO2 convention, time intervals and native wet mask; atmosphere, wind, DIC and alkalinity are not assumed supplied."
+   "sampling": "Model state variables supplied by the provider; read their time sampling from the files and document it before any run.",
+   "note": "Agent-visible model fields for Q16 only, Pearl River adjacent shelf: dissolved inorganic carbon (TIC) and phosphate (PO4), surface to bottom on wet cells with water depth no greater than 200 m, 2011-2020. The provider supplied these instead of the CO2_airsea and pCO2 diagnostics first requested; Q16 was rewritten for them on 2026-10-14. Units, time sampling and the level marked 9999 are read from the files; alkalinity, pCO2, air-sea flux and nitrate are not supplied."
   },
   "P_MODIS": {
    "phase": "public",

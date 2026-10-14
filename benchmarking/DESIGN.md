@@ -30,11 +30,12 @@ Everything runs on the Linux server, never on macOS.
 | Paper data cover the paper's period | Every paper's study period lies inside the supplied data (see "Papers"). Each `task_info.json` records this under `period_match`, and a test checks it against the data manifest. |
 | South China Sea questions use CMOMS | All 13 South China Sea questions use CMOMS (temperature, salinity, velocity, oxygen, chlorophyll; daily, 2011-2020, full depth). |
 | CMOMS is a minority of the open problems | 7 of the 20 open problems use CMOMS. The other 13 use public data: 5 in the Arabian Sea, 4 in the Gulf of Mexico and 4 in the East China Sea. |
-| Centred on the CMOMS variables | Questions use temperature, salinity, currents, oxygen and chlorophyll. Q14 also uses primary production and nitrate uptake, and Q16 uses air-sea CO2 exchange and surface pCO2. Oxygen: Q05, Q13, Q17 on CMOMS and Q19 on public data. Chlorophyll: Q06, Q14, Q22 on CMOMS and Q18 on public data. |
-| Typical problems, several regions | The open problems are standard research problems: marine heatwaves, coastal upwelling, hypoxia, blooms, primary production, air-sea carbon exchange, oxygen minimum zones, deep ventilation, water-mass spreading, boundary currents and eddy shedding, river plumes, ocean heat content, fronts. |
-| Few multi-product questions | Only 3 of 30 combine products: Q10 (OISST, GLORYS12 and ERA5), Q19 (biogeochemical and physical reanalyses) and Q22 (CMOMS and MODIS). Q14 and Q16 add diagnostics from the same CMOMS model, not another product. |
+| Centred on the CMOMS variables | Questions use temperature, salinity, currents, oxygen and chlorophyll. Q14 also uses primary production and nitrate uptake, and Q16 dissolved inorganic carbon and phosphate. Oxygen: Q05, Q13, Q17 on CMOMS and Q19 on public data. Chlorophyll: Q06, Q14, Q22 on CMOMS and Q18 on public data. |
+| Typical problems, several regions | The open problems are standard research problems: marine heatwaves, coastal upwelling, hypoxia, blooms, primary production, carbon and nutrient consumption on a river-dominated shelf, oxygen minimum zones, deep ventilation, water-mass spreading, boundary currents and eddy shedding, river plumes, ocean heat content, fronts. |
+| Few multi-product questions | Only 3 of 30 combine products: Q10 (OISST, GLORYS12 and ERA5), Q19 (biogeochemical and physical reanalyses) and Q22 (CMOMS and MODIS). Q14 and Q16 add fields from the same CMOMS model, not another product. |
 | Download as little as possible | The Gulf of Mexico, East China Sea, ERA5, OISST and MODIS groups are already on the server (MODIS is extended to 2020). New downloads are two monthly Arabian Sea groups (about 2 GB) and the evolution suite's California Current and Tasman Sea groups (about 2-3 GB each). The two evolution sets use the same three products, so no new product is added. The monthly winds are no longer needed. |
 | Paper verification needs real papers | The 10 papers were checked against Crossref (title, authors, volume, pages, DOI) and their abstracts on 2026-10-01. The findings in each query paraphrase the abstract. Six were also read in full (Q02, Q04, Q05, Q07, Q08, Q10); see "Papers". |
+| Questions from published work | A new or rewritten question must be a problem that published papers have studied (owner, 2026-10-14). Its rubric names those papers in `literature_context`, each checked against Crossref and its abstract; Q14 and Q16 do so. |
 | Different rubrics for the two types | Paper verification scores whether each finding of the paper was actually verified. Open problems are scored more broadly and deeply, on seven dimensions, against a hidden answer key (see "Rubrics"). |
 | No evaluator material reaches the agent | Rubrics live in `tasks/<task>/evaluator/`. Answer-key data lives under `_evaluator_only/` on the server. Query preparation refuses both. |
 | No learning while benchmarking | Each attempt starts from empty OceanX state and its library is frozen. Every arm runs the default policy (`v2-nested`); an arm fixes an optional frozen library (lessons and tools), and every attempt verifies that library was unchanged. |
@@ -88,7 +89,7 @@ exist, and a model may have memorised them. None exist for this CMOMS archive.
 | Q13 | SCS | checkable | Year-to-year control of hypoxia off the Pearl River Estuary | C_CORE | independent core-field reference diagnostics |
 | Q14 | SCS | checkable | Winter chlorophyll, primary production and nitrate uptake northwest of Luzon | C_CORE, C_PRODUCTION | reference diagnostics |
 | Q15 | ARAB | checkable | Year-to-year strength of the summer upwelling off Somalia and Oman | P_ARAB_PHY | reference diagnostics |
-| Q16 | SCS | checkable | Seasonal and interannual air-sea CO2 exchange on the Pearl River adjacent shelf | C_CORE, C_CARBON | reference diagnostics |
+| Q16 | SCS | checkable | Inorganic carbon and phosphate beyond water-mass mixing on the Pearl River adjacent shelf | C_CORE, C_CARBON | reference diagnostics |
 | Q17 | SCS | checkable | Ventilation of the deep South China Sea | C_CORE | reference diagnostics |
 | Q18 | ARAB | checkable | The winter and summer blooms of the Arabian Sea | P_ARAB_BGC | reference diagnostics |
 | Q19 | ARAB | checkable | Structure and ventilation of the Arabian Sea oxygen minimum zone | P_ARAB_BGC, P_ARAB_PHY | reference diagnostics |
@@ -156,7 +157,9 @@ The query lists the paper's findings. The agent tests each one in the supplied d
 reproduced, partly reproduced, not reproduced, or cannot be tested, and explains the differences. Agreeing
 with the paper does not earn marks. Agreeing with what the supplied data show does.
 
-Four rubrics also cite verified literature for judging the agent's comparison with published work:
+Six rubrics also cite verified literature for judging the agent's comparison with published work:
+- Tang et al. (1999), Lu et al. (2015) and Lee Chen et al. (2008) for Q14;
+- Zhao et al. (2020), Cao et al. (2011), Han et al. (2012), Su et al. (2017) and Gan et al. (2014) for Q16;
 - Keerthi et al. (2017) for Q18;
 - McCreary et al. (2013) and Lachkar et al. (2019) for Q19;
 - Beal and Donohue (2013) for Q20;
@@ -304,6 +307,16 @@ therefore show whether L1 helps on a kind of problem it was learned from. The ot
 each the only one of their kind. Four questions combine two products from different model systems (E04,
 E12, E20, E24). E13 touches one hypothesis named in Q20 (planetary waves); its subject is not the Great
 Whirl. E10 and E17 are unchanged from the earlier suite.
+
+## What changed on 2026-10-14 (label still v7)
+
+- **Q16 is rewritten.** The provider supplied `TIC` and `PO4` instead of the `CO2_airsea` and `pCO2`
+  diagnostics first requested. Q16 now asks how far summer inorganic carbon and phosphate on the same shelf
+  depart from water-mass mixing, a problem studied by Zhao et al. (2020), Cao et al. (2011), Han et al.
+  (2012) and Su et al. (2017). Region, period, data groups and access are unchanged.
+- **Only `C_CARBON` changes in the data manifest:** its variables become `TIC` and `PO4`. The catalogue
+  label and every task-to-group binding stay, so no other group needs a new download or check.
+- **Q14 is unchanged.** Its rubric now cites the published work behind it.
 
 ## What changed in v7
 

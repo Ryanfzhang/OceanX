@@ -180,7 +180,7 @@ def test_evaluator_groups_are_never_agent_inputs(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("key,task,variables", [
     ("C_PRODUCTION", "Q14", ["P_Production", "NO3_uptake"]),
-    ("C_CARBON", "Q16", ["CO2_airsea", "pCO2"]),
+    ("C_CARBON", "Q16", ["TIC", "PO4"]),
 ])
 def test_requested_diagnostics_only_bind_and_block_their_question(tmp_path, key, task, variables):
     m = all_data.load_manifest()

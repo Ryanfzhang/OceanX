@@ -46,7 +46,7 @@ def test_suite_produces_loadable_cases_without_data_copy(archive, tmp_path, suit
         assert not any("_evaluator_only" in p.parts for p in case.datasets)
         diagnostics = {p.name for p in case.datasets if "CMOMS_DIA" in p.parts}
         assert diagnostics == {"Q14": {"P_Production", "NO3_uptake"},
-                               "Q16": {"CO2_airsea", "pCO2"}}.get(case.id, set())
+                               "Q16": {"TIC", "PO4"}}.get(case.id, set())
     assert sorted(p.relative_to(archive) for p in archive.rglob("*.nc")) == before
     assert not list(output.parent.rglob("*.nc"))
 

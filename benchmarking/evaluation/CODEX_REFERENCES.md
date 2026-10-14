@@ -304,7 +304,10 @@ Q17, Q22) are not started.
 State on 2026-10-10: eleven CMOMS questions (Q01 to Q06, Q11 to Q13, Q17, Q22) have their `spec.md`
 reviewed once; nothing is computed or frozen. The three methods ran them before the references existed,
 with a grid derived from `temp` and no statement of the averaging interval, so the two clarifications
-of rule 3 apply to all of them. Q14 and Q16 wait for their diagnostics.
+of rule 3 apply to all of them. Q14 and Q16 wait for their data.
+
+State on 2026-10-14: the provider supplied `P_Production`, `NO3_uptake`, `TIC` and `PO4`; Q16 was rewritten
+for `TIC` and `PO4` (DESIGN.md). Neither Q14 nor Q16 has run.
 
 ## Reports
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.1",
+  "rubric_version": "3.2",
   "task_id": "Q14",
   "type": "open_problem",
   "open_kind": "checkable",
@@ -152,6 +152,44 @@
   "breadth_probes": [
     "Connects the chlorophyll seasonal cycle to explicit production and nitrate uptake, with physical state and circulation as additional evidence.",
     "Compares with published Luzon winter-bloom interpretations while identifying missing irradiance, nutrient concentrations and ecosystem loss terms."
+  ],
+  "literature_context": [
+    {
+      "citation": "Tang et al. (1999)",
+      "title": "Remote sensing observations of winter phytoplankton blooms southwest of the Luzon Strait in the South China Sea",
+      "journal": "Marine Ecology Progress Series",
+      "year": 1999,
+      "volume": "191",
+      "pages": "43-51",
+      "doi": "10.3354/meps191043",
+      "url": "https://doi.org/10.3354/meps191043",
+      "verification": "Crossref metadata and abstract checked 2026-10-14",
+      "use": "Satellite colour images of the winters 1979-1986 show blooms of 1-3 mg m-3 about 100 km southwest of the Luzon Strait, lasting one to three weeks, attributed to upwelling that supplies nutrients and cools the surface. Use it to judge the literature comparison only."
+    },
+    {
+      "citation": "Lu et al. (2015)",
+      "title": "Winter bloom and associated upwelling northwest of the Luzon Island: A coupled physical-biological modeling approach",
+      "journal": "Journal of Geophysical Research: Oceans",
+      "year": 2015,
+      "volume": "120",
+      "pages": "533-546",
+      "doi": "10.1002/2014JC010218",
+      "url": "https://doi.org/10.1002/2014JC010218",
+      "verification": "Crossref metadata and abstract checked 2026-10-14",
+      "use": "A coupled physical-biological model of January 2010: the bloom forms as strong northeasterly winds relax and the deep mixed layer shoals; vertical mixing feeds the upper ~40 m with nutrients and subsurface upwelling feeds the layer below the mixed layer. Use it to judge the literature comparison only."
+    },
+    {
+      "citation": "Lee Chen et al. (2008)",
+      "title": "Seasonal dynamics of new production from Trichodesmium N2 fixation and nitrate uptake in the upstream Kuroshio and South China Sea basin",
+      "journal": "Limnology and Oceanography",
+      "year": 2008,
+      "volume": "53",
+      "pages": "1705-1721",
+      "doi": "10.4319/lo.2008.53.5.1705",
+      "url": "https://doi.org/10.4319/lo.2008.53.5.1705",
+      "verification": "Crossref metadata and abstract checked 2026-10-14",
+      "use": "Measured primary production and nitrate-based new production: the South China Sea is most productive in winter, unlike the upstream Kuroshio, where primary production shows no clear seasonality but nitrate-based new production is highest in winter. Use it to judge the literature comparison only."
+    }
   ],
   "gates": [
     "A number or citation that cannot be traced (to executed analysis, outputs or a real source) is unsupported; the criterion it supports scores at most 1, and a flag is recorded.",
