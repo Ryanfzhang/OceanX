@@ -186,10 +186,11 @@ def test_requested_diagnostics_only_bind_and_block_their_question(tmp_path, key,
     m = all_data.load_manifest()
     group = m["groups"][key]
     assert group["adapter"] == "private" and group["availability"] == "requested"
-    assert group["years"] == list(range(2011, 2021))
+    # Q14 and Q16 leave out 2020: the supplied production files end on 22 December 2020.
+    assert group["years"] == list(range(2011, 2020))
     report = all_data.check_private(group, tmp_path)
     assert not report["complete"]
-    assert report["missing"] == [f"CMOMS_DIA/{v}/{year}" for v in variables for year in range(2011, 2021)]
+    assert report["missing"] == [f"CMOMS_DIA/{v}/{year}" for v in variables for year in range(2011, 2020)]
     paths = {f"CMOMS_DIA/{v}" for v in variables}
     bindings = all_data.bindings(m)
     assert paths <= set(bindings[task]["datasets"])

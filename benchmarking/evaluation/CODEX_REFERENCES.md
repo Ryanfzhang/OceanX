@@ -307,7 +307,8 @@ with a grid derived from `temp` and no statement of the averaging interval, so t
 of rule 3 apply to all of them. Q14 and Q16 wait for their data.
 
 State on 2026-10-14: the provider supplied `P_Production`, `NO3_uptake`, `TIC` and `PO4`; Q16 was rewritten
-for `TIC` and `PO4` (DESIGN.md). Neither Q14 nor Q16 has run.
+for `TIC` and `PO4` (DESIGN.md). Both use 2011-2019, because the 2020 production files end on 22 December;
+their references use the same years. Neither Q14 nor Q16 has run.
 
 ## Reports
 

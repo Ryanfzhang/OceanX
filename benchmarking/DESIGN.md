@@ -317,6 +317,9 @@ Whirl. E10 and E17 are unchanged from the earlier suite.
 - **Only `C_CARBON` changes in the data manifest:** its variables become `TIC` and `PO4`. The catalogue
   label and every task-to-group binding stay, so no other group needs a new download or check.
 - **Q14 is unchanged.** Its rubric now cites the published work behind it.
+- **Q14 and Q16 use 2011-2019.** The supplied 2020 files of `P_Production` and `NO3_uptake` end on
+  22 December (357 days). By the owner's decision both questions leave out 2020, and `C_PRODUCTION` and
+  `C_CARBON` list 2011-2019 only; the core fields stay 2011-2020 for the other questions.
 
 ## What changed in v7
 

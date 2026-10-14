@@ -63,8 +63,7 @@
     2016,
     2017,
     2018,
-    2019,
-    2020
+    2019
    ],
    "bbox": [
     116,
@@ -77,12 +76,12 @@
     100
    ],
    "availability": "requested",
-   "sampling": "Interval-averaged diagnostics; daily means requested, native averaging interval must be documented.",
+   "sampling": "Daily records stamped 12:00, like the core fields; the files declare no averaging window.",
    "units": {
     "P_Production": "millimole_nitrogen meter-3 day-1",
     "NO3_uptake": "millimole_nitrogen meter-3 day-1"
    },
-   "note": "Agent-visible dia-file diagnostics for Q14 only, northwest of Luzon. Request 2011-2020 and the upper 100 m; preserve wet masks, vertical coordinates, cell volumes and time-interval metadata. No automatic download or assumed availability."
+   "note": "Agent-visible dia-file diagnostics for Q14 only, northwest of Luzon, upper 100 m, 2011-2019: the supplied 2020 files end on 22 December, so Q14 leaves out 2020 (owner, 2026-10-14). Preserve wet masks, vertical coordinates, cell volumes and time-interval metadata. No automatic download or assumed availability."
   },
   "C_CARBON": {
    "phase": "private",
@@ -105,8 +104,7 @@
     2016,
     2017,
     2018,
-    2019,
-    2020
+    2019
    ],
    "bbox": [
     112,
@@ -119,8 +117,12 @@
     200
    ],
    "availability": "requested",
-   "sampling": "Model state variables supplied by the provider; read their time sampling from the files and document it before any run.",
-   "note": "Agent-visible model fields for Q16 only, Pearl River adjacent shelf: dissolved inorganic carbon (TIC) and phosphate (PO4), surface to bottom on wet cells with water depth no greater than 200 m, 2011-2020. The provider supplied these instead of the CO2_airsea and pCO2 diagnostics first requested; Q16 was rewritten for them on 2026-10-14. Units, time sampling and the level marked 9999 are read from the files; alkalinity, pCO2, air-sea flux and nitrate are not supplied."
+   "sampling": "Daily records stamped 12:00, like the core fields; the files declare no averaging window.",
+   "units": {
+    "TIC": "millimole_carbon meter-3",
+    "PO4": "millimole_phosphorus meter-3"
+   },
+   "note": "Agent-visible model fields for Q16 only, Pearl River adjacent shelf: dissolved inorganic carbon (TIC) and phosphate (PO4), surface to bottom on wet cells with water depth no greater than 200 m, 2011-2019. The provider supplied these instead of the CO2_airsea and pCO2 diagnostics first requested; Q16 was rewritten for them on 2026-10-14 and, like Q14, leaves out 2020. The files share the core depth levels, including the bottom level marked 9999; alkalinity, pCO2, air-sea flux and nitrate are not supplied."
   },
   "P_MODIS": {
    "phase": "public",

@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "4.0",
+  "rubric_version": "4.1",
   "task_id": "Q16",
   "type": "open_problem",
   "open_kind": "checkable",
   "title": "Inorganic carbon and phosphate beyond water-mass mixing on the Pearl River adjacent shelf",
   "status": "draft",
-  "query_sha256": "18a7726a269e542141970b2558166ef48ce09be3127c204aa1414c5c45d4f8a9",
+  "query_sha256": "093d24d7eda44c3284d6071c4042b69147d5a2119876a6c7276b4e14d76602de",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",
@@ -121,7 +121,7 @@
       {
         "id": "Q16-A1",
         "quantity": "Surface departures from mixing per summer",
-        "procedure": "On valid wet cells in 112-116 E, 20-23 N with water depth <=200 m, for June-August of each year 2011-2020: predict conservative TIC and PO4 with a three end-member mixing model on potential temperature and salinity (Pearl River plume water, offshore surface water, offshore subsurface water, each defined from the bound fields and recorded in spec.md). Report the departure (supplied minus predicted) in the surface plume (salinity below a stated threshold, 33.5 by default), its area-weighted mean, the area with a deficit and the ranking of the ten summers, in stated units.",
+        "procedure": "On valid wet cells in 112-116 E, 20-23 N with water depth <=200 m, for June-August of each year 2011-2019: predict conservative TIC and PO4 with a three end-member mixing model on potential temperature and salinity (Pearl River plume water, offshore surface water, offshore subsurface water, each defined from the bound fields and recorded in spec.md). Report the departure (supplied minus predicted) in the surface plume (salinity below a stated threshold, 33.5 by default), its area-weighted mean, the area with a deficit and the ranking of the nine summers, in stated units.",
         "used_by": "Q16-Q",
         "expected": "to freeze before judging",
         "tolerance": "to freeze before judging (suggested: sign of the mean departure exact; magnitude within 30% under matched end-members, or a difference explained by a stated end-member choice that the evaluator recomputed; Spearman of the yearly ranking at least 0.6)"
@@ -129,7 +129,7 @@
       {
         "id": "Q16-A2",
         "quantity": "Bottom-water departures per summer",
-        "procedure": "With the same mixing model, departures of TIC, PO4 and oxygen in the bottom water (the deepest valid level, with the treatment of the level marked 9999 stated) on the same cells and summers: where and when the TIC and PO4 additions and the oxygen deficit are largest, their area-weighted means and the ranking of the ten summers.",
+        "procedure": "With the same mixing model, departures of TIC, PO4 and oxygen in the bottom water (the deepest valid level, with the treatment of the level marked 9999 stated) on the same cells and summers: where and when the TIC and PO4 additions and the oxygen deficit are largest, their area-weighted means and the ranking of the nine summers.",
         "used_by": "Q16-Q",
         "expected": "to freeze before judging",
         "tolerance": "to freeze before judging (suggested: sign exact; magnitude within 30% under matched end-members and bottom definition; Spearman at least 0.6; the largest addition in the same part of the shelf)"
@@ -152,7 +152,7 @@
     "States how missing alkalinity, pCO2, nitrate, river loads and winds limit attribution; a departure from mixing is not a closed carbon budget."
   ],
   "breadth_probes": [
-    "Compares surface deficits, bottom additions and their ratios with published Pearl River plume and shelf studies, distinguishing a ten-summer model record from single-summer cruise observations.",
+    "Compares surface deficits, bottom additions and their ratios with published Pearl River plume and shelf studies, distinguishing a nine-summer model record from single-summer cruise observations.",
     "Links the carbon and phosphate signals to chlorophyll, stratification and bottom hypoxia on the same shelf."
   ],
   "literature_context": [

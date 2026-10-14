@@ -36,8 +36,8 @@ The machine-readable source is `download/data_manifest.json`. Every task file li
 | Group | Phase | Product | Variables | Period | Region | Used by | On the server |
 |---|---|---|---|---|---|---|---|
 | C_CORE | private | CMOMS model output (owner) | temp, salt, u, v, oxygen, chlorophyll + grid | daily, 2011-2020, full depth | CMOMS domain | Q01-Q06, Q11-Q14, Q16, Q17, Q22 | have; stage as below |
-| C_PRODUCTION | private, agent-visible | CMOMS primary-production diagnostics (dia file) | P_Production, NO3_uptake | 2011-2020; native interval averages, daily requested; 0-100 m | 116-120 E, 16-20 N, wet cells northwest of Luzon | Q14 | **supplied; stage as below** |
-| C_CARBON | private, agent-visible | CMOMS dissolved inorganic carbon and phosphate (model state variables) | TIC, PO4 | 2011-2020; sampling as supplied, documented before any run; surface to bottom | 112-116 E, 20-23 N; Q16 uses wet shelf cells with depth <=200 m | Q16 | **supplied; stage as below** |
+| C_PRODUCTION | private, agent-visible | CMOMS primary-production diagnostics (dia file) | P_Production, NO3_uptake | 2011-2019 (the 2020 files end on 22 December); daily records stamped 12:00, no averaging window declared; 0-100 m | 116-120 E, 16-20 N, wet cells northwest of Luzon | Q14 | **supplied; stage as below** |
+| C_CARBON | private, agent-visible | CMOMS dissolved inorganic carbon and phosphate (model state variables) | TIC, PO4 | 2011-2019, like Q14; daily records stamped 12:00; surface to bottom | 112-116 E, 20-23 N; Q16 uses wet shelf cells with depth <=200 m | Q16 | **supplied; stage as below** |
 | P_MODIS | public | MODIS-Aqua monthly chlorophyll (ERDDAP `erdMH1chlamday_R2022SQ`) | chlor_a | 2003-2020 | 104-122 E, 1-25 N | Q22 | 2003-2017 likely present; adds 2018-2020 |
 | P_GULF | services | GLORYS12 daily `cmems_mod_glo_phy_my_0.083deg_P1D-m`, version 202311 | thetao, so, zos | 2011-2017, 0-2000 m | 98-80 W, 18-31 N | Q07-Q09, Q23-Q26 | present, unchanged |
 | P_OISST | public | NOAA OISST v2.1 daily (NCEI originals, cropped) | sst, ice | 1982-2023 | 120-128 E, 25-34 N | Q10, Q27, Q30 | present, unchanged |
@@ -213,7 +213,11 @@ The variable lists in `avg_info.cdl` (32 variables) and `dia_info.cdl` (174 term
 small regional groups for 2011-2020 were requested; native heat and oxygen budget archives were not,
 because Q05 and Q11-Q13 use independent reference diagnostics from their core inputs. The provider
 supplied `P_Production`, `NO3_uptake`, `TIC` and `PO4`, but not the `CO2_airsea` and `pCO2` diagnostics
-first requested for Q16, so Q16 was rewritten for `TIC` and `PO4` on 2026-10-14 (DESIGN.md):
+first requested for Q16, so Q16 was rewritten for `TIC` and `PO4` on 2026-10-14 (DESIGN.md). The
+supplied 2020 files of `P_Production` and `NO3_uptake` end on 22 December (357 days), so both questions
+use 2011-2019 and the 2020 files of the four variables are not staged (owner, 2026-10-14). All four files
+hold one record per day stamped 12:00 on the 128 core depth levels, including the bottom level marked 9999,
+and declare neither a fill value nor an averaging window:
 
 | Group | Variables | Why | Before a run |
 |---|---|---|---|
@@ -227,7 +231,7 @@ references do not establish a closed heat or oxygen budget. A residual is unreso
 is not measured respiration, and ocean currents alone do not establish wind forcing. Keep the
 reference calculations private under EVAL_ROOT even though they use the same core inputs as the agent.
 
-Stage each field as `$DATA_ROOT/CMOMS_DIA/<variable>/<year>/*.nc` for every year 2011-2020. The NetCDF
+Stage each field as `$DATA_ROOT/CMOMS_DIA/<variable>/<year>/*.nc` for every year 2011-2019, not 2020. The NetCDF
 variable must have the folder's name (`P_Production`, `NO3_uptake`, `TIC`, `PO4`); if a file names it
 otherwise, stop and tell the owner. Use hard links or copies, never symlinks, and never change the
 provider's files; the warnings of the core staging above apply. Put a `README.md` in each of the four
@@ -241,8 +245,7 @@ production rate requires depth integration. Then check both groups; each must pr
 python benchmarking/download/download_all.py private --output "$DATA_ROOT" --groups C_PRODUCTION C_CARBON
 ```
 
-If the files are not daily, document their interval before any run and align the core fields to it. Do
-not invent daily values by upsampling, interpret uptake/production as an observed export fraction, or
+Do not invent values for missing days or by upsampling, interpret uptake/production as an observed export fraction, or
 claim a closed carbon budget from these fields. Neither group is evaluator-only; independent reference
 calculations remain private.
 

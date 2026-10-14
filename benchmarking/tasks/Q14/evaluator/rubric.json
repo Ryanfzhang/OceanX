@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.2",
+  "rubric_version": "3.3",
   "task_id": "Q14",
   "type": "open_problem",
   "open_kind": "checkable",
   "title": "Winter chlorophyll, primary production and nitrate uptake northwest of Luzon",
   "status": "draft",
-  "query_sha256": "fefab3d233c789b8b40201999b2556343a2bb467de6dd2bd8650588a8239992c",
+  "query_sha256": "a8ebe831a97cfa1fb6e3234e69f1f007f260bec7fa3e5f35dbb859edc686f813",
   "judge": "Codex, single judge; procedure in benchmarking/evaluation/CODEX_JUDGE.md",
   "scoring": {
     "scale": "0-4 per criterion",

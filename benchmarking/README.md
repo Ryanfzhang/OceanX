@@ -12,7 +12,8 @@ Catalogue `2026-10-02-v7`:
   OceanX learns lessons and tools from these runs in two rounds: set A yields the library L1, and set B,
   run with L1, yields L2.
 - **Extra CMOMS inputs:** primary-production/nitrate-uptake diagnostics (Q14) and dissolved inorganic
-  carbon/phosphate (Q16), 2011-2020, supplied by the provider and staged by the owner (DATA.md).
+  carbon/phosphate (Q16), supplied by the provider and staged by the owner (DATA.md). Both questions use
+  2011-2019, because the supplied 2020 production files end on 22 December.
 
 Everything runs on the Linux server.
 All runner/meta models use DeepSeek Flash via `benchmarking/.env`. Copy `.env.example`
