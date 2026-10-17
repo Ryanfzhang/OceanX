@@ -16,13 +16,15 @@ def parse_json_object(text: str) -> dict:
 
 def default_llm(role: str = "meta") -> Callable[[str], str]:
     """The ``meta`` role profile when configured (``role_profiles.meta`` in the model settings,
-    e.g. a second model family), otherwise the Expert profile."""
+    e.g. a second model family), otherwise the Expert profile. A request that failed in a way
+    the agents' model calls retry is sent again, a bounded number of times (provider_retry)."""
     from oceanx.model_config import _load_settings_payload, create_chat_model, load_model_profile
+    from oceanx.provider_retry import call_with_retries
 
     if role == "meta" and "meta" not in (_load_settings_payload().get("role_profiles") or {}):
         role = "expert"
     model = create_chat_model(load_model_profile(role))
-    return lambda prompt: model.invoke(prompt).text
+    return lambda prompt: call_with_retries(lambda: model.invoke(prompt).text)
 
 
 __all__ = ["default_llm", "parse_json_object"]

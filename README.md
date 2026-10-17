@@ -139,7 +139,10 @@ Install updated dependencies in the selected environment with
 See [current migration design](refine.md) for boundaries and validation.
 
 Transient provider failures are retried at the failed model call without replaying the graph or
-Python tools. DeepAgents owns conversation summarization; OceanX does not generate a second result
+Python tools. A failure is judged by its type, so a connection that drops while a reply is
+streamed in is retried whatever its message says; a fault of OceanX's own code is not retried.
+Model calls made outside a research task (the learning step, readings of final answers) follow
+the same rule and are tried up to six times. DeepAgents owns conversation summarization; OceanX does not generate a second result
 summary or replace native message history. Authentication, exhausted provider
 credit and invalid requests fail explicitly; user cancellation interrupts provider waits.
 Each Expert task has at most 60 effective model calls, including native summarization and handoff.

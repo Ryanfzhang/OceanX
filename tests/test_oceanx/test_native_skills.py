@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx2
 import numpy as np
 import pytest
 import xarray as xr
@@ -167,8 +168,19 @@ def test_validity_matched_weights_and_declared_units(ao):
             angle_unit="degrees", direction="zonal")
 
 
+def _unavailable():
+    error = RuntimeError("temporary provider failure")
+    error.status_code = 503
+    return error
+
+
 @pytest.mark.asyncio
-async def test_native_retry_two_503s_do_not_repeat_completed_tool(tmp_path, monkeypatch):
+@pytest.mark.parametrize("failure", [_unavailable, lambda: httpx2.ReadError("")],
+                         ids=["provider-503", "stream-read-error"])
+async def test_native_retry_of_two_failed_calls_does_not_repeat_completed_tool(tmp_path, monkeypatch, failure):
+    """The second failure is the one that failed a benchmark question on 2026-10-17: the stream
+    of a reply broke after HTTP 200, as an httpx2.ReadError without a message, and the call was
+    not retried. Retried, the same model call is sent again and the tool is not run twice."""
     from oceanx.provider_retry import provider_retry_middleware
 
     class UnavailableModel(_BoundFakeModel):
@@ -177,9 +189,7 @@ async def test_native_retry_two_503s_do_not_repeat_completed_tool(tmp_path, monk
         def _generate(self, messages, stop=None, run_manager=None, **kwargs):
             if any(isinstance(m, ToolMessage) for m in messages) and self.failures < 2:
                 self.failures += 1
-                error = RuntimeError("temporary provider failure")
-                error.status_code = 503
-                raise error
+                raise failure()
             return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
 
     def immediate_retry():
