@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "3.3",
+  "rubric_version": "3.4",
   "task_id": "Q14",
   "type": "open_problem",
   "open_kind": "checkable",
@@ -121,7 +121,7 @@
       {
         "id": "Q14-A1",
         "quantity": "Chlorophyll and production seasonality",
-        "procedure": "For valid wet cells in 116-120 E, 16-20 N, compute surface and 0-100 m chlorophyll metrics, and volume-integrated P_Production and NO3_uptake over 0-100 m. Report monthly climatologies and each complete December-February winter (2011/12 through 2019/20). Weight by actual layer thickness, cell area and averaging interval; label partial edge winters.",
+        "procedure": "For valid wet cells in 116-120 E, 16-20 N, compute surface and 0-100 m chlorophyll metrics, and volume-integrated P_Production and NO3_uptake over 0-100 m. Report monthly climatologies and each complete December-February winter (2011/12 through 2018/19, eight winters). Weight by actual layer thickness, cell area and averaging interval; label the partial edge winters (January-February 2011 and December 2019).",
         "used_by": "Q14-Q",
         "expected": "to freeze before judging",
         "tolerance": "to freeze before judging (suggested: seasonal peak within one month; seasonal and winter integrals within 15% after matching masks, depths and definitions)"

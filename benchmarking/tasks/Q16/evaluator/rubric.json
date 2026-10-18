@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "rubric_version": "4.1",
+  "rubric_version": "4.2",
   "task_id": "Q16",
   "type": "open_problem",
   "open_kind": "checkable",
@@ -132,7 +132,7 @@
         "procedure": "With the same mixing model, departures of TIC, PO4 and oxygen in the bottom water (the deepest valid level, with the treatment of the level marked 9999 stated) on the same cells and summers: where and when the TIC and PO4 additions and the oxygen deficit are largest, their area-weighted means and the ranking of the nine summers.",
         "used_by": "Q16-Q",
         "expected": "to freeze before judging",
-        "tolerance": "to freeze before judging (suggested: sign exact; magnitude within 30% under matched end-members and bottom definition; Spearman at least 0.6; the largest addition in the same part of the shelf)"
+        "tolerance": "to freeze before judging (suggested: sign exact; magnitude within 30% under matched end-members and bottom definition; Spearman at least 0.6 over the summers that the reference's primary definition ranks, not applied when it ranks three or fewer; the largest addition in the same part of the shelf)"
       },
       {
         "id": "Q16-A3",
