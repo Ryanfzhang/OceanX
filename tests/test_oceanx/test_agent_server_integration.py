@@ -277,10 +277,11 @@ def _start_fixture_server(tmp_path, mode, log):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("workflow_mode", ["research", "standard"])
+@pytest.mark.parametrize("workflow_mode", ["research", "auto"])
 async def test_the_coordinator_goes_on_when_the_first_of_two_experts_returns(tmp_path, workflow_mode):
     """The real Agent Server and desktop protocol: B1 returns, the Coordinator is called again and
-    waits, and only then does the slow B2 return, with its own receipt on its own task call."""
+    waits, and only then does the slow B2 return, with its own receipt on its own task call. In auto
+    mode, as the desktop sends it, the single agent hands the question over first in the same run."""
     logpath = tmp_path / "server.log"
     with logpath.open("w") as log:
         process, port, token = _start_fixture_server(tmp_path, "gateway_background", log)
@@ -354,12 +355,84 @@ async def test_the_coordinator_goes_on_when_the_first_of_two_experts_returns(tmp
                 assert "Receipt of B2 (scientific_discussion_partner)" in waited["output"]
 
                 snapshots = [e for e in events if e["type"] == "team.snapshot"]
+                handoff = [e for e in events if e["type"] == "transcript.item.appended"
+                           and "FIXTURE_HANDOFF" in json.dumps(e["payload"])]
+                if workflow_mode == "auto":
+                    # The single agent's note, then the team: no snapshot before the handoff.
+                    assert len(handoff) == 1 and events.index(handoff[0]) < events.index(snapshots[0])
+                    assert [p["tool_name"] for p in started.values()][0] == "hand_to_research_team"
+                else:
+                    assert not handoff
                 experts = [a for a in snapshots[-1]["payload"]["agents"] if a["agent_id"] != "coordinator"]
                 assert len(experts) == 2 and {a["status"] for a in experts} == {"completed"}
                 assert all(a["report_path"] for a in experts)
                 # While B2 was still working, B1 was already shown as completed.
                 assert any(sorted(a["status"] for a in e["payload"]["agents"] if a["agent_id"] != "coordinator")
                            == ["completed", "working"] for e in snapshots)
+        finally:
+            process.terminate()
+            try:
+                await asyncio.to_thread(process.wait, timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                await asyncio.to_thread(process.wait)
+
+
+@pytest.mark.asyncio
+async def test_the_single_agent_answers_a_simple_request_without_the_team(tmp_path):
+    """The real Agent Server and desktop protocol in auto mode: the single agent runs code itself and
+    answers in chat; the desktop is never shown a team."""
+    logpath = tmp_path / "server.log"
+    with logpath.open("w") as log:
+        process, port, token = _start_fixture_server(tmp_path, "single", log)
+        try:
+            url = f"http://127.0.0.1:{port}"
+            headers = {"authorization": "Bearer " + token}
+            await _wait_for_server(process, url, headers, logpath)
+            from websockets.asyncio.client import connect
+            async with connect(url.replace("http:", "ws:") + "/ocean/protocol",
+                               additional_headers={**headers,
+                                                   "x-ocean-desktop-token": token + "-desktop"}) as ws:
+                context = {}
+
+                async def send(kind, payload, request_id):
+                    frame = {"protocol_version": 2, "request_id": request_id,
+                             "type": kind, "payload": payload}
+                    if context:
+                        frame.update(context=context, expected_workspace_revision=1)
+                    await ws.send(json.dumps(frame))
+
+                async def terminal(request_id):
+                    seen = []
+                    async with asyncio.timeout(120):
+                        while True:
+                            event = json.loads(await ws.recv())
+                            seen.append(event)
+                            assert event["type"] not in {"system.error", "request.failed"}, (
+                                json.dumps(event) + logpath.read_text()[-8000:])
+                            if event.get("request_id") == request_id and event["type"] in {
+                                "system.ready", "request.completed"
+                            }:
+                                return event, seen
+
+                await send("system.handshake", {"client_kind": "desktop", "client_version": "test",
+                                                  "supported_protocol_versions": [2]}, "req_hello")
+                hello, _ = await terminal("req_hello")
+                context.update(client_id=hello["payload"]["client_id"],
+                               session_id=hello["payload"]["session_id"], workspace_id="ws_fixture")
+                await send("workspace.open", {"path": str(tmp_path / "state/workspace")}, "req_open")
+                await terminal("req_open")
+                context["task_id"] = "task_fixture"
+                await send("session.submit", {"text": "What is 1 + 1?", "workflow_mode": "auto"}, "req_quick")
+                final, events = await terminal("req_quick")
+                result = final["payload"]["result"]
+                assert result["assistant_text"] == "Fixture single answer: 2."
+                assert result["team_provenance"]["workflow"] == "single_agent"
+                assert not [e for e in events if e["type"] == "team.snapshot"]
+                tools = [e["payload"]["tool_name"] for e in events if e["type"] == "tool.call.started"]
+                assert tools == ["ocean_expert_run_code"]
+                folders = [path.name for path in (tmp_path / "state").rglob("single-agent-*") if path.is_dir()]
+                assert folders, "the single agent works in its own folder"
         finally:
             process.terminate()
             try:

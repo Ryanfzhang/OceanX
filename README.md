@@ -69,13 +69,26 @@ orchestration behavior are unchanged by this additional client.
 Electron Desktop
     ↕ Ocean protocol v2
 Local Agent Server (automatically launched)
-    ├─ Coordinator (Deep Agents)
+    ├─ Single agent first, with its own helpers (Deep Agents)
+    ├─ Coordinator (Deep Agents), for requests the single agent hands over
     ├─ Native synchronous Expert tasks (Deep Agents)
     ├─ Ocean domain tools
     ├─ report.md summaries + self-describing NetCDF results
     ├─ Native server checkpoints + SQLite UI/file projections
     └─ Isolated persistent scientific Python kernels
 ```
+
+Every desktop request goes first to one agent that works alone: it has the Experts' tools and
+the data and search Experts' skills, answers in chat, and may give independent parts of a request
+to up to three helpers of its own (not the Experts). When a request is an open research problem
+(why something happens, which mechanism holds, how much each factor contributes), or the
+researcher asks for deep research, it calls `hand_to_research_team` and the same server run goes
+on with the Coordinator and its Experts in research mode, as below. It decides on the call that
+starts the work, so a simple request pays nothing for the choice; if its 40 calls run out first,
+its last call may only answer or hand over. Headless runs (`ocean run`, `ocean batch`, the
+benchmark) send the team at once unless `--workflow-mode auto` or `standard` (the single agent
+alone) is given. Lessons stay in the team's skills; the single agent reads the learned helper
+functions only.
 
 For open research, the Coordinator selects a bounded subquestion whose answer informs the next
 direction, rather than outsourcing the whole investigation as a diagnostic checklist. It updates
@@ -107,8 +120,8 @@ author/reviewer loop. The Coordinator may explicitly ask another Expert or the r
 Partner when a scientific disagreement warrants it. A native task returns its report Summary,
 report path and saved `.nc` outputs to the same Coordinator run.
 The single visual-delivery follow-up is only for a visual the user explicitly asked for,
-not one the Coordinator added to an Expert assignment. This applies in standard and research
-workflows; it does not require Experts to add figures or change their scientific methods.
+not one the Coordinator added to an Expert assignment. It does not require Experts to add figures
+or change their scientific methods.
 Dependencies determine question order, not an instruction to merge the whole project into one task.
 An explicit `task.node_id` must exist after the short node-write wait; otherwise the task returns
 an error without starting the Expert. A node ID inferred only from description text may still

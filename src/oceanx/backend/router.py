@@ -163,6 +163,7 @@ from oceanx.protocol.v2.models import (
     new_event_id,
     parse_request,
 )
+from oceanx.research.routing import HANDOFF_TOOL, HELPER_TOOL
 from oceanx.research.services import ResearchServices
 from oceanx.skills import LITERATURE_CAPABILITY
 from oceanx.storage import is_safe_cross_platform_relative_path
@@ -283,6 +284,9 @@ class OceanRequestRouter:
         # scheduler or source of truth; execution and completion remain inside
         # DeepAgents and the durable products are report.md/.nc files.
         self._native_task_activity: dict[str, dict[str, dict[str, Any]]] = {}
+        # Requests of this backend that the research team works on: sent in research mode, or
+        # handed over by the single agent. The team is shown only for these (_uses_team).
+        self._team_requests: set[str] = set()
         # Internal callers such as the frozen evaluator can lower a single
         # follow-up request's remaining budget without changing the user-facing
         # Protocol v2 payload or the router-wide default.
@@ -2046,6 +2050,8 @@ class OceanRequestRouter:
                 extra={"task_id": task_id, "request_id": request.request_id},
             )
         self._team_snapshot_revisions[request.request_id] = 0
+        if request.payload.workflow_mode == "research":
+            self._team_requests.add(request.request_id)
         await self._emit_team_snapshot(
             workspace_id=workspace_id,
             parent_request_id=request.request_id,
@@ -2376,6 +2382,11 @@ class OceanRequestRouter:
                         # a conclusion. The next assistant answer is synthesis.
                         last_assistant_text = ""
 
+                if isinstance(event, ToolExecutionStarted) and event.tool_name == HANDOFF_TOOL:
+                    self._team_requests.add(request.request_id)
+                    reason = str(event.tool_input.get("reason") or "").strip()
+                    if reason:
+                        await self._append_transcript_item(client, request, role="system", text=reason)
                 if isinstance(event, ToolExecutionStarted) and event.tool_name == "task":
                     now = datetime.now(UTC).isoformat()
                     self._native_task_activity.setdefault(request.request_id, {})[
@@ -2427,7 +2438,7 @@ class OceanRequestRouter:
                 refresh_team = (
                     isinstance(event, (ToolExecutionStarted, ToolExecutionCompleted))
                     and event.tool_name in native_team_tools
-                )
+                ) or (isinstance(event, ToolExecutionStarted) and event.tool_name == HANDOFF_TOOL)
                 if refresh_team:
                     await self._emit_team_snapshot(
                         workspace_id=agent_session.workspace_id,
@@ -2503,6 +2514,7 @@ class OceanRequestRouter:
             )
             team_provenance = {
                 "architecture": "deepagents_native_task",
+                "workflow": "research_team" if request.request_id in self._team_requests else "single_agent",
                 "activation_count": len(native_tasks),
                 "routing_decision": {
                     "strategy": (
@@ -2618,6 +2630,10 @@ class OceanRequestRouter:
                 state, activity = "working", "Reading a selected scientific source"
             elif event.tool_name == "task":
                 state, activity = "working", "Delegating a research subquestion"
+            elif event.tool_name == HELPER_TOOL:
+                state, activity = "working", "A helper is working on part of the request"
+            elif event.tool_name == HANDOFF_TOOL:
+                state, activity = "working", "Handed to the research team"
         elif isinstance(event, ToolExecutionCompleted):
             if event.is_error:
                 state = "working"
@@ -2633,6 +2649,8 @@ class OceanRequestRouter:
                 state, activity = "working", "Interpreting the selected paper"
             elif event.tool_name == "task":
                 state, activity = "working", "Expert result returned"
+            elif event.tool_name == HELPER_TOOL:
+                state, activity = "working", "Helper result returned"
         elif isinstance(event, AssistantTurnComplete) and not event.message.tool_uses:
             state, activity = "working", "Preparing the final answer"
         if state is not None and activity is not None:
@@ -3073,6 +3091,21 @@ class OceanRequestRouter:
             interactions=tuple(interactions),
         )
 
+    def _uses_team(self, request_id: str) -> bool:
+        """Whether the research team worked on a request: one this backend saw, one sent in research
+        mode (the default of a request without a mode), or one whose completion records the team."""
+        if request_id in self._team_requests:
+            return True
+        record = self.store.get_request(request_id)
+        if record is None:
+            return False
+        payload = record.canonical_request.get("payload")
+        if not isinstance(payload, dict) or payload.get("workflow_mode", "research") == "research":
+            return True
+        result = getattr(getattr(record.terminal_event, "payload", None), "result", None)
+        provenance = result.get("team_provenance") if isinstance(result, dict) else None
+        return isinstance(provenance, dict) and provenance.get("workflow") == "research_team"
+
     async def _emit_team_snapshot(
         self,
         *,
@@ -3083,7 +3116,7 @@ class OceanRequestRouter:
         client: BackendClient | None = None,
     ) -> None:
         client = client or self._agent_request_clients.get(parent_request_id)
-        if client is None:
+        if client is None or not self._uses_team(parent_request_id):
             return
         if heartbeat:
             self.store.update_task_workflow_progress(
@@ -3497,6 +3530,8 @@ class OceanRequestRouter:
         )
         team_snapshots = []
         for workflow in self.store.list_task_workflows(task_id):
+            if not self._uses_team(workflow.request_id):
+                continue  # the single agent answered it alone
             team_snapshots.append(await self._native_team_snapshot_payload(
                 workspace_id=snapshot.task.workspace_id,
                 parent_request_id=workflow.request_id,

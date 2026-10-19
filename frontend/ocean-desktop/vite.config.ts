@@ -1,6 +1,6 @@
 import {defineConfig} from 'vite';
 import react from '@vitejs/plugin-react';
-import {dirname, resolve} from 'node:path';
+import {dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const desktopRoot = dirname(fileURLToPath(import.meta.url));
@@ -10,14 +10,6 @@ export default defineConfig({
   root: 'src/renderer',
   envDir: desktopRoot,
   plugins: [react()],
-  resolve: {
-    alias: {
-      // Packages under ../packages are imported as source; bare specifiers
-      // inside them must resolve against this app's node_modules.
-      'react': resolve(desktopRoot, 'node_modules/react'),
-      'lucide-react': resolve(desktopRoot, 'node_modules/lucide-react'),
-    },
-  },
   build: {
     outDir: '../../dist/renderer',
     emptyOutDir: true,
@@ -35,6 +27,5 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     port: 5177,
-    fs: {allow: [desktopRoot, resolve(desktopRoot, '..', 'packages')]},
   },
 });

@@ -59,6 +59,7 @@ CREATE TABLE artifact_projections (
                             REFERENCES artifact_versions(workspace_id, artifact_id, version)
                     );
 
+-- Kept for the storage contract: nothing writes it now; the impact rebuild still reads it.
 CREATE TABLE artifact_state_events (
                         state_event_id TEXT PRIMARY KEY,
                         workspace_id TEXT NOT NULL,

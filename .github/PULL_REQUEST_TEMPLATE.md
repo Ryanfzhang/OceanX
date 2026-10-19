@@ -5,8 +5,8 @@
 
 ## Validation
 
-- [ ] `uv run ruff check src tests scripts`
-- [ ] `uv run pytest -q`
+- [ ] `make lint`
+- [ ] `make test`
 - [ ] `cd frontend/ocean-desktop && npm run check` (if Desktop touched)
 
 ## Notes

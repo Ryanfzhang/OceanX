@@ -10,8 +10,6 @@ from typing import Any
 from oceanx.model_config import ModelRole, load_model_profile
 from oceanx.tools import OceanToolServices
 
-OCEAN_EXPERT_MIN_RESPONSE_TOKENS = 24_576
-
 
 class OceanAgentRuntimeError(RuntimeError):
     """The configured model or checkpoint runtime cannot start."""

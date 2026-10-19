@@ -63,12 +63,6 @@ class BaseTool(ABC):
         del arguments
         return None
 
-    def input_validation_error(
-        self, raw_input: dict[str, object], error: Exception
-    ) -> ToolResult | None:
-        del raw_input, error
-        return None
-
     def to_api_schema(self) -> dict[str, Any]:
         return {
             "name": self.name,

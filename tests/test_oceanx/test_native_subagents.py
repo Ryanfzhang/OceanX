@@ -67,57 +67,13 @@ def test_removed_roles_are_not_available():
 
 
 @pytest.mark.asyncio
-async def test_standard_workflow_keeps_native_experts_without_a_research_tree(
-    monkeypatch, tmp_path
-):
-    from oceanx.research import graphs
-
-    config = _config()
-    config["configurable"]["request_options"] = {"workflow_mode": "standard"}
-    captured: dict[str, Any] = {}
-
-    async def fake_expert(_config, profile_id):
-        return f"runnable:{profile_id}"
-
-    async def fake_build(_config, role, *, subagents=None, suffix="", middleware=None, **_kwargs):
-        captured.update(role=role, subagents=subagents, suffix=suffix, middleware=middleware)
-        return "graph"
-
-    monkeypatch.setattr(graphs, "expert", fake_expert)
-    monkeypatch.setattr(graphs, "build", fake_build)
-    monkeypatch.setattr(graphs, "coordinator_report_path", lambda _config: tmp_path / "report.md")
-
-    experts = RunningExperts()
-    assert await _coordinator_agent(config, experts) == "graph"
-    background, repair = captured["middleware"]
-    assert isinstance(background, BackgroundDelegationMiddleware) and background.experts is experts
-    assert isinstance(repair, ToolCallRepairMiddleware)  # a stray bracket must not end a standard run either
-    assert "Experts work in the background" in captured["suffix"]
-    assert "Synthesize only after every Expert has returned" in captured["suffix"]
-    assert captured["role"] == "coordinator"
-    assert {item["name"] for item in captured["subagents"]} == {
-        profile.profile_id for profile in AGENT_PROFILES
-    }
-    assert "# Standard workflow" in captured["suffix"]
-    assert "Research mode is off" in captured["suffix"]
-    assert "This does not disable the team" in captured["suffix"]
-    assert "Do not create or update a research tree" in captured["suffix"]
-    assert COORDINATOR_VISUAL_DELIVERY_POLICY in captured["suffix"]
-    assert "one and only one follow-up task call" in captured["suffix"]
-    assert "A .preview.png is only the fallback" in captured["suffix"]
-    assert "execute" not in COORDINATOR_FILESYSTEM_TOOLS
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("workflow_mode", ["standard", "research"])
 @pytest.mark.parametrize("figure_delivery", ["interactive", "static"])
 async def test_visual_follow_up_is_only_for_a_visual_the_user_asked_for(
-    monkeypatch, tmp_path, workflow_mode, figure_delivery
+    monkeypatch, tmp_path, figure_delivery
 ):
     from oceanx.research import graphs
 
     config = _config()
-    config["configurable"]["request_options"] = {"workflow_mode": workflow_mode}
     captured = {}
 
     async def fake_expert(_config, profile_id):
@@ -649,7 +605,7 @@ async def test_a_coordinator_run_that_ends_early_leaves_no_expert_working(monkey
                 raise RuntimeError("provider failure")
             await asyncio.Event().wait()
 
-    async def fake_agent(_config, experts):
+    async def fake_agent(_config, experts, **_kwargs):
         agent = Agent()
         agent.experts = experts
         return agent
@@ -1241,13 +1197,14 @@ async def test_a_coordinator_run_sizes_the_data_expert_pool_from_its_request(
             seen["search"] = _search_expert_slots().limit
             return {"messages": [*state["messages"], AIMessage(content="answer")]}
 
-    async def fake_agent(_config, _experts):
+    async def fake_agent(_config, _experts, **_kwargs):
         return Agent()
 
     monkeypatch.setattr(graphs, "_coordinator_agent", fake_agent)
     monkeypatch.setattr(graphs, "coordinator_report_path", lambda _config: tmp_path / "report.md")
+    monkeypatch.setattr(graphs, "research_tree", lambda _task_id: SimpleNamespace())
     config = _config()
-    config["configurable"]["request_options"] = {"workflow_mode": "standard", **options}
+    config["configurable"]["request_options"] = dict(options)
     _expert_slots(MAX_PARALLEL_EXPERTS)  # whatever an earlier request left in the app-wide pool
     graph = await graphs.coordinator(config)
 
@@ -1317,6 +1274,38 @@ def test_research_budget_stamps_receipts_and_stops_new_assignments():
     unlimited = ResearchBudgetMiddleware(None, clock=lambda: 10 ** 6)
     assert unlimited.wrap_tool_call(request(), lambda _request: receipt).text.endswith(
         "min elapsed; 1 Expert assignments so far.")
+
+
+@pytest.mark.asyncio
+async def test_a_handed_over_request_reaches_the_research_coordinator_with_the_note(monkeypatch, tmp_path):
+    from oceanx.research import graphs
+    from oceanx.research.routing import handoff_note
+
+    captured: dict[str, Any] = {}
+
+    async def fake_expert(_config, profile_id):
+        return f"runnable:{profile_id}"
+
+    async def fake_build(_config, role, *, subagents=None, suffix="", middleware=None, **_kwargs):
+        captured.update(role=role, subagents=subagents, suffix=suffix, middleware=middleware)
+        return "graph"
+
+    monkeypatch.setattr(graphs, "expert", fake_expert)
+    monkeypatch.setattr(graphs, "build", fake_build)
+    monkeypatch.setattr(graphs, "coordinator_report_path", lambda _config: tmp_path / "report.md")
+    monkeypatch.setattr(graphs, "research_tree",
+                        lambda _task_id: SimpleNamespace(policy=SimpleNamespace(guidance="")))
+    monkeypatch.delenv(graphs.RESEARCH_BUDGET_ENV, raising=False)
+    note = handoff_note({"reason": "它问的是机制。", "progress": "Read the SST file."}, tmp_path / "single")
+    experts = RunningExperts()
+    assert await _coordinator_agent(_config(), experts, handoff=note) == "graph"
+    assert captured["role"] == "coordinator"
+    assert {item["name"] for item in captured["subagents"]} == {p.profile_id for p in AGENT_PROFILES}
+    assert captured["middleware"][0].experts is experts
+    assert COORDINATOR_VISUAL_DELIVERY_POLICY in captured["suffix"]
+    assert captured["suffix"].endswith(note)
+    assert "它问的是机制。" in note and "Read the SST file." in note and str(tmp_path / "single") in note
+    assert "execute" not in COORDINATOR_FILESYSTEM_TOOLS  # the team's Coordinator still runs no code
 
 
 @pytest.mark.asyncio

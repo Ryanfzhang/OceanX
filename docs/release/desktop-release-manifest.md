@@ -115,6 +115,6 @@ trusted-execution approval.
 
 This package verification does not prove an end-to-end updater. The desktop now
 has signed-manifest admission and a constrained platform-updater handoff, but a
-release still requires F6 target platform signing/notarization, checksum
-publication, atomic replacement/rollback policy, and clean-machine validation
-gates in `plan_frontend.md`.
+release still requires target platform signing/notarization, checksum
+publication, atomic replacement/rollback policy, and the clean-machine rows of
+the [lifecycle validation matrix](desktop-lifecycle-validation.md).

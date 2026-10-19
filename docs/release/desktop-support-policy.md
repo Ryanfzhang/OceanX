@@ -69,8 +69,8 @@ clean-machine installation, update, rollback, or a researcher walkthrough.
 The release owner must retain the generated release metadata alongside the
 exact bundle submitted for signing. See the [Desktop signing
 runbook](desktop-signing-runbook.md), [Desktop release
-metadata](desktop-release-manifest.md), and F5/F6 in `plan_frontend.md` for
-the remaining release gates.
+metadata](desktop-release-manifest.md), and the [lifecycle validation
+matrix](desktop-lifecycle-validation.md) for the remaining release gates.
 
 ## Development Performance Baseline
 

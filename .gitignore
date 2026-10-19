@@ -3,9 +3,6 @@ __pycache__/
 *$py.class
 *.egg-info/
 dist/
-!src/oceanx/_ocean_terminal/
-!src/oceanx/_ocean_terminal/dist/
-!src/oceanx/_ocean_terminal/dist/ocean-terminal.mjs
 build/
 .eggs/
 *.egg
@@ -87,3 +84,9 @@ uv.lock
 /benchmark.yaml
 /benchmarking/.env
 !/benchmarking/.env.example
+
+# Benchmark files and frozen references are retained locally, not tracked.
+/benchmarking/
+
+# Release metadata is a CI output (see docs/release/desktop-release-manifest.md).
+release-metadata/

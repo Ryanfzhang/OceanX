@@ -1,8 +1,7 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
 
-import type {ArtifactVersion, DeliveryManifest, ResultDocument, TaskOutput, TaskResultRecord, TeamAgentTranscript, TeamSnapshot} from '../types.js';
-import {AgentActivityPanel} from './AgentActivityPanel.js';
+import type {ArtifactVersion, DeliveryManifest, ResultDocument, TaskOutput, TaskResultRecord, TeamSnapshot} from '../types.js';
 import {activeRoster, AgentCollaborationCanvas} from './AgentCollaborationCanvas.js';
 import {ConversationTranscript} from './ConversationTranscript.js';
 import {InteractiveViewWorkbench} from './InteractiveViewWorkbench.js';
@@ -208,29 +207,6 @@ describe('research workbench layout', () => {
     expect(markup).toContain('status-waiting');
     expect(markup).toContain('Test the uncertainty');
     expect(markup).not.toContain('role="button"');
-  });
-
-  it('renders the selected agent complete history in the fixed canvas panel', () => {
-    const agent = {agent_id: 'physical', semantic_role: 'Physical Oceanographer', authority: 'expert' as const, status: 'working' as const, activity: 'Analyzing circulation', agent_run_id: 'work_physical'};
-    const transcript: TeamAgentTranscript = {
-      agent_id: agent.agent_id,
-      agent_run_id: agent.agent_run_id,
-      messages: [
-        {message_id: 'message_1', role: 'coordinator', blocks: [{type: 'text', text: 'Analyze the circulation evidence.'}]},
-        {message_id: 'message_2', role: 'expert', blocks: [{type: 'tool_call', tool_call_id: 'tool_1', tool_name: 'ocean_execute_code', input: {script: 'analysis.py'}}]},
-        {message_id: 'message_3', role: 'expert', blocks: [{type: 'text', text: 'The Loop Current signal is resolved.'}]},
-      ],
-    };
-
-    const markup = renderToStaticMarkup(<AgentActivityPanel agent={agent} profiles={[]} todos={[]} transcript={transcript} loading={false} error={null} />);
-
-    expect(markup).toContain('Analyze the circulation evidence.');
-    expect(markup).toContain('ocean_execute_code');
-    expect(markup).toContain('The Loop Current signal is resolved.');
-    expect(markup).toContain('Technical activity');
-    expect(markup).toContain('Coordinator → Physical Oceanographer');
-    expect(markup).toContain('Physical Oceanographer → Coordinator');
-    expect(markup).not.toContain('>Back<');
   });
 
   it('keeps a unified result workbench mounted when no result is selected', () => {
@@ -773,10 +749,48 @@ describe('research workbench layout', () => {
       onOpenTaskResult={() => undefined}
     />);
 
-    expect(markup).toContain('<span>Team</span>');
+    expect(markup).toContain('<span>Research team</span>');
     expect(markup).toContain('Partial result');
     expect(markup).not.toContain('>Incomplete<');
     expect(markup).toContain('status-incomplete');
+  });
+
+  it('speaks as OceanX and shows no team while the single agent works alone', () => {
+    const common = {
+      loading: false,
+      streaming: '',
+      task: null,
+      workspacePath: '/tmp/workspace',
+      outputs: [] as TaskOutput[],
+      manifests: [] as DeliveryManifest[],
+      taskResults: [],
+      team: null,
+      onOpenResult: () => undefined,
+      onOpenTaskResult: () => undefined,
+    };
+    const user = {item_id: 'user_quick', role: 'user' as const, text: 'Plot the SST on 15 August.', request_id: 'req_quick'};
+    const starting = renderToStaticMarkup(<ConversationTranscript {...common} transcript={[user]} activeRequestId="req_quick" />);
+    expect(starting).toContain('<span>OceanX</span>');
+    expect(starting).toContain('<strong>OceanX:</strong>');
+    expect(starting).toContain('Working on the request…');
+    expect(starting).not.toContain('Coordinator:');
+    expect(starting).not.toContain('agent-canvas');
+
+    const narrated = renderToStaticMarkup(<ConversationTranscript
+      {...common}
+      transcript={[user, {item_id: 'narration_quick', role: 'assistant', text: 'Reading the 15 August slice.', request_id: 'req_quick'}]}
+      activeRequestId="req_quick"
+    />);
+    expect(narrated).toContain('<strong>OceanX:</strong>');
+    expect(narrated).toContain('Reading the 15 August slice.');
+
+    const done = renderToStaticMarkup(<ConversationTranscript
+      {...common}
+      transcript={[user, {item_id: 'answer_quick', role: 'assistant', text: 'The map is ready.', request_id: 'req_quick'}]}
+      activeRequestId={null}
+    />);
+    expect(done).toContain('The map is ready.');
+    expect(done).not.toContain('working-stream');
   });
 
   it('keeps the completed Canvas between its duration divider and final answer', () => {

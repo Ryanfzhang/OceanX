@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from oceanx.backend.host import OceanBackendHost
 from oceanx.batch import (
     BatchClient,
     NeedsInteraction,

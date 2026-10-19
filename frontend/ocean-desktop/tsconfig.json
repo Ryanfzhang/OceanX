@@ -6,12 +6,7 @@
     "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
-    "types": ["vite/client"],
-    "paths": {
-      "react": ["./node_modules/@types/react"],
-      "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime.d.ts"],
-      "lucide-react": ["./node_modules/lucide-react/dist/lucide-react.d.ts"]
-    }
+    "types": ["vite/client"]
   },
   "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/shared/**/*.ts"]
 }

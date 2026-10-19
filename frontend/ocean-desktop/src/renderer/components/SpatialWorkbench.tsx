@@ -808,7 +808,7 @@ export function ResultWorkbench({
             {chartExpanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
           </button>
         </header> : null}
-        <div className="result-chart-body"><ResultRenderBoundary key={document?.key ?? structured.plot_kind} resetKey={document?.key ?? structured.plot_kind}><StructuredView payload={structured as StructuredPayload} compactHeader={hasSpatialContext} featureId={selectedFeature} /></ResultRenderBoundary></div>
+        <div className="result-chart-body"><ResultRenderBoundary key={document?.key ?? structured.plot_kind} resetKey={document?.key ?? structured.plot_kind}><StructuredView payload={structured as StructuredPayload} compactHeader={hasSpatialContext} featureId={selectedFeature} fillHeight /></ResultRenderBoundary></div>
       </section> : null}
       {fallback ? <section className="result-fallback-surface" aria-label="Result fallback">
         <header><div>{previewUrl ? <Image size={16} /> : <Download size={16} />}<span><strong>{document?.title}</strong><small>{renderStatus === 'preview' ? 'Static preview' : 'Result file'}</small></span></div></header>

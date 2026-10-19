@@ -68,7 +68,9 @@ LiteratureAcquisitionMode = Literal[
     "auto_download_open_access",
     "search_only",
 ]
-WorkflowMode = Literal["standard", "research"]
+# auto: the single agent, which hands an open research problem to the team (the desktop);
+# standard: the single agent alone; research: the team at once (the default of headless runs).
+WorkflowMode = Literal["auto", "standard", "research"]
 
 
 class StrictModel(BaseModel):

@@ -36,8 +36,8 @@ class QueryCase(BaseModel):
     datasets: list[Path] = Field(default_factory=list, max_length=64)
     timeout_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     literature_mode: Literal["ask_before_download", "auto_download_open_access", "search_only"] = "ask_before_download"
-    # Same switch as the desktop's research toggle; headless runs keep research as the default.
-    workflow_mode: Literal["standard", "research"] = "research"
+    # auto is what the desktop sends; headless runs keep research (the team at once) as the default.
+    workflow_mode: Literal["auto", "standard", "research"] = "research"
     selected_papers: list[str] = Field(default_factory=list, max_length=30)
     permission_tools: list[str] = Field(default_factory=list, max_length=30)
     answers: dict[str, str] = Field(default_factory=dict)

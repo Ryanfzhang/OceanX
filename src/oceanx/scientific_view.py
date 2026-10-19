@@ -1252,64 +1252,6 @@ class ScientificFigure:
         }.get(self.plot_kind, self.plot_kind)
         return f"{kind}.{renderer}"
 
-    def _data_schema(self, *, dataset_file: str) -> dict[str, Any]:
-        """Describe external NetCDF arrays and their semantic rendering roles."""
-
-        roles: dict[str, set[str]] = {name: set() for name in self.data_specs}
-        units: dict[str, str] = {
-            name: str(metadata.get("units") or "") for name, metadata in self.field_metadata.items()
-        }
-        for panel in self.panels:
-            axes = panel.payload.get("axes", {})
-            for channel in ("x", "y"):
-                axis = axes.get(channel, {})
-                field = axis.get("field")
-                if isinstance(field, str) and field in roles:
-                    roles[field].add(channel)
-                    if axis.get("units"):
-                        units.setdefault(field, str(axis["units"]))
-            for layer in panel.layers:
-                for channel in ("x", "y", "z", "color", "category", "u", "v", "y0", "y1"):
-                    field = layer.get(channel)
-                    if isinstance(field, str) and field in roles:
-                        roles[field].add(channel)
-        return {
-            "schema_version": "ocean-view-data/v1",
-            "format": "netcdf",
-            "dataset_output": dataset_file,
-            "variables": [
-                {
-                    "name": name,
-                    "dims": list(spec["dims"]),
-                    "shape": list(spec["shape"]),
-                    "units": units.get(name, ""),
-                    "roles": sorted(roles.get(name, ())),
-                }
-                for name, spec in self.data_specs.items()
-            ],
-        }
-
-    def view_spec(self, *, dataset_file: str = "data.nc") -> dict[str, Any]:
-        """Return compact renderer semantics; numeric arrays stay in NetCDF."""
-
-        payload = self.payload(dataset_file=dataset_file)
-        return {
-            "schema_version": "ocean-interactive-view/v1",
-            "type": self._view_type(),
-            "plot_kind": self.plot_kind,
-            "figure_schema": payload["schema_version"],
-            "data": payload["data"],
-            "layout": payload["layout"],
-            "panels": payload["panels"],
-            "interaction": {"tooltip": True, "zoom": True},
-            "features": payload["features"],
-            **(
-                {"spatial_context": payload["spatial_context"]}
-                if "spatial_context" in payload
-                else {}
-            ),
-        }
-
     def save(self, output: str | os.PathLike[str]) -> Path:
         if self.plot_kind == "spatial_map":
             return self._save_spatial_map(output)

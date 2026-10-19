@@ -78,12 +78,3 @@ discoverable names for existing typed actions.
 - Dialogs and focused panes are ephemeral view state. Task transcript,
   checkpoint, task map state, artifacts, and run evidence remain backend-owned
   durable state.
-
-## Regression Evidence
-
-The Electron accessibility contract verifies named controls, the map and linked
-plot semantics, command-palette focus trapping/restoration, and keyboard
-activation of the composer action. The compact workspace contract verifies the
-Task/Map buttons by keyboard at the minimum size and 200% zoom. See
-`frontend/ocean-desktop/tests/accessibility-contract.spec.ts` and
-`frontend/ocean-desktop/tests/security-boundary.spec.ts`.

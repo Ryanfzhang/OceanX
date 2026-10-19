@@ -145,6 +145,9 @@ class OceanBackendHost:
         self.event_bus = EventBus()
         # Filesystem intents are recovered before active request records are marked interrupted.
         self.recovered_artifact_operations = self.artifact_service.recover_pending()
+        # Kernels die with their backend, so the executions it left running can never report
+        # back; until they are failed, cache cleanup treats their tasks as busy forever.
+        self.interrupted_code_executions = self.store.fail_running_code_executions()
         self.research = ResearchServices(self)
         self.router = OceanRequestRouter(
             store=self.store,

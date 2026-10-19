@@ -24,7 +24,13 @@ const WIDTH = 680;
 const HEIGHT = 430;
 const MARGIN = {left: 70, right: 78, top: 24, bottom: 58};
 const PLOT_WIDTH = WIDTH - MARGIN.left - MARGIN.right;
-const PLOT_HEIGHT = HEIGHT - MARGIN.top - MARGIN.bottom;
+const MIN_FILL_HEIGHT = 240;
+const MAX_TEXT_SCALE = 1.25;
+
+/** Rough width of tick text in view-box units; full-width characters take about twice the room. */
+function tickLabelWidth(label: string): number {
+  return [...label].reduce((width, character) => width + (/[⺀-鿿가-힯＀-￯]/.test(character) ? 13 : 7.5), 0);
+}
 
 const DEFAULT_SERIES = ['#147d78', '#245f82', '#bd6840', '#766fc1', '#507b66', '#9d7b36'];
 type Viewport = {x?: [number, number]; y?: [number, number]};
@@ -181,23 +187,49 @@ function axisText(value: number, axis: ScientificAxis): string {
   return decimalText(value, axis.precision);
 }
 
-function tickValues(domain: [number, number], count: number): number[] {
+function evenTickValues(domain: [number, number], count: number): number[] {
   if (count <= 1) return [(domain[0] + domain[1]) / 2];
   return Array.from({length: count}, (_, index) => domain[0] + (domain[1] - domain[0]) * index / (count - 1));
 }
 
-function axisTickValues(domain: [number, number], axis: ScientificAxis, count: number): number[] {
-  if (axis.scale !== 'log') return tickValues(domain, count);
-  const low = Math.log10(Math.max(domain[0], Number.MIN_VALUE));
-  const high = Math.log10(Math.max(domain[1], Number.MIN_VALUE));
-  return tickValues([low, high], count).map((value) => 10 ** value);
+/** The round step (1, 2 or 5 times a power of ten) that gives about `count` ticks, as d3 does. */
+function roundTickStep(span: number, count: number): number {
+  const rough = span / count;
+  const power = 10 ** Math.floor(Math.log10(rough));
+  const error = rough / power;
+  return (error >= Math.sqrt(50) ? 10 : error >= Math.sqrt(10) ? 5 : error >= Math.SQRT2 ? 2 : 1) * power;
 }
 
-export function scientificAxisTicks(domain: [number, number], axis: ScientificAxis) {
-  const count = Math.max(3, Math.min(6, axis.tick_count ?? 5));
-  const step = Math.abs(domain[1] - domain[0]) / (count - 1);
-  const precision = axis.precision ?? Math.min(10, Math.max(0, Math.ceil(-Math.log10(step || 1)) + 1));
-  return axisTickValues(domain, axis, count).map(value => ({value, label: axisText(value, {...axis, precision})}));
+function roundTickValues(domain: [number, number], step: number): number[] {
+  const low = Math.min(domain[0], domain[1]);
+  const high = Math.max(domain[0], domain[1]);
+  const ticks: number[] = [];
+  for (let index = Math.ceil(low / step - 1e-9); index * step <= high + step * 1e-9; index += 1) {
+    ticks.push(Number((index * step).toPrecision(12)));
+  }
+  return domain[0] <= domain[1] ? ticks : ticks.reverse();
+}
+
+export function scientificAxisTicks(domain: [number, number], axis: ScientificAxis, preferredCount = 5) {
+  const count = Math.max(3, Math.min(8, axis.tick_count ?? preferredCount));
+  const span = Math.abs(domain[1] - domain[0]);
+  if (axis.scale === 'log') {
+    const low = Math.log10(Math.max(Math.min(...domain), Number.MIN_VALUE));
+    const high = Math.log10(Math.max(Math.max(...domain), Number.MIN_VALUE));
+    const decades: number[] = [];
+    for (let exponent = Math.ceil(low - 1e-9); exponent <= high + 1e-9; exponent += 1) decades.push(exponent);
+    const values = decades.length >= 2
+      ? decades.map((exponent) => 10 ** exponent)
+      : evenTickValues([low, high], count).map((value) => 10 ** value);
+    return values.map(value => ({value, label: axisText(value, axis)}));
+  }
+  if (axis.scale === 'time' || !(span > 0) || !Number.isFinite(span)) {
+    const precision = axis.precision ?? Math.min(10, Math.max(0, Math.ceil(-Math.log10(span / (count - 1) || 1)) + 1));
+    return evenTickValues(domain, count).map(value => ({value, label: axisText(value, {...axis, precision})}));
+  }
+  const step = roundTickStep(span, count);
+  const precision = axis.precision ?? Math.min(10, Math.max(0, -Math.floor(Math.log10(step) + 1e-9)));
+  return roundTickValues(domain, step).map(value => ({value, label: axisText(value, {...axis, precision})}));
 }
 
 function lerpColor(leftColor: string, rightColor: string, ratio: number): string {
@@ -426,7 +458,7 @@ function drawCanvasMarker(context: CanvasRenderingContext2D, marker: NonNullable
   context.fill();
 }
 
-function ScientificPanelView({figure, panel, index, featureId}: {figure: ScientificFigurePayload; panel: ScientificPanel; index: number; featureId?: string}): React.JSX.Element {
+function ScientificPanelView({figure, panel, index, featureId, fill = false}: {figure: ScientificFigurePayload; panel: ScientificPanel; index: number; featureId?: string; fill?: boolean}): React.JSX.Element {
   const panelRef = useRef<HTMLElement | null>(null);
   const instanceId = useId().replaceAll(':', '');
   const clipId = `scientific-clip-${instanceId}`;
@@ -437,6 +469,27 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
   const [viewport, setViewport] = useState<Viewport>({});
   const drag = useRef<{x: number; y: number; viewport: Required<Viewport>} | null>(null);
   const scatterCanvas = useRef<HTMLCanvasElement | null>(null);
+  const canvasBox = useRef<HTMLDivElement | null>(null);
+  // A lone panel in the result workbench is drawn to the height it is given, so the
+  // view box follows the box's proportions; elsewhere figures keep their fixed shape.
+  // Text grows by the view box's shrink factor (up to 1.25) to stay readable in a narrow box.
+  const [viewHeight, setViewHeight] = useState(HEIGHT);
+  const [textScale, setTextScale] = useState(1);
+  useEffect(() => {
+    const element = canvasBox.current;
+    if (!fill || !element || typeof ResizeObserver === 'undefined') {setViewHeight(HEIGHT); setTextScale(1); return;}
+    const measure = () => {
+      const bounds = element.getBoundingClientRect();
+      if (!(bounds.width > 0 && bounds.height > 0)) return;
+      setViewHeight(Math.max(MIN_FILL_HEIGHT, Math.round(WIDTH * bounds.height / bounds.width)));
+      setTextScale(Math.min(MAX_TEXT_SCALE, Math.max(1, Math.round(WIDTH / bounds.width * 100) / 100)));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [fill]);
+  const plotHeight = viewHeight - MARGIN.top - MARGIN.bottom;
   const xAxis = panel.axes.x;
   const yAxis = panel.axes.y;
   const axisCaption = (axis: ScientificAxis, maxLength: number) => {
@@ -546,16 +599,20 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
       const numeric = axisNumber(value, yAxis, yCategories);
       if (numeric === null) return Number.NaN;
       const ratio = transform(numeric, yDomain, yAxis.scale);
-      return MARGIN.top + (yAxis.reverse ? ratio : 1 - ratio) * PLOT_HEIGHT;
+      return MARGIN.top + (yAxis.reverse ? ratio : 1 - ratio) * plotHeight;
     };
+    // Show every category label that fits; a taller plot gets more value ticks.
+    const widestCategory = xCategories
+      ? Math.max(...[...xCategories.keys()].map((label) => tickLabelWidth(conciseScientificLabel(label, 16)))) * textScale
+      : 0;
     const xTicks = xCategories
-      ? scientificCategoryTicks(xCategories)
+      ? scientificCategoryTicks(xCategories, Math.max(10, Math.floor(PLOT_WIDTH / (widestCategory + 10))))
       : scientificAxisTicks(xDomain, xAxis);
     const yTicks = yCategories
       ? [...yCategories.entries()].filter((_, tickIndex, all) => tickIndex % Math.max(1, Math.ceil(all.length / 6)) === 0).map(([label, value]) => ({label, value}))
-      : scientificAxisTicks(yDomain, yAxis);
+      : scientificAxisTicks(yDomain, yAxis, Math.round(plotHeight / 70));
     return {baseX, baseY, xDomain, yDomain, px, py, xTicks, yTicks, comparableScatter};
-  }, [data, panel.layers, viewport, xAxis, yAxis]);
+  }, [data, panel.layers, plotHeight, textScale, viewport, xAxis, yAxis]);
 
   const colorLayer = panel.layers.find((layer) => layer.type === 'field2d' || layer.type === 'heatmap' || ((layer.type === 'scatter' || layer.type === 'line') && !!layer.color));
   const colorValues = colorLayer?.type === 'field2d' || colorLayer?.type === 'heatmap'
@@ -611,11 +668,11 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
       if (canvas.height !== height) canvas.height = height;
       const context = canvas.getContext('2d');
       if (!context) return;
-      context.setTransform(width / WIDTH, 0, 0, height / HEIGHT, 0, 0);
-      context.clearRect(0, 0, WIDTH, HEIGHT);
+      context.setTransform(width / WIDTH, 0, 0, height / viewHeight, 0, 0);
+      context.clearRect(0, 0, WIDTH, viewHeight);
       context.save();
       context.beginPath();
-      context.rect(MARGIN.left, MARGIN.top, PLOT_WIDTH, PLOT_HEIGHT);
+      context.rect(MARGIN.left, MARGIN.top, PLOT_WIDTH, plotHeight);
       context.clip();
 
       panel.layers.forEach((layer, layerIndex) => {
@@ -684,7 +741,7 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(draw);
     observer?.observe(container);
     return () => observer?.disconnect();
-  }, [data, geometry, hidden, panel.layers, seriesColors]);
+  }, [data, geometry, hidden, panel.layers, plotHeight, seriesColors, viewHeight]);
 
   const hoverIndex = useMemo(() => {
     const cellSize = 18;
@@ -704,7 +761,7 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
         const screenX = geometry.px(x);
         const screenY = geometry.py(y);
         if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) continue;
-        if (screenX < MARGIN.left || screenX > MARGIN.left + PLOT_WIDTH || screenY < MARGIN.top || screenY > MARGIN.top + PLOT_HEIGHT) continue;
+        if (screenX < MARGIN.left || screenX > MARGIN.left + PLOT_WIDTH || screenY < MARGIN.top || screenY > MARGIN.top + plotHeight) continue;
         const key = `${Math.floor(screenX / cellSize)}:${Math.floor(screenY / cellSize)}`;
         const points = buckets.get(key) ?? [];
         points.push({x: screenX, y: screenY, layerIndex, pointIndex});
@@ -712,7 +769,7 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
       }
     });
     return {buckets, cellSize};
-  }, [data, geometry, hidden, panel.layers]);
+  }, [data, geometry, hidden, panel.layers, plotHeight]);
 
   const nearestHoverPoint = (x: number, y: number): Hover | null => {
     const cellX = Math.floor(x / hoverIndex.cellSize);
@@ -752,11 +809,11 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
 
   const fieldHover = (screenX: number, screenY: number): Hover | null => {
     const entry = panel.layers.find((layer): layer is Field2DLayer => layer.type === 'field2d');
-    if (!entry || screenX < MARGIN.left || screenX > MARGIN.left + PLOT_WIDTH || screenY < MARGIN.top || screenY > MARGIN.top + PLOT_HEIGHT) return null;
+    if (!entry || screenX < MARGIN.left || screenX > MARGIN.left + PLOT_WIDTH || screenY < MARGIN.top || screenY > MARGIN.top + plotHeight) return null;
     const xs = numericCoordinate(data[entry.x] ?? [], xAxis);
     const ys = numericCoordinate(data[entry.y] ?? [], yAxis);
     const xRatio = (screenX - MARGIN.left) / PLOT_WIDTH;
-    const yRatio = (screenY - MARGIN.top) / PLOT_HEIGHT;
+    const yRatio = (screenY - MARGIN.top) / plotHeight;
     const xValue = geometry.xDomain[0] + (geometry.xDomain[1] - geometry.xDomain[0]) * (xAxis.reverse ? 1 - xRatio : xRatio);
     const yValue = geometry.yDomain[0] + (geometry.yDomain[1] - geometry.yDomain[0]) * (yAxis.reverse ? yRatio : 1 - yRatio);
     const x = coordinateBracket(xs, xValue, true);
@@ -819,15 +876,19 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
   const colorbarCaption = panel.display?.colorbar_label
     ? conciseScientificLabel(panel.display.colorbar_label, 40)
     : null;
+  // Category labels drop into two rows only when their estimated width needs it.
+  const staggerXTicks = xAxis.scale === 'category' && geometry.xTicks.length > 1
+    && Math.max(...geometry.xTicks.map((tick) => tickLabelWidth(conciseScientificLabel(tick.label, 16)))) * textScale > PLOT_WIDTH / geometry.xTicks.length;
+  const yCaptionX = textScale > 1 ? 13 : 17;
   return <article ref={panelRef} className="scientific-panel">
     {(panel.label || inferredTitle || panel.subtitle || figure.panels.length > 1) ? <header className="scientific-panel-heading">
       <span className="scientific-panel-letter">{panel.label ?? String.fromCharCode(97 + index)}</span>
       <div>{inferredTitle ? <strong title={fullInferredTitle}>{inferredTitle}</strong> : null}{panel.subtitle ? <small title={panel.subtitle}>{conciseScientificLabel(panel.subtitle, 96)}</small> : null}</div>
     </header> : null}
     {legendPosition === 'top' ? legend : null}
-    <div className="scientific-panel-canvas">
-      <svg className="scientific-field-layer" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} aria-hidden="true" focusable="false">
-        <defs><clipPath id={fieldClipId}><rect x={MARGIN.left} y={MARGIN.top} width={PLOT_WIDTH} height={PLOT_HEIGHT} /></clipPath></defs>
+    <div ref={canvasBox} className="scientific-panel-canvas">
+      <svg className="scientific-field-layer" viewBox={`0 0 ${WIDTH} ${viewHeight}`} aria-hidden="true" focusable="false">
+        <defs><clipPath id={fieldClipId}><rect x={MARGIN.left} y={MARGIN.top} width={PLOT_WIDTH} height={plotHeight} /></clipPath></defs>
         <g clipPath={`url(#${fieldClipId})`}>
           {panel.layers.map((layer, layerIndex) => {
             if (layer.type !== 'field2d') return null;
@@ -835,8 +896,8 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
             if (hidden.has(id)) return null;
             const image = fieldImages.get(id);
             return image
-              ? <image key={id} className="scientific-field" href={image} x={MARGIN.left} y={MARGIN.top} width={PLOT_WIDTH} height={PLOT_HEIGHT} preserveAspectRatio="none" opacity={layer.style?.opacity ?? 1} />
-              : <rect key={id} className="scientific-field scientific-field-fallback" x={MARGIN.left} y={MARGIN.top} width={PLOT_WIDTH} height={PLOT_HEIGHT} />;
+              ? <image key={id} className="scientific-field" href={image} x={MARGIN.left} y={MARGIN.top} width={PLOT_WIDTH} height={plotHeight} preserveAspectRatio="none" opacity={layer.style?.opacity ?? 1} />
+              : <rect key={id} className="scientific-field scientific-field-fallback" x={MARGIN.left} y={MARGIN.top} width={PLOT_WIDTH} height={plotHeight} />;
           })}
         </g>
       </svg>
@@ -846,12 +907,12 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
         data-point-count={rasterPointCount}
         aria-hidden="true"
       />
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={panel.title ?? `${figure.plot_kind} panel ${index + 1}`}
+      <svg viewBox={`0 0 ${WIDTH} ${viewHeight}`} style={{'--scientific-text-scale': textScale} as React.CSSProperties} role="img" aria-label={panel.title ?? `${figure.plot_kind} panel ${index + 1}`}
         onPointerDown={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           const x = (event.clientX - rect.left) / rect.width * WIDTH;
-          const y = (event.clientY - rect.top) / rect.height * HEIGHT;
-          if (x < MARGIN.left || x > MARGIN.left + PLOT_WIDTH || y < MARGIN.top || y > MARGIN.top + PLOT_HEIGHT) return;
+          const y = (event.clientY - rect.top) / rect.height * viewHeight;
+          if (x < MARGIN.left || x > MARGIN.left + PLOT_WIDTH || y < MARGIN.top || y > MARGIN.top + plotHeight) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           drag.current = {x: event.clientX, y: event.clientY, viewport: {x: geometry.xDomain, y: geometry.yDomain}};
         }}
@@ -860,11 +921,11 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
           if (drag.current) {
             const rect = event.currentTarget.getBoundingClientRect();
             const dx = (event.clientX - drag.current.x) / rect.width * WIDTH;
-            const dy = (event.clientY - drag.current.y) / rect.height * HEIGHT;
+            const dy = (event.clientY - drag.current.y) / rect.height * viewHeight;
             const xSpan = drag.current.viewport.x[1] - drag.current.viewport.x[0];
             const ySpan = drag.current.viewport.y[1] - drag.current.viewport.y[0];
             const xShift = dx / PLOT_WIDTH * xSpan * (xAxis.reverse ? 1 : -1);
-            const yShift = dy / PLOT_HEIGHT * ySpan * (yAxis.reverse ? -1 : 1);
+            const yShift = dy / plotHeight * ySpan * (yAxis.reverse ? -1 : 1);
             setViewport({
               x: clampScientificDomain(
                 [drag.current.viewport.x[0] + xShift, drag.current.viewport.x[1] + xShift],
@@ -880,7 +941,7 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
           }
           const rect = event.currentTarget.getBoundingClientRect();
           const x = (event.clientX - rect.left) / rect.width * WIDTH;
-          const y = (event.clientY - rect.top) / rect.height * HEIGHT;
+          const y = (event.clientY - rect.top) / rect.height * viewHeight;
           setHover(nearestHoverPoint(x, y) ?? fieldHover(x, y));
         }}
         onPointerLeave={() => {drag.current = null; setHover(null);}}
@@ -891,13 +952,13 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
           if (!event.ctrlKey && !event.metaKey) return;
           const rect = event.currentTarget.getBoundingClientRect();
           const x = (event.clientX - rect.left) / rect.width * WIDTH;
-          const y = (event.clientY - rect.top) / rect.height * HEIGHT;
-          if (x < MARGIN.left || x > MARGIN.left + PLOT_WIDTH || y < MARGIN.top || y > MARGIN.top + PLOT_HEIGHT) return;
+          const y = (event.clientY - rect.top) / rect.height * viewHeight;
+          if (x < MARGIN.left || x > MARGIN.left + PLOT_WIDTH || y < MARGIN.top || y > MARGIN.top + plotHeight) return;
           event.preventDefault();
-          zoom(event.deltaY < 0 ? .82 : 1.22, (x - MARGIN.left) / PLOT_WIDTH, 1 - (y - MARGIN.top) / PLOT_HEIGHT);
+          zoom(event.deltaY < 0 ? .82 : 1.22, (x - MARGIN.left) / PLOT_WIDTH, 1 - (y - MARGIN.top) / plotHeight);
         }}>
         <defs>
-          <clipPath id={clipId}><rect x={MARGIN.left} y={MARGIN.top} width={PLOT_WIDTH} height={PLOT_HEIGHT} /></clipPath>
+          <clipPath id={clipId}><rect x={MARGIN.left} y={MARGIN.top} width={PLOT_WIDTH} height={plotHeight} /></clipPath>
           <linearGradient id={gradientId} x1="0" x2="0" y1="1" y2="0">
             {colorPalette.map((color, colorIndex) => <stop key={`${color}-${colorIndex}`} offset={`${colorIndex / (colorPalette.length - 1) * 100}%`} stopColor={color} />)}
           </linearGradient>
@@ -908,11 +969,11 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
           <text x={MARGIN.left - 10} y={geometry.py(tick.value) + 4} textAnchor="end" className="scientific-tick">{tick.label}</text>
         </g>)}
         {geometry.xTicks.map((tick, tickIndex) => <g key={`x-${tickIndex}`}>
-          {xAxis.grid ? <line x1={geometry.px(tick.value)} y1={MARGIN.top} x2={geometry.px(tick.value)} y2={MARGIN.top + PLOT_HEIGHT} className="scientific-grid" /> : null}
-          <line x1={geometry.px(tick.value)} y1={MARGIN.top + PLOT_HEIGHT} x2={geometry.px(tick.value)} y2={MARGIN.top + PLOT_HEIGHT + 5} className="scientific-tick-mark" />
+          {xAxis.grid ? <line x1={geometry.px(tick.value)} y1={MARGIN.top} x2={geometry.px(tick.value)} y2={MARGIN.top + plotHeight} className="scientific-grid" /> : null}
+          <line x1={geometry.px(tick.value)} y1={MARGIN.top + plotHeight} x2={geometry.px(tick.value)} y2={MARGIN.top + plotHeight + 5} className="scientific-tick-mark" />
           <text
             x={geometry.px(tick.value)}
-            y={MARGIN.top + PLOT_HEIGHT + 18 + (xAxis.scale === 'category' && geometry.xTicks.length > 6 ? tickIndex % 2 * 11 : 0)}
+            y={MARGIN.top + plotHeight + 12 + 6 * textScale + (staggerXTicks ? tickIndex % 2 * 13 * textScale : 0)}
             textAnchor="middle"
             className={`scientific-tick${xAxis.scale === 'category' && geometry.xTicks.length > 6 ? ' scientific-category-tick' : ''}`}
           ><title>{tick.label}</title>{conciseScientificLabel(tick.label, 16)}</text>
@@ -928,7 +989,7 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
           className="scientific-identity-reference"
           clipPath={`url(#${clipId})`}
         /> : null}
-        <path d={`M${MARGIN.left},${MARGIN.top} V${MARGIN.top + PLOT_HEIGHT} H${MARGIN.left + PLOT_WIDTH}`} className="scientific-axis" />
+        <path d={`M${MARGIN.left},${MARGIN.top} V${MARGIN.top + plotHeight} H${MARGIN.left + PLOT_WIDTH}`} className="scientific-axis" />
         <g clipPath={`url(#${clipId})`}>
           {panel.layers.map((layer, layerIndex) => {
             const id = layerId(layer, layerIndex);
@@ -1034,7 +1095,7 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
             if (layer.type === 'reference') {
               const coordinate = layer.axis === 'x' ? geometry.px(layer.value) : geometry.py(layer.value);
               return <g key={id}>{layer.axis === 'x'
-                ? <line x1={coordinate} y1={MARGIN.top} x2={coordinate} y2={MARGIN.top + PLOT_HEIGHT} stroke={baseColor} strokeWidth={style.width ?? 1.1} strokeDasharray={style.dash ?? '5 4'} />
+                ? <line x1={coordinate} y1={MARGIN.top} x2={coordinate} y2={MARGIN.top + plotHeight} stroke={baseColor} strokeWidth={style.width ?? 1.1} strokeDasharray={style.dash ?? '5 4'} />
                 : <line x1={MARGIN.left} y1={coordinate} x2={MARGIN.left + PLOT_WIDTH} y2={coordinate} stroke={baseColor} strokeWidth={style.width ?? 1.1} strokeDasharray={style.dash ?? '5 4'} />}
                 {layer.label ? <text x={layer.axis === 'x' ? coordinate + 5 : MARGIN.left + PLOT_WIDTH - 5} y={layer.axis === 'x' ? MARGIN.top + 14 : coordinate - 6} textAnchor={layer.axis === 'x' ? 'start' : 'end'} fill={baseColor} className="scientific-reference-label">{layer.label}</text> : null}</g>;
             }
@@ -1093,17 +1154,17 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
             </g>;
           })}
         </g>
-        <text x={MARGIN.left + PLOT_WIDTH / 2} y={HEIGHT - 13} textAnchor="middle" className="scientific-axis-label"><title>{xCaption.full}</title>{xCaption.visible}</text>
-        <text x="17" y={MARGIN.top + PLOT_HEIGHT / 2} textAnchor="middle" transform={`rotate(-90 17 ${MARGIN.top + PLOT_HEIGHT / 2})`} className="scientific-axis-label"><title>{yCaption.full}</title>{yCaption.visible}</text>
-        {!fieldCategories.length && colorValues.length && panel.display?.colorbar !== false ? <g><rect className="scientific-colorbar" x={WIDTH - 45} y={MARGIN.top + 8} width="9" height={PLOT_HEIGHT - 16} fill={`url(#${gradientId})`} />
+        <text x={MARGIN.left + PLOT_WIDTH / 2} y={viewHeight - (staggerXTicks ? 6 : 13)} textAnchor="middle" className="scientific-axis-label"><title>{xCaption.full}</title>{xCaption.visible}</text>
+        <text x={yCaptionX} y={MARGIN.top + plotHeight / 2} textAnchor="middle" transform={`rotate(-90 ${yCaptionX} ${MARGIN.top + plotHeight / 2})`} className="scientific-axis-label"><title>{yCaption.full}</title>{yCaption.visible}</text>
+        {!fieldCategories.length && colorValues.length && panel.display?.colorbar !== false ? <g><rect className="scientific-colorbar" x={WIDTH - 45} y={MARGIN.top + 8} width="9" height={plotHeight - 16} fill={`url(#${gradientId})`} />
           <line x1={WIDTH - 35} y1={MARGIN.top + 8} x2={WIDTH - 31} y2={MARGIN.top + 8} className="scientific-tick-mark" />
-          <line x1={WIDTH - 35} y1={MARGIN.top + PLOT_HEIGHT / 2} x2={WIDTH - 31} y2={MARGIN.top + PLOT_HEIGHT / 2} className="scientific-tick-mark" />
-          <line x1={WIDTH - 35} y1={MARGIN.top + PLOT_HEIGHT - 8} x2={WIDTH - 31} y2={MARGIN.top + PLOT_HEIGHT - 8} className="scientific-tick-mark" />
+          <line x1={WIDTH - 35} y1={MARGIN.top + plotHeight / 2} x2={WIDTH - 31} y2={MARGIN.top + plotHeight / 2} className="scientific-tick-mark" />
+          <line x1={WIDTH - 35} y1={MARGIN.top + plotHeight - 8} x2={WIDTH - 31} y2={MARGIN.top + plotHeight - 8} className="scientific-tick-mark" />
           <text x={WIDTH - 28} y={MARGIN.top + 12} className="scientific-colorbar-tick">{decimalText(colorDomain[1])}</text>
-          <text x={WIDTH - 28} y={MARGIN.top + PLOT_HEIGHT / 2 + 4} className="scientific-colorbar-tick">{decimalText((colorDomain[0] + colorDomain[1]) / 2)}</text>
-          <text x={WIDTH - 28} y={MARGIN.top + PLOT_HEIGHT - 4} className="scientific-colorbar-tick">{decimalText(colorDomain[0])}</text>
-          {panel.display?.colorbar_label && colorbarCaption ? <text x={WIDTH - 3} y={MARGIN.top + PLOT_HEIGHT / 2} textAnchor="middle" transform={`rotate(-90 ${WIDTH - 3} ${MARGIN.top + PLOT_HEIGHT / 2})`} className="scientific-colorbar-label"><title>{panel.display.colorbar_label}</title>{colorbarCaption}</text> : null}</g> : null}
-        {hover ? <g pointerEvents="none"><line x1={hover.x} y1={MARGIN.top} x2={hover.x} y2={MARGIN.top + PLOT_HEIGHT} className="scientific-hover-line" /><circle cx={hover.x} cy={hover.y} r="4" className="scientific-hover-point" /></g> : null}
+          <text x={WIDTH - 28} y={MARGIN.top + plotHeight / 2 + 4} className="scientific-colorbar-tick">{decimalText((colorDomain[0] + colorDomain[1]) / 2)}</text>
+          <text x={WIDTH - 28} y={MARGIN.top + plotHeight - 4} className="scientific-colorbar-tick">{decimalText(colorDomain[0])}</text>
+          {panel.display?.colorbar_label && colorbarCaption ? <text x={WIDTH - 3} y={MARGIN.top + plotHeight / 2} textAnchor="middle" transform={`rotate(-90 ${WIDTH - 3} ${MARGIN.top + plotHeight / 2})`} className="scientific-colorbar-label"><title>{panel.display.colorbar_label}</title>{colorbarCaption}</text> : null}</g> : null}
+        {hover ? <g pointerEvents="none"><line x1={hover.x} y1={MARGIN.top} x2={hover.x} y2={MARGIN.top + plotHeight} className="scientific-hover-line" /><circle cx={hover.x} cy={hover.y} r="4" className="scientific-hover-point" /></g> : null}
       </svg>
       <div className="scientific-panel-controls" role="group" aria-label="Chart zoom controls">
         <button type="button" onClick={() => zoom(.8)} title="Zoom in" aria-label="Zoom in"><ZoomIn size={14} /></button>
@@ -1118,8 +1179,9 @@ function ScientificPanelView({figure, panel, index, featureId}: {figure: Scienti
   </article>;
 }
 
-export function ScientificView({payload, compactHeader = false, featureId}: {payload: ScientificPayload; compactHeader?: boolean; featureId?: string}): React.JSX.Element {
+export function ScientificView({payload, compactHeader = false, featureId, fillHeight = false}: {payload: ScientificPayload; compactHeader?: boolean; featureId?: string; fillHeight?: boolean}): React.JSX.Element {
   const figure = useMemo(() => normalizeScientificFigure(payload), [payload]);
+  const fill = fillHeight && figure.panels.length === 1;
   const visibleFigureTitle = figure.title ? conciseScientificLabel(figure.title, 120) : undefined;
   const visibleFigureSubtitle = figure.subtitle ? conciseScientificLabel(figure.subtitle, 120) : undefined;
   const columns = figure.layout?.columns ?? (figure.panels.length === 1 ? 1 : 2);
@@ -1131,7 +1193,7 @@ export function ScientificView({payload, compactHeader = false, featureId}: {pay
     '--scientific-paper': figure.theme?.paper ?? '#ffffff',
     '--scientific-gap': `${figure.layout?.gap ?? 16}px`,
   } as React.CSSProperties;
-  return <section className={`scientific-figure scientific-columns-${columns}${autoHeroLayout ? ' scientific-auto-hero' : ''}${compactHeader ? ' scientific-compact' : ''}`} style={themeStyle}>
+  return <section className={`scientific-figure scientific-columns-${columns}${autoHeroLayout ? ' scientific-auto-hero' : ''}${compactHeader ? ' scientific-compact' : ''}${fill ? ' scientific-fill' : ''}`} style={themeStyle}>
     {!compactHeader && (figure.title || figure.subtitle) ? <header className="scientific-figure-heading">
       {visibleFigureTitle ? <h2 title={figure.title}>{visibleFigureTitle}</h2> : null}
       {visibleFigureSubtitle ? <p title={figure.subtitle}>{visibleFigureSubtitle}</p> : null}
@@ -1140,7 +1202,7 @@ export function ScientificView({payload, compactHeader = false, featureId}: {pay
       {figure.panels.map((panel, index) => <div key={panel.id} className="scientific-panel-slot" style={{
         gridColumn: panel.grid?.column ? `${panel.grid.column} / span ${panel.grid.column_span ?? 1}` : undefined,
         gridRow: panel.grid?.row ? `${panel.grid.row} / span ${panel.grid.row_span ?? 1}` : undefined,
-      }}><ScientificPanelView figure={figure} panel={panel} index={index} featureId={featureId} /></div>)}
+      }}><ScientificPanelView figure={figure} panel={panel} index={index} featureId={featureId} fill={fill} /></div>)}
     </div>
     {figure.caption ? <footer className="scientific-figure-caption">{figure.caption}</footer> : null}
   </section>;

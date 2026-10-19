@@ -137,7 +137,7 @@ async def _backend(tmp_path, monkeypatch):
         task = host.store.create_research_task(workspace_id=context["workspace_id"], title="Saved data")
         monkeypatch.setattr(graphs, "host", lambda: host)
         monkeypatch.setattr(graphs, "load_model_profile", lambda _: SimpleNamespace(provider="openai"))
-        monkeypatch.setattr("oceanx.research.metering.CallMeter", lambda *args: BaseCallbackHandler())
+        monkeypatch.setattr("oceanx.research.metering.CallMeter", lambda *args, **kwargs: BaseCallbackHandler())
         seen = {}
 
         async def capture(**kwargs):

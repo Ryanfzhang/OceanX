@@ -39,10 +39,6 @@ class ConversationMessage(BaseModel):
     role: Literal["user", "assistant", "tool"]
     content: list[TextBlock | ToolUseBlock | ToolResultBlock] = Field(default_factory=list)
 
-    @classmethod
-    def from_user_text(cls, text: str) -> ConversationMessage:
-        return cls(role="user", content=[TextBlock(text=text)])
-
     @property
     def text(self) -> str:
         return "".join(block.text for block in self.content if isinstance(block, TextBlock))

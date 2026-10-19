@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from oceanx.task_results import TaskResultError, TaskResultRecord, TaskResultStore
+from oceanx.task_results import TaskResultRecord, TaskResultStore
 
 MAX_RENDERED_SCIENTIFIC_VALUES = 500_000
 

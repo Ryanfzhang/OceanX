@@ -1,21 +1,13 @@
-PYTHON ?= .venv/bin/python
+# The active environment (INSTALL.md: conda activate oceanx); override with PYTHON=...
+PYTHON ?= python
 PYTEST = PYTHONPATH=src $(PYTHON) -m pytest
-RUFF_TARGETS = \
-	src/oceanx/agent.py \
-	src/oceanx/agent_contract.py \
-	src/oceanx/agent_tools.py \
-	src/oceanx/deep_runtime.py \
-	src/oceanx/model_config.py \
-	src/oceanx/web_search.py \
-	src/oceanx/runtime.py \
-	src/oceanx/tools.py \
-	src/oceanx/sandbox \
-	tests/test_oceanx/test_deep_agent_runtime.py
+RUFF_TARGETS = src/oceanx tests scripts
 
 .PHONY: lint typecheck test test-contract test-e2e-offline test-wheel build release-manifest
 
+# Faults only (syntax errors, undefined and unused names); style rules are not gated.
 lint:
-	$(PYTHON) -m ruff check $(RUFF_TARGETS)
+	$(PYTHON) -m ruff check --select E9,F $(RUFF_TARGETS)
 
 typecheck:
 	cd frontend/ocean-desktop && npm run check

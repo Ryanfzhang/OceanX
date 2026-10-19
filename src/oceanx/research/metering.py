@@ -6,8 +6,9 @@ from datetime import UTC, datetime
 
 from langchain_core.callbacks import AsyncCallbackHandler
 
-# True while a native Expert runs. The Coordinator's meter is inherited by that nested
-# run, so it skips those calls and leaves them to the Expert's own meter.
+# True while a native Expert, or a helper of the single agent, runs. The meter of the agent that
+# started it is inherited by that nested run, so it skips those calls and leaves them to the
+# nested agent's own meter.
 INSIDE_EXPERT: ContextVar[bool] = ContextVar("oceanx_inside_expert", default=False)
 _SKILL_FILE = re.compile(r"/skills/([a-z0-9-]+)/SKILL\.md")
 
@@ -22,13 +23,15 @@ def _skills_read(tool_calls) -> list[str]:
 class CallMeter(AsyncCallbackHandler):
     raise_error = True
 
-    def __init__(self, store, config, role, run=None):
+    def __init__(self, store, config, role, run=None, *, outer=False):
         self.store, self.config, self.role, self.run = store, config, role, run
+        # The Coordinator's meter (no run) and the single agent's start nested agents.
+        self.outer = outer or run is None
         self.calls = {}
         self.started = {}
 
     async def on_chat_model_start(self, serialized, messages, *, run_id, tags=None, metadata=None, **kwargs):
-        if self.run is None and INSIDE_EXPERT.get():
+        if self.outer and INSIDE_EXPERT.get():
             return
         c = self.config["configurable"]
         key = str(run_id)

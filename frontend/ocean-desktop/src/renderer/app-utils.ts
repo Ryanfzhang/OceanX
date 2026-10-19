@@ -1,4 +1,4 @@
-import type {ArtifactRef, DesktopRuntimeCapabilities, EventPayload} from './types.js';
+import type {DesktopRuntimeCapabilities, EventPayload} from './types.js';
 
 export function asRecord(value: unknown): EventPayload {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as EventPayload : {};
@@ -18,10 +18,6 @@ export function sourceTitleFromPath(path: string): string {
 export function artifactFileName(file: {uri?: string}): string | null {
   const name = file.uri?.split('/').at(-1) ?? '';
   return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$/.test(name) ? name : null;
-}
-
-export function sameRef(left: ArtifactRef | null | undefined, right: ArtifactRef | null | undefined): boolean {
-  return Boolean(left && right && left.artifact_id === right.artifact_id && left.version === right.version);
 }
 
 /** Only the foreground research request owns the task-level completion refresh. */
@@ -81,8 +77,4 @@ export function parseDesktopRuntimeCapabilities(value: unknown): DesktopRuntimeC
       : [];
   }) : [];
   return {connections, skills};
-}
-
-export function researchSkillLabel(name: string): string {
-  return name.split('-').filter(Boolean).map((part) => part[0]?.toUpperCase() + part.slice(1)).join(' ');
 }

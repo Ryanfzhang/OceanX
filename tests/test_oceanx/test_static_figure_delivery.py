@@ -305,7 +305,7 @@ async def test_a_static_run_shows_no_model_a_plotting_interface(tmp_path, monkey
         monkeypatch.setattr(graphs, "host", lambda: host)
         monkeypatch.setattr(graphs, "load_model_profile", lambda _: SimpleNamespace(provider="openai"))
         monkeypatch.setattr("oceanx.model_config.profile_supports_vision", lambda _profile: True)
-        monkeypatch.setattr("oceanx.research.metering.CallMeter", lambda *args: BaseCallbackHandler())
+        monkeypatch.setattr("oceanx.research.metering.CallMeter", lambda *args, **kwargs: BaseCallbackHandler())
         seen = {}
 
         async def capture(**kwargs):

@@ -73,7 +73,7 @@ class ServerGraphStream:
             messages = inputs.get("messages", [])
             c["original_question"] = messages[-1].text if messages else ""
             inputs = {"messages": [m.model_dump(mode="json") if isinstance(m, BaseMessage) else m for m in messages],
-                      "research_complete": False, "final_answer": ""}
+                      "research_complete": False, "final_answer": "", "handoff": ""}
         await self.client.threads.create(thread_id=self.thread_id, if_exists="do_nothing")
         run = await self.client.runs.create(self.thread_id, "coordinator", input=inputs,
             # Preserve DeepAgents' native graph-step default when Agent Server

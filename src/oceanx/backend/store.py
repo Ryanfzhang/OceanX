@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -45,7 +44,6 @@ from oceanx.protocol.v2.models import (
     parse_event,
 )
 from oceanx.storage import ensure_private_directory, ensure_private_file
-from oceanx.task_results import TaskResultRef
 from oceanx.team.models import CoordinatorResult, WorkFailureCode
 
 
@@ -570,16 +568,6 @@ class RequestStore:
                 "SELECT event_json FROM event_records WHERE event_id = ?", (event_id,)
             ).fetchone()
             return parse_event(json.loads(row["event_json"])) if row is not None else None
-
-    def record_domain_event(self, event: EventEnvelope) -> None:
-        """Persist an already-committed domain state notification exactly once before broadcast."""
-
-        with self._transaction() as connection:
-            existing = connection.execute(
-                "SELECT 1 FROM event_records WHERE event_id = ?", (event.event_id,)
-            ).fetchone()
-            if existing is None:
-                self._persist_event(connection, event)
 
     def commit_terminal(self, request_id: str, event: EventEnvelope) -> RequestRecord:
         """Persist a terminal result and its event before any broadcast occurs."""
@@ -1195,36 +1183,6 @@ class RequestStore:
                     self._task_workflow_from_row(workflow_row) if workflow_row is not None else None
                 ),
             )
-
-    def research_notes(self, *, workspace_id: str, task_id: str) -> dict[str, Any]:
-        """Recover original questions and recent model-authored notes, without a tree.
-
-        The existing append-only transcript is the version history. This is a
-        bounded read projection, not a summarizer, scientific schema or new log.
-        """
-        with self._lock:
-            row = self._require_research_task_row(self._connection, task_id)
-            if row["workspace_id"] != workspace_id:
-                raise RequestStoreError("Task is outside this workspace")
-            rows = self._connection.execute(
-                "SELECT role, text, request_id, sequence FROM task_transcript_items "
-                "WHERE task_id = ? AND role IN ('user', 'assistant') "
-                "ORDER BY sequence DESC LIMIT 8", (task_id,),
-            ).fetchall()
-            first = self._connection.execute(
-                "SELECT text FROM task_transcript_items WHERE task_id = ? AND role = 'user' "
-                "ORDER BY sequence LIMIT 1", (task_id,),
-            ).fetchone()
-            return {
-                "original_user_question": first["text"] if first else None,
-                "recent_notes": [
-                    {"role": r["role"], "text": r["text"][:6000],
-                     "request_id": r["request_id"], "sequence": r["sequence"],
-                     "truncated": len(r["text"]) > 6000}
-                    for r in reversed(rows)
-                ],
-                "history": "Full original messages and earlier versions remain in the task transcript.",
-            }
 
     def list_task_transcript_for_request(
         self,
@@ -1988,72 +1946,6 @@ class RequestStore:
                 ),
             )
 
-    def replace_task_request_deliveries(
-        self,
-        *,
-        task_id: str,
-        origin_request_id: str,
-        primary_refs: tuple[ArtifactRef, ...],
-        supporting_refs: tuple[ArtifactRef, ...] = (),
-    ) -> None:
-        """Atomically replace one response's presentation set without deleting evidence."""
-
-        if not origin_request_id:
-            raise RequestStoreError("Task delivery replacement requires a request ID")
-        if not primary_refs:
-            raise RequestStoreError("A task response requires at least one primary delivery")
-        if len(set(primary_refs)) != len(primary_refs):
-            raise RequestStoreError("Primary task deliveries must be unique")
-        if len(set(supporting_refs)) != len(supporting_refs):
-            raise RequestStoreError("Supporting task deliveries must be unique")
-        if set(primary_refs).intersection(supporting_refs):
-            raise RequestStoreError("Primary and supporting task deliveries must be disjoint")
-
-        deliveries = tuple((ref, "primary") for ref in primary_refs) + tuple(
-            (ref, "supporting") for ref in supporting_refs
-        )
-        with self._transaction() as connection:
-            task = self._require_research_task(connection, task_id)
-            for ref, _relation in deliveries:
-                artifact = connection.execute(
-                    """
-                    SELECT 1 FROM artifact_versions
-                    WHERE workspace_id = ? AND artifact_id = ? AND version = ?
-                    """,
-                    (task.workspace_id, ref.artifact_id, ref.version),
-                ).fetchone()
-                if artifact is None:
-                    raise RequestStoreError("Task artifact must exist in the task workspace")
-
-            # Direct publication and earlier result-submission paths may already have projected
-            # several representations as outputs. The final presentation contract is
-            # authoritative for this request only; supporting/evidence links remain durable.
-            connection.execute(
-                """
-                DELETE FROM task_artifact_links
-                WHERE task_id = ? AND origin_request_id = ?
-                  AND relation IN ('primary', 'output')
-                """,
-                (task_id, origin_request_id),
-            )
-            now = _utc_now()
-            for ref, relation in deliveries:
-                connection.execute(
-                    """
-                    INSERT OR IGNORE INTO task_artifact_links (
-                        task_id, artifact_id, version, relation, origin_request_id, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        task_id,
-                        ref.artifact_id,
-                        ref.version,
-                        relation,
-                        origin_request_id,
-                        now,
-                    ),
-                )
-
     def _task_output_summaries_in_connection(
         self,
         connection: sqlite3.Connection,
@@ -2197,26 +2089,6 @@ class RequestStore:
         with self._lock:
             rows = self._connection.execute(query, (workspace_id, artifact_id)).fetchall()
         return [self._artifact_summary_from_row(row) for row in rows]
-
-    def get_artifact_file(self, *, workspace_id: str, uri: str) -> ArtifactFile | None:
-        """Resolve a URI only when it belongs to an immutable artifact in this workspace."""
-
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT uri, mime_type, size_bytes, sha256 FROM artifact_files
-                WHERE workspace_id = ? AND uri = ?
-                """,
-                (workspace_id, uri),
-            ).fetchone()
-        if row is None:
-            return None
-        return ArtifactFile(
-            uri=row["uri"],
-            mime_type=row["mime_type"],
-            size_bytes=int(row["size_bytes"]),
-            sha256=row["sha256"],
-        )
 
     def list_artifact_links(
         self,
@@ -2828,7 +2700,7 @@ class RequestStore:
             return tuple(self._code_execution_from_row(row) for row in rows)
 
     def fail_running_code_executions(self) -> int:
-        """Mark only executions left unprovable after manifest reconciliation."""
+        """Fail the executions a stopped backend left running; the backend calls this at start."""
 
         with self._transaction() as connection:
             rows = connection.execute(
@@ -2877,81 +2749,6 @@ class RequestStore:
                 (workspace_id, ref.artifact_id, ref.version),
             ).fetchone()
             return self._projection_from_row(row) if row is not None else None
-
-    def rebuild_impact_projections(
-        self, *, workspace_id: str
-    ) -> dict[ArtifactRef, ArtifactProjection]:
-        """Deterministically rebuild impact projections from authoritative DB records."""
-
-        with self._transaction() as connection:
-            return self._rebuild_impact_in_transaction(connection, workspace_id=workspace_id)
-
-    def set_artifact_lifecycle(
-        self,
-        *,
-        workspace_id: str,
-        ref: ArtifactRef,
-        lifecycle_state: str,
-        source_event_id: str | None = None,
-    ) -> ArtifactProjection:
-        """Change a lifecycle projection without mutating the immutable artifact manifest."""
-
-        with self._transaction() as connection:
-            projection = self._require_projection(
-                connection,
-                workspace_id,
-                ref.artifact_id,
-                ref.version,
-            ).model_copy(
-                update={
-                    "lifecycle_state": lifecycle_state,
-                    "updated_at": datetime.now(timezone.utc),
-                    "source_event_id": source_event_id,
-                }
-            )
-            self._upsert_projection(connection, projection, workspace_id=workspace_id)
-            rebuilt = self._rebuild_impact_in_transaction(connection, workspace_id=workspace_id)
-            return rebuilt[ref]
-
-    def set_artifact_impact_input(
-        self,
-        *,
-        state_event_id: str,
-        workspace_id: str,
-        ref: ArtifactRef,
-        kind: str,
-        active: bool,
-        source_event_id: str | None = None,
-    ) -> ArtifactProjection:
-        """Record source availability/decision facts and rebuild dependent projections."""
-
-        if kind not in {"source_unavailable", "decision_invalidated"}:
-            raise RequestStoreError(f"Unsupported artifact impact input: {kind}")
-        with self._transaction() as connection:
-            self._require_artifact(connection, workspace_id, ref.artifact_id, ref.version)
-            connection.execute(
-                """
-                INSERT INTO artifact_state_events (
-                    state_event_id, workspace_id, artifact_id, version, kind, active,
-                    source_event_id, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(state_event_id) DO UPDATE SET
-                    active = excluded.active,
-                    source_event_id = excluded.source_event_id
-                """,
-                (
-                    state_event_id,
-                    workspace_id,
-                    ref.artifact_id,
-                    ref.version,
-                    kind,
-                    int(active),
-                    source_event_id,
-                    _utc_now(),
-                ),
-            )
-            rebuilt = self._rebuild_impact_in_transaction(connection, workspace_id=workspace_id)
-            return rebuilt[ref]
 
     def commit_cancellation(
         self,
@@ -3774,25 +3571,6 @@ class RequestStore:
             interrupted=bool(row["interrupted"]),
             created_at=row["created_at"],
         )
-
-    @staticmethod
-    def _last_assistant_text(messages: tuple[dict[str, Any], ...]) -> str:
-        for message in reversed(messages):
-            if message.get("role") != "assistant":
-                continue
-            content = message.get("content")
-            if not isinstance(content, list):
-                continue
-            text = "".join(
-                str(block.get("text", ""))
-                for block in content
-                if isinstance(block, dict) and block.get("type") == "text"
-            ).strip()
-            if text:
-                if len(text) <= 8_000:
-                    return text
-                return text[:4_000] + "\n... [middle omitted] ...\n" + text[-4_000:]
-        return ""
 
     @staticmethod
     def _clear_task_active_request_in_connection(

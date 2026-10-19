@@ -14,6 +14,7 @@ from oceanx import __version__
 from oceanx.artifacts.files import ArtifactFileStore
 from oceanx.artifacts.models import ArtifactRef
 from oceanx.backend.host import run_stdio_backend
+from oceanx.backend.store import RequestStore
 from oceanx.doctor import ocean_doctor
 from oceanx.exports import PortableExportService
 from oceanx.protocol.v2.models import ClientKind
@@ -59,7 +60,9 @@ def run_query(
     dataset: list[Path] = typer.Option([], "--dataset", help="Read-only dataset file/directory; repeatable."),
     timeout: float | None = typer.Option(None, "--timeout", min=1),
     workflow_mode: str = typer.Option("research", "--workflow-mode",
-                                      help="standard | research (the desktop's research toggle)."),
+                                      help=("research: the team at once | auto: the single agent, which hands "
+                                            "research problems to the team (as the desktop) | "
+                                            "standard: the single agent alone")),
 ) -> None:
     """Run one headless research task. Unanswered interactions are recorded, not auto-approved."""
     from oceanx.batch import QueryCase, resolve_datasets, run_batch

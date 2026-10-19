@@ -2166,6 +2166,7 @@
         "workflow_mode": {
           "default": "research",
           "enum": [
+            "auto",
             "standard",
             "research"
           ],

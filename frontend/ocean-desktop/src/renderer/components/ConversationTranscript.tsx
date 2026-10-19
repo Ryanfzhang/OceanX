@@ -256,7 +256,10 @@ function Working({
       (timestamp(left.updated_at ?? left.created_at ?? undefined) ?? Number.MAX_SAFE_INTEGER)
       - (timestamp(right.updated_at ?? right.created_at ?? undefined) ?? Number.MAX_SAFE_INTEGER),
     );
-  const showResearchLog = group.active && Boolean(matchingTeam || process.length || live || expertResults.length);
+  // The backend sends a team only once the research team works on the request; until then the
+  // single agent works alone and speaks as OceanX.
+  const speaker = matchingTeam ? 'Coordinator:' : 'OceanX:';
+  const showResearchLog = group.active;
   const hasLiveTrace = group.active && Boolean(researchLog.length || live || currentActivities.length);
   const timing = requestTimeBounds(group);
   useEffect(() => {
@@ -276,7 +279,7 @@ function Working({
   const elapsed = timing.startedAt === null ? null : Math.max(0, (group.active ? now : timing.endedAt ?? timing.startedAt) - timing.startedAt);
   const timerLabel = group.active && elapsed !== null ? timerClock(elapsed) : null;
   return <section className={`working-stream ${group.active ? 'active' : 'completed'} status-${status}${matchingTeam ? ' has-team' : ''}${canvasCollapsed ? ' details-collapsed' : ''}${hasLiveTrace ? ' has-trace' : ''}`}>
-    <header className="working-stream-header"><i /><span>{uiText('Team', '团队')}</span>{timerLabel ? <small className="working-stream-timer"><Timer size={12} />{timerLabel}</small> : null}
+    <header className="working-stream-header"><i /><span>{matchingTeam ? uiText('Research team', '研究团队') : 'OceanX'}</span>{timerLabel ? <small className="working-stream-timer"><Timer size={12} />{timerLabel}</small> : null}
       {matchingTeam ? <button
         className="working-stream-toggle"
         type="button"
@@ -294,7 +297,7 @@ function Working({
         <div className="live-research-log-body" ref={traceRef} aria-live="polite">
           {researchLog.map((entry) => entry.kind === 'coordinator'
             ? <article className={`research-log-entry ${entry.item.role === 'system' ? 'system' : 'coordinator'}`} key={entry.item.item_id}>
-              <strong>{entry.item.role === 'system' ? 'OceanX:' : 'Coordinator:'}</strong>
+              <strong>{entry.item.role === 'system' ? 'OceanX:' : speaker}</strong>
               <div className="research-log-content"><CompactLogMarkdown content={text(entry.item)} /></div>
             </article>
             : <article className="research-log-entry expert-result" key={`result:${entry.agent.agent_id}:${entry.agent.report_path}`}>
@@ -311,9 +314,9 @@ function Working({
             <strong>{agent.authority === 'coordinator' ? 'Coordinator:' : `${expertDisplayName(agent)}:`}</strong>
             <div className="research-log-content"><p>{agent.activity}</p></div>
           </article>)}
-          {live ? <article className="research-log-entry coordinator streaming"><strong>Coordinator:</strong><div className="research-log-content"><CompactLogMarkdown content={live} /></div></article> : null}
+          {live ? <article className="research-log-entry coordinator streaming"><strong>{speaker}</strong><div className="research-log-content"><CompactLogMarkdown content={live} /></div></article> : null}
           {!researchLog.length && !live && !currentActivities.length
-            ? <article className="research-log-entry coordinator streaming"><strong>Coordinator:</strong><div className="research-log-content"><p>{uiText('Preparing the first research update…', '正在准备第一条研究动态…')}</p></div></article>
+            ? <article className="research-log-entry coordinator streaming"><strong>{speaker}</strong><div className="research-log-content"><p>{matchingTeam ? uiText('Preparing the first research update…', '正在准备第一条研究动态…') : uiText('Working on the request…', '正在处理请求…')}</p></div></article>
             : null}
         </div>
       </section> : null}

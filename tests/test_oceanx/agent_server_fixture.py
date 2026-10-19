@@ -74,9 +74,30 @@ class FixtureModel(FakeMessagesListChatModel):
                 "# Fixture synthesis\n\n## Summary\n\n" + summary})
         return AIMessage(content="Saved the report.")
 
+    def _single_agent(self, messages, call):
+        """The desktop's first agent: hands the background-Experts question to the team, answers others."""
+        if os.environ.get("OCEAN_FIXTURE_MODE") == "gateway_background":
+            return call("hand_to_research_team", {"reason": "FIXTURE_HANDOFF: the research team takes this over.",
+                                                  "progress": ""})
+        assert "hand_to_research_team" in self.names  # the desktop sends auto
+        system = "\n".join(m.text for m in messages if isinstance(m, SystemMessage))
+        assert "Backend-assigned report file" not in system and "When the research team takes over" in system
+        last_human = max(i for i, m in enumerate(messages) if isinstance(m, HumanMessage))
+        done = [m for m in messages[last_human + 1:] if isinstance(m, ToolMessage)]
+        if not done:
+            return call("ocean_expert_run_code", {"purpose": "Compute the quick answer",
+                                                  "code": "print('SINGLE', 1 + 1)\n"})
+        payload = json.loads(re.sub(r"\n\n\[Budget: [^\]]*\]$", "", done[-1].text))
+        assert payload.get("state") == "succeeded", payload
+        return AIMessage(content="Fixture single answer: 2.")
+
     def _generate(self, messages, **kwargs):
         def call(name, args):
             return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": str(uuid4()), "type": "tool_call"}])
+        if "assign_helper" in self.names:
+            answer = self._single_agent(messages, call)
+            answer.usage_metadata = {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120}
+            return ChatResult(generations=[ChatGeneration(message=answer)])
         if "task" in self.names and os.environ.get("OCEAN_FIXTURE_MODE") in {
                 "gateway_background", "cancel_background"}:
             assert "await_experts" in self.names
@@ -126,8 +147,6 @@ class FixtureModel(FakeMessagesListChatModel):
         else:
             if os.environ.get("OCEAN_FIXTURE_MODE") == "failure":
                 raise RuntimeError("Injected provider failure for notification test")
-            humans = [m.text for m in messages if isinstance(m, HumanMessage)]
-            assignment = humans[-1]
             system_prompts = [m.text for m in messages if isinstance(m, SystemMessage)]
             if os.environ.get("OCEAN_FIXTURE_MODE") == "missing_report":
                 return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Done without saving."))])

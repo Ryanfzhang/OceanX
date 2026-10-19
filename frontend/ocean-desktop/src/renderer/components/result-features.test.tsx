@@ -10,6 +10,11 @@ describe('generic result objects', () => {
     const ticks = scientificAxisTicks([21.98, 22.02], {field: 'y'});
     expect(new Set(ticks.map(tick => tick.label)).size).toBe(ticks.length);
   });
+  it('puts axis ticks on round values inside the domain', () => {
+    expect(scientificAxisTicks([25.73, 27.47], {field: 'y'}).map(tick => tick.label)).toEqual(['26', '26.5', '27']);
+    expect(scientificAxisTicks([27.47, 25.73], {field: 'y'}).map(tick => tick.value)).toEqual([27, 26.5, 26]);
+    expect(scientificAxisTicks([0.5, 5000], {field: 'y', scale: 'log'}).map(tick => tick.value)).toEqual([1, 10, 100, 1000]);
+  });
   const region: ResultFeature = {id: 'region', label: 'Computed region', panel_id: 'p', geometry: {type: 'Polygon', coordinates: [[[1, 2], [3, 2], [3, 4], [1, 4], [1, 2]]]}};
   it('derives bounds from geometry and keeps old figures feature-free', () => {
     expect(featureBounds(region)).toEqual([1, 2, 3, 4]);

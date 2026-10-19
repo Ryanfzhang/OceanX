@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Check, GitFork, ImageOff, LoaderCircle, Mic, Plus, SendHorizontal, Square, Trash2, X} from 'lucide-react';
+import {Check, ImageOff, LoaderCircle, Mic, Plus, SendHorizontal, Square, Trash2, X} from 'lucide-react';
 
 import type {BackendFrame, DesktopUpdateStatus, ModelProviderSetup, ModelProviderStatus} from '../shared/bridge.js';
 import {artifactFileName, asRecord, changedResultsTaskId, isActiveForegroundRequest, isTaskCreationReady, parseDesktopRuntimeCapabilities, projectNameFromPath, shouldApplyTaskSnapshot, sourceTitleFromPath} from './app-utils.js';
@@ -23,7 +23,6 @@ import {revisionFromRequestFailure} from './request-recovery.js';
 import {requestId} from './request-id.js';
 import {taskResultRefKey} from './types.js';
 import type {AppearanceTheme, ArtifactSummary, ArtifactVersion, DeliveryManifest, DisplayDensity, EventPayload, OceanEvent, RequestContext, ResearchTask, ResolvedAppearanceTheme, ResultDocument, TaskOutput, TaskResultFile, TaskResultRecord, TeamSnapshot, TranscriptItem, Workspace} from './types.js';
-import {readWorkflowMode, workflowModeStorageKey, writeWorkflowMode, type WorkflowMode} from './workflow-mode.js';
 
 type SourceSelection = {kind: 'file' | 'folder'; relativePath?: string; localPath?: string};
 type PendingImageAttachment = {fileName: string; mimeType: string; bytes: Uint8Array; previewUrl: string};
@@ -126,7 +125,6 @@ export function App(): React.JSX.Element {
   const [stoppingRequestId, setStoppingRequestId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [workflowMode, setWorkflowMode] = useState<WorkflowMode>('standard');
   const [listening, setListening] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [paperAcquisitionMode, setPaperAcquisitionMode] = useState<PaperAcquisitionMode>('ask_before_download');
@@ -206,8 +204,6 @@ export function App(): React.JSX.Element {
     speechRecognitionRef.current = null;
     setListening(false);
     setVoiceNotice(null);
-    const key = workflowModeStorageKey(workspacePath, activeTask?.task_id ?? null);
-    setWorkflowMode(readWorkflowMode(window.localStorage, key));
   }, [activeTask?.task_id, workspacePath]);
   useEffect(() => {
     void window.oceanDesktop.listProjects()
@@ -366,7 +362,10 @@ export function App(): React.JSX.Element {
       setWorkspace(openedWorkspace);
       setProjects((current) => rememberProject(current, path));
       refreshTasks();
-      if (restoreTaskId) openTask(restoreTaskId);
+      // After an unexpected restart nothing is pending; reopen the selected task so
+      // the new backend's snapshot replaces what the exited process left on screen.
+      const taskId = restoreTaskId ?? selectedTaskIdRef.current;
+      if (taskId) openTask(taskId);
       pendingTaskRestore.current = null;
     });
     void send({protocol_version: 2, request_id: workspaceOpenId, type: 'workspace.open', payload: {path}, context: next});
@@ -374,7 +373,12 @@ export function App(): React.JSX.Element {
 
   const handleFrame = useCallback((frame: BackendFrame) => {
     if (frame.kind === 'diagnostic') {if (frame.source !== 'backend_log') setInlineStatus(frame.message); return;}
-    if (frame.kind === 'exit') {setInlineStatus(`Backend exited (${frame.code ?? 0}).`); setContext(null); return;}
+    if (frame.kind === 'exit') {
+      // The exited process owned the foreground request; it can no longer finish or stop it.
+      setInlineStatus(`Backend exited (${frame.code ?? 0}).`); setContext(null);
+      setActiveRequestId(null); setStoppingRequestId(null); setStreaming(''); setPendingInteraction(null); setInteractionAnswer('');
+      return;
+    }
     const event = frame.payload as OceanEvent;
     if (event.event_id && seenEvents.current.has(event.event_id)) return;
     if (event.event_id) {seenEvents.current.add(event.event_id); if (seenEvents.current.size > 2_000) seenEvents.current.clear();}
@@ -634,24 +638,11 @@ export function App(): React.JSX.Element {
     pendingTaskCreate.current = null;
     setNewTaskTitle((current) => current.trim() === pending.title ? '' : current);
   }, [context, dispatchTaskCreate, workspace, workspacePath]);
-  const dispatchResearchRequest = (userText: string, task: ResearchTask, mode: WorkflowMode) => {
+  const dispatchResearchRequest = (userText: string, task: ResearchTask) => {
     const activePaperMode = readPaperAcquisitionMode(window.localStorage, paperAcquisitionStorageKey(workspacePathRef.current, task.task_id));
     const id = requestId('session_submit');
     setTranscript((current) => [...current, optimisticUser(id, userText)]); setPrompt(''); setStreaming(''); setTeam(null); setActiveRequestId(id); setInlineStatus(null);
-    void send({protocol_version: 2, request_id: id, type: 'session.submit', payload: {text: userText, context_refs: [], literature_acquisition_mode: activePaperMode, workflow_mode: mode, max_parallel_experts: readParallelExperts(window.localStorage)}, context: {...contextRef.current!, task_id: task.task_id}, expected_workspace_revision: workspaceRef.current?.revision ?? 0, expected_task_revision: task.task_revision});
-  };
-  const toggleWorkflowMode = () => {
-    const task = taskRef.current;
-    if (!task || activeRequestRef.current) return;
-    setWorkflowMode((current) => {
-      const next: WorkflowMode = current === 'research' ? 'standard' : 'research';
-      writeWorkflowMode(
-        window.localStorage,
-        workflowModeStorageKey(workspacePathRef.current, task.task_id),
-        next,
-      );
-      return next;
-    });
+    void send({protocol_version: 2, request_id: id, type: 'session.submit', payload: {text: userText, context_refs: [], literature_acquisition_mode: activePaperMode, workflow_mode: 'auto', max_parallel_experts: readParallelExperts(window.localStorage)}, context: {...contextRef.current!, task_id: task.task_id}, expected_workspace_revision: workspaceRef.current?.revision ?? 0, expected_task_revision: task.task_revision});
   };
   const toggleVoiceInput = () => {
     if (listening) {
@@ -769,10 +760,9 @@ export function App(): React.JSX.Element {
       return;
     }
     if (!isModelProviderReady(modelProvider)) {setSettingsOpen(true); return;}
-    const submittedWorkflowMode = workflowMode;
     if (listening) speechRecognitionRef.current?.stop();
     if (!pendingImage) {
-      dispatchResearchRequest(userText, task, submittedWorkflowMode);
+      dispatchResearchRequest(userText, task);
       return;
     }
     const attachment = pendingImage;
@@ -787,7 +777,7 @@ export function App(): React.JSX.Element {
         afterImport: () => {
           if (taskRef.current?.task_id !== task.task_id) return;
           clearPendingImage();
-          dispatchResearchRequest(userText, task, submittedWorkflowMode);
+          dispatchResearchRequest(userText, task);
         },
       });
     }).catch((error) => {
@@ -1165,21 +1155,6 @@ export function App(): React.JSX.Element {
                 {attachmentNotice ? <div className="attachment-notice" role="status"><ImageOff size={14} /><span>{attachmentNotice}</span><button type="button" onClick={() => setAttachmentNotice(null)} aria-label={text('Dismiss', '关闭')}><X size={12} /></button></div> : null}
                 <button onClick={() => void chooseSource()} disabled={!activeTask || sourceImporting || pendingInteraction?.kind === 'paper_selection'} aria-busy={sourceImporting} aria-label={sourceImporting ? text('Adding source', '正在添加来源') : text('Add file or folder', '添加文件或文件夹')} title={sourceImporting ? text('Adding source…', '正在添加来源…') : text('Add file or folder', '添加文件或文件夹')}>{sourceImporting ? <LoaderCircle className="spin" size={17} /> : <Plus size={19} />}</button>
               </div>
-              <button
-                type="button"
-                className={`research-mode-button${workflowMode === 'research' ? ' active' : ''}`}
-                onClick={toggleWorkflowMode}
-                disabled={!activeTask || activeArchived || Boolean(activeRequestId) || pendingInteraction?.kind === 'paper_selection'}
-                aria-pressed={workflowMode === 'research'}
-                aria-label={text('Research mode', '研究模式')}
-                title={workflowMode === 'research'
-                  ? text('Research mode is on: use experts and build a research tree', '研究模式已开启：调用专家并构建研究树')
-                  : text('Research mode is off: answer directly without a research tree', '研究模式已关闭：直接回答，不构建研究树')}
-              >
-                <GitFork size={15} />
-                <span>{text('Research', '研究')}</span>
-                <i aria-hidden="true" />
-              </button>
               <div className="composer-actions-spacer" />
               <div className="voice-anchor">
                 {voiceNotice ? <div className="voice-notice" role="status"><span>{voiceNotice}</span><button type="button" onClick={() => setVoiceNotice(null)} aria-label={text('Dismiss', '关闭')}><X size={12} /></button></div> : null}

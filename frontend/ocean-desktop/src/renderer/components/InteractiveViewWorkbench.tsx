@@ -151,8 +151,8 @@ function SpatialView({payload, previewUrl}: {payload: SpatialPayload; previewUrl
 
 
 
-export function StructuredView({payload, compactHeader = false, featureId}: {payload: StructuredPayload; compactHeader?: boolean; featureId?: string}): React.JSX.Element {
-  return <ScientificView payload={payload} compactHeader={compactHeader} featureId={featureId} />;
+export function StructuredView({payload, compactHeader = false, featureId, fillHeight = false}: {payload: StructuredPayload; compactHeader?: boolean; featureId?: string; fillHeight?: boolean}): React.JSX.Element {
+  return <ScientificView payload={payload} compactHeader={compactHeader} featureId={featureId} fillHeight={fillHeight} />;
 }
 
 export function InteractiveViewWorkbench({artifact, loading, data, previewUrl, error, onClose}: {

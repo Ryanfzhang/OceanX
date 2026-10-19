@@ -18,7 +18,7 @@ from oceanx.tools import (
 # Increment this whenever the authority or completion contract changes. Stable
 # UI transcripts remain in the task, but model checkpoints from an older
 # contract must not be replayed into the new runtime.
-OCEAN_RUNTIME_PROFILE_VERSION = "oceanx_runtime/native-task-v36-coordinator-adopts-proposals"
+OCEAN_RUNTIME_PROFILE_VERSION = "oceanx_runtime/native-task-v37-single-agent-first"
 
 
 OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT = """\
@@ -280,6 +280,51 @@ async def build_ocean_expert_runtime(
     )
 
 
+OCEAN_SINGLE_AGENT_PROMPT = """\
+# Working on the request
+You do the work yourself, with the supplied data and the tools below, and answer the researcher in chat. Use the
+supplied data and authorized shared results; report missing evidence instead of silently substituting it. Do not
+acquire or re-acquire datasets unless the researcher explicitly asks for it. Keep source data read-only. Do not
+access unrelated files or credentials, upload local data, or expose secrets. Answer briefly: the result, how it
+was obtained in a sentence or two, and a limitation only when it matters.
+"""
+
+
+OCEAN_HELPER_PROMPT = """\
+You are an OceanX helper. The OceanX agent working on a researcher's request gave you one part of it: do only that
+part, with the supplied data and the tools below, and reply to that agent, which answers the researcher. Use the
+supplied data and authorized shared results; report missing evidence instead of silently substituting it. Do not
+acquire or re-acquire datasets unless the part asks for it. Keep source data read-only. Do not access unrelated
+files or credentials, upload local data, or expose secrets. Reply in the language of the part with the result it
+asks for, the files you saved (full paths) and a limitation only when it matters.
+"""
+
+
+async def build_ocean_single_agent_runtime(
+    *, services: OceanToolServices, helper: bool = False
+) -> OceanRuntimeComposition:
+    """The agent that works on a request alone, or one of its helpers: Expert tools, no report file."""
+
+    policy = STATIC_EXPERT_WORKSTREAM_POLICY if static_figures() else OCEAN_EXPERT_WORKSTREAM_POLICY
+    # The Experts cite their results in report.md; these agents cite them where they answer.
+    policy = policy.replace("in report.md", "in your reply" if helper else "in your answer")
+    profile = OceanRuntimeProfile(
+        tool_registry=create_ocean_expert_tool_registry(services),
+        system_prompt_sections=(policy, OCEAN_AGENT_SKILL_POLICY),
+        tool_metadata={
+            "ocean_workspace_id": services.workspace_id,
+            "ocean_provider_id": services.provider_id,
+            "ocean_runtime": "research-partner/helper-v1" if helper else "research-partner/single-v1",
+            "ocean_skill_role": services.skill_role,
+        },
+    )
+    base = (OCEAN_HELPER_PROMPT,) if helper else (OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT, OCEAN_SINGLE_AGENT_PROMPT)
+    return OceanRuntimeComposition(
+        profile=profile,
+        system_prompt="\n\n".join((*base, *profile.system_prompt_sections)),
+    )
+
+
 async def build_ocean_discussion_runtime(
     *, services: OceanToolServices, **runtime_kwargs: object
 ) -> OceanRuntimeComposition:
@@ -323,12 +368,15 @@ text to the Coordinator. If interrupted, resume the same native child task witho
 
 __all__ = [
     "OCEAN_CHILD_BASE_SYSTEM_PROMPT",
+    "OCEAN_HELPER_PROMPT",
     "OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT",
     "OCEAN_RUNTIME_PROFILE_VERSION",
+    "OCEAN_SINGLE_AGENT_PROMPT",
     "OceanRuntimeComposition",
     "OceanRuntimeProfile",
     "build_ocean_discussion_runtime",
     "build_ocean_expert_runtime",
     "build_ocean_runtime",
     "build_ocean_runtime_composition",
+    "build_ocean_single_agent_runtime",
 ]

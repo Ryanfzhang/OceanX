@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import threading
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from types import SimpleNamespace
 
+from oceanx.backend.host import OceanBackendHost
 from oceanx.backend.store import RequestStore
 from oceanx.cache_cleanup import TaskCacheCleaner
 from oceanx.native_backend import OceanSandbox
@@ -212,6 +212,28 @@ def test_store_candidate_query_respects_status_and_active_request(tmp_path):
         assert {task.task_id for task in candidates} == {"old_active", "old_archived"}
     finally:
         store.close()
+
+
+async def test_restart_fails_executions_the_stopped_backend_left_running(tmp_path):
+    state = tmp_path / "state"
+    stopped = OceanBackendHost(state, write_frame=lambda _frame: None)
+    stopped.store.create_research_task(workspace_id="workspace", title="task", task_id="task")
+    stopped.store.start_code_execution(
+        execution_id="execution", workspace_id="workspace", task_id="task",
+        agent_thread_id="thread", server_run_id="run", request={},
+        started_at=datetime(2026, 10, 19, tzinfo=UTC).isoformat(),
+    )
+    stopped.store.close()  # the process ends without settling its work
+
+    restarted = OceanBackendHost(state, write_frame=lambda _frame: None)
+    try:
+        record = restarted.store.get_code_execution("execution")
+        assert restarted.interrupted_code_executions == 1
+        assert record is not None and record.state == "failed" and record.ended_at
+        assert record.result["failure_code"] == "backend_interrupted"
+        assert restarted.store.list_running_code_executions() == ()  # cleanup may run again
+    finally:
+        await restarted.close()
 
 
 def test_corrupt_result_manifest_prevents_cleanup(tmp_path):

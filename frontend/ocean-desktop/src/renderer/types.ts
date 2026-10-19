@@ -154,24 +154,6 @@ export type TeamTodo = {
   created_at?: string | null;
   updated_at?: string | null;
 };
-export type TeamAgentTranscriptBlock =
-  | {type: 'text'; text: string}
-  | {type: 'tool_call'; tool_call_id: string; tool_name: string; input: EventPayload}
-  | {type: 'tool_result'; tool_call_id: string; text: string; is_error: boolean}
-  | {type: 'attachment'; media_type: string; source_path: string};
-export type TeamAgentTranscriptMessage = {
-  message_id: string;
-  role: 'user' | 'coordinator' | 'expert' | 'tool' | 'system';
-  blocks: TeamAgentTranscriptBlock[];
-  created_at?: string;
-  interrupted?: boolean;
-};
-export type TeamAgentTranscript = {
-  agent_id: string;
-  agent_run_id?: string | null;
-  messages: TeamAgentTranscriptMessage[];
-  updated_at?: string | null;
-};
 export type TeamSnapshot = {
   request_id?: string;
   revision: number;

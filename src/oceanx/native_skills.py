@@ -22,6 +22,11 @@ from oceanx.skills import (
 )
 
 
+# The agent that works on a request alone, and its helpers, read what the data and search Experts read.
+_EXPERT_READERS = ("ocean_process_expert", "statistical_inference_expert", "literature_reproduction_expert")
+SKILL_READERS = {"single_agent": _EXPERT_READERS, "helper": _EXPERT_READERS}
+
+
 def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=None) -> Path:
     """Use the current bundled content, never a legacy snapshot or database overlay.
 
@@ -34,7 +39,8 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
     part of the content hash, so a change selects a new snapshot.
     """
     revisions = revisions or {}
-    allowed = {s.name for s in ocean_skill_metadata(role=role, capabilities=capabilities)}
+    allowed = {s.name for reader in SKILL_READERS.get(role, (role,))
+               for s in ocean_skill_metadata(role=reader, capabilities=capabilities)}
     if static_figures():
         allowed -= INTERACTIVE_FIGURE_SKILLS  # a static run describes no plotting interface
     files = []

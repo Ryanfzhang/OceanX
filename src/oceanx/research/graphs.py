@@ -1,11 +1,11 @@
 """OceanX graphs built from native DeepAgents subagents.
 
-The Coordinator is one Agent Server run. Its ``task`` calls invoke compiled
-Expert graphs directly and return compact file-backed receipts to the same run;
-OceanX does not mirror child lifecycle, enqueue callbacks, or resume a second
-Coordinator run. Each Expert works as a background job of that run, so the
-Coordinator is called again when the next one returns rather than when the whole
-batch has (background_experts.py).
+A request is one Agent Server run. On the desktop it goes first to the single agent, which works
+alone and hands an open research problem to the team in the same run (routing.py). The
+Coordinator's ``task`` calls invoke compiled Expert graphs directly and return compact file-backed
+receipts to the same run; OceanX does not mirror child lifecycle, enqueue callbacks, or resume a
+second Coordinator run. Each Expert works as a background job of that run, so the Coordinator is
+called again when the next one returns rather than when the whole batch has (background_experts.py).
 """
 from __future__ import annotations
 
@@ -26,7 +26,6 @@ from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddlewar
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 
-from oceanx.agent_tools import ToolRegistry
 from oceanx.deep_runtime import build_deep_agent_graph
 from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
@@ -35,14 +34,46 @@ from oceanx.model_config import load_model_profile
 from oceanx.research.background_experts import (
     AWAIT_TOOL, BackgroundDelegationMiddleware, RunningExperts, appended)
 from oceanx.research.metering import INSIDE_EXPERT
+from oceanx.research.routing import (
+    BOUNDED_WORK_POLICY,
+    HANDOFF_POLICY,
+    HANDOFF_TOOL,
+    HELPER,
+    HELPER_CALL_LIMIT,
+    HELPER_LAST_CALL,
+    HELPER_POLICY,
+    LAST_CALL,
+    LAST_CALL_HANDOFF,
+    SINGLE_AGENT,
+    SINGLE_AGENT_CALL_LIMIT,
+    TEAM,
+    HandoffMiddleware,
+    HelperMiddleware,
+    QuickCallBudgetMiddleware,
+    budget_handoff,
+    call_budget_sentence,
+    handoff_note,
+    handoff_request,
+    last_answer,
+    seen_by,
+    tagged,
+    team_config,
+    workflow_mode,
+)
 from oceanx.research.services import (
     AgentRun,
+    expert_agent_key,
     file_revision,
     format_expert_receipt,
     host,
     report_summary,
 )
-from oceanx.runtime import build_ocean_discussion_runtime, build_ocean_expert_runtime, build_ocean_runtime
+from oceanx.runtime import (
+    build_ocean_discussion_runtime,
+    build_ocean_expert_runtime,
+    build_ocean_runtime,
+    build_ocean_single_agent_runtime,
+)
 from oceanx.skills import JINA_READER_CAPABILITY, LITERATURE_CAPABILITY, WEB_SEARCH_CAPABILITY
 from oceanx.team.profiles import AGENT_PROFILES, get_agent_profile, profile_system_prompt
 from oceanx.research.tool_calls import ToolCallRepairMiddleware
@@ -506,6 +537,7 @@ class ExpertCallBudgetMiddleware(ModelCallLimitMiddleware):
 class ResearchState(FilesystemState, SummarizationState, SkillsState, DeepAgentState):
     research_complete: NotRequired[bool]
     final_answer: NotRequired[str]
+    handoff: NotRequired[str]  # what the Coordinator is told when the single agent hands a request over
 
 
 class ExpertState(FilesystemState, SummarizationState, SkillsState, DeepAgentState):
@@ -555,36 +587,15 @@ def _library_record(tree, final_report: str) -> dict:
 
 
 def research_mode(config) -> bool:
-    """The desktop's research toggle; headless runs default to research."""
-    return config["configurable"].get("request_options", {}).get("workflow_mode", "research") == "research"
+    """Whether the team works on this run in research mode; headless runs default to it, and the
+    single agent's runs (auto, standard) have it off until it hands a request over."""
+    return workflow_mode(config) == "research"
 
 
-def _standard_expert_policy(saved_view: str) -> str:
-    return f"""\
-# Bounded request (research mode is off)
-The requested output (a figure, number, table, route or file) is the finish line. First cut the data to the
-variables, region, depth and period the request needs; never load a whole field or water column when a slice
-answers it. Compute it with one defensible method, publish it, write the report and stop. Do not add
-sensitivity tests, extra figures or statistics, investigations of individual cells or values, or re-checks of
-saved outputs unless a result is clearly wrong or the researcher asked. Do not open {saved_view} of a
-figure you just saved. State a remaining limitation in one sentence instead of investigating it. Each code run stops after {STANDARD_MODE_CODE_SECONDS} s; if one times
-out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
-"""
-
-
-STANDARD_EXPERT_POLICY = _standard_expert_policy("the .preview.png")
-# A static run has no preview file beside a figure: the saved image is the figure.
-STATIC_STANDARD_EXPERT_POLICY = _standard_expert_policy("the image")
-
-STANDARD_COORDINATOR_POLICY = """\
-# Research mode is off
-First judge whether the request is an open research problem: it asks why something happens, which mechanism or
-explanation holds, or otherwise needs open-ended investigation across competing explanations. If it clearly is,
-do not delegate: reply in one or two sentences that it looks like an open research question, and ask whether to
-switch on Research mode or give a brief bounded answer now; then stop. A bounded request, even a complex
-computation such as a route through a current field, proceeds without asking; when unsure, proceed.
-Give the Expert the requested output as the finish line.
-"""
+def bounded_work_policy(static: bool) -> str:
+    # A static run has no preview file beside a figure: the saved image is the figure.
+    return BOUNDED_WORK_POLICY.format(saved_view="the image" if static else "the .preview.png",
+                                      seconds=STANDARD_MODE_CODE_SECONDS)
 
 
 def coordinator_report_path(config) -> Path:
@@ -647,6 +658,12 @@ async def _describe_task_data(c) -> None:
         _LOGGER.warning("Could not describe the task's data sources", exc_info=True)
 
 
+# Roles that search and read sources; the single agent and its helpers do what the Search Expert does.
+SEARCH_ROLES = frozenset({"literature_reproduction_expert", SINGLE_AGENT, HELPER})
+# Roles that answer in chat or to the agent that asked, without a report file or an assignment.
+QUICK_ROLES = frozenset({SINGLE_AGENT, HELPER})
+
+
 def services(config, role: str, run: AgentRun | None = None) -> OceanToolServices:
     h = host()
     c = config["configurable"]
@@ -658,7 +675,7 @@ def services(config, role: str, run: AgentRun | None = None) -> OceanToolService
         resource_access="routing" if role == "coordinator" else "inspection",
         skill_role=role,
         skill_capabilities=(LITERATURE_CAPABILITY, WEB_SEARCH_CAPABILITY, JINA_READER_CAPABILITY)
-        if role == "literature_reproduction_expert" else (LITERATURE_CAPABILITY,),
+        if role in SEARCH_ROLES else (LITERATURE_CAPABILITY,),
         expert_code_execution=h.expert_code_execution,
         domain_event_emitter=h.event_bus.emit_workspace,
         agent_run_id=run.agent_run_id if run else None,
@@ -668,9 +685,10 @@ def services(config, role: str, run: AgentRun | None = None) -> OceanToolService
         coordinator_enabled=role == "coordinator",
         native_vision=profile_supports_vision(model_profile),
         code_time_limit_seconds=None if research_mode(config) else STANDARD_MODE_CODE_SECONDS,
+        # A helper works out of the researcher's sight, so only the agent answering them asks them.
         paper_selection_sink=(lambda payload, context: h.router._request_paper_selection(
             workspace_id=c["workspace_id"], task_id=c["task_id"], payload=payload, context=context))
-        if role == "literature_reproduction_expert" else None,
+        if role in {"literature_reproduction_expert", SINGLE_AGENT} else None,
     )
 
 
@@ -850,10 +868,12 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
     c = config["configurable"]
     context_builder = OceanContextBuilder(store=host().store, paths=host().paths)
     research = research_mode(config)
+    quick = role in QUICK_ROLES
     composition = await (
         build_ocean_runtime(services=svc, research_mode=research) if role == "coordinator" else
         build_ocean_discussion_runtime(services=svc)
         if role == "scientific_discussion_partner" else
+        build_ocean_single_agent_runtime(services=svc, helper=role == HELPER) if quick else
         build_ocean_expert_runtime(services=svc)
     )
     prompt = composition.system_prompt
@@ -894,8 +914,9 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         if not static:
             prompt += ("\n" + figure_reading_rule("the Result API reference path above")
                        + " " + DRAFT_RULE + "\n" + figure_call_skeleton())
-        if not research:
-            prompt += "\n" + (STATIC_STANDARD_EXPERT_POLICY if static else STANDARD_EXPERT_POLICY)
+        if quick:
+            prompt += ("\nocean_expert_run_code keeps Python variables for this request, so prefer it for "
+                       "array analysis; use execute for shell work.\n" + bounded_work_policy(static))
         else:
             limit = int(svc.expert_code_execution.limits.wall_time_seconds or 300)
             prompt += (f"\nEach execute or ocean_expert_run_code run is stopped after {limit} s; a larger "
@@ -912,17 +933,31 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
             "is scientific evidence needed for your reasoning, such as a spatial pattern; preview "
             "inspection is not a separate visual-delivery review."
         )
-    if role != "coordinator":
+    if role != "coordinator" and not quick:
         prompt += "\n" + profile_system_prompt(get_agent_profile(role))
+    if role not in {"coordinator", SINGLE_AGENT}:  # the single agent has the conversation itself
         prompt += "\nOriginal researcher question:\n" + c.get("original_question", "")
-    if role in {"coordinator", "literature_reproduction_expert"}:
+    if role in {"coordinator", *SEARCH_ROLES}:
         mode = c.get("request_options", {}).get("literature_acquisition_mode", "ask_before_download")
         prompt += "\nLiterature acquisition mode: " + mode + ". " + {
             "ask_before_download": "Ask the researcher before downloading full text.",
             "auto_download_open_access": "Open-access full text may be downloaded; ask before restricted sources.",
             "search_only": "Search metadata only; do not download or import full text.",
         }.get(mode, "Ask the researcher before downloading full text.")
-    if run:
+    if run and quick:
+        if not static:  # a static run names the figure file instead (see the workstream policy)
+            prompt += (
+                f"\nYour Agent key is {run.thread_id}. When a saved result supports a claim, write its "
+                f"complete binding right after the claim in your {'reply' if role == HELPER else 'answer'}, "
+                f"for example [{run.thread_id}/result1] for result1.nc; the result name is the .nc path below "
+                "outputs without its extension."
+                + (" Copy the bindings in a helper's reply unchanged." if role == SINGLE_AGENT else "") + "\n")
+        if role == SINGLE_AGENT and context_builder.policy_for(
+            workspace_id=c["workspace_id"], provider_id=svc.provider_id,
+        ).decision_for("metadata") == "allow":
+            prompt += await _saved_data_prompt(run, own=True)  # what earlier requests left in its folder
+        prompt += call_budget_sentence(HELPER_CALL_LIMIT if role == HELPER else SINGLE_AGENT_CALL_LIMIT)
+    elif run:
         assigned = host().research.report_path(run)
         prompt += f"\nBackend-assigned report file: {assigned}\n"
         if not static:  # a static run cites the figure file by name instead (see the Expert policy)
@@ -953,7 +988,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    "and keep it current as evidence changes. Begin with a short ## Summary. Do not defer "
                    "the report until the end, repeat it, or announce its path in chat.\n")
         prompt += _call_budget_sentence()
-    if role in DATA_EXPERT_ROLES:
+    if role in DATA_EXPERT_ROLES or quick:
         await _describe_task_data(c)
     context = context_builder.build(
         workspace_id=c["workspace_id"], provider_id=svc.provider_id, task_id=c["task_id"],
@@ -984,7 +1019,9 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         research_tree=research_tree(c["task_id"])
         if role == "coordinator" and research else None)
     from oceanx.research.metering import CallMeter
-    return graph.with_config(callbacks=[CallMeter(host().store, config, role, run)])
+    # A helper runs inside the single agent's tool call; its own meter counts its calls.
+    return graph.with_config(callbacks=[CallMeter(host().store, config, role, run,
+                                                  outer=role == SINGLE_AGENT)])
 
 
 def _question(state) -> str:
@@ -1167,10 +1204,9 @@ BACKGROUND_EXPERTS_RULE = (
 )
 
 
-async def _coordinator_agent(config, experts: RunningExperts | None = None):
-    # Workflow mode controls research-tree exploration, not whether the
-    # Coordinator has a team. Standard requests may still need one or more
-    # bounded Experts for analysis, acquisition, inference, or saved results.
+async def _coordinator_agent(config, experts: RunningExperts | None = None, *, handoff: str = ""):
+    """The Coordinator in research mode; ``handoff`` is what the single agent left when it handed
+    the request over, empty when the request came to the team directly."""
     specs = [{"name": profile.profile_id, "description": profile.summary,
               "runnable": await expert(config, profile.profile_id)}
              for profile in AGENT_PROFILES]
@@ -1179,25 +1215,6 @@ async def _coordinator_agent(config, experts: RunningExperts | None = None):
     static = static_figures()  # a static run describes no plotting interface (figure_delivery.py)
     # Listed first: the rest of a task call then runs inside the Expert's background job.
     background = BackgroundDelegationMiddleware(experts if experts is not None else RunningExperts())
-    if not research_mode(config):
-        return await build(config, "coordinator", subagents=specs,
-                           middleware=[background, ToolCallRepairMiddleware()], suffix=(
-            "\n" + STANDARD_COORDINATOR_POLICY + "\n# Standard workflow\n"
-            "Do not create or update a research tree, generate candidate/frontier nodes, or expand the "
-            "request into an open-ended research project. This does not disable the team. Delegate bounded "
-            "standalone questions to the appropriate Experts whenever the request needs scientific data "
-            "analysis, statistical inference, literature or requested dataset acquisition, or a reusable "
-            "scientific result. Multiple independent questions may run in parallel. Experts work in the "
-            "background: a task call returns when the next one finishes, and await_experts returns the "
-            "receipts of the others. Synthesize only after every Expert has returned, directly in chat. "
-            + ("Cite a figure only by a path listed under Saved figures in the native task receipt; "
-               "never invent a figure path. " if static else
-               "Cite only keys listed under Published results in the native "
-               "task receipt; never invent result1, cite an ordinary output file as a desktop result, or embed "
-               "a local preview path. ")
-            + "Create a Coordinator report only when the user explicitly asks for one.\n\n"
-            + _visual_delivery_policy()
-        ))
     from oceanx.research.delegation import StructuredDelegationMiddleware
     tree = research_tree(config["configurable"]["task_id"])
     guidance = tree.policy.guidance  # lessons are not prompt text; see build()
@@ -1237,25 +1254,91 @@ async def _coordinator_agent(config, experts: RunningExperts | None = None):
         "conclusion no more strongly than its evidence: write 'consistent with' unless an analysis "
         "separated the cause from the alternatives, and call a comparison independent only if the "
         "evidence shows it is. End with the required ## Research Tree section.\n\n"
-        + _visual_delivery_policy()))
+        + _visual_delivery_policy()
+        + handoff))
+
+
+def _single_agent_run(config) -> AgentRun:
+    """The single agent keeps one folder and kernel identity for the whole task."""
+    c = config["configurable"]
+    return AgentRun(
+        workspace_id=c["workspace_id"], task_id=c["task_id"], request_id=c["request_id"],
+        thread_id=expert_agent_key(str(c["task_id"]), SINGLE_AGENT, ""),
+        server_run_id=str(c.get("run_id") or config.get("metadata", {}).get("run_id", "")),
+        role=SINGLE_AGENT)
+
+
+async def _run_helper(config, part: str) -> str:
+    """One helper does one part of the single agent's request, in its own folder and kernel."""
+    single = _single_agent_run(config)
+    run = AgentRun(workspace_id=single.workspace_id, task_id=single.task_id, request_id=single.request_id,
+                   thread_id=expert_agent_key(single.task_id, HELPER, part),
+                   server_run_id=single.server_run_id, role=HELPER, question=part)
+    agent = await build(config, HELPER, run=run, middleware=[
+        QuickCallBudgetMiddleware(HELPER_CALL_LIMIT, last_call=HELPER_LAST_CALL), ToolCallRepairMiddleware()])
+    token = INSIDE_EXPERT.set(True)  # the single agent's inherited meter skips these calls
+    try:
+        result = await agent.ainvoke({"messages": [HumanMessage(content=part)]})
+    finally:
+        INSIDE_EXPERT.reset(token)
+        await asyncio.shield(_close_kernel(run))
+    folder = host().task_workspace_projector.expert_session_root(run.task_id, run.thread_id)
+    return (last_answer(result.get("messages", ())) or "The helper ended without a reply.") + (
+        f"\n\n(Helper folder: {folder})")
+
+
+async def _single_agent(config, run: AgentRun):
+    """The agent that works on a request alone; in auto mode it can hand the request to the team."""
+    handoff = workflow_mode(config) == "auto"
+    return await build(config, SINGLE_AGENT, run=run, middleware=[
+        *([HandoffMiddleware()] if handoff else []),
+        HelperMiddleware(lambda part: _run_helper(config, part)),
+        QuickCallBudgetMiddleware(SINGLE_AGENT_CALL_LIMIT, last_call=LAST_CALL_HANDOFF if handoff else LAST_CALL,
+                                  last_tools=frozenset({HANDOFF_TOOL}) if handoff else frozenset()),
+        ToolCallRepairMiddleware(),
+    ], suffix="\n" + (HANDOFF_POLICY + "\n" if handoff else "") + HELPER_POLICY)
 
 
 async def coordinator(config):
+    async def single_agent(state, config):
+        run = _single_agent_run(config)
+        agent = await _single_agent(config, run)
+        conversation = seen_by(state["messages"], SINGLE_AGENT)
+        try:
+            result = await agent.ainvoke({**state, "messages": conversation}, config=config)
+        finally:
+            await asyncio.shield(_close_kernel(run))
+        known = {message.id for message in conversation}
+        new = [message for message in result.get("messages", ()) if message.id not in known]
+        handoff = None
+        if workflow_mode(config) == "auto":
+            handoff = handoff_request(new)
+            last = new[-1] if new else None
+            if handoff is None and isinstance(last, AIMessage) and last.text.startswith(
+                    "Model call limits exceeded"):  # the budget ran out past its last call
+                handoff = budget_handoff(SINGLE_AGENT_CALL_LIMIT)
+        folder = host().task_workspace_projector.expert_session_root(run.task_id, run.thread_id)
+        return {**result, "messages": tagged(new, SINGLE_AGENT),
+                "handoff": handoff_note(handoff, folder) if handoff else "",
+                "final_answer": "" if handoff else last_answer(new)}
+
     async def coordinate(state, config):
         # Agent Server profiles graph schemas without request configuration, so
         # task-bound paths and subagents must be assembled when this node runs.
         # This is still one Coordinator run: native ``task`` calls execute inside
         # this invocation, as background jobs of it (background_experts.py), with
         # no callback or follow-up run.
+        config = team_config(config)  # a request the single agent handed over continues in research mode
         report = coordinator_report_path(config)
         previous_report_revision = file_revision(report)
         # The desktop sends its parallel-Experts setting with each request; the newest request sizes
         # the app-wide pool. None (the benchmark) keeps the environment's value.
         _expert_slots(_requested_parallel_experts(config))
         experts = RunningExperts()
-        agent = await _coordinator_agent(config, experts)
+        agent = await _coordinator_agent(config, experts, handoff=state.get("handoff") or "")
+        conversation = seen_by(state["messages"], TEAM)
         try:
-            result = await agent.ainvoke(state, config=config)
+            result = await agent.ainvoke({**state, "messages": conversation}, config=config)
         finally:
             # None is left when the run ended normally; a failed or cancelled run stops its Experts.
             await experts.close()
@@ -1308,30 +1391,24 @@ async def coordinator(config):
             except Exception:  # noqa: BLE001 - analysis data must never fail delivery
                 _LOGGER.exception("Research outcome recording failed")
         delivered = AIMessage(content=answer, additional_kwargs={"oceanx_delivered": True})
-        return {**result, "research_complete": True, "final_answer": answer,
-                "messages": [*result.get("messages", ()), delivered]}
+        known = {message.id for message in conversation}
+        new = [message for message in result.get("messages", ()) if message.id not in known]
+        return {**result, "research_complete": True, "final_answer": answer, "handoff": "",
+                "messages": tagged([*new, delivered], TEAM)}
+
+    def first(state, config) -> str:
+        return "coordinate" if research_mode(config) else "single_agent"
+
+    def after_single_agent(state) -> str:
+        return "coordinate" if state.get("handoff") else END
 
     graph = StateGraph(ResearchState)
+    graph.add_node("single_agent", single_agent)
     graph.add_node("coordinate", coordinate)
-    graph.add_edge(START, "coordinate")
+    graph.add_conditional_edges(START, first, ["single_agent", "coordinate"])
+    graph.add_conditional_edges("single_agent", after_single_agent, ["coordinate", END])
     graph.add_edge("coordinate", END)
     return graph.compile()
 
 
-async def physics(config):
-    return await expert(config, "ocean_process_expert")
-
-
-async def statistics(config):
-    return await expert(config, "statistical_inference_expert")
-
-
-async def literature(config):
-    return await expert(config, "literature_reproduction_expert")
-
-
-async def discussion(config):
-    return await expert(config, "scientific_discussion_partner")
-
-
-__all__ = ["coordinator", "discussion", "expert", "literature", "physics", "statistics"]
+__all__ = ["coordinator", "expert"]

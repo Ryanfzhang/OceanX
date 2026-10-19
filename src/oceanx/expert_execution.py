@@ -6,9 +6,7 @@ import asyncio
 import hashlib
 import json
 import os
-import re
 import shutil
-import zipfile
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
