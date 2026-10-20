@@ -75,7 +75,7 @@ async def test_imported_source_path_reaches_native_graph(
             graphs, "load_model_profile", lambda _: SimpleNamespace(provider="openai")
         )
         monkeypatch.setattr(
-            "oceanx.research.metering.CallMeter", lambda *args: BaseCallbackHandler()
+            "oceanx.research.metering.CallMeter", lambda *args, **kwargs: BaseCallbackHandler()
         )
         original = graphs.build_deep_agent_graph
 

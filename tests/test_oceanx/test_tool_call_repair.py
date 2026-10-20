@@ -147,5 +147,5 @@ def test_a_second_broken_reply_is_not_retried_again():
 
 def test_the_coordinator_and_every_expert_are_built_with_the_repair():
     source = (Path(__file__).parents[2] / "src/oceanx/research/graphs.py").read_text(encoding="utf-8")
-    # The Coordinator in research mode, the Coordinator in standard mode, and every Expert.
-    assert source.count("ToolCallRepairMiddleware()") == 3
+    # The Coordinator, every Expert, the single agent and each of its helpers.
+    assert source.count("ToolCallRepairMiddleware()") == 4
