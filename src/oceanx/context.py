@@ -222,6 +222,7 @@ class OceanContextBuilder:
         if task_records is not None:
             task_sources: list[dict[str, Any]] = []
             from oceanx.local_sources import LocalSourceError, resolve_local_source
+            from oceanx.pdf_text import source_text_context
             for record in task_records:
                 artifact = record.artifact
                 if "source" not in record.relations:
@@ -234,6 +235,7 @@ class OceanContextBuilder:
                     artifact.artifact_type == "project_context"
                     and artifact.schema_version == "ocean-local-source/v1"
                 ):
+                    texts: dict[str, Any] = {}
                     try:
                         source = resolve_local_source(
                             store=self.store, workspace_id=workspace_id, ref=artifact.ref
@@ -244,6 +246,11 @@ class OceanContextBuilder:
                             format=source.format,
                             access="read_only",
                         )
+                        if self.paths is not None:  # a PDF is read as its extracted text (ADR 0023)
+                            texts = source_text_context(
+                                source.path, self.paths,
+                                allowed=policy.decision_for("document_text") == "allow",
+                            )
                     except LocalSourceError as exc:
                         entry["path_error"] = str(exc)
                     # The task's one-time data description, once the first Expert has created it.
@@ -253,6 +260,10 @@ class OceanContextBuilder:
                         fits = {**base, "task_sources": [*task_sources, detailed]}
                         if _estimate_tokens(fits) <= token_budget:
                             entry = detailed
+                    if texts and _estimate_tokens(
+                        {**base, "task_sources": [*task_sources, entry | texts]}
+                    ) <= token_budget:
+                        entry = entry | texts
                     candidate = {**base, "task_sources": [*task_sources, entry]}
                     if _estimate_tokens(candidate) <= token_budget:
                         task_sources.append(entry)

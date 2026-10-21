@@ -1,6 +1,6 @@
 # ADR 0012: Local-First Literature Evidence Contract
 
-- Status: Accepted
+- Status: Accepted; decision 3 superseded for PDFs attached as Task sources by ADR 0023
 - Date: 2026-07-12
 - Decision IDs: OD-05
 

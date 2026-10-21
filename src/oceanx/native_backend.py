@@ -329,9 +329,13 @@ def task_backend(host, config, *, run, library):
                 and artifact.schema_version == "ocean-local-source/v1"
             ):
                 from oceanx.local_sources import resolve_local_source
-                roots.append(resolve_local_source(
+                from oceanx.pdf_text import document_text_allowed, readable_texts
+                source = resolve_local_source(
                     store=host.store, workspace_id=c["workspace_id"], ref=artifact.ref
-                ).path)
+                ).path
+                roots.append(source)
+                if document_text_allowed(host.store, c["workspace_id"]):  # the texts of its PDFs
+                    roots.extend(readable_texts(source, host.paths))
             else:
                 roots.extend(host.paths.resolve_uri(f.uri) for f in artifact.files)
         return tuple(path for path in roots if path.exists())

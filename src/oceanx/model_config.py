@@ -269,6 +269,11 @@ class OceanChatDeepSeek(ChatDeepSeek):
                 serialized["reasoning_content"] = message.additional_kwargs["reasoning_content"]
         return payload
 
+    def _resolve_model_profile(self):
+        # Send DeepSeek no PDF attachments, which its API is not known to accept: a PDF opened
+        # with read_file returns a note instead, and agents read its extracted text (ADR 0023).
+        return {**(super()._resolve_model_profile() or {}), "pdf_inputs": False}
+
 
 def create_chat_model(
     profile: OceanModelProfile, *, request_timeout: float | None = None

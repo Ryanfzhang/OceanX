@@ -31,6 +31,7 @@ dependencies = [
     # currently falls back to a Rust source build on our macOS x86_64 target.
     "cryptography>=46,<50",
     "pyyaml>=6.0",
+    "pypdf>=6.0", # text of the PDFs a user attaches to a Task (ADR 0023)
 ]
 
 [project.optional-dependencies]
