@@ -3,7 +3,7 @@ PYTHON ?= python
 PYTEST = PYTHONPATH=src $(PYTHON) -m pytest
 RUFF_TARGETS = src/oceanx tests scripts
 
-.PHONY: lint typecheck test test-contract test-e2e-offline test-wheel build release-manifest
+.PHONY: lint typecheck frontend-build test test-contract test-e2e-offline test-wheel build release-manifest
 
 # Faults only (syntax errors, undefined and unused names); style rules are not gated.
 lint:
@@ -11,13 +11,17 @@ lint:
 
 typecheck:
 	cd frontend/ocean-desktop && npm run check
+	cd frontend/ocean-web && npm run check
+
+frontend-build:
+	cd frontend/ocean-desktop && npm run build
+	cd frontend/ocean-web && npm run build
 
 test:
 	$(PYTEST) -q
 
-test-contract:
+test-contract: typecheck
 	PYTHONPATH=src $(PYTHON) scripts/export_protocol_v2.py
-	cd frontend/ocean-desktop && npm run check
 
 test-e2e-offline:
 	$(PYTEST) -q tests/test_oceanx
@@ -25,8 +29,7 @@ test-e2e-offline:
 test-wheel:
 	$(PYTHON) scripts/check_ocean_wheel_contents.py --dist dist
 
-build:
-	cd frontend/ocean-desktop && npm run build
+build: frontend-build
 	$(PYTHON) -m build
 	$(PYTHON) scripts/check_ocean_wheel_contents.py --dist dist
 

@@ -15,6 +15,7 @@ import {parseDesktopUpdateConfig} from './shared/update-config.js';
 import {loadElectronPlatformUpdater} from './shared/electron-updater-adapter.js';
 import {parseStrictJsonBytes} from './shared/strict-json.js';
 import {developmentPython} from './shared/python-environment.mjs';
+import {desktopMapConfig} from './shared/map-config.js';
 import {UpdateHandoffStore, type UpdateHandoffOutcome} from './shared/update-handoff.js';
 import {DesktopUpdateService} from './shared/update-service.js';
 import {UpdateStagingStore} from './shared/update-staging.js';
@@ -1181,6 +1182,10 @@ app.whenReady().then(() => {
   ipcMain.handle('ocean:get-model-provider-status', async (event) => {
     assertMainRenderer(event);
     return sidecar.modelProviderStatus();
+  });
+  ipcMain.handle('ocean:get-map-config', (event) => {
+    assertMainRenderer(event);
+    return desktopMapConfig(process.env);
   });
   ipcMain.handle('ocean:configure-model-provider', async (event, setup: unknown) => {
     assertMainRenderer(event);

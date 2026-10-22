@@ -36,20 +36,12 @@ export default defineConfig({
       transform(code, id) {
         // Adapt the web bundle only; never edit the shared Desktop source files.
         if (id.startsWith(renderer) && /\.[tj]sx?(\?|$)/.test(id)) {
-          if (id.split('?')[0] === resolve(renderer, 'components/SpatialWorkbench.tsx')) {
-            const start = code.indexOf('const cartoBasemapsKey =');
-            const end = code.indexOf('const OVERLAY_SOURCE =', start);
-            if (start < 0 || end < 0) throw new Error('Shared map entry changed; update the web-only adapter.');
-            code = code.slice(0, start)
-              + `import {WEB_BASEMAP_STYLE as BASEMAP_STYLE} from ${JSON.stringify(resolve(here, 'src/basemap.ts'))};\n`
-              + code.slice(end);
-          }
           return code.replaceAll('ocean-artifact://resource/', '/api/resources/')
             // MapLibre's current browser package exposes named exports. Desktop
             // keeps its own pinned dependency and original import unchanged.
             .replace(
-              "import maplibregl, {type Map as MapLibreMap, type StyleSpecification} from 'maplibre-gl';",
-              "import * as maplibregl from 'maplibre-gl'; import type {Map as MapLibreMap, StyleSpecification} from 'maplibre-gl';",
+              "import maplibregl, {type Map as MapLibreMap} from 'maplibre-gl';",
+              "import * as maplibregl from 'maplibre-gl'; import type {Map as MapLibreMap} from 'maplibre-gl';",
             );
         }
       },

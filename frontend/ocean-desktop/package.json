@@ -13,7 +13,7 @@
     "test": "vitest run",
     "typecheck": "npm run check",
     "benchmark:smoke": "npm run build && node scripts/benchmark-desktop.mjs",
-    "start": "node scripts/ensure-sidecar.mjs && npm run build && node scripts/start-electron.mjs",
+    "start": "node scripts/ensure-sidecar.mjs && node scripts/ensure-frontend.mjs && node scripts/start-electron.mjs",
     "start:cached": "node scripts/ensure-sidecar.mjs && node scripts/start-electron.mjs",
     "dev": "node scripts/ensure-sidecar.mjs && tsc -p tsconfig.main.json && node scripts/build-preload.mjs && node scripts/dev-electron.mjs",
     "verify:sidecar": "node scripts/verify-sidecar.mjs",

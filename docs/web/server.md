@@ -106,7 +106,9 @@ The map key is a browser key, described below.
 
 Create or select a task and click the attachment button. Enter the complete
 server path to a file or directory. OceanX validates the path against source roots
-and reuses read-only source import. There is no directory listing, search or
+and reuses read-only source import. A successful validation returns the canonical
+form of that specific user-entered path to the attachment bridge; it never lists
+other server paths. There is no directory listing, search or
 copy of large files. PDF text extraction uses native PDF support.
 
 Only explicitly granted result files can be downloaded. Downloads verify native

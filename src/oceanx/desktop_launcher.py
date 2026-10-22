@@ -61,7 +61,8 @@ def prepare_environment(config: DesktopConfig, repo: Path) -> dict[str, str]:
     environment["OCEANMIND_CONFIG_DIR"] = str(config.model_config.materialize(config.runtime_dir))
     environment["OCEAN_PYTHON"] = sys.executable
     environment["OCEAN_SANDBOX_PYTHON"] = str(config.sandbox_python or sys.executable)
-    environment["VITE_CARTO_BASEMAPS_API_KEY"] = config.carto_api_key
+    environment["OCEAN_DESKTOP_CARTO_API_KEY"] = config.carto_api_key
+    environment.pop("VITE_CARTO_BASEMAPS_API_KEY", None)
     environment["PYTHONPATH"] = os.pathsep.join(filter(None, (str(repo / "src"), environment.get("PYTHONPATH"))))
     # Never let automation-specific flags replace the normal backend/profile.
     for key in tuple(environment):

@@ -44,7 +44,8 @@ carto_api_key = "public-map"
     assert (legacy / "settings.json").read_text() == '{"model":"original"}'
     assert environment["OCEANMIND_CONFIG_DIR"] == str(tmp_path / "generated")
     assert environment["OCEAN_PYTHON"] == environment["OCEAN_SANDBOX_PYTHON"] == sys.executable
-    assert environment["VITE_CARTO_BASEMAPS_API_KEY"] == "public-map"
+    assert environment["OCEAN_DESKTOP_CARTO_API_KEY"] == "public-map"
+    assert "VITE_CARTO_BASEMAPS_API_KEY" not in environment
     assert "ELECTRON_RUN_AS_NODE" not in environment and "OCEAN_DESKTOP_TEST_MODE" not in environment
     result = subprocess.run([sys.executable, "-c", '''
 from oceanx.model_config import load_model_profile

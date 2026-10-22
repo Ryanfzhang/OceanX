@@ -3,7 +3,9 @@
 [server]
 workspace = "./.oceanx/web-workspace"
 port = 8765
-source_roots = ["/srv/ocean-data", "/srv/papers"]
+source_roots = []
+# Add existing data/paper directories, for example:
+# source_roots = ["/srv/ocean-data", "/srv/papers"]
 # Defaults to <workspace>/.oceanx-web; console and backend logs are appended.
 # log_dir = "./.oceanx/web-logs"
 # Defaults to the repository's frontend/ocean-web/dist.

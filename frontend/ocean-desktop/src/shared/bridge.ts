@@ -41,6 +41,9 @@ export type ModelProviderStatus = {
   configured: boolean;
 };
 
+/** CARTO browser key only. Model credentials never travel through this API. */
+export type MapConfig = {cartoKey: string};
+
 export type DesktopBackendStatus = {
   running: boolean;
   workspacePath: string | null;
@@ -86,6 +89,7 @@ export type OceanDesktopBridge = {
   stopBackend(): Promise<void>;
   getBackendStatus(): Promise<DesktopBackendStatus>;
   getModelProviderStatus(): Promise<ModelProviderStatus>;
+  getMapConfig(): Promise<MapConfig>;
   configureModelProvider(setup: ModelProviderSetup): Promise<ModelProviderStatus>;
   sendBackendFrame(frame: Record<string, unknown>): Promise<void>;
   openArtifactResource(url: string): Promise<OpenArtifactResourceResult>;

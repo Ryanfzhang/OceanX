@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
@@ -146,3 +147,9 @@ def test_unified_config_rejects_invalid_server_settings(tmp_path, monkeypatch, s
     monkeypatch.setenv("WEB_TEST_KEY", "web-private-key")
     with pytest.raises(ValueError):
         load_web_config(write_config(tmp_path, section))
+
+
+def test_committed_web_example_needs_no_placeholder_source_directories():
+    config = load_web_config(Path(__file__).resolve().parents[2] / "web.example.toml")
+    assert config.source_roots == ()
+    assert config.model_config.roles["coordinator"]["model"] == "deepseek-flash"

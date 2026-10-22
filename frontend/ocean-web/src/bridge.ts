@@ -2,7 +2,6 @@ import type {
   BackendFrame, DesktopBackendStatus, ModelProviderStatus, OceanDesktopBridge,
   WorkspaceSourceSelection,
 } from '../../ocean-desktop/src/shared/bridge.js';
-import {configureWebBasemap} from './basemap.js';
 
 type Configuration = {
   project: {path: string; name: string};
@@ -64,7 +63,6 @@ function choosePath(): Promise<WorkspaceSourceSelection | null> {
 
 export async function installWebBridge(): Promise<void> {
   const initial = await configuration();
-  configureWebBasemap(initial.map?.cartoKey ?? '');
   const listeners = new Set<(frame: BackendFrame) => void>();
   let socket: WebSocket | null = null;
   let closed = false;
@@ -127,6 +125,7 @@ export async function installWebBridge(): Promise<void> {
     stopBackend: async () => undefined,
     getBackendStatus: async () => (await configuration()).backend,
     getModelProviderStatus: async () => (await configuration()).provider,
+    getMapConfig: async () => initial.map ?? {cartoKey: ''},
     configureModelProvider: unavailable,
     sendBackendFrame: async (frame) => {
       if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error('正在重连，请稍后重试。');

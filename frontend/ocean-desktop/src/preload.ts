@@ -11,6 +11,7 @@ const bridge: OceanDesktopBridge = {
   stopBackend: () => ipcRenderer.invoke('ocean:stop-backend'),
   getBackendStatus: () => ipcRenderer.invoke('ocean:get-backend-status'),
   getModelProviderStatus: () => ipcRenderer.invoke('ocean:get-model-provider-status'),
+  getMapConfig: () => ipcRenderer.invoke('ocean:get-map-config'),
   configureModelProvider: (setup: ModelProviderSetup) => ipcRenderer.invoke('ocean:configure-model-provider', setup),
   sendBackendFrame: (frame) => ipcRenderer.invoke('ocean:send-backend-frame', frame),
   openArtifactResource: (url) => ipcRenderer.invoke('ocean:open-artifact-resource', url),

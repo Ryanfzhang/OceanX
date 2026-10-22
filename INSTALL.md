@@ -85,9 +85,5 @@ Node.js 由 Conda 管理，前端依赖由 `npm ci` 按 `package-lock.json` 安�
 见[网页部署](docs/web/server.md)与[单机启动说明](docs/desktop/launcher.md)。
 原前端设置、`npm start` 和 `ocean configure-models` 接口保持兼容；
 使用新脚本时，API 的持久修改写入对应 TOML，启动时会生成原后端所需的配置。
-**benchmark 独立使用 `benchmarking/.env`，统一为 DeepSeek Flash，不会读取或改写这些日常模型设置。**
-在服务器复制 `benchmarking/.env.example` 为 `.env` 后填写一个 API key；真实 `.env` 不提交 Git。
-
-运行 benchmark 不需要再安装此 `oceanx` 环境：只需按
-[benchmark 安装教程](benchmarking/INSTALL.md) 创建 `oceanx-bench`，其中已经包含 OceanX。
-只在既使用日常 OceanX 又运行 benchmark 时保留这两个环境。
+无界面运行使用 `ocean run` 或 `ocean batch`，见[运行说明](docs/evals/headless-benchmark.md)。
+专项 benchmark 的数据绑定和实验配置由对应评测项目管理，不属于本仓库的日常启动步骤。

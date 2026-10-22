@@ -1,4 +1,4 @@
-安装与环境配置见 [INSTALL.md](INSTALL.md)；测评见 [benchmarking/INSTALL.md](benchmarking/INSTALL.md)。
+安装与环境配置见 [INSTALL.md](INSTALL.md)；无界面执行见[运行说明](docs/evals/headless-benchmark.md)。
 
 # OceanX
 
@@ -51,17 +51,17 @@ question/evidence document edited by the Coordinator; it has no agent lifecycle 
 log, outcomes and labels feed a human-gated research-policy improvement loop (see
 [research-policy operations](docs/research-policy-operations.md)).
 
-A headless benchmark run delivers ordinary images instead. `OCEANX_FIGURE_DELIVERY=static` (set by
-`benchmarking/server/run_oceanx.py` for every OceanX arm; the desktop never sets it and is unchanged)
-leaves no model with a description of `ScientificFigure`, the Figure API, `Published results` bindings
+A headless caller can request ordinary images using `OCEANX_FIGURE_DELIVERY=static`
+(the Desktop launcher does not set it). This mode leaves no model with a description of `ScientificFigure`, the Figure API, `Published results` bindings
 or `.preview.png` files, in any prompt, tool description or skill. The final figure is a PNG, JPEG, SVG
 or PDF that the Expert saves with matplotlib anywhere under its node's `outputs/` folder; exploratory
 plots stay in `scratch/`, and a name starting with `_` or `.` is a draft. `TaskResultStore.list` then
 lists these images as `file` results with `render_status: "static"`, and each Expert receipt lists
 the node's images under `Saved figures (cite these paths):` instead of `Published results`.
 
-After updating, close the running desktop and run `npm start` in `frontend/ocean-desktop`
-from the activated OceanX conda environment. It rebuilds an outdated sidecar and frontend.
+After updating, close the running desktop and run `bash scripts/run_desktop.sh` from
+the repository root in the activated OceanX conda environment. It rebuilds an outdated
+sidecar and checks whether the frontend source, dependencies or outputs changed before rebuilding.
 Do not use an already-running old backend to evaluate these changes.
 
 OceanX is a local-first multi-agent workbench for ocean-science research. It supports
@@ -274,14 +274,15 @@ named `oceanx` environment.
 
 ### CARTO basemap key
 
-Copy `frontend/ocean-desktop/.env.example` to `.env.local` in the same directory
-and set `VITE_CARTO_BASEMAPS_API_KEY` to your project's
-[CARTO Basemaps key](https://carto.com/basemaps/apikey/). The local file is ignored
-by Git. Vite reads it for both development and production builds; CI can instead
-set the same environment variable. Restart the development server or rebuild the
-desktop after changing the key (`npm start` rebuilds; `npm run start:cached` does not).
-The key is included in the renderer bundle and sent to CARTO with tile requests.
-Keep the existing CARTO and OpenStreetMap map attribution visible.
+Set `[map].carto_api_key` in `desktop.toml` or `web.toml`. These are the only
+user-edited map settings for the two normal launchers. Both renderers read the
+browser map key at runtime; changing it requires a restart, not a frontend build.
+An empty key uses bundled Natural Earth geography. Legacy frontend `.env.local`
+files no longer control the map.
+
+The [CARTO Basemaps key](https://carto.com/basemaps/apikey/) is visible in tile
+requests; model API keys stay private. Keep CARTO and OpenStreetMap attribution
+visible when CARTO tiles are used.
 
 ### Runtime context summaries
 

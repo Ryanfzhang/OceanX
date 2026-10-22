@@ -1,7 +1,7 @@
 import {useEffect, useMemo, useRef, useState, type CSSProperties} from 'react';
 import {ChevronDown, ChevronUp, Download, Image, Layers3, LoaderCircle, X} from 'lucide-react';
 import type {FeatureCollection, Geometry, GeoJsonProperties} from 'geojson';
-import maplibregl, {type Map as MapLibreMap, type StyleSpecification} from 'maplibre-gl';
+import maplibregl, {type Map as MapLibreMap} from 'maplibre-gl';
 
 import type {ResultDocument} from '../types.js';
 import {FEATURE_COLORS, categoryColor, featureAnchor, featureBounds, prepareResultFeature, resultFeatureMapLayers, resultFeatures} from './result-features.js';
@@ -18,32 +18,7 @@ import {
   viewLabel,
 } from './InteractiveViewWorkbench.js';
 
-const cartoBasemapsKey = (import.meta.env.VITE_CARTO_BASEMAPS_API_KEY ?? '').trim();
-const cartoTileQuery = cartoBasemapsKey ? `?key=${encodeURIComponent(cartoBasemapsKey)}` : '';
-
-const BASEMAP_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {
-    'carto-light': {
-      type: 'raster',
-      tiles: ['a', 'b', 'c', 'd'].map(subdomain =>
-        `https://${subdomain}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png${cartoTileQuery}`),
-      tileSize: 256,
-      attribution: '© OpenStreetMap contributors © CARTO',
-    },
-  },
-  layers: [{
-    id: 'carto-light',
-    type: 'raster',
-    source: 'carto-light',
-    paint: {
-      'raster-saturation': -.82,
-      'raster-contrast': -.08,
-      'raster-brightness-min': .12,
-      'raster-brightness-max': .96,
-    },
-  }],
-};
+import {getBasemapStyle} from '../basemap.js';
 
 const OVERLAY_SOURCE = 'ocean-result-overlay';
 const OVERLAY_LAYER = 'ocean-result-overlay';
@@ -536,7 +511,7 @@ export function ResultWorkbench({
     try {
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: BASEMAP_STYLE,
+        style: getBasemapStyle(),
         center: [121, 24],
         zoom: 2.8,
         minZoom: 1,

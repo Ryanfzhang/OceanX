@@ -1,0 +1,26 @@
+name: Frontend checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  frontends:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            frontend/ocean-desktop/package-lock.json
+            frontend/ocean-web/package-lock.json
+      - run: npm --prefix frontend/ocean-desktop ci
+      - run: npm --prefix frontend/ocean-web ci
+      - run: make typecheck frontend-build
+      - run: npm --prefix frontend/ocean-desktop test
