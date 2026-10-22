@@ -1,7 +1,9 @@
 """The web adapter must not widen file access or change Desktop cleanup policy."""
 import asyncio
 import hashlib
+from pathlib import Path
 from datetime import UTC, datetime, timedelta
+from urllib.parse import quote
 
 import pytest
 from starlette.testclient import TestClient
@@ -118,6 +120,79 @@ def test_websocket_disconnect_does_not_close_native_backend(setup):
                 assert ws.receive_json()["payload"]["type"] == "request.completed"
             assert app.state.backend.closed is False
     assert app.state.backend.closed is True
+
+
+def test_pdf_upload_is_private_unique_and_uses_native_source_import(setup):
+    settings, app, _ = setup
+    content = b"%PDF-1.7\nfixture paper\n%%EOF"
+    headers = {"Origin": "http://127.0.0.1:8765", "Content-Type": "application/pdf",
+               "X-Filename": quote("论文.pdf")}
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        paths = []
+        for _ in range(2):
+            result = client.post("/api/papers", content=content, headers=headers)
+            assert result.status_code == 200, result.text
+            path = Path(result.json()["localPath"])
+            assert result.json()["kind"] == "file"
+            assert path.name == "论文.pdf" and path.read_bytes() == content
+            assert path.stat().st_mode & 0o777 == 0o600
+            assert path.parent.stat().st_mode & 0o777 == 0o700
+            assert settings.resolve_source(str(path)) == path
+            assert prepare_frame(settings, {"type": "source.import", "payload": {"local_path": str(path)}})["payload"]["local_path"] == str(path)
+            paths.append(path)
+        assert paths[0] != paths[1]
+
+
+def test_pdf_upload_rejects_cross_origin_and_leaves_no_partial_files(setup, monkeypatch):
+    from oceanx.web import uploads
+    settings, app, _ = setup
+    monkeypatch.setattr(uploads, "MAX_PDF_BYTES", 32)
+    headers = {"Origin": "http://127.0.0.1:8765", "Content-Type": "application/pdf", "X-Filename": "paper.pdf"}
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        for origin in (None, "https://evil.example"):
+            denied = {k: v for k, v in headers.items() if k != "Origin"}
+            if origin:
+                denied["Origin"] = origin
+            assert client.post("/api/papers", content=b"%PDF-", headers=denied).status_code == 403
+        assert client.post("/api/papers", content=b"%PDF-", headers={**headers, "Host": "evil.example"}).status_code == 403
+        for name in ("../paper.pdf", "..%2Fpaper.pdf", "%5Cpaper.pdf", "paper.txt", "paper%00.pdf", ""):
+            assert client.post("/api/papers", content=b"%PDF-", headers={**headers, "X-Filename": name}).status_code == 400
+        assert client.post("/api/papers", content=b"%PDF-", headers={**headers, "Content-Type": "text/html"}).status_code == 400
+        for content in (b"", b"<html>fake.pdf</html>"):
+            assert client.post("/api/papers", content=content, headers=headers).status_code == 400
+        assert client.post("/api/papers", content=b"%PDF-" + b"x" * 33, headers=headers).status_code == 413
+        # A chunked body has no Content-Length: enforce the actual received length too.
+        assert client.post("/api/papers", content=iter([b"%PDF-", b"x" * 33]), headers=headers).status_code == 413
+        assert not list((settings.workspace / "Uploaded papers").iterdir())
+
+
+def test_pdf_upload_cannot_write_through_symlink(setup, tmp_path):
+    settings, app, _ = setup
+    outside = tmp_path / "outside"; outside.mkdir()
+    (settings.workspace / "Uploaded papers").symlink_to(outside, target_is_directory=True)
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        response = client.post("/api/papers", content=b"%PDF-1.7", headers={
+            "Origin": "http://127.0.0.1:8765", "Content-Type": "application/pdf", "X-Filename": "paper.pdf"})
+        assert response.status_code == 400
+        assert not list(outside.iterdir())
+
+
+@pytest.mark.asyncio
+async def test_disconnected_pdf_upload_removes_partial_file(setup):
+    from starlette.requests import ClientDisconnect, Request
+    from oceanx.web.uploads import stage_pdf
+    settings, _, _ = setup
+    messages = iter([{"type": "http.request", "body": b"%PDF-", "more_body": True},
+                     {"type": "http.disconnect"}])
+
+    async def receive():
+        return next(messages)
+
+    request = Request({"type": "http", "headers": [(b"content-type", b"application/pdf"),
+                       (b"x-filename", b"paper.pdf")]}, receive)
+    with pytest.raises(ClientDisconnect):
+        await stage_pdf(request, settings.workspace)
+    assert not list((settings.workspace / "Uploaded papers").iterdir())
 
 
 def grant_for(path):

@@ -6,6 +6,7 @@ from starlette.testclient import TestClient
 
 from oceanx.web.config import load_web_model_config
 from oceanx.web.server import ProtocolBackend, WebSettings, create_app
+from tests.test_oceanx.test_pdf_text import _write_pdf
 
 
 class FixtureBackend(ProtocolBackend):
@@ -70,6 +71,11 @@ def test_web_native_task_reconnect_and_report_grant(tmp_path, monkeypatch):
             created = terminal(ws, frame("task.create", {"title": "Web native integration"}))
             task = created["task"]; context["task_id"] = task["task_id"]
             terminal(ws, frame("source.import", {"local_path": str(sources / "data.csv"), "title": "data.csv"}))
+            paper = _write_pdf(tmp_path / "paper.pdf", ["Synthetic paper for browser upload."])
+            uploaded = client.post("/api/papers", content=paper.read_bytes(),
+                                   headers={"Origin": origin, "Content-Type": "application/pdf", "X-Filename": "paper.pdf"})
+            assert uploaded.status_code == 200
+            terminal(ws, frame("source.import", {"local_path": uploaded.json()["localPath"], "title": "paper.pdf"}))
             opened = terminal(ws, frame("task.open", {"task_id": context["task_id"]}))
             task_revision = opened["task"]["task_revision"]
             request = frame("session.submit", {"text": "Compare formation and persistence.", "workflow_mode": "research", "literature_acquisition_mode": "search_only"})

@@ -34,6 +34,7 @@ from websockets.asyncio.client import connect
 from oceanx.backend.auth import REQUEST_CAPABILITIES
 from oceanx.web.config import WebModelConfig
 from oceanx.web.resources import PathNotAllowed, ResourceGrants, source_path
+from oceanx.web.uploads import InvalidUpload, stage_pdf
 
 _LOG = logging.getLogger(__name__)
 _WORKSPACE_ALIAS = "web-project"
@@ -361,6 +362,19 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
             headers["Content-Disposition"] = "attachment; filename*=UTF-8''" + quote(grant.path.name)
         return Response(data, media_type=grant.mime, headers=headers)
 
+    async def upload_paper(request: Request):
+        if not local_request(request) or request.headers.get("origin") is None:
+            return JSONResponse({"error": "origin_not_allowed"}, status_code=403)
+        try:
+            path = await stage_pdf(request, settings.workspace)
+        except InvalidUpload as exc:
+            return JSONResponse({"error": str(exc)}, status_code=exc.status)
+        except OSError:
+            _LOG.exception("Unable to stage uploaded PDF")
+            return JSONResponse({"error": "upload_unavailable"}, status_code=503)
+        return JSONResponse({"kind": "file", "localPath": str(path)},
+                            headers={"Cache-Control": "no-store"})
+
     async def browser(socket: WebSocket):
         if not local_request(socket) or socket.headers.get("origin") is None:
             await socket.close(code=1008)
@@ -422,6 +436,7 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
 
     app = Starlette(lifespan=lifespan, routes=[
         Route("/api/config", config), Route("/api/source", attach, methods=["POST"]),
+        Route("/api/papers", upload_paper, methods=["POST"]),
         Route("/api/resources/{token}", resource), WebSocketRoute("/api/protocol", browser),
         Route("/{path:path}", frontend),
     ])

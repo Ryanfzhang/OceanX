@@ -1,6 +1,6 @@
+import {chooseSource} from './source-picker.js';
 import type {
   BackendFrame, DesktopBackendStatus, ModelProviderStatus, OceanDesktopBridge,
-  WorkspaceSourceSelection,
 } from '../../ocean-desktop/src/shared/bridge.js';
 
 type Configuration = {
@@ -14,51 +14,6 @@ async function configuration(): Promise<Configuration> {
   const response = await fetch('/api/config', {cache: 'no-store', signal: AbortSignal.timeout(15000)});
   if (!response.ok) throw new Error('The server workspace is unavailable.');
   return response.json() as Promise<Configuration>;
-}
-
-function choosePath(): Promise<WorkspaceSourceSelection | null> {
-  return new Promise((resolve) => {
-    const dialog = document.createElement('dialog');
-    dialog.className = 'web-source-dialog';
-    const form = document.createElement('form');
-    const label = document.createElement('label');
-    label.textContent = '服务器数据或 PDF 的绝对路径 / Server source path';
-    const input = document.createElement('input');
-    input.name = 'source-path'; input.required = true; input.autocomplete = 'off';
-    input.placeholder = '/srv/ocean-data/file.nc 或 /srv/papers/paper.pdf';
-    label.append(input);
-    const note = document.createElement('p');
-    note.textContent = '只读引用已有文件或目录，不上传、不列出服务器文件。';
-    const error = document.createElement('p');
-    error.setAttribute('role', 'alert');
-    const actions = document.createElement('div');
-    const cancel = document.createElement('button');
-    cancel.type = 'button'; cancel.textContent = '取消 / Cancel';
-    const submit = document.createElement('button');
-    submit.type = 'submit'; submit.textContent = '添加 / Add';
-    actions.append(cancel, submit); form.append(label, note, error, actions); dialog.append(form);
-    let settled = false;
-    const finish = (value: WorkspaceSourceSelection | null) => {
-      if (settled) return;
-      settled = true; dialog.close(); dialog.remove(); resolve(value);
-    };
-    cancel.onclick = () => finish(null);
-    dialog.addEventListener('cancel', (event) => {event.preventDefault(); finish(null);});
-    form.onsubmit = async (event) => {
-      event.preventDefault(); submit.disabled = true; error.textContent = '';
-      try {
-        const response = await fetch('/api/source', {method: 'POST',
-          headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: input.value.trim()})});
-        if (!response.ok) {
-          error.textContent = '该来源不可用或不在服务器允许的目录内，请核对路径。';
-          return;
-        }
-        finish(await response.json() as WorkspaceSourceSelection);
-      } catch {error.textContent = '连接失败，请重试。';}
-      finally {submit.disabled = false;}
-    };
-    document.body.append(dialog); dialog.showModal(); input.focus();
-  });
 }
 
 export async function installWebBridge(): Promise<void> {
@@ -114,7 +69,7 @@ export async function installWebBridge(): Promise<void> {
     chooseWorkspace: async () => initial.project.path,
     listProjects: async () => [{...initial.project, lastOpenedAt: Date.now()}],
     forgetProject: async () => [{...initial.project, lastOpenedAt: Date.now()}],
-    chooseWorkspaceSource: choosePath,
+    chooseWorkspaceSource: chooseSource,
     stageImageAttachment: unavailable,
     startBackend: async () => {
       const config = await configuration();

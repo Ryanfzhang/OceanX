@@ -104,7 +104,15 @@ The map key is a browser key, described below.
 
 ## Add data or a PDF
 
-Create or select a task and click the attachment button. Enter the complete
+Create or select a task and click the attachment button. The dialog follows the
+language selected in Settings. Choose **Upload PDF** to select a paper from your
+computer (up to 25 MiB). A private copy is stored under
+`<workspace>/Uploaded papers/<unique directory>/` and attached through native
+source import; the original file is unchanged. Interrupted or rejected uploads
+leave no partial file. Uploaded papers are sources, not temporary computation
+caches, and remain in the workspace with its task data.
+
+Choose **Server path** for an existing server data file, PDF or folder. Enter the complete
 server path to a file or directory. OceanX validates the path against source roots
 and reuses read-only source import. A successful validation returns the canonical
 form of that specific user-entered path to the attachment bridge; it never lists

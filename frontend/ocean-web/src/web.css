@@ -8,6 +8,11 @@
 .web-source-dialog [role=alert] {color: #b91c1c; min-height: 1.6em;}
 .web-source-dialog form > div {display: flex; gap: 10px; justify-content: flex-end;}
 .web-source-dialog button {padding: 7px 14px; cursor: pointer;}
+.web-source-dialog .web-source-modes {justify-content: flex-start; margin-bottom: 20px;}
+.web-source-dialog .web-source-modes [aria-pressed=true] {background: #dcecf8; border-color: #2785bc; color: #163c59;}
+.web-source-dialog section[hidden] {display: none;}
+.web-source-dialog section p {overflow-wrap: anywhere;}
+.web-source-dialog button:disabled {cursor: wait; opacity: .65;}
 
 .web-task-sidebar .web-new-task {display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: inherit; cursor: pointer;}
 .web-task-sidebar .web-new-task:hover {background: var(--surface-hover, #e4edf3);}
