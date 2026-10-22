@@ -182,6 +182,11 @@ button, input, textarea, select { transition: border-color 150ms ease, backgroun
 .research-report-link:hover { color: #0b5f99; text-decoration: underline; text-underline-offset: 3px; }
 .research-report-link:focus-visible { outline: 2px solid color-mix(in srgb, #1678bd 42%, transparent); outline-offset: 3px; border-radius: 2px; }
 .research-log-entry.system::before { background: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 12%, transparent); }
+.request-tool-progress { border-top: 1px solid var(--line); margin-top: 6px; }
+.tool-activity.completed::before { background: var(--green); box-shadow: none; }
+.tool-activity.error::before { background: var(--amber); box-shadow: none; }
+.tool-activity.running::before { animation: pulse 1.4s infinite; }
+.restored-request-activity { color: var(--muted); font-size: var(--font-small); padding: 8px 0; margin: 0; }
 .research-log-content > p { display: block; min-width: 0; margin: 0; }
 .compact-log-markdown,
 .compact-log-list-item,

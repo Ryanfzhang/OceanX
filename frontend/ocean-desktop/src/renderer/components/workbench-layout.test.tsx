@@ -1391,3 +1391,41 @@ describe('research workbench layout', () => {
     expect(markup.match(/agent-role-icon-expert/g)).toHaveLength(3);
   });
 });
+
+describe('live request progress', () => {
+  const transcript = [
+    {item_id: 'u', role: 'user' as const, text: 'Reproduce the figures', request_id: 'req_progress'},
+    {item_id: 'a', role: 'assistant' as const, text: 'I will inspect the paper and data.', request_id: 'req_progress'},
+  ];
+  const base = {loading: false, transcript, streaming: '', activeRequestId: 'req_progress',
+    task: null, workspacePath: '/tmp/workspace', outputs: [], manifests: [], taskResults: [],
+    team: null, onOpenResult: () => undefined, onOpenTaskResult: () => undefined};
+
+  it('shows actual tool work beside an older message while remaining a single agent', () => {
+    const markup = renderToStaticMarkup(<ConversationTranscript {...base} requestActivity={{requestId: 'req_progress', calls: [
+      {callId: 'c', toolName: 'ocean_expert_run_code', purpose: 'Assemble the annual circulation series', status: 'running'},
+    ]}} />);
+    expect(markup).toContain('I will inspect the paper and data.');
+    expect(markup).toContain('Running analysis');
+    expect(markup).toContain('Assemble the annual circulation series');
+    expect(markup).not.toContain('Research team');
+    expect(markup).not.toContain('Active OceanX Team');
+  });
+
+  it('restores progress from a snapshot and hides it after completion', () => {
+    const task = {task_id: 'task', workspace_id: 'ws', title: 'Task', task_revision: 1, status: 'active' as const,
+      workflow: {request_id: 'req_progress', state: 'working' as const, activity: 'Expert interpreting the code result'}};
+    expect(renderToStaticMarkup(<ConversationTranscript {...base} task={task} />)).toContain('Reviewing analysis results');
+    expect(renderToStaticMarkup(<ConversationTranscript {...base} task={task} activeRequestId={null} />)).not.toContain('Reviewing analysis results');
+  });
+
+  it('keeps current team activities visible after an initial Coordinator message', () => {
+    const team: TeamSnapshot = {request_id: 'req_progress', revision: 1, status: 'working', strategy: 'parallel_team',
+      agents: [{agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Comparing the returned evidence'}],
+      dependencies: [], interactions: [], todos: []};
+    const markup = renderToStaticMarkup(<ConversationTranscript {...base} team={team} />);
+    const log = markup.slice(markup.indexOf('class="live-research-log"'));
+    expect(log).toContain('Comparing the returned evidence');
+    expect(markup).toContain('Research team');
+  });
+});

@@ -21,6 +21,7 @@ import {readParallelExperts, writeParallelExperts, type ParallelExperts} from '.
 import {forgetProject, mergeRememberedProjects, parseProjectCatalog, rememberProject, upsertTaskPreservingOrder, type ProjectCatalogEntry} from './project-catalog.js';
 import {revisionFromRequestFailure} from './request-recovery.js';
 import {requestId} from './request-id.js';
+import {updateRequestActivity, type RequestActivity} from './request-activity.js';
 import {taskResultRefKey} from './types.js';
 import type {AppearanceTheme, ArtifactSummary, ArtifactVersion, DeliveryManifest, DisplayDensity, EventPayload, OceanEvent, RequestContext, ResearchTask, ResolvedAppearanceTheme, ResultDocument, TaskOutput, TaskResultFile, TaskResultRecord, TeamSnapshot, TranscriptItem, Workspace} from './types.js';
 
@@ -124,6 +125,7 @@ export function App(): React.JSX.Element {
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [stoppingRequestId, setStoppingRequestId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState('');
+  const [requestActivity, setRequestActivity] = useState<RequestActivity | null>(null);
   const [prompt, setPrompt] = useState('');
   const [listening, setListening] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
@@ -290,6 +292,7 @@ export function App(): React.JSX.Element {
     setTaskResults([]);
     setTeam(null);
     setTeamSnapshots({});
+    setRequestActivity(null);
     setActiveRequestId(null);
     setStoppingRequestId(null);
     setStreaming('');
@@ -423,6 +426,7 @@ export function App(): React.JSX.Element {
       return;
     }
     if (event.type === 'request.accepted' && payload.request_type === 'session.submit' && event.request_id) {
+      activeRequestRef.current = event.request_id;
       setActiveRequestId(event.request_id); refreshTasks(); return;
     }
     if (event.type === 'workspace.snapshot') {
@@ -449,6 +453,7 @@ export function App(): React.JSX.Element {
       if (!shouldApplyTaskSnapshot(selectedTaskIdRef.current, task.task_id)) return;
       const workflowIsTerminal = Boolean(task.workflow && TERMINAL_WORKFLOW_STATES.has(task.workflow.state));
       const snapshotRequestId = workflowIsTerminal ? null : task.active_request_id ?? null;
+      activeRequestRef.current = snapshotRequestId;
       taskRef.current = task;
       setTaskLoading(false); setActiveTask(task); setTranscript(Array.isArray(payload.transcript) ? payload.transcript as TranscriptItem[] : []);
       setOutputs(Array.isArray(payload.outputs) ? payload.outputs as TaskOutput[] : []);
@@ -488,6 +493,9 @@ export function App(): React.JSX.Element {
     }
     const visible = !event.task_id || event.task_id === taskRef.current?.task_id;
     if (!visible) {if (event.type === 'request.completed' || event.type === 'request.failed') refreshTasks(); return;}
+    if (event.type === 'tool.call.started' || event.type === 'tool.call.completed') {
+      setRequestActivity(current => updateRequestActivity(current, event, activeRequestRef.current));
+    }
     const resultsTaskId = changedResultsTaskId(selectedTaskIdRef.current, event);
     if (resultsTaskId) {
       loadTaskResults(resultsTaskId);
@@ -1139,7 +1147,7 @@ export function App(): React.JSX.Element {
     />
     <section className="conversation-pane">
       <header className="conversation-toolbar">{activeTask ? <div className="conversation-title"><strong>{activeTask.title}</strong></div> : <span />}{activeTask ? <div className="conversation-actions"><button onClick={() => setDeleteCandidate({task: activeTask, projectPath: workspacePath ?? ''})} title={text('Delete task', '删除任务')}><Trash2 size={16} /></button></div> : <span />}</header>
-      <div className={`conversation-scroll${activeTask ? '' : ' welcome-scroll'}`}>{activeTask ? <ConversationTranscript loading={taskLoading} transcript={transcript} streaming={streaming} activeRequestId={activeRequestId} task={activeTask} workspacePath={workspacePath} outputs={outputs} manifests={manifests} taskResults={taskResults} team={team} teamSnapshots={teamSnapshots} pendingInteraction={pendingInteraction} interactionAnswer={interactionAnswer} onInteractionAnswer={setInteractionAnswer} onInteractionSubmit={answer} onOpenResult={openResult} onOpenTaskResult={openTaskResult} onOpenTaskResultFile={openTaskResultFile} onOpenReport={openExpertReport} /> : <OceanXWelcome projectName={projectName} hasProject={Boolean(workspacePath)} title={newTaskTitle} onTitle={setNewTaskTitle} onCreateTask={createTask} onChooseProject={() => void chooseProject()} />}</div>
+      <div className={`conversation-scroll${activeTask ? '' : ' welcome-scroll'}`}>{activeTask ? <ConversationTranscript loading={taskLoading} transcript={transcript} streaming={streaming} activeRequestId={activeRequestId} requestActivity={requestActivity} task={activeTask} workspacePath={workspacePath} outputs={outputs} manifests={manifests} taskResults={taskResults} team={team} teamSnapshots={teamSnapshots} pendingInteraction={pendingInteraction} interactionAnswer={interactionAnswer} onInteractionAnswer={setInteractionAnswer} onInteractionSubmit={answer} onOpenResult={openResult} onOpenTaskResult={openTaskResult} onOpenTaskResultFile={openTaskResultFile} onOpenReport={openExpertReport} /> : <OceanXWelcome projectName={projectName} hasProject={Boolean(workspacePath)} title={newTaskTitle} onTitle={setNewTaskTitle} onCreateTask={createTask} onChooseProject={() => void chooseProject()} />}</div>
       {activeTask ? <div className="composer-wrap">
         {inlineStatus ? <div className="inline-status"><span>{inlineStatus}</span><button onClick={() => setInlineStatus(null)}><X size={14} /></button></div> : null}
         <div className="composer-stack">

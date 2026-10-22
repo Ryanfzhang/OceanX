@@ -102,6 +102,12 @@ Changing the code location does not require moving the task data or these logs.
 Model API keys and internal filesystem paths are not sent in browser config.
 The map key is a browser key, described below.
 
+The shared Desktop/web conversation shows tool progress even when the agent
+does not write another chat message. It keeps a short trail of step descriptions,
+without displaying code or raw tool output, and restores the current workflow
+status after refresh. Requests remain in `auto` mode: the agent decides whether
+to hand over to the research team; the interface shows a team only after handoff.
+
 ## Add data or a PDF
 
 Create or select a task and click the attachment button. The dialog follows the

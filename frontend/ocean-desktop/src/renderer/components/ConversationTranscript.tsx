@@ -8,6 +8,7 @@ import type {PendingInteraction} from '../pending-interaction.js';
 import {resultsForRequest, taskResultRefKey, taskResultsForRequest} from '../types.js';
 import type {DeliveryManifest, ResearchTask, TaskOutput, TaskResultRecord, TeamSnapshot, TranscriptItem} from '../types.js';
 import {useUiLanguage} from '../i18n.js';
+import {toolActivityLabel, workflowActivityLabel, type RequestActivity} from '../request-activity.js';
 import {AgentCollaborationCanvas, timerClock} from './AgentCollaborationCanvas.js';
 import {InteractionDrawer} from './InteractionDrawer.js';
 
@@ -186,12 +187,18 @@ function Working({
   group,
   streaming,
   team,
+  requestActivity,
+  workflow,
+  waitingForInput = false,
   hiddenProcessItemId = null,
   onOpenReport,
 }: {
   group: PresentedTranscriptGroup;
   streaming: string;
   team: TeamSnapshot | null;
+  requestActivity: RequestActivity | null;
+  workflow: ResearchTask['workflow'];
+  waitingForInput?: boolean;
   hiddenProcessItemId?: string | null;
   onOpenReport: (path: string, title: string) => void;
 }): React.JSX.Element | null {
@@ -250,7 +257,7 @@ function Working({
   // durable transcript turn or returned report yet.  Keep the activity area
   // visible during that interval and project the current Team activities into
   // it instead of making the whole log disappear.
-  const currentActivities = researchLog.length || live ? [] : (matchingTeam?.agents ?? [])
+  const currentActivities = (matchingTeam?.agents ?? [])
     .filter((agent) => !['completed', 'incomplete', 'blocked', 'failed', 'skipped'].includes(agent.status) && agent.activity.trim())
     .sort((left, right) =>
       (timestamp(left.updated_at ?? left.created_at ?? undefined) ?? Number.MAX_SAFE_INTEGER)
@@ -259,6 +266,10 @@ function Working({
   // The backend sends a team only once the research team works on the request; until then the
   // single agent works alone and speaks as OceanX.
   const speaker = matchingTeam ? 'Coordinator:' : 'OceanX:';
+  const toolActivities = group.active && !matchingTeam && !waitingForInput && requestActivity?.requestId === group.requestId
+    ? requestActivity.calls : [];
+  const restoredActivity = group.active && !matchingTeam && !waitingForInput && !toolActivities.length
+    ? workflowActivityLabel(workflow, group.requestId, uiText) : null;
   const showResearchLog = group.active;
   const hasLiveTrace = group.active && Boolean(researchLog.length || live || currentActivities.length);
   const timing = requestTimeBounds(group);
@@ -267,7 +278,7 @@ function Working({
   }, [group.active, group.key]);
   useEffect(() => {
     if (traceRef.current) traceRef.current.scrollTop = traceRef.current.scrollHeight;
-  }, [process.length, live, expertResults.length]);
+  }, [process.length, live, expertResults.length, requestActivity, restoredActivity]);
   useEffect(() => {
     if (!group.active || timing.startedAt === null) return;
     setNow(Date.now());
@@ -314,6 +325,15 @@ function Working({
             <strong>{agent.authority === 'coordinator' ? 'Coordinator:' : `${expertDisplayName(agent)}:`}</strong>
             <div className="research-log-content"><p>{agent.activity}</p></div>
           </article>)}
+          {toolActivities.length || restoredActivity ? <section className="request-tool-progress" aria-label={uiText('Current progress', '当前进度')} aria-live="polite">
+            {toolActivities.map(activity => <article className={`research-log-entry tool-activity ${activity.status}`} key={activity.callId}>
+              <strong>{toolActivityLabel(activity, uiText)}</strong>
+              {activity.purpose ? <div className="research-log-content"><p>{activity.purpose}</p></div> : null}
+            </article>)}
+            {restoredActivity ? <p className="restored-request-activity">{restoredActivity}</p> : null}
+            {toolActivities.length && !toolActivities.some(activity => activity.status === 'running')
+              ? <p className="restored-request-activity">{uiText('Reviewing the latest tool result…', '正在检查最新工具结果…')}</p> : null}
+          </section> : null}
           {live ? <article className="research-log-entry coordinator streaming"><strong>{speaker}</strong><div className="research-log-content"><CompactLogMarkdown content={live} /></div></article> : null}
           {!researchLog.length && !live && !currentActivities.length
             ? <article className="research-log-entry coordinator streaming"><strong>{speaker}</strong><div className="research-log-content"><p>{matchingTeam ? uiText('Preparing the first research update…', '正在准备第一条研究动态…') : uiText('Working on the request…', '正在处理请求…')}</p></div></article>
@@ -366,6 +386,7 @@ export function ConversationTranscript({
   taskResults,
   team,
   teamSnapshots = {},
+  requestActivity = null,
   pendingInteraction = null,
   interactionAnswer = '',
   onInteractionAnswer = () => undefined,
@@ -386,6 +407,7 @@ export function ConversationTranscript({
   taskResults: TaskResultRecord[];
   team: TeamSnapshot | null;
   teamSnapshots?: Readonly<Record<string, TeamSnapshot>>;
+  requestActivity?: RequestActivity | null;
   pendingInteraction?: PendingInteraction | null;
   interactionAnswer?: string;
   onInteractionAnswer?: (answer: string) => void;
@@ -495,6 +517,9 @@ export function ConversationTranscript({
           group={group}
           streaming={streaming}
           team={groupTeam}
+          requestActivity={requestActivity}
+          workflow={task?.workflow}
+          waitingForInput={Boolean(group.active && pendingInteraction)}
           hiddenProcessItemId={checkpointSummary?.item_id ?? null}
           onOpenReport={onOpenReport}
         />
@@ -539,7 +564,7 @@ export function ConversationTranscript({
       </section>;
     })}
     {activeRequestId && !hasActive ? <>
-      <Working group={{key: activeRequestId, requestId: activeRequestId, userItems: [], processItems: [], finalItem: null, active: true}} streaming={streaming} team={team} onOpenReport={onOpenReport} />
+      <Working group={{key: activeRequestId, requestId: activeRequestId, userItems: [], processItems: [], finalItem: null, active: true}} streaming={streaming} team={team} requestActivity={requestActivity} workflow={task?.workflow} waitingForInput={Boolean(pendingInteraction)} onOpenReport={onOpenReport} />
     </> : null}
     {!task && !workspacePath ? <div className="empty-state"><MessageSquare size={34} /><p>{uiText('Open a project to begin.', '打开一个项目以开始。')}</p></div> : null}
     {!task && workspacePath ? <div className="empty-state"><MessageSquare size={34} /><p>{uiText('Create or select a research task.', '创建或选择一个研究任务。')}</p></div> : null}
