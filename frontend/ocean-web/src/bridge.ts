@@ -2,11 +2,13 @@ import type {
   BackendFrame, DesktopBackendStatus, ModelProviderStatus, OceanDesktopBridge,
   WorkspaceSourceSelection,
 } from '../../ocean-desktop/src/shared/bridge.js';
+import {configureWebBasemap} from './basemap.js';
 
 type Configuration = {
   project: {path: string; name: string};
   provider: ModelProviderStatus;
   backend: DesktopBackendStatus;
+  map?: {cartoKey: string};
 };
 
 async function configuration(): Promise<Configuration> {
@@ -62,6 +64,7 @@ function choosePath(): Promise<WorkspaceSourceSelection | null> {
 
 export async function installWebBridge(): Promise<void> {
   const initial = await configuration();
+  configureWebBasemap(initial.map?.cartoKey ?? '');
   const listeners = new Set<(frame: BackendFrame) => void>();
   let socket: WebSocket | null = null;
   let closed = false;

@@ -49,6 +49,9 @@ class WebSettings:
     archived_cache_hours: float = 6
     sweep_seconds: float = 3600
     model_config: WebModelConfig | None = None
+    log_dir: Path | None = None
+    sandbox_python: Path | None = None
+    carto_api_key: str = ""
 
     @property
     def state(self):
@@ -146,7 +149,10 @@ class ProtocolBackend:
                        "OCEAN_WEB_ARCHIVED_CACHE_HOURS": str(self.settings.archived_cache_hours),
                        "OCEAN_WEB_SWEEP_SECONDS": str(self.settings.sweep_seconds),
                        "LANGSMITH_TRACING": "false", "LANGCHAIN_TRACING_V2": "false"}
-        self.log = (self.settings.state / "web-agent-server.log").open("ab")
+        environment["OCEAN_SANDBOX_PYTHON"] = str(self.settings.sandbox_python or sys.executable)
+        log_dir = self.settings.log_dir or self.settings.state
+        log_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
+        self.log = (log_dir / "web-agent-server.log").open("ab")
         try:
             if self.settings.model_config is not None:
                 directory = self.settings.model_config.materialize(self.settings.state / "model-config")
@@ -317,6 +323,8 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
             return JSONResponse({"error": "origin_not_allowed"}, status_code=403)
         return JSONResponse({"project": {"path": _WORKSPACE_ALIAS, "name": settings.workspace.name},
                              "provider": await asyncio.to_thread(provider_status, settings.model_config),
+                             # CARTO's browser key is intentionally public, unlike model credentials.
+                             "map": {"cartoKey": settings.carto_api_key},
                              "backend": backend.status()}, headers={"Cache-Control": "no-store"})
 
     async def attach(request: Request):

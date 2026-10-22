@@ -1,10 +1,8 @@
 import type {StyleSpecification} from 'maplibre-gl';
 import landUrl from '../../ocean-desktop/src/renderer/assets/basemap/ne_110m_land.geojson?url';
 
-const cartoKey = (import.meta.env.VITE_CARTO_BASEMAPS_API_KEY ?? '').trim();
-
 /** Local geography remains below CARTO, and is used alone without a key. */
-export const WEB_BASEMAP_STYLE: StyleSpecification = {
+function basemapStyle(cartoKey: string): StyleSpecification {return {
   version: 8,
   sources: {
     land: {type: 'geojson', data: landUrl, attribution: 'Natural Earth (public domain)'},
@@ -25,4 +23,12 @@ export const WEB_BASEMAP_STYLE: StyleSpecification = {
       'raster-brightness-min': .12, 'raster-brightness-max': .96,
     }}] : []),
   ],
-};
+};}
+
+export let WEB_BASEMAP_STYLE = basemapStyle('');
+
+// Loaded before the shared renderer mounts. Map settings come from web.toml,
+// so changing the map key needs a service restart, never a frontend rebuild.
+export function configureWebBasemap(cartoKey: string): void {
+  WEB_BASEMAP_STYLE = basemapStyle(cartoKey.trim());
+}

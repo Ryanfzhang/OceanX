@@ -7,7 +7,7 @@ import sys
 import pytest
 from starlette.testclient import TestClient
 
-from oceanx.web.config import load_web_model_config
+from oceanx.web.config import load_web_config, load_web_model_config
 from oceanx.web.server import WebSettings, create_app
 from tests.test_oceanx.test_web_entry import StubBackend
 
@@ -50,12 +50,14 @@ def test_browser_status_never_contains_credentials_or_endpoint(tmp_path, monkeyp
     config = load_web_model_config(write_config(tmp_path))
     frontend = tmp_path / "frontend"; frontend.mkdir()
     (frontend / "index.html").write_text("web")
-    app = create_app(WebSettings(tmp_path / "workspace", frontend, model_config=config), backend_factory=StubBackend)
+    app = create_app(WebSettings(tmp_path / "workspace", frontend, model_config=config,
+                                 carto_api_key="public-map-key"), backend_factory=StubBackend)
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         response = client.get("/api/config")
     assert response.json()["provider"]["coordinator"]["model"] == "deepseek-flash"
     assert response.json()["provider"]["expert"]["model"] == "deepseek-flash"
     assert response.json()["provider"]["configured"] is True
+    assert response.json()["map"] == {"cartoKey": "public-map-key"}
     for secret in ("web-private-key", "WEB_TEST_KEY", "api.deepseek.com", str(tmp_path)):
         assert secret not in response.text
         assert secret not in repr(config)
@@ -84,3 +86,63 @@ def test_inline_key_can_override_shared_environment_key(tmp_path, monkeypatch):
     config = load_web_model_config(write_config(tmp_path, '\n[models.expert]\napi_key="expert-key"\n'))
     assert config.roles["coordinator"]["api_key"] == "shared-key"
     assert config.roles["expert"]["api_key"] == "expert-key"
+
+
+def test_one_config_controls_server_models_map_cleanup_and_logs(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEB_TEST_KEY", "web-private-key")
+    (tmp_path / "sources").mkdir()
+    frontend = tmp_path / "frontend"; frontend.mkdir()
+    (frontend / "index.html").write_text("web")
+    path = write_config(tmp_path, '''
+[server]
+workspace = "./project"
+frontend = "./frontend"
+source_roots = ["./sources"]
+port = 8768
+log_dir = "./logs"
+[cleanup]
+cache_hours = 12
+archived_cache_hours = 2
+sweep_minutes = 15
+[map]
+carto_api_key = "public-map-key"
+''')
+    elsewhere = tmp_path / "elsewhere"; elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    config = load_web_config(path)
+    assert config.workspace == tmp_path / "project"
+    assert config.source_roots == (tmp_path / "sources",)
+    assert config.log_dir == tmp_path / "logs"
+    assert config.port == 8768
+    assert (config.cache_hours, config.archived_cache_hours, config.sweep_seconds) == (12, 2, 900)
+    assert config.carto_api_key == "public-map-key"
+    assert config.model_config.roles["expert"]["model"] == "deepseek-flash"
+    from oceanx.web.__main__ import main
+    calls = []
+    monkeypatch.setattr("oceanx.web.__main__.uvicorn.run", lambda app, **kwargs: calls.append((app, kwargs)))
+    monkeypatch.setattr(sys, "argv", ["oceanx.web", "--config", str(path)])
+    main()
+    app, options = calls[0]
+    settings = app.state.backend.settings
+    assert settings.workspace == config.workspace
+    assert settings.log_dir == config.log_dir
+    assert settings.carto_api_key == config.carto_api_key
+    assert settings.model_config.roles == config.model_config.roles
+    assert options["host"] == "127.0.0.1" and options["port"] == config.port
+    assert options["log_config"]["handlers"]["web_file"]["filename"] == str(tmp_path / "logs/web-console.log")
+
+
+@pytest.mark.parametrize("section", [
+    '[server]\nworkspace="./project"\nport=0',
+    '[server]\nworkspace="./project"\nsource_roots="/srv"',
+    '[server]\nworkspace="./project"\nsource_roots=["./missing"]',
+    '[server]\nworkspace="./project"\nsandbox_python="./missing-python"',
+    '[server]\nworkspace="./project"\nsource_root=[]',
+    '[server]\nworkspace="./project"\n[cleanup]\ncache_hours=nan',
+    '[server]\nworkspace="./project"\n[cleanup]\nsweep_minutes=0',
+    '[server]\nworkspace="./project"\n[map]\ncarto_api_key=42',
+])
+def test_unified_config_rejects_invalid_server_settings(tmp_path, monkeypatch, section):
+    monkeypatch.setenv("WEB_TEST_KEY", "web-private-key")
+    with pytest.raises(ValueError):
+        load_web_config(write_config(tmp_path, section))

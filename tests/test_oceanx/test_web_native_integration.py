@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from starlette.testclient import TestClient
 
+from oceanx.web.config import load_web_model_config
 from oceanx.web.server import ProtocolBackend, WebSettings, create_app
 
 
@@ -19,9 +20,16 @@ def test_web_native_task_reconnect_and_report_grant(tmp_path, monkeypatch):
     (sources / "data.csv").write_text("x,y\n1,2\n")
     monkeypatch.setenv("OCEAN_FIXTURE_MODE", "code")
     monkeypatch.setattr("oceanx.web.server.provider_status", lambda *_: {"configured": True})
-    app = create_app(WebSettings(workspace, frontend, (sources,)), backend_factory=FixtureBackend)
+    config_path = tmp_path / "web.toml"
+    config_path.write_text('[model]\nprovider="deepseek"\nmodel="deepseek-flash"\napi_key="fixture-only"\n')
+    logs = tmp_path / "web-logs"
+    app = create_app(WebSettings(workspace, frontend, (sources,),
+                                 model_config=load_web_model_config(config_path), log_dir=logs),
+                     backend_factory=FixtureBackend)
     origin = "http://127.0.0.1:8765"
     with TestClient(app, base_url=origin) as client:
+        assert (logs / "web-agent-server.log").is_file()
+        assert (workspace / ".oceanx-web/model-config/settings.json").is_file()
         ready = client.get("/api/config").json()["backend"]["readyEvent"]["payload"]
         context = {"client_id": ready["client_id"], "session_id": ready["session_id"], "workspace_id": "ws_desktop"}
         revision = 0

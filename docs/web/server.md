@@ -1,133 +1,132 @@
 # Single-user server web entry
 
-Run OceanX on a server, forward its loopback port with SSH, and use the existing
-workbench in a browser. This entry is for one owner; multiple browser tabs can
-connect to the same project without blocking each other.
-It has no account system and no server file browser. The sidebar lists tasks
-directly; the native workspace remains an internal storage detail. There is no
-Review UI, and the web router subclass disables automatic library maintenance
-and rejects manual learning requests. Desktop review and learning are unchanged.
+Run directly from the Git checkout and forward its loopback port with SSH.
+There is one user-edited configuration file: **`web.toml` in the repository root**.
+It controls model APIs, port, workspace, source roots, map and cleanup. The file
+is ignored by Git; only the example is committed. Desktop settings and agent
+implementation are unchanged.
 
-## Build and start
+The sidebar lists tasks directly. There is no account system, filesystem browser,
+Review UI or automatic library learning. Multiple browser tabs share the owner's
+existing native task backend.
 
-Use the same Python environment as OceanX, with the dependencies in
-`pyproject.toml` installed. Build with Node 22.12+ or Node 24:
+## Install, configure and run
+
+Use an activated Python environment with the repository's `pyproject.toml`
+dependencies installed. Use Node 22.12+ or Node 24 to build the frontend:
 
 ```sh
-cd frontend/ocean-web
-npm ci
-npm run build
-cd ../..
-mkdir -p /srv/oceanx-config
-cp docs/web/web.example.toml /srv/oceanx-config/web.toml
-chmod 600 /srv/oceanx-config/web.toml
-# Set your API key in web.toml, or export the environment variable it names.
-export DEEPSEEK_API_KEY='your-key'
-python -m oceanx.web --config /srv/oceanx-config/web.toml \
-  --workspace /srv/oceanx-project \
-  --allow-source-root /srv/ocean-data \
-  --allow-source-root /srv/papers \
-  --port 8765
+# From the repository root:
+cp docs/web/web.example.toml web.toml
+chmod 600 web.toml
+# Edit web.toml: API credentials, actual workspace and existing source roots.
+npm --prefix frontend/ocean-web ci
+npm --prefix frontend/ocean-web run build
+bash scripts/run_web.sh
 ```
 
-The source roots are server-side settings. They are not listed in the browser.
-Use the actual mounted paths visible to the server process. Repeat
-`--allow-source-root` for additional source locations.
+The launcher always imports Python source from this checkout. It starts
+`python -m oceanx.web`, which reads `./web.toml`. To use another config location:
 
-## Model API configuration
+```sh
+bash scripts/run_web.sh --config /srv/oceanx/web.toml
+```
 
-`--config` is required. The server-owned TOML file is the single source of model
-settings for this web instance; Desktop profiles are never used by the CLI.
-Copy [web.example.toml](web.example.toml) and fill in your provider, exact model
-ID, base URL, and either `api_key` or `api_key_env`. Supported providers are
-`deepseek`, `openai` (including compatible APIs), and `anthropic`.
+All relative paths inside the TOML file are resolved relative to that file.
+The default frontend is the checkout's `frontend/ocean-web/dist`. There is no
+separate release copy to synchronize. An optional local `.web-python-deps`
+directory can hold isolated dependencies if the server's shared Python
+environment must remain untouched; it contains no user configuration.
+
+A minimal configuration is:
 
 ```toml
+[server]
+workspace = "/srv/oceanx-workspace"
+source_roots = ["/srv/ocean-data", "/srv/papers"]
+port = 8765
+
 [model]
 provider = "deepseek"
 model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
 api_key = "your-key"
+
+[map]
+carto_api_key = "your-browser-map-key"
+
+[cleanup]
+cache_hours = 24
+archived_cache_hours = 6
+sweep_minutes = 60
 ```
 
-`[model]` applies to both coordinator and experts. Optional `[models.coordinator]`
-and `[models.expert]` tables override individual fields for a role. Output limit
-`max_tokens` is shared by both roles (default 65536, native minimum 24576).
-Omit `image_inputs` to retain native capability detection, or explicitly set it
-to true/false for your model.
-An environment credential must be exported in the service's environment, including
-when started in tmux. Invalid configuration stops startup without quoting secrets.
+Copy the [complete example](web.example.toml) for additional settings.
+`[model]` applies to coordinator and experts. Optional `[models.coordinator]`
+and `[models.expert]` tables override individual fields. Providers are `deepseek`,
+`openai` (including compatible APIs), and `anthropic`. Instead of `api_key`, use
+`api_key_env` to name an exported environment variable. Output limit `max_tokens`
+is shared by both roles (default 65536, native minimum 24576). Omit `image_inputs`
+to retain native capability detection, or explicitly set it to true/false.
 
-Keep this file outside the repository, allowed source roots and task folders,
-and restrict it to the service owner (`chmod 600`). The web entry writes private
-native profiles under `<workspace>/.oceanx-web/model-config` and passes that
-directory only to its own backend process. It reuses the native model adapters;
-it never modifies `~/.oceanmind`, Desktop configuration or agent implementation.
-The browser shows model IDs and configured status, never keys or endpoint URLs.
-Restart the web service after editing the file; finish any active task first.
+The config file should not be inside a source root or task folder. Model keys
+stay on the server. Private native profiles under `<workspace>/.oceanx-web/model-config`
+are generated automatically from `web.toml` on startup; **do not edit them**.
+They let the web entry reuse the existing native adapters without modifying
+`~/.oceanmind` or Desktop. Restart the web service after changing configuration,
+finishing any active task first. Invalid settings stop startup without quoting keys.
 
-For long sessions, start the command inside a server-side tmux session. Closing
-or refreshing the browser, or losing the SSH tunnel, leaves the server's native
-research run connected and working. Stopping the web service stops its backend;
-it does not promise recovery of an interrupted model run after a server restart.
+## Access and long sessions
 
-From the local machine:
+Start `bash scripts/run_web.sh` inside tmux with the Python environment activated.
+From your local machine:
 
 ```sh
-ssh -N -L 8765:127.0.0.1:8765 user@server
+ssh -N -L 8766:127.0.0.1:8765 user@server
 ```
 
-Open `http://127.0.0.1:8765`. To use a different local port, forward
-`8766:127.0.0.1:8765` and open `http://127.0.0.1:8766`. Both listeners bind to loopback. No public bind
-option is provided.
+Open `http://127.0.0.1:8766`. Closing a tab or losing the tunnel leaves the native
+research run working. Stopping the service stops its backend; restart recovery
+of an interrupted model run is not guaranteed. There is no public bind option.
+
+## Logs and task data
+
+`server.workspace` is where tasks, reports and state are kept; existing workspaces
+can remain outside the checkout. `server.log_dir` sets the log directory. If
+omitted, logs go to `<workspace>/.oceanx-web`:
+
+- `web-console.log`: web gateway startup and access logs, also shown in the terminal.
+- `web-agent-server.log`: native task backend logs, appended across restarts.
+
+Changing the code location does not require moving the task data or these logs.
+Model API keys and internal filesystem paths are not sent in browser config.
+The map key is a browser key, described below.
 
 ## Add data or a PDF
 
-Create a task and use the existing attachment button. Enter the complete server
-path to a file or directory. OceanX validates that exact path against the allowed
-roots, then uses its existing read-only source import. It does not copy large
-source files or offer directory listing, path search, or arbitrary file download.
-PDF text extraction uses the existing PDF source support.
+Create or select a task and click the attachment button. Enter the complete
+server path to a file or directory. OceanX validates the path against source roots
+and reuses read-only source import. There is no directory listing, search or
+copy of large files. PDF text extraction uses native PDF support.
 
-Only explicitly granted result files can be downloaded. Downloads verify the
-native size and checksum and are bounded to 25 MiB per file. Closing and
-reopening a result obtains a fresh grant when its short-lived grant expires.
+Only explicitly granted result files can be downloaded. Downloads verify native
+size/checksum and are bounded to 25 MiB per file. Reopening a result renews a grant.
 
 ## Map
 
-The web build reads `VITE_CARTO_BASEMAPS_API_KEY` from its own
-`frontend/ocean-web/.env.local`. Copy the existing Desktop CARTO setting there
-before building; it is not automatically loaded from the Desktop directory.
-The local configuration is ignored by Git. As in Desktop, this browser map key
-is included in built assets and visible in tile requests; it is not a model API
-credential. A changed key requires rebuilding the web frontend.
+`map.carto_api_key` in **the same `web.toml`** controls the map at runtime.
+No web `.env.local` or frontend rebuild is needed to change it. The server returns
+only this browser map key to the frontend; as in Desktop, it is visible in tile
+requests. Model API credentials are never returned. Empty uses the repository's
+local Natural Earth 1:110m geography; local geography also sits under CARTO tiles.
+Scientific overlays and Desktop map configuration are unchanged.
 
-With a key, the map uses CARTO tiles. Without one, it uses the repository's
-public-domain Natural Earth 1:110m land and coastline geometry. Local geography
-also sits below the CARTO layer. Scientific fields and result features continue
-to use the native overlays. Desktop's configuration and source are unchanged.
+## Cleanup
 
-## Web-only retention
-
-The backend subclass uses the original cache cleaner's protected-path and
-file-pruning operations, with these defaults:
-
-- Unarchived task intermediates: after 24 hours without task activity.
-- Archived task intermediates: after 6 hours.
-- Sweep: at startup and once per hour.
-
-Override with `--cache-hours`, `--archived-cache-hours`, and `--sweep-minutes`.
-Active requests, working workflows and running executions remain protected.
-Bound source files and published result files are retained. Cleanup does not
-remove task history or the entire project. Desktop retains its original policy.
-
-Web state lives under `<workspace>/.oceanx-web`; tasks use the native `OceanX Tasks`
-project folders. Use a dedicated web workspace rather than opening a Desktop
-project concurrently. Neither the original Desktop backend source nor its
-renderer is modified. The browser adapter implements the existing bridge; its
-private server connection calls the native protocol, task runner, scientific
-executor and result interfaces. The two retention classes inherit their native
-counterparts.
+The web subclass reuses the native cleaner with shorter retention, set under
+`[cleanup]`. Active requests, working workflows, running executions, bound sources
+and published results are protected. Only managed intermediates are pruned;
+task history and the entire workspace are not removed. Desktop policy is unchanged.
 
 ## Validation
 
@@ -137,12 +136,9 @@ python -m pytest tests/test_oceanx/test_web_entry.py \
   tests/test_oceanx/test_web_native_integration.py \
   tests/test_oceanx/test_cache_cleanup.py \
   tests/test_oceanx/test_static_figure_delivery.py -q
-cd frontend/ocean-web
-npm run check
-npm run build
+npm --prefix frontend/ocean-web run check
+npm --prefix frontend/ocean-web run build
 ```
 
 The native integration test launches the real Agent Server with deterministic
-test models and synthetic arrays. It checks source binding, task submission,
-browser disconnection/reconnection, scientific figure delivery, result grants
-and report reading without model-provider requests.
+test models and synthetic arrays. No provider calls are made.

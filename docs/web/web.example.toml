@@ -1,11 +1,32 @@
-# Copy outside the repository to e.g. /srv/oceanx-config/web.toml; chmod 600 it.
+# Copy to web.toml in the repository root (Git-ignored); chmod 600 it.
+# This is the only user-edited web config. Relative paths start at this file.
+[server]
+workspace = "./.oceanx/web-workspace"
+port = 8765
+source_roots = ["/srv/ocean-data", "/srv/papers"]
+# Defaults to <workspace>/.oceanx-web; console and backend logs are appended.
+# log_dir = "./.oceanx/web-logs"
+# Defaults to the repository's frontend/ocean-web/dist.
+# frontend = "./frontend/ocean-web/dist"
+# Defaults to the Python interpreter running the service.
+# sandbox_python = "/path/to/science-environment/bin/python"
+
+[cleanup]
+cache_hours = 24
+archived_cache_hours = 6
+sweep_minutes = 60
+
+[map]
+# Browser map key (public in tile requests). Empty uses local Natural Earth.
+carto_api_key = ""
+
 # Shared by coordinator and all experts. Changes take effect after a restart.
 [model]
 provider = "deepseek"
 model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
-api_key_env = "DEEPSEEK_API_KEY"
-# Or replace api_key_env with: api_key = "your-key"
+api_key = "your-key"
+# Or replace api_key with: api_key_env = "DEEPSEEK_API_KEY"
 max_tokens = 65536
 # Optional capability override; omitted means native model capability detection.
 # image_inputs = true
