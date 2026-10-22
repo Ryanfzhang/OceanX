@@ -74,8 +74,17 @@ Node.js 由 Conda 管理，前端依赖由 `npm ci` 按 `package-lock.json` 安�
 
 ## 模型配置和启动
 
-日常 OceanX 在前端设置 API 地址、密钥和模型；继续保留原有角色配置功能。
-命令行部署可用 `ocean configure-models` 的 JSON 输入接口。
+从源码日常启动统一用两个入口（在仓库根目录、激活相应环境后运行）：
+
+| 模式 | 启动脚本 | 私有配置 | GitHub 示例 |
+| --- | --- | --- | --- |
+| 网页版 | `bash scripts/run_web.sh` | `web.toml` | `web.example.toml` |
+| 单机桌面版 | `bash scripts/run_desktop.sh` | `desktop.toml` | `desktop.example.toml` |
+
+首次复制对应示例，填写模型 API 和地图 key。私有配置不提交 Git。
+见[网页部署](docs/web/server.md)与[单机启动说明](docs/desktop/launcher.md)。
+原前端设置、`npm start` 和 `ocean configure-models` 接口保持兼容；
+使用新脚本时，API 的持久修改写入对应 TOML，启动时会生成原后端所需的配置。
 **benchmark 独立使用 `benchmarking/.env`，统一为 DeepSeek Flash，不会读取或改写这些日常模型设置。**
 在服务器复制 `benchmarking/.env.example` 为 `.env` 后填写一个 API key；真实 `.env` 不提交 Git。
 

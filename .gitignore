@@ -69,6 +69,7 @@ native/windows-sandbox-broker/target/
 .oceanmind/
 .oceanx/
 /web.toml
+/desktop.toml
 /.web-python-deps/
 react_tui_smoke.txt
 

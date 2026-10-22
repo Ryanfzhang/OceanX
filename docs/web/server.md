@@ -17,7 +17,7 @@ dependencies installed. Use Node 22.12+ or Node 24 to build the frontend:
 
 ```sh
 # From the repository root:
-cp docs/web/web.example.toml web.toml
+cp web.example.toml web.toml
 chmod 600 web.toml
 # Edit web.toml: API credentials, actual workspace and existing source roots.
 npm --prefix frontend/ocean-web ci
@@ -61,7 +61,7 @@ archived_cache_hours = 6
 sweep_minutes = 60
 ```
 
-Copy the [complete example](web.example.toml) for additional settings.
+Copy the [complete example](../../web.example.toml) for additional settings.
 `[model]` applies to coordinator and experts. Optional `[models.coordinator]`
 and `[models.expert]` tables override individual fields. Providers are `deepseek`,
 `openai` (including compatible APIs), and `anthropic`. Instead of `api_key`, use

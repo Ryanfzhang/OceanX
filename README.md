@@ -2,6 +2,17 @@
 
 # OceanX
 
+## Source checkout: two normal launchers
+
+| Mode | Launch from the repository root | User configuration | Committed example |
+| --- | --- | --- | --- |
+| Server web | `bash scripts/run_web.sh` | `web.toml` | [web.example.toml](web.example.toml) |
+| Local Desktop | `bash scripts/run_desktop.sh` | `desktop.toml` | [desktop.example.toml](desktop.example.toml) |
+
+Activate the appropriate Python/Node environment first. Copy and fill in the
+example once; private files with credentials are ignored by Git. See the
+[web deployment guide](docs/web/server.md) and [Desktop launcher guide](docs/desktop/launcher.md).
+
 ## Native release: start with a new workspace state
 
 This release intentionally does not import old tasks, result formats, or database versions.

@@ -1,0 +1,27 @@
+# Copy to desktop.toml in the repository root; chmod 600 desktop.toml.
+# Only the example is committed. Fill in your key before launching.
+[desktop]
+# Generated native profiles; not task data. No manual editing needed here.
+runtime_dir = "./.oceanx/desktop-launch"
+# Optional separate interpreter for scientific computation:
+# sandbox_python = "/path/to/science-environment/bin/python"
+
+[model]
+provider = "deepseek"
+model = "deepseek-flash"
+base_url = "https://api.deepseek.com"
+api_key = "your-key"
+# Or replace api_key with: api_key_env = "DEEPSEEK_API_KEY"
+max_tokens = 65536
+# Omit image_inputs to retain native model capability detection.
+
+[map]
+# Browser map key, visible in tile requests. Empty disables CARTO tiles.
+carto_api_key = ""
+
+# Optional per-role overrides, with the same fields as [model]:
+# [models.expert]
+# provider = "openai"
+# model = "your-model-id"
+# base_url = "https://your-provider.example/v1"
+# api_key_env = "EXPERT_API_KEY"
