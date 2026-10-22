@@ -8,3 +8,8 @@
 .web-source-dialog [role=alert] {color: #b91c1c; min-height: 1.6em;}
 .web-source-dialog form > div {display: flex; gap: 10px; justify-content: flex-end;}
 .web-source-dialog button {padding: 7px 14px; cursor: pointer;}
+
+.web-task-sidebar .web-new-task {display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: inherit; cursor: pointer;}
+.web-task-sidebar .web-new-task:hover {background: var(--surface-hover, #e4edf3);}
+.web-task-list .task-row {margin-left: 0; padding-left: 8px;}
+.web-welcome-note {color: var(--text-muted, #657785); margin: 0 0 24px; text-align: center;}

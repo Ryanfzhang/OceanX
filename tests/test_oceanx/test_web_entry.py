@@ -82,7 +82,8 @@ def test_reference_import_is_revalidated_and_project_cannot_switch(setup):
         prepare_frame(settings, frame)
     with pytest.raises(ValueError):
         prepare_frame(settings, {"type": "workspace.open", "payload": {"path": "/etc"}})
-    for kind in ("system.shutdown", "portable.export.create", "arbitrary.command"):
+    for kind in ("system.shutdown", "portable.export.create", "arbitrary.command",
+                 "research.library.get", "research.library.update", "research.library.mark"):
         with pytest.raises(ValueError):
             prepare_frame(settings, {"type": kind, "payload": {}})
 
@@ -216,3 +217,32 @@ def test_shared_native_events_are_routed_by_task_and_request_owner(setup):
     backend.disconnect(first)
     assert first not in backend.browser_queues and not backend.request_queues
     assert backend.closing is False
+
+
+@pytest.mark.asyncio
+async def test_web_review_hooks_do_not_modify_the_desktop_router(tmp_path, monkeypatch):
+    from oceanx.backend.host import OceanBackendHost
+    from oceanx.backend.router import OceanRequestRouter
+    from oceanx.web.backend import WebBackendHost, WebRequestRouter
+
+    original_schedule = OceanRequestRouter._schedule_research_consolidation
+    original_update = OceanRequestRouter._update_library
+    desktop = OceanBackendHost(tmp_path / "desktop", write_frame=lambda _: None)
+    web = WebBackendHost(tmp_path / "web", write_frame=lambda _: None)
+    try:
+        assert type(desktop.router) is OceanRequestRouter
+        assert isinstance(web.router, WebRequestRouter)
+        assert web.stdio.router is web.router
+        assert web.router.store is web.store and web.router.event_bus is web.event_bus
+        def unexpected(*args, **kwargs):
+            raise AssertionError("Web task must not start meta-agent upkeep")
+        monkeypatch.setattr(web.router, "_project_research", unexpected)
+        assert web.router._schedule_research_consolidation(None) is None
+        assert web.router._maintain_library("ws_desktop") is None
+        with pytest.raises(ValueError, match="unavailable"):
+            web.router._update_library("ws_desktop", review=True)
+        assert OceanRequestRouter._schedule_research_consolidation is original_schedule
+        assert OceanRequestRouter._update_library is original_update
+    finally:
+        await web.close()
+        await desktop.close()

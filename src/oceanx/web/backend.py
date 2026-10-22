@@ -14,6 +14,7 @@ from starlette.applications import Starlette
 from starlette.routing import WebSocketRoute
 
 from oceanx.backend.host import OceanBackendHost
+from oceanx.backend.router import OceanRequestRouter
 from oceanx.cache_cleanup import CacheCleanupResult, TaskCacheCleaner
 from oceanx.research.app import protocol
 
@@ -90,9 +91,32 @@ class WebTaskCacheCleaner(TaskCacheCleaner):
         return CacheCleanupResult(task_id, count, released)
 
 
+class WebRequestRouter(OceanRequestRouter):
+    """Native task routing with web-only review/learning hooks disabled."""
+
+    @classmethod
+    def from_native(cls, native):
+        # Adopt the freshly initialized native state without running recovery a
+        # second time. No global class, Desktop instance or source is patched.
+        router = cls.__new__(cls)
+        router.__dict__.update(vars(native))
+        return router
+
+    def _schedule_research_consolidation(self, request):
+        return None
+
+    def _maintain_library(self, workspace_id):
+        return None
+
+    def _update_library(self, workspace_id, *, review, wait=True):
+        raise ValueError("Review and learning are unavailable in the web entry")
+
+
 class WebBackendHost(OceanBackendHost):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.router = WebRequestRouter.from_native(self.router)
+        self.stdio.router = self.router
         self.cache_cleaner = WebTaskCacheCleaner(
             store=self.store, task_workspaces=self.task_workspace_projector,
             active_hours=positive_setting("OCEAN_WEB_CACHE_HOURS", 24),

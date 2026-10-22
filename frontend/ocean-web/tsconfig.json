@@ -5,8 +5,19 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "skipLibCheck": true,
-    "types": ["vite/client"],
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "types": [
+      "vite/client"
+    ],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts", "../ocean-desktop/src/shared/bridge.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "../ocean-desktop/src/shared/bridge.ts"
+  ]
 }

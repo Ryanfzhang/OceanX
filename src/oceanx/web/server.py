@@ -79,7 +79,8 @@ def local_request(scope) -> bool:
 def prepare_frame(settings: WebSettings, incoming: dict) -> dict:
     frame = copy.deepcopy(incoming)
     kind = frame.get("type")
-    if kind not in REQUEST_CAPABILITIES or kind in {"system.shutdown", "portable.export.create"}:
+    if (kind not in REQUEST_CAPABILITIES or kind in {"system.shutdown", "portable.export.create"}
+            or (isinstance(kind, str) and kind.startswith("research.library."))):
         raise ValueError("request_not_available")
     payload = frame.get("payload")
     if not isinstance(payload, dict):

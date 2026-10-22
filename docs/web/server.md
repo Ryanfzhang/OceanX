@@ -3,7 +3,10 @@
 Run OceanX on a server, forward its loopback port with SSH, and use the existing
 workbench in a browser. This entry is for one owner; multiple browser tabs can
 connect to the same project without blocking each other.
-It has no account system and no server file browser.
+It has no account system and no server file browser. The sidebar lists tasks
+directly; the native workspace remains an internal storage detail. There is no
+Review UI, and the web router subclass disables automatic library maintenance
+and rejects manual learning requests. Desktop review and learning are unchanged.
 
 ## Build and start
 
@@ -58,6 +61,14 @@ PDF text extraction uses the existing PDF source support.
 Only explicitly granted result files can be downloaded. Downloads verify the
 native size and checksum and are bounded to 25 MiB per file. Closing and
 reopening a result obtains a fresh grant when its short-lived grant expires.
+
+## Map
+
+The web bundle reuses the repository's public-domain Natural Earth 1:110m land
+geometry for background land and coastlines. No external tile service or API key
+is required. This is a coarse orientation map; scientific fields and result
+features continue to use the existing native overlays. It adds no new research
+calculation. Desktop keeps its own basemap configuration.
 
 ## Web-only retention
 
