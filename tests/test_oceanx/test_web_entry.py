@@ -1,4 +1,5 @@
 """The web adapter must not widen file access or change Desktop cleanup policy."""
+import asyncio
 import hashlib
 from datetime import UTC, datetime, timedelta
 
@@ -9,7 +10,7 @@ from starlette.websockets import WebSocketDisconnect
 from oceanx.cache_cleanup import ACTIVE_CACHE_RETENTION, ARCHIVED_CACHE_RETENTION, TaskCacheCleaner
 from oceanx.web.backend import WebTaskCacheCleaner
 from oceanx.web.resources import PathNotAllowed, source_path
-from oceanx.web.server import WebSettings, create_app, prepare_frame
+from oceanx.web.server import ProtocolBackend, WebSettings, create_app, prepare_frame
 from tests.test_oceanx.test_cache_cleanup import _managed_agent, _Projector, _Store, _task
 
 
@@ -17,7 +18,7 @@ class StubBackend:
     """Only endpoint unit tests use this stub; native protocol has its own integration test."""
     def __init__(self, settings, grants):
         self.settings, self.grants = settings, grants
-        self.browser_queue = None
+        self.browser_queues = {}
         self.messages = []
         self.closed = False
 
@@ -30,9 +31,12 @@ class StubBackend:
     def status(self):
         return {"running": True, "workspacePath": "web-project", "readyEvent": None}
 
-    async def send(self, frame):
+    def disconnect(self, queue):
+        self.browser_queues.pop(queue, None)
+
+    async def send(self, frame, *, browser_queue):
         self.messages.append(prepare_frame(self.settings, frame))
-        await self.browser_queue.put({"kind": "event", "payload": {
+        await browser_queue.put({"kind": "event", "payload": {
             "type": "request.completed", "request_id": frame["request_id"], "payload": {"result": {}}}})
 
 
@@ -177,3 +181,38 @@ def test_archived_web_retention_and_invalid_configuration(tmp_path):
     assert cleaner.clean_task("task", now=now).file_count == 1
     with pytest.raises(ValueError):
         WebTaskCacheCleaner(store=store, task_workspaces=_Projector(tmp_path), active_hours=0)
+
+
+def test_two_forwarded_browser_tabs_remain_connected_independently(setup):
+    _, app, _ = setup
+    origin = "http://127.0.0.1:8766"
+    with (
+        TestClient(app, base_url=origin) as client,
+        client.websocket_connect("ws://127.0.0.1:8766/api/protocol", headers={"Origin": origin}) as first,
+    ):
+        with client.websocket_connect("ws://127.0.0.1:8766/api/protocol", headers={"Origin": origin}) as second:
+            assert len(app.state.backend.browser_queues) == 2
+            for name, tab in [("first", first), ("second", second)]:
+                tab.send_json({"request_id": name, "type": "task.list", "payload": {}})
+                assert tab.receive_json()["payload"]["request_id"] == name
+        first.send_json({"request_id": "still_open", "type": "task.list", "payload": {}})
+        assert first.receive_json()["payload"]["request_id"] == "still_open"
+        assert app.state.backend.closed is False
+
+
+def test_shared_native_events_are_routed_by_task_and_request_owner(setup):
+    settings, app, _ = setup
+    backend = ProtocolBackend(settings, app.state.grants)
+    first, second = asyncio.Queue(), asyncio.Queue()
+    backend.browser_queues = {first: "task_first", second: "task_second"}
+    backend.deliver({"type": "transcript.item.appended", "task_id": "task_first", "payload": {"text": "first only"}})
+    assert first.get_nowait()["payload"]["task_id"] == "task_first"
+    assert second.empty()
+    backend.request_queues["create"] = second
+    backend.deliver({"type": "request.completed", "request_id": "create", "task_id": "task_new", "payload": {}})
+    assert second.get_nowait()["payload"]["request_id"] == "create"
+    assert first.empty() and not backend.request_queues
+    backend.request_queues["running"] = first
+    backend.disconnect(first)
+    assert first not in backend.browser_queues and not backend.request_queues
+    assert backend.closing is False

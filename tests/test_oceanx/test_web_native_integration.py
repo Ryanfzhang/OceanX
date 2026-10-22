@@ -50,10 +50,15 @@ def test_web_native_task_reconnect_and_report_grant(tmp_path, monkeypatch):
                         task_revision = result["task"].get("task_revision", task_revision)
                     return result
 
-        with client.websocket_connect("ws://127.0.0.1:8765/api/protocol", headers={"Origin": origin}) as ws:
+        with (
+            client.websocket_connect("ws://127.0.0.1:8766/api/protocol", headers={"Origin": "http://127.0.0.1:8766"}) as spectator,
+            client.websocket_connect("ws://127.0.0.1:8765/api/protocol", headers={"Origin": origin}) as ws,
+        ):
+            assert len(app.state.backend.browser_queues) == 2
             terminal(ws, frame("session.open", {"requested_workspace_id": "ws_desktop"}))
             opened = terminal(ws, frame("workspace.open", {"path": "web-project"}))
             assert str(workspace) not in json.dumps(opened)
+            terminal(spectator, frame("task.list", {}))
             created = terminal(ws, frame("task.create", {"title": "Web native integration"}))
             task = created["task"]; context["task_id"] = task["task_id"]
             terminal(ws, frame("source.import", {"local_path": str(sources / "data.csv"), "title": "data.csv"}))

@@ -1,7 +1,8 @@
 # Single-user server web entry
 
 Run OceanX on a server, forward its loopback port with SSH, and use the existing
-workbench in a browser. This entry is for one owner and one active browser tab.
+workbench in a browser. This entry is for one owner; multiple browser tabs can
+connect to the same project without blocking each other.
 It has no account system and no server file browser.
 
 ## Build and start
@@ -42,7 +43,8 @@ From the local machine:
 ssh -N -L 8765:127.0.0.1:8765 user@server
 ```
 
-Open `http://127.0.0.1:8765`. Both listeners bind to loopback. No public bind
+Open `http://127.0.0.1:8765`. To use a different local port, forward
+`8766:127.0.0.1:8765` and open `http://127.0.0.1:8766`. Both listeners bind to loopback. No public bind
 option is provided.
 
 ## Add data or a PDF

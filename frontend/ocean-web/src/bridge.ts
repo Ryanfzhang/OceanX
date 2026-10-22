@@ -10,7 +10,7 @@ type Configuration = {
 };
 
 async function configuration(): Promise<Configuration> {
-  const response = await fetch('/api/config', {cache: 'no-store'});
+  const response = await fetch('/api/config', {cache: 'no-store', signal: AbortSignal.timeout(15000)});
   if (!response.ok) throw new Error('The server workspace is unavailable.');
   return response.json() as Promise<Configuration>;
 }
@@ -90,8 +90,21 @@ export async function installWebBridge(): Promise<void> {
     };
   };
   connect();
-  await Promise.race([connected, new Promise<never>((_, reject) => setTimeout(
-    () => reject(new Error('Cannot connect to the server workspace. Check the SSH tunnel.')), 15000))]);
+  let startupTimeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([connected, new Promise<never>((_, reject) => {
+      startupTimeout = setTimeout(() => reject(new Error(
+        '无法连接工作区。请检查 SSH 转发，或刷新重试 / Cannot connect to the workspace. Check the SSH tunnel or reload.'
+      )), 15000);
+    })]);
+  } catch (error) {
+    closed = true;
+    if (retry) clearTimeout(retry);
+    (socket as WebSocket | null)?.close();
+    throw error;
+  } finally {
+    clearTimeout(startupTimeout);
+  }
   const unavailable = async (): Promise<never> => {
     throw new Error('此设置由服务器启动配置管理 / Configure this on the server.');
   };

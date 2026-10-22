@@ -118,7 +118,8 @@ class ProtocolBackend:
         self.ready = None
         self._ready = asyncio.Event()
         self._send_lock = asyncio.Lock()
-        self.browser_queue: asyncio.Queue | None = None
+        self.browser_queues: dict[asyncio.Queue, str | None] = {}
+        self.request_queues: dict[str, asyncio.Queue] = {}
         self.lock = self.log = None
         self.failure = None
         self.closing = False
@@ -200,15 +201,7 @@ class ProtocolBackend:
                     continue
                 if self.ready is None and event.get("type") in {"system.error", "request.failed"}:
                     self._ready.set()
-                frame = self.public_frame(event)
-                if self.browser_queue is not None:
-                    try:
-                        self.browser_queue.put_nowait(frame)
-                    except asyncio.QueueFull:
-                        # Discard only UI frames, never cancel/replay the scientific run.
-                        while not self.browser_queue.empty():
-                            self.browser_queue.get_nowait()
-                        self.browser_queue.put_nowait({"kind": "resync"})
+                self.deliver(event)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - isolate and log failures at the transport boundary
@@ -218,15 +211,46 @@ class ProtocolBackend:
             if not self.closing:
                 self.failure = "Backend connection ended; restart the web service."
             self._ready.set()
-            if self.browser_queue is not None:
+            for queue in tuple(self.browser_queues):
                 with suppress(asyncio.QueueFull):
-                    self.browser_queue.put_nowait({"kind": "exit", "code": 1})
+                    queue.put_nowait({"kind": "exit", "code": 1})
 
-    async def send(self, incoming):
+    def deliver(self, event):
+        frame = self.public_frame(event)
+        owner = self.request_queues.get(event.get("request_id"))
+        task_id = event.get("task_id")
+        for queue, selected_task in tuple(self.browser_queues.items()):
+            # RPC replies always reach their requester; task progress reaches
+            # only tabs displaying that task. The native backend stays shared.
+            if task_id and task_id != selected_task and queue is not owner:
+                continue
+            try:
+                queue.put_nowait(frame)
+            except asyncio.QueueFull:
+                # Refresh only the slow tab, never cancel/replay its research.
+                while not queue.empty():
+                    queue.get_nowait()
+                queue.put_nowait({"kind": "resync"})
+        if event.get("type") in {"request.completed", "request.failed", "request.cancelled"}:
+            self.request_queues.pop(event.get("request_id"), None)
+
+    def disconnect(self, queue):
+        self.browser_queues.pop(queue, None)
+        self.request_queues = {key: owner for key, owner in self.request_queues.items() if owner is not queue}
+
+    async def send(self, incoming, *, browser_queue=None):
         if self.failure or self.upstream is None:
             raise RuntimeError("backend_unavailable")
         frame = prepare_frame(self.settings, incoming)
         async with self._send_lock:
+            if browser_queue is not None:
+                if isinstance(frame.get("request_id"), str):
+                    self.request_queues[frame["request_id"]] = browser_queue
+                task_id = (frame.get("context") or {}).get("task_id")
+                if frame["type"] in {"task.open", "task.snapshot.get"}:
+                    task_id = frame["payload"].get("task_id")
+                if isinstance(task_id, str):
+                    self.browser_queues[browser_queue] = task_id
             await self.upstream.send(json.dumps(frame, ensure_ascii=False))
 
     def status(self):
@@ -325,12 +349,9 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
         if not local_request(socket) or socket.headers.get("origin") is None:
             await socket.close(code=1008)
             return
-        if backend.browser_queue is not None:
-            await socket.close(code=1013)
-            return
         await socket.accept()
         queue = asyncio.Queue(maxsize=256)
-        backend.browser_queue = queue
+        backend.browser_queues[queue] = None
 
         async def transmit():
             while True:
@@ -351,7 +372,7 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
                     frame = json.loads(raw)
                     if not isinstance(frame, dict):
                         raise TypeError("invalid_request")
-                    await backend.send(frame)
+                    await backend.send(frame, browser_queue=queue)
                 except (TypeError, ValueError, OSError, RuntimeError) as exc:
                     # No internal path/traceback is sent back as an error detail.
                     _LOG.info("Rejected web frame: %s", type(exc).__name__)
@@ -366,7 +387,7 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
         except (WebSocketDisconnect, RuntimeError, asyncio.CancelledError):
             pass
         finally:
-            backend.browser_queue = None
+            backend.disconnect(queue)
             for task in tasks:
                 task.cancel()
             with anyio.CancelScope(shield=True):
