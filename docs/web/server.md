@@ -64,11 +64,17 @@ reopening a result obtains a fresh grant when its short-lived grant expires.
 
 ## Map
 
-The web bundle reuses the repository's public-domain Natural Earth 1:110m land
-geometry for background land and coastlines. No external tile service or API key
-is required. This is a coarse orientation map; scientific fields and result
-features continue to use the existing native overlays. It adds no new research
-calculation. Desktop keeps its own basemap configuration.
+The web build reads `VITE_CARTO_BASEMAPS_API_KEY` from its own
+`frontend/ocean-web/.env.local`. Copy the existing Desktop CARTO setting there
+before building; it is not automatically loaded from the Desktop directory.
+The local configuration is ignored by Git. As in Desktop, this browser map key
+is included in built assets and visible in tile requests; it is not a model API
+credential. A changed key requires rebuilding the web frontend.
+
+With a key, the map uses CARTO tiles. Without one, it uses the repository's
+public-domain Natural Earth 1:110m land and coastline geometry. Local geography
+also sits below the CARTO layer. Scientific fields and result features continue
+to use the native overlays. Desktop's configuration and source are unchanged.
 
 ## Web-only retention
 
