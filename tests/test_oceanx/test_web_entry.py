@@ -46,7 +46,7 @@ def setup(tmp_path, monkeypatch):
     frontend = tmp_path / "frontend"; frontend.mkdir()
     (frontend / "index.html").write_text('<div id="root"></div>')
     sources = tmp_path / "sources"; sources.mkdir()
-    monkeypatch.setattr("oceanx.web.server.provider_status", lambda: {"configured": False})
+    monkeypatch.setattr("oceanx.web.server.provider_status", lambda *_: {"configured": False})
     settings = WebSettings(workspace, frontend, (sources,))
     app = create_app(settings, backend_factory=StubBackend)
     return settings, app, sources

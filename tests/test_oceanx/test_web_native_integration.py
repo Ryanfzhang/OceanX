@@ -18,7 +18,7 @@ def test_web_native_task_reconnect_and_report_grant(tmp_path, monkeypatch):
     sources = tmp_path / "sources"; sources.mkdir()
     (sources / "data.csv").write_text("x,y\n1,2\n")
     monkeypatch.setenv("OCEAN_FIXTURE_MODE", "code")
-    monkeypatch.setattr("oceanx.web.server.provider_status", lambda: {"configured": True})
+    monkeypatch.setattr("oceanx.web.server.provider_status", lambda *_: {"configured": True})
     app = create_app(WebSettings(workspace, frontend, (sources,)), backend_factory=FixtureBackend)
     origin = "http://127.0.0.1:8765"
     with TestClient(app, base_url=origin) as client:

@@ -32,6 +32,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from websockets.asyncio.client import connect
 
 from oceanx.backend.auth import REQUEST_CAPABILITIES
+from oceanx.web.config import WebModelConfig
 from oceanx.web.resources import PathNotAllowed, ResourceGrants, source_path
 
 _LOG = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ class WebSettings:
     cache_hours: float = 24
     archived_cache_hours: float = 6
     sweep_seconds: float = 3600
+    model_config: WebModelConfig | None = None
 
     @property
     def state(self):
@@ -146,6 +148,9 @@ class ProtocolBackend:
                        "LANGSMITH_TRACING": "false", "LANGCHAIN_TRACING_V2": "false"}
         self.log = (self.settings.state / "web-agent-server.log").open("ab")
         try:
+            if self.settings.model_config is not None:
+                directory = self.settings.model_config.materialize(self.settings.state / "model-config")
+                environment["OCEANMIND_CONFIG_DIR"] = str(directory)
             self.process = await asyncio.create_subprocess_exec(
                 sys.executable, "-m", self.server_module, "--state", str(self.settings.state),
                 "--port", str(port), env=environment, stdin=asyncio.subprocess.DEVNULL,
@@ -282,7 +287,9 @@ class ProtocolBackend:
             self.lock.close()
 
 
-def provider_status():
+def provider_status(model_config: WebModelConfig | None = None):
+    if model_config is not None:
+        return model_config.status()
     from oceanx.model_config import load_model_profile
 
     roles = {}
@@ -309,7 +316,7 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
         if not local_request(request):
             return JSONResponse({"error": "origin_not_allowed"}, status_code=403)
         return JSONResponse({"project": {"path": _WORKSPACE_ALIAS, "name": settings.workspace.name},
-                             "provider": await asyncio.to_thread(provider_status),
+                             "provider": await asyncio.to_thread(provider_status, settings.model_config),
                              "backend": backend.status()}, headers={"Cache-Control": "no-store"})
 
     async def attach(request: Request):

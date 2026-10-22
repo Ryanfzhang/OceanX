@@ -18,7 +18,13 @@ cd frontend/ocean-web
 npm ci
 npm run build
 cd ../..
-python -m oceanx.web --workspace /srv/oceanx-project \
+mkdir -p /srv/oceanx-config
+cp docs/web/web.example.toml /srv/oceanx-config/web.toml
+chmod 600 /srv/oceanx-config/web.toml
+# Set your API key in web.toml, or export the environment variable it names.
+export DEEPSEEK_API_KEY='your-key'
+python -m oceanx.web --config /srv/oceanx-config/web.toml \
+  --workspace /srv/oceanx-project \
   --allow-source-root /srv/ocean-data \
   --allow-source-root /srv/papers \
   --port 8765
@@ -28,12 +34,37 @@ The source roots are server-side settings. They are not listed in the browser.
 Use the actual mounted paths visible to the server process. Repeat
 `--allow-source-root` for additional source locations.
 
-Configure the native model profiles on the server before starting. The web entry
-reads the existing OceanX model configuration; it does not copy credentials into
-the frontend or change model settings. To isolate its configuration as well,
-set `OCEANMIND_CONFIG_DIR` to a web-specific directory containing the native
-`settings.json` and `credentials.json`. Model configuration uses the existing
-`python -m oceanx.cli configure-models` interface.
+## Model API configuration
+
+`--config` is required. The server-owned TOML file is the single source of model
+settings for this web instance; Desktop profiles are never used by the CLI.
+Copy [web.example.toml](web.example.toml) and fill in your provider, exact model
+ID, base URL, and either `api_key` or `api_key_env`. Supported providers are
+`deepseek`, `openai` (including compatible APIs), and `anthropic`.
+
+```toml
+[model]
+provider = "deepseek"
+model = "deepseek-flash"
+base_url = "https://api.deepseek.com"
+api_key = "your-key"
+```
+
+`[model]` applies to both coordinator and experts. Optional `[models.coordinator]`
+and `[models.expert]` tables override individual fields for a role. Output limit
+`max_tokens` is shared by both roles (default 65536, native minimum 24576).
+Omit `image_inputs` to retain native capability detection, or explicitly set it
+to true/false for your model.
+An environment credential must be exported in the service's environment, including
+when started in tmux. Invalid configuration stops startup without quoting secrets.
+
+Keep this file outside the repository, allowed source roots and task folders,
+and restrict it to the service owner (`chmod 600`). The web entry writes private
+native profiles under `<workspace>/.oceanx-web/model-config` and passes that
+directory only to its own backend process. It reuses the native model adapters;
+it never modifies `~/.oceanmind`, Desktop configuration or agent implementation.
+The browser shows model IDs and configured status, never keys or endpoint URLs.
+Restart the web service after editing the file; finish any active task first.
 
 For long sessions, start the command inside a server-side tmux session. Closing
 or refreshing the browser, or losing the SSH tunnel, leaves the server's native
@@ -102,6 +133,7 @@ counterparts.
 
 ```sh
 python -m pytest tests/test_oceanx/test_web_entry.py \
+  tests/test_oceanx/test_web_config.py \
   tests/test_oceanx/test_web_native_integration.py \
   tests/test_oceanx/test_cache_cleanup.py \
   tests/test_oceanx/test_static_figure_delivery.py -q

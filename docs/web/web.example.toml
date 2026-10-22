@@ -1,0 +1,18 @@
+# Copy outside the repository to e.g. /srv/oceanx-config/web.toml; chmod 600 it.
+# Shared by coordinator and all experts. Changes take effect after a restart.
+[model]
+provider = "deepseek"
+model = "deepseek-flash"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"
+# Or replace api_key_env with: api_key = "your-key"
+max_tokens = 65536
+# Optional capability override; omitted means native model capability detection.
+# image_inputs = true
+
+# Optional: override a role. Omit these tables to use the shared settings.
+# [models.expert]
+# provider = "openai"
+# model = "your-model-id"
+# base_url = "https://your-provider.example/v1"
+# api_key_env = "EXPERT_API_KEY"
