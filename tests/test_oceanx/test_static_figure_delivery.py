@@ -1,4 +1,4 @@
-"""A static-delivery run saves ordinary image files and describes no plotting interface."""
+"""Saved image files are delivered figures; a static-delivery run also describes no plotting interface."""
 
 import json
 import re
@@ -93,7 +93,8 @@ def test_delivered_images_are_images_of_any_depth_without_drafts_or_links(tmp_pa
     (outputs / "maps").mkdir(parents=True)
     (agent / "scratch").mkdir()
     for name in ("map.png", "photo.jpg", "photo2.jpeg", "chart.svg", "paper.pdf", "maps/mld.PNG",
-                 "_draft.png", ".hidden.png", "maps/_draft.png", "table.csv", "data.nc"):
+                 "_draft.png", ".hidden.png", "maps/_draft.png", "table.csv", "data.nc",
+                 "front.preview.png"):  # an interactive figure's own preview
         (outputs / name).write_bytes(PNG)
     (agent / "scratch" / "explore.png").write_bytes(PNG)  # exploratory plots live in scratch
     (outputs / "link.png").symlink_to(outputs / "map.png")
@@ -112,7 +113,8 @@ def test_delivered_images_are_images_of_any_depth_without_drafts_or_links(tmp_pa
     assert list(static_figure_files(tmp_path / "no-such-task")) == []
 
 
-def test_images_are_listed_as_file_results_only_in_a_static_run(monkeypatch, tmp_path):
+@pytest.mark.parametrize("delivery", ["interactive", "static"])
+def test_images_are_listed_as_file_results_in_either_delivery_mode(monkeypatch, tmp_path, delivery):
     key = "ocean-process-a"
     outputs = tmp_path / "agents" / key / "outputs"
     (outputs / "maps").mkdir(parents=True)
@@ -120,12 +122,10 @@ def test_images_are_listed_as_file_results_only_in_a_static_run(monkeypatch, tmp
     figure.write_bytes(PNG)
     (outputs / "_probe.png").write_bytes(PNG)
     (outputs / "data.nc").write_bytes(b"not a figure")
+    (outputs / "data.preview.png").write_bytes(PNG)  # owned by an interactive figure, never its own result
     store = TaskResultStore(task_workspaces=_Projector(tmp_path))
 
-    monkeypatch.delenv(FIGURE_DELIVERY_ENV, raising=False)
-    assert store.list(task_id="task") == ()
-
-    monkeypatch.setenv(FIGURE_DELIVERY_ENV, "static")
+    monkeypatch.setenv(FIGURE_DELIVERY_ENV, delivery)
     (record,) = store.list(task_id="task")
     relative = f"agents/{key}/outputs/maps/mld_anomaly.png"
     assert record.kind == "file" and record.title == "mld anomaly" and record.agent_run_id == key
@@ -161,6 +161,52 @@ def test_a_static_receipt_names_saved_figures_and_no_published_results():
     # Without saved_figures the receipt is the interactive one.
     assert "Published results (only these bracket bindings open in the desktop):" in format_expert_receipt(
         "Result: shown.", None)
+
+
+@pytest.mark.asyncio
+async def test_an_interactive_expert_receipt_publishes_a_saved_image_as_a_binding(monkeypatch, tmp_path):
+    monkeypatch.delenv(FIGURE_DELIVERY_ENV, raising=False)
+    role, question = "ocean_process_expert", "B1.2: reproduce the stippled trend map"
+    key = expert_agent_key("task", role, question, node_id="B1.2")
+    projector = _Projector(tmp_path)
+    fake_host = SimpleNamespace(
+        research=ResearchServices(SimpleNamespace(task_workspace_projector=projector,
+                                                  expert_code_execution=None)),
+        task_workspace_projector=projector, expert_code_execution=None,
+        task_results=TaskResultStore(task_workspaces=projector))
+    monkeypatch.setattr(services, "current_delegation", lambda: SimpleNamespace(
+        node_id="B1.2", delegation_id="delegation", attempt_id="attempt", started_at=None))
+    attached = []
+
+    def attach_result(node_id, **kwargs):
+        attached.append(kwargs)
+        return {"projection": {"nodes": [{"id": node_id, "result": {}}]}}
+
+    root = tmp_path / "agents" / key
+    report = root / "reports" / "B1.2" / "report.md"
+
+    class Author:
+        async def ainvoke(self, state, config):
+            (root / "outputs").mkdir(parents=True)
+            (root / "outputs" / "trend_map.png").write_bytes(PNG)
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text("## Summary\nResult: the trend is significant.\n", encoding="utf-8")
+            return {"messages": [*state["messages"], AIMessage(content="Done.")]}
+
+    async def fake_build(*_args, **_kwargs):
+        return Author()
+
+    monkeypatch.setattr(graphs, "host", lambda: fake_host)
+    monkeypatch.setattr(graphs, "build", fake_build)
+    monkeypatch.setattr(graphs, "research_tree", lambda _task: SimpleNamespace(attach_result=attach_result))
+    graph = await graphs.expert(_config(), role)
+    result = await graph.ainvoke({"messages": [HumanMessage(content=question)]}, _config())
+
+    receipt = result["messages"][-1].text
+    assert (f"Published results (only these bracket bindings open in the desktop):\n"
+            f"- [{key}/trend_map.png] — trend map") in receipt
+    assert "Saved figures" not in receipt
+    assert attached[0]["output_refs"] == (f"{key}/trend_map.png",)
 
 
 @pytest.mark.asyncio
@@ -221,8 +267,8 @@ async def test_a_static_expert_receipt_lists_its_own_saved_figures(monkeypatch, 
     assert parse_expert_receipt(receipt)[1] == str(report)
 
 
-@pytest.mark.parametrize("delivery, kept", [("interactive", False), ("static", True)])
-def test_cache_cleanup_keeps_delivered_images_only_in_a_static_run(monkeypatch, tmp_path, delivery, kept):
+@pytest.mark.parametrize("delivery", ["interactive", "static"])
+def test_cache_cleanup_keeps_delivered_images_in_either_delivery_mode(monkeypatch, tmp_path, delivery):
     monkeypatch.setenv(FIGURE_DELIVERY_ENV, delivery)
     now = datetime(2026, 9, 24, tzinfo=UTC)
     agent = _managed_agent(tmp_path)
@@ -232,7 +278,7 @@ def test_cache_cleanup_keeps_delivered_images_only_in_a_static_run(monkeypatch, 
     TaskCacheCleaner(
         store=_CleanupStore(_task(now)), task_workspaces=_CleanupProjector(tmp_path),
     ).clean_task("task", now=now)
-    assert (agent / "outputs" / "figure.png").exists() is kept
+    assert (agent / "outputs" / "figure.png").exists()
     assert not (agent / "outputs" / "_draft.png").exists()
     assert not (agent / "outputs" / "data.nc").exists()
     assert not (agent / "scratch" / "explore.png").exists()

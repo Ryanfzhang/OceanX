@@ -1,11 +1,11 @@
 import {useEffect, useRef, useState} from 'react';
-import {BarChart3, BookOpen, ChevronDown, ChevronRight, MessageSquare, Sparkles, Timer} from 'lucide-react';
+import {BarChart3, BookOpen, ChevronDown, ChevronRight, Image as ImageIcon, MessageSquare, Sparkles, Timer} from 'lucide-react';
 
 import {presentTranscript, type PresentedTranscriptGroup} from '../conversation-presentation.js';
 import {agentDisplayName} from '../agent-display-name.js';
 import {CompactLogMarkdown, InlineMarkdown, MessageMarkdown, referencedResultKeys, type MarkdownResultLink} from '../message-markdown.js';
 import type {PendingInteraction} from '../pending-interaction.js';
-import {resultsForRequest, taskResultRefKey, taskResultsForRequest} from '../types.js';
+import {isStaticFigure, resultsForRequest, taskResultRefKey, taskResultsForRequest} from '../types.js';
 import type {DeliveryManifest, ResearchTask, TaskOutput, TaskResultRecord, TeamSnapshot, TranscriptItem} from '../types.js';
 import {useUiLanguage} from '../i18n.js';
 import {currentStep, stepLabel, type RequestActivity} from '../request-activity.js';
@@ -466,7 +466,7 @@ export function ConversationTranscript({
   const groups = presentTranscript(transcript, activeRequestId);
   const hasActive = groups.some((group) => group.active);
   const taskScopedResults = taskResults
-    .filter((result) => result.kind === 'interactive_view' || result.kind === 'report');
+    .filter((result) => result.kind === 'interactive_view' || result.kind === 'report' || isStaticFigure(result));
   // Older self-describing .nc files predate request ownership metadata. Keep
   // them visible after a backend restart by attaching them only to the latest
   // completed exchange instead of silently filtering every figure out.
@@ -490,7 +490,7 @@ export function ConversationTranscript({
           : []),
       ];
       const directResults = requestResults
-        .filter((result) => result.kind === 'interactive_view' || result.kind === 'report');
+        .filter((result) => result.kind === 'interactive_view' || result.kind === 'report' || isStaticFigure(result));
       const supplementaryNotebooks = requestResults.flatMap((result) => {
         if (result.kind !== 'file' || result.content.role !== 'supplementary_figure_notebook') return [];
         const declared = typeof result.content.file === 'string' ? result.content.file : null;
@@ -595,8 +595,8 @@ export function ConversationTranscript({
             <summary>{uiText('Additional Results', '其他结果')} ({unreferencedResults.length + legacyResults.length})</summary>
             <div className="message-artifact-actions">
               {unreferencedResults.map((result) => <button key={taskResultRefKey(result.result_ref)} className={`result-${result.kind}`} onClick={() => onOpenTaskResult(result)}>
-                {result.kind === 'interactive_view' ? <BarChart3 size={16} /> : <BookOpen size={16} />}
-                <span><strong>{result.kind === 'interactive_view' ? uiText('Interactive View', '交互视图') : uiText('Research Report', '研究报告')}</strong><small>{result.title}</small></span>
+                {result.kind === 'interactive_view' ? <BarChart3 size={16} /> : isStaticFigure(result) ? <ImageIcon size={16} /> : <BookOpen size={16} />}
+                <span><strong>{result.kind === 'interactive_view' ? uiText('Interactive View', '交互视图') : isStaticFigure(result) ? uiText('Figure', '图') : uiText('Research Report', '研究报告')}</strong><small>{result.title}</small></span>
               </button>)}
               {legacyResults.map(({entry, output}) => <button key={entry.entry_id} className={`result-${entry.kind}`} onClick={() => onOpenResult(output)}>
                 {entry.kind === 'interactive_view' ? <BarChart3 size={16} /> : <BookOpen size={16} />}

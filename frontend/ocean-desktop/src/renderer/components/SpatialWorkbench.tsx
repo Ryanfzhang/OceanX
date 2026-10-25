@@ -4,6 +4,7 @@ import type {FeatureCollection, Geometry, GeoJsonProperties} from 'geojson';
 import maplibregl, {type Map as MapLibreMap} from 'maplibre-gl';
 
 import type {ResultDocument} from '../types.js';
+import {useUiLanguage} from '../i18n.js';
 import {FEATURE_COLORS, categoryColor, featureAnchor, featureBounds, prepareResultFeature, resultFeatureMapLayers, resultFeatures} from './result-features.js';
 import {resolveScientificPalette} from './scientific-palettes.js';
 import {
@@ -499,6 +500,7 @@ export function ResultWorkbench({
   const context = useMemo(() => contextFor(data), [data]);
   const displayContext = useMemo(() => displayContextFor(context), [context]);
   const structuredKind = structured ? structuredViewKind(structured) : undefined;
+  const {text: uiText} = useUiLanguage();
   const renderStatus = typeof document?.content?.render_status === 'string' ? document.content.render_status : null;
   const renderMessage = typeof document?.content?.render_message === 'string' ? document.content.render_message : null;
   const fallback = Boolean(document && !loading && !error && !spatial && !structured && (previewUrl || downloadUrl));
@@ -793,10 +795,12 @@ export function ResultWorkbench({
         <div className="result-chart-body"><ResultRenderBoundary key={document?.key ?? structured.plot_kind} resetKey={document?.key ?? structured.plot_kind}><StructuredView payload={structured as StructuredPayload} compactHeader={hasSpatialContext} featureId={selectedFeature} fillHeight /></ResultRenderBoundary></div>
       </section> : null}
       {fallback ? <section className="result-fallback-surface" aria-label="Result fallback">
-        <header><div>{previewUrl ? <Image size={16} /> : <Download size={16} />}<span><strong>{document?.title}</strong><small>{renderStatus === 'preview' ? 'Static preview' : 'Result file'}</small></span></div></header>
+        <header><div>{previewUrl ? <Image size={16} /> : <Download size={16} />}<span><strong>{document?.title}</strong><small>{renderStatus === 'static' ? uiText('Figure', '图') : renderStatus === 'preview' ? 'Static preview' : 'Result file'}</small></span></div></header>
         {previewUrl ? <div className="result-fallback-preview"><img src={previewUrl} alt={document?.title ?? 'Scientific result preview'} /></div> : null}
-        <footer><span>{renderMessage ?? (previewUrl ? 'Interactive rendering is unavailable; showing the saved preview.' : 'Preview is unavailable; the saved result can still be downloaded.')}</span>
-          {downloadUrl ? <a href={downloadUrl} download><Download size={14} />Download result</a> : null}
+        <footer><span>{renderStatus === 'static'
+          ? (typeof document?.content?.preview_file === 'string' ? document.content.preview_file : '')
+          : renderMessage ?? (previewUrl ? 'Interactive rendering is unavailable; showing the saved preview.' : 'Preview is unavailable; the saved result can still be downloaded.')}</span>
+          {downloadUrl ? <a href={downloadUrl} download><Download size={14} />{renderStatus === 'static' ? uiText('Download', '下载') : 'Download result'}</a> : null}
         </footer>
       </section> : null}
     </div>

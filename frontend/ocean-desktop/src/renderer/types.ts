@@ -223,6 +223,11 @@ export function taskResultRefKey(ref: TaskResultRef): string {
   return `${ref.task_id}/${ref.result_id}@v${ref.version}`;
 }
 
+/** An image an Expert saved under its outputs folder: a figure the Figure API could not draw. */
+export function isStaticFigure(result: TaskResultRecord): boolean {
+  return result.kind === 'file' && result.content?.render_status === 'static';
+}
+
 export function taskResultsForRequest(
   results: TaskResultRecord[],
   requestId: string | null | undefined,

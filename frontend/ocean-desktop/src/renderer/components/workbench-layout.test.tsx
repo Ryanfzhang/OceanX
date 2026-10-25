@@ -822,6 +822,45 @@ describe('research workbench layout', () => {
     expect(done).not.toContain('streaming-answer');
   });
 
+  it('links a saved image like a view and lists an uncited one as a figure', () => {
+    const figure = (name: string, id: string): TaskResultRecord => ({
+      result_ref: {task_id: 'task_figure', result_id: id, version: 1},
+      workspace_id: 'ws_figure',
+      kind: 'file',
+      title: name.replace('.png', '').replace('_', ' '),
+      summary: '',
+      created_at: '2026-10-25T10:00:00Z',
+      execution_output_names: [`ocean_b1/${name}`, name, `agents/ocean_b1/outputs/${name}`],
+      content: {
+        agent_key: 'ocean_b1', result_key: `ocean_b1/${name}`, output_path: `agents/ocean_b1/outputs/${name}`,
+        render_status: 'static', preview_file: name, workspace_files: {[name]: `agents/ocean_b1/outputs/${name}`},
+      },
+      files: [{path: name, mime_type: 'image/png', size: 10, sha256: 'c'.repeat(64)}],
+    });
+    const markup = renderToStaticMarkup(<ConversationTranscript
+      loading={false}
+      transcript={[
+        {item_id: 'user_figure', role: 'user', text: 'Reproduce Fig. 3.', request_id: 'req_figure'},
+        {item_id: 'answer_figure', role: 'assistant', text: 'The trend is significant [ocean_b1/trend_map.png].', request_id: 'req_figure'},
+      ]}
+      streaming=""
+      activeRequestId={null}
+      task={null}
+      workspacePath="/tmp/workspace"
+      outputs={[]}
+      manifests={[]}
+      taskResults={[figure('trend_map.png', 'figure_trend'), figure('taylor.png', 'figure_taylor')]}
+      team={null}
+      onOpenResult={() => undefined}
+      onOpenTaskResult={() => undefined}
+    />);
+
+    expect(markup).toContain('markdown-result-link');
+    expect(markup).not.toContain('[ocean_b1/trend_map.png]');
+    expect(markup).toContain('Additional Results (1)');
+    expect(markup).toContain('<strong>Figure</strong><small>taylor</small>');
+  });
+
   it('folds the completed Canvas to its header between its duration divider and final answer', () => {
     const snapshot: TeamSnapshot = {
       request_id: 'req_supplement',

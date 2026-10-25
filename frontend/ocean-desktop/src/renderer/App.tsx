@@ -23,7 +23,7 @@ import {forgetProject, mergeRememberedProjects, parseProjectCatalog, rememberPro
 import {revisionFromRequestFailure} from './request-recovery.js';
 import {requestId} from './request-id.js';
 import {updateRequestActivity, type RequestActivity} from './request-activity.js';
-import {taskResultRefKey} from './types.js';
+import {isStaticFigure, taskResultRefKey} from './types.js';
 import type {AppearanceTheme, ArtifactSummary, ArtifactVersion, DeliveryManifest, DisplayDensity, EventPayload, OceanEvent, RequestContext, ResearchTask, ResolvedAppearanceTheme, ResultDocument, TaskOutput, TaskResultFile, TaskResultRecord, TeamSnapshot, TranscriptItem, Workspace} from './types.js';
 
 type SourceSelection = {kind: 'file' | 'folder'; relativePath?: string; localPath?: string};
@@ -966,8 +966,27 @@ export function App(): React.JSX.Element {
     };
     readPage(0, '');
   };
+  // A saved image opens as the figure itself; its file is also what Download returns.
+  const openStaticFigure = (result: TaskResultRecord) => {
+    const resultKey = taskResultRefKey(result.result_ref);
+    const file = result.files[0];
+    openResultKey.current = resultKey;
+    setResultSurface({kind: 'interactive_view', document: directResultDocument(result)});
+    setResultLoading(Boolean(file)); setResultError(file ? null : 'Figure file is missing.');
+    setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]);
+    if (!file) return;
+    void grantTaskResult(result, file, 'result_file').then((url) => {
+      if (openResultKey.current !== resultKey) return;
+      setResultFileUrl(url);
+      if (file.mime_type.startsWith('image/')) setResultPreviewUrl(url);
+      setResultLoading(false);
+    }).catch(() => {
+      if (openResultKey.current === resultKey) {setResultError('Figure is unavailable.'); setResultLoading(false);}
+    });
+  };
   const openTaskResult = (result: TaskResultRecord, featureId?: string) => {
     setResultFeatureId(featureId);
+    if (isStaticFigure(result)) {openStaticFigure(result); return;}
     if (result.kind !== 'interactive_view' && result.kind !== 'report') return;
     const kind = result.kind;
     const resultKey = taskResultRefKey(result.result_ref);

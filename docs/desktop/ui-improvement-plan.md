@@ -14,7 +14,9 @@
 | 欢迎页 | 不显示地图。图标和"你想用 OceanX 做什么？"一行；保留三张卡片（检索与阅读论文、分析数据、开展 Autoresearch）；起名框里有"+"、项目名和发送按钮。 |
 | 地图 | 打开任务后始终显示，作为圆角卡片放在窗口背景上，四周留 12 px；海用蓝灰、陆地用中性色。 |
 | 添加来源 | 输入框和起名框的"+"都弹出两项：添加 PDF、添加数据文件夹。单机版分别打开只显示 PDF 的对话框和选文件夹的对话框（也可选单个数据文件）；网页版直接进入"上传 PDF"或"服务器路径"。在欢迎页选的来源，任务建好后逐个导入。 |
-| 对话 | 单智能体不再套卡片：过程说明作为正文显示，下面一行"● 步骤 · 目的　详情 ›"，没有"OceanX:"前缀和步骤计数；团队仍是带关系图的卡片。 |
+| 对话 | 单智能体不再套卡片：过程说明作为正文显示，下面一行"● 步骤 · 目的　详情 ›"，没有"OceanX:"前缀和步骤计数；团队仍是带关系图的卡片。完成后团队卡片收成标题行（未完成时标"部分结果""受阻""失败"），单智能体的过程说明收进"过程说明（n）"；用户展开或收起的选择按请求记住。 |
+| 流式答复 | 模型正在写的文字以正文样式出现在答复的位置，末尾带光标，写完原地变成答复。后端本来就逐字发送（`assistant.delta`），网页服务原样转发。 |
+| 论文里的图 | 交互图优先；Figure API 画不了的图（柱状图、显著性打点、极坐标或 Taylor 图、双 y 轴、其他投影、流线、示意图，或按原文复现的图），Expert 用 matplotlib/cartopy 画成 PNG 存到 outputs，作为结果交付：回执里列为可引用的键（带扩展名，如 `[agent/fig.png]`），答复里可点击，右侧显示原图并可下载。 |
 
 设计稿在 `docs/desktop/design/`（`make_mocks.py` 生成），图标页是 `docs/desktop/brand/icon-sheet.png`。
 
@@ -26,6 +28,8 @@
 - 网页版：`TaskSidebar.tsx` 用图标；`source-picker.ts` 按 `kind` 打开对应模式，并跟随深色模式；`web.css` 改用同一套令牌；`index.html` 加网站图标（`public/favicon.svg`）。
 - 地图：`basemap.ts` 的海、陆、海岸线颜色。
 - 图标文件：`frontend/ocean-desktop/assets/oceanx-icon.{svg,png,icns,ico}` 和 `oceanx-icon.iconset/` 取代 `ocean-partner-icon.*`，`package.json` 已改引用；界面内用 `src/renderer/assets/brand/oceanx-icon{,-dark}.svg`。
+- 对话折叠与流式答复：`ConversationTranscript.tsx`（团队卡片完成后折叠并显示结果状态、展开选择存在 `localStorage` 的 `oceanx.team-canvas-collapsed.v1`、单智能体"过程说明"折叠、正在写的文字按正文流式显示）。
+- 论文里的图（后端）：`figure_delivery.py`（交互模式也交付 outputs 下的图片，跳过交互图自带的 `.preview.png`）、`task_results.py`、`cache_cleanup.py`（两种模式都保留这些图片）、`runtime.py` 与 `research/graphs.py`（Expert 什么时候改画静态图、怎样引用；回执把这些图片列在 Published results 里）。前端：`types.ts` 的 `isStaticFigure`，答复链接、"其他结果"和右侧的图片显示。
 
 ## 3. 验证
 
@@ -37,3 +41,4 @@
 - 没有在真实后端上点一遍"+"：单机版的两个系统对话框、欢迎页来源在建任务后的导入。
 - 没有打包验证新图标（dmg/exe 的应用图标）。
 - 对话里每一步单独成行并带用时（设计稿的样子）需要逐步记录，目前只有当前一步和折叠的最近步骤。
+- 静态图还没有在真实复现任务里跑过：Expert 是否在该画静态图时真的改用 matplotlib，要看 case study 的结果。agent 仍看不到 PDF 里的原图，只能依据正文和图注。

@@ -1,4 +1,4 @@
-"""Only explicitly saved ScientificFigure outputs become desktop results."""
+"""Only explicitly saved ScientificFigure outputs become interactive desktop results."""
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -82,12 +82,15 @@ def test_only_explicit_scientific_figure_event_is_exposed(tmp_path: Path) -> Non
         task_workspaces=_Projector(task_root, execution)
     ).list(task_id="task")
 
-    assert len(records) == 1
-    assert records[0].title == "Explicit temperature figure"
-    assert records[0].content["output_path"].endswith("/temperature.nc")
-    assert all("intermediate.nc" not in name for name in records[0].execution_output_names)
-    assert all("orphan-preview.png" not in name for name in records[0].execution_output_names)
-    assert records[0].content["render_status"] == "interactive"
+    (view,) = [record for record in records if record.kind == "interactive_view"]
+    assert view.title == "Explicit temperature figure"
+    assert view.content["output_path"].endswith("/temperature.nc")
+    assert all("intermediate.nc" not in name for name in view.execution_output_names)
+    assert all("orphan-preview.png" not in name for name in view.execution_output_names)
+    assert view.content["render_status"] == "interactive"
+    # A plain image under outputs is an image result of its own; the view's .preview.png is not.
+    (image,) = [record for record in records if record.kind == "file"]
+    assert image.content["render_status"] == "static" and image.files[0].path == "orphan-preview.png"
 
 
 def test_self_describing_file_without_save_event_is_not_exposed(tmp_path: Path) -> None:

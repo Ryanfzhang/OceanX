@@ -908,7 +908,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    + "here, not in outputs. Scratch may be removed after the task becomes idle. "
                    "Save only final deliverables under OCEAN_OUTPUT_DIR; "
                    + ("a final figure saved there as a PNG is delivered. " if static else
-                      "ScientificFigure.save('name.nc') publishes there automatically. ")
+                      "ScientificFigure.save('name.nc') publishes there automatically, and a figure the "
+                      "Figure API cannot draw is delivered when saved there as a PNG. ")
                    + "Use supplied absolute data/result paths with native file tools or execute. "
                    "Source data and other agents' evidence are read-only; your working directory is writable.")
         if not static:
@@ -950,7 +951,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                 f"\nYour Agent key is {run.thread_id}. When a saved result supports a claim, write its "
                 f"complete binding right after the claim in your {'reply' if role == HELPER else 'answer'}, "
                 f"for example [{run.thread_id}/result1] for result1.nc; the result name is the .nc path below "
-                "outputs without its extension."
+                f"outputs without its extension, while an image keeps it, as in [{run.thread_id}/figure.png]."
                 + (" Copy the bindings in a helper's reply unchanged." if role == SINGLE_AGENT else "") + "\n")
         if role == SINGLE_AGENT and context_builder.policy_for(
             workspace_id=c["workspace_id"], provider_id=svc.provider_id,
@@ -1139,13 +1140,16 @@ async def expert(config, role: str):
                 ):
                     published_results.append((result_key.strip(), record.title))
                 elif (
-                    static
-                    and record.agent_run_id == run.thread_id
+                    record.agent_run_id == run.thread_id
                     and record.content.get("render_status") == "static"
                     and isinstance(record.content.get("output_path"), str)
                 ):
-                    saved_figures.append((str(task_root / record.content["output_path"]), record.title))
-                    figure_keys.append(str(result_key))
+                    if static:
+                        saved_figures.append((str(task_root / record.content["output_path"]), record.title))
+                        figure_keys.append(str(result_key))
+                    elif isinstance(result_key, str) and result_key.strip():
+                        # An image the Figure API could not draw is published like a view.
+                        published_results.append((result_key.strip(), record.title))
         # Structured binding from the delegation (see research/delegation.py);
         # no node ID is parsed from free text here.
         if run.node_id and path is not None and handoff:

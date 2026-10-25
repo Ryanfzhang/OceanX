@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from oceanx.figure_delivery import static_figure_files, static_figures
+from oceanx.figure_delivery import static_figure_files
 
 if TYPE_CHECKING:
     from oceanx.task_workspace import TaskWorkspaceProjector
@@ -284,9 +284,7 @@ class TaskResultStore:
         return tuple(records)
 
     def _static_figures(self, *, task_id: str) -> tuple[TaskResultRecord, ...]:
-        """The images an Expert saved under its outputs folder, in a static-delivery run only."""
-        if not static_figures():
-            return ()
+        """The images an Expert saved under its outputs folder (see figure_delivery.py)."""
         task = self.task_workspaces.store.get_research_task(task_id)
         if task is None:
             return ()
