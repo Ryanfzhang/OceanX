@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {toolActivityLabel, updateRequestActivity, workflowActivityLabel, type RequestActivity} from './request-activity.js';
+import {currentStep, stepLabel, updateRequestActivity, type RequestActivity} from './request-activity.js';
 import type {OceanEvent} from './types.js';
 
 const start = (id: string, purpose = 'Check the regional grid'): OceanEvent => ({
@@ -41,12 +41,18 @@ describe('request activity', () => {
     expect(next?.calls.map(call => call.callId)).toEqual(['b']);
   });
 
-  it('labels errors and restores active workflow progress in either language', () => {
-    const state = updateRequestActivity(null, end('a', true), 'request-1');
-    expect(toolActivityLabel(state!.calls[0]!, (en) => en)).toContain('error');
-    expect(toolActivityLabel({...state!.calls[0]!, status: 'running'}, (_, zh) => zh)).toBe('正在运行分析');
-    expect(workflowActivityLabel({request_id: 'request-1', state: 'working', activity: 'Expert running code'}, 'request-1', (en) => en)).toBe('Running analysis');
-    expect(workflowActivityLabel({request_id: 'request-1', state: 'working', activity: 'Expert running code'}, 'request-1', (_, zh) => zh)).toBe('正在运行分析');
-    expect(workflowActivityLabel({request_id: 'request-1', state: 'completed', activity: 'Expert running code'}, 'request-1', (en) => en)).toBeNull();
+  it('says in one line what runs now, what follows a result or an error, and what a snapshot records', () => {
+    const en = (english: string) => english;
+    const zh = (_: string, chinese: string) => chinese;
+    const running = updateRequestActivity(null, start('a'), 'request-1');
+    expect(currentStep(running, null, 'request-1', en)).toBe('Running analysis · Check the regional grid');
+    expect(currentStep(running, null, 'request-1', zh)).toBe('运行分析 · Check the regional grid');
+    expect(currentStep(updateRequestActivity(running, end('a'), 'request-1'), null, 'request-1', en)).toBe('Reviewing the result');
+    expect(currentStep(updateRequestActivity(running, end('a', true), 'request-1'), null, 'request-1', en))
+      .toBe('Adjusting after a tool error');
+    const recorded = {request_id: 'request-1', state: 'working' as const, activity: 'Expert running code'};
+    expect(currentStep(null, recorded, 'request-1', zh)).toBe('运行分析');
+    expect(currentStep(null, {...recorded, state: 'completed'}, 'request-1', en)).toBe('Working on the request…');
+    expect(stepLabel('an_unlisted_tool', en)).toBe('Using a research tool');
   });
 });

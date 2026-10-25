@@ -25,39 +25,53 @@ export function updateRequestActivity(
     purpose: purpose || existing?.purpose || '',
     status: event.type === 'tool.call.started' ? 'running' : payload.is_error === true ? 'error' : 'completed',
   };
-  // Keep a short progress trail without losing another parallel tool still in flight.
+  // Keep a short trail of steps without losing another parallel tool still in flight.
   const updated = existing ? calls.map(call => call.callId === next.callId ? next : call) : [...calls, next];
   const recent = new Set(updated.slice(-6).map(call => call.callId));
   return {requestId: activeRequestId, calls: updated.filter(call => call.status === 'running' || recent.has(call.callId))};
 }
 
 type UiText = (english: string, chinese: string) => string;
+type Label = readonly [english: string, chinese: string];
 
-export function toolActivityLabel(activity: ToolActivity, text: UiText): string {
-  if (activity.status === 'error') return text('Adjusting after a tool error', '正在处理工具执行错误');
-  const running = activity.status === 'running';
-  switch (activity.toolName) {
-    case 'ocean_expert_run_code': return running ? text('Running analysis', '正在运行分析') : text('Analysis step completed', '分析步骤已完成');
-    case 'web_search': return running ? text('Searching the literature', '正在检索文献') : text('Literature search completed', '文献检索已完成');
-    case 'jina_reader': return running ? text('Reading a source', '正在阅读资料') : text('Source reading completed', '资料阅读已完成');
-    case 'read_file': return running ? text('Reading a file', '正在读取文件') : text('File reading completed', '文件读取已完成');
-    case 'ls': case 'glob': case 'grep': return running ? text('Inspecting source files', '正在检查来源文件') : text('Source inspection completed', '来源检查已完成');
-    case 'task': return running ? text('Delegating a research question', '正在分派研究问题') : text('Research result returned', '研究结果已返回');
-    case 'hand_to_research_team': return running ? text('Handing over to the research team', '正在交给研究团队') : text('Handed over to the research team', '已交给研究团队');
-    default: return running ? text('Using a research tool', '正在使用研究工具') : text('Tool step completed', '工具步骤已完成');
-  }
+// One label per step; whether it runs, finished or failed is shown beside it, not in the words.
+const INSPECTING: Label = ['Inspecting files', '查看文件'];
+const STEP_LABELS: Record<string, Label> = {
+  ocean_expert_run_code: ['Running analysis', '运行分析'],
+  web_search: ['Searching the literature', '检索文献'],
+  jina_reader: ['Reading a source', '阅读资料'],
+  read_file: ['Reading a file', '读取文件'],
+  ls: INSPECTING, glob: INSPECTING, grep: INSPECTING,
+  task: ['Delegating a research question', '分派研究问题'],
+  hand_to_research_team: ['Handing over to the research team', '交给研究团队'],
+};
+const OTHER_TOOL: Label = ['Using a research tool', '使用研究工具'];
+const REVIEWING: Label = ['Reviewing the result', '查看结果'];
+const AFTER_ERROR: Label = ['Adjusting after a tool error', '处理工具错误'];
+// What a task snapshot records, for the line after a refresh or reconnect.
+const WORKFLOW_LABELS: Record<string, Label> = {
+  'Expert running code': STEP_LABELS.ocean_expert_run_code!,
+  'Expert interpreting the code result': REVIEWING,
+  'Expert adjusting its method after a tool failure': AFTER_ERROR,
+  'Searching external scientific evidence': STEP_LABELS.web_search!,
+  'Reading a selected scientific source': STEP_LABELS.jina_reader!,
+  'Interpreting the selected paper': STEP_LABELS.jina_reader!,
+  'Preparing the final answer': ['Preparing the final answer', '整理最终答案'],
+};
+
+export function stepLabel(toolName: string, text: UiText): string {
+  return text(...(STEP_LABELS[toolName] ?? OTHER_TOOL));
 }
 
-/** A task snapshot supplies a durable fallback after refresh/reconnect. */
-export function workflowActivityLabel(workflow: TaskWorkflow | null | undefined, requestId: string | null, text: UiText): string | null {
-  if (!workflow || workflow.request_id !== requestId || !['planning', 'working'].includes(workflow.state)) return null;
-  switch (workflow.activity) {
-    case 'Expert running code': return text('Running analysis', '正在运行分析');
-    case 'Expert interpreting the code result': return text('Reviewing analysis results', '正在检查分析结果');
-    case 'Expert adjusting its method after a tool failure': return text('Adjusting after a tool error', '正在处理工具执行错误');
-    case 'Searching external scientific evidence': return text('Searching the literature', '正在检索文献');
-    case 'Reading a selected scientific source': case 'Interpreting the selected paper': return text('Reading a source', '正在阅读资料');
-    case 'Preparing the final answer': return text('Preparing the final answer', '正在整理最终答案');
-    default: return text('Working on the request', '正在处理请求');
-  }
+/** The one line for a single agent at work: its latest running step, else what the task records. */
+export function currentStep(
+  activity: RequestActivity | null, workflow: TaskWorkflow | null | undefined, requestId: string | null, text: UiText,
+): string {
+  const calls = activity && activity.requestId === requestId ? activity.calls : [];
+  const running = calls.filter(call => call.status === 'running').at(-1);
+  if (running) return running.purpose ? `${stepLabel(running.toolName, text)} · ${running.purpose}` : stepLabel(running.toolName, text);
+  if (calls.length) return text(...(calls.at(-1)!.status === 'error' ? AFTER_ERROR : REVIEWING));
+  const recorded = workflow && workflow.request_id === requestId && ['planning', 'working'].includes(workflow.state)
+    ? WORKFLOW_LABELS[workflow.activity] : undefined;
+  return recorded ? text(...recorded) : text('Working on the request…', '正在处理请求…');
 }

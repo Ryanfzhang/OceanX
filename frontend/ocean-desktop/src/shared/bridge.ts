@@ -7,6 +7,8 @@ export type WorkspaceSourceSelection = {
   relativePath?: string;
   localPath?: string;
 };
+/** What the + menu asks for: a PDF, or a data folder (a data file is accepted too). */
+export type WorkspaceSourceKind = 'pdf' | 'data';
 export type StagedImageAttachment = {fileName: string; mimeType: string; bytes: Uint8Array};
 
 /**
@@ -83,7 +85,7 @@ export type OceanDesktopBridge = {
   chooseWorkspace(): Promise<string | null>;
   listProjects(): Promise<DesktopProjectEntry[]>;
   forgetProject(projectPath: string): Promise<DesktopProjectEntry[]>;
-  chooseWorkspaceSource(allowImages: boolean): Promise<WorkspaceSourceSelection | null>;
+  chooseWorkspaceSource(allowImages: boolean, kind?: WorkspaceSourceKind): Promise<WorkspaceSourceSelection | null>;
   stageImageAttachment(attachment: StagedImageAttachment): Promise<WorkspaceSourceSelection>;
   startBackend(options: DesktopBackendLaunch): Promise<DesktopBackendStatus>;
   stopBackend(): Promise<void>;

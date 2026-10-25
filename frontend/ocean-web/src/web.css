@@ -1,20 +1,32 @@
+/* The add-source dialog sits outside the shell, so it opens with the shell's theme class and uses the same tokens. */
 .web-source-dialog {
-  width: min(620px, calc(100vw - 48px)); padding: 24px; border: 1px solid #64748b;
-  border-radius: 14px; background: #f8fafc; color: #0f172a; font: 14px/1.6 system-ui, sans-serif;
+  width: min(560px, calc(100vw - 48px)); padding: 22px 22px 18px; border: 1px solid var(--line-strong);
+  border-radius: var(--r-xl); background: var(--card); color: var(--ink); box-shadow: var(--shadow);
+  font: var(--text-ui)/1.55 var(--sans);
 }
-.web-source-dialog::backdrop {background: #0f172a88;}
-.web-source-dialog label {display: grid; gap: 12px; font-weight: 600;}
-.web-source-dialog input {width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #94a3b8; border-radius: 7px; font: 14px monospace;}
-.web-source-dialog [role=alert] {color: #b91c1c; min-height: 1.6em;}
-.web-source-dialog form > div {display: flex; gap: 10px; justify-content: flex-end;}
-.web-source-dialog button {padding: 7px 14px; cursor: pointer;}
-.web-source-dialog .web-source-modes {justify-content: flex-start; margin-bottom: 20px;}
-.web-source-dialog .web-source-modes [aria-pressed=true] {background: #dcecf8; border-color: #2785bc; color: #163c59;}
-.web-source-dialog section[hidden] {display: none;}
-.web-source-dialog section p {overflow-wrap: anywhere;}
-.web-source-dialog button:disabled {cursor: wait; opacity: .65;}
+.web-source-dialog::backdrop {background: rgb(20 20 19 / 36%); backdrop-filter: blur(6px);}
+.web-source-dialog h2 {margin: 0 0 14px; font-size: var(--text-heading); font-weight: 600;}
+.web-source-dialog label {display: grid; gap: 10px; font-weight: 500;}
+.web-source-dialog input {width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid var(--line-strong); border-radius: var(--r-m); outline: 0; color: var(--ink); background: var(--paper); font: var(--text-sm)/1.4 var(--mono);}
+.web-source-dialog input:focus {border-color: var(--line-focus);}
+.web-source-dialog [role=alert] {min-height: 1.55em; color: var(--red);}
+.web-source-dialog section p {margin: 10px 0 0; overflow-wrap: anywhere; color: var(--faint); font-size: var(--text-sm);}
+.web-source-dialog form > div {display: flex; gap: 8px; justify-content: flex-end;}
+.web-source-dialog button {min-height: 32px; padding: 6px 14px; border: 1px solid var(--line-strong); border-radius: var(--r-m); color: var(--ink); background: var(--card); font: inherit; cursor: pointer;}
+.web-source-dialog button:hover {background: var(--soft);}
+.web-source-dialog button[type=submit] {border-color: var(--accent); color: #fff; background: var(--accent);}
+.web-source-dialog button[type=submit]:hover {background: var(--accent-strong);}
+.web-source-dialog .web-source-modes {justify-content: flex-start; gap: 4px; width: fit-content; margin-bottom: 18px; padding: 3px; border-radius: var(--r-m); background: var(--soft);}
+.web-source-dialog .web-source-modes[hidden], .web-source-dialog section[hidden] {display: none;}
+.web-source-dialog .web-source-modes button {min-height: 28px; padding: 3px 12px; border: 0; color: var(--muted); background: transparent;}
+.web-source-dialog .web-source-modes [aria-pressed=true] {color: var(--ink); background: var(--card); box-shadow: var(--shadow-soft);}
+.web-source-dialog button:disabled {cursor: wait; opacity: .6;}
 
-.web-task-sidebar .web-new-task {display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: inherit; cursor: pointer;}
-.web-task-sidebar .web-new-task:hover {background: var(--surface-hover, #e4edf3);}
-.web-task-list .task-row {margin-left: 0; padding-left: 8px;}
-.web-welcome-note {color: var(--text-muted, #657785); margin: 0 0 24px; text-align: center;}
+/* A browser has no window controls, so the brand takes the top row of the sidebar. */
+.web-task-sidebar .sidebar-brand {position: absolute; top: 0; left: 20px; height: var(--topbar); display: flex; align-items: center; gap: 9px; font-size: var(--text-heading); font-weight: 600;}
+.web-task-sidebar .sidebar-brand img {width: 22px; height: 22px; display: block;}
+.web-task-sidebar .sidebar-brand strong {font-weight: 600;}
+.web-task-sidebar .web-new-task {display: grid; place-items: center; width: 25px; height: 25px; margin-left: auto; padding: 0; border: 0; border-radius: var(--r-s); color: var(--faint); background: transparent; cursor: pointer;}
+.web-task-sidebar .web-new-task:hover {color: var(--ink); background: var(--soft-2);}
+.web-task-list .task-row > button:first-child {padding-left: 8px;}
+.web-welcome-note {margin: 0 0 24px; color: var(--faint); text-align: center;}

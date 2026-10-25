@@ -78,8 +78,8 @@ export function ProjectTaskSidebar({
   }, [activeProjectPath, activeTaskId, markViewed, projects]);
 
   return <aside className="task-sidebar">
+    {/* The window controls have the top row to themselves; the brand is the app icon and the welcome page. */}
     <div className="window-drag" />
-    <div className="sidebar-brand"><span className="sidebar-brand-mark"><span /><span /><span /></span><strong>OceanX</strong></div>
     <div className="project-list-heading">
       <span>{text('Projects', '项目')}</span>
       <button className="add-project" type="button" onClick={onChooseProject} title={text('Add local project', '添加本地项目')} aria-label={text('Add local project', '添加本地项目')}>

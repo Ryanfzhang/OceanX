@@ -2,6 +2,7 @@ import {useEffect, useState} from 'react';
 import {LoaderCircle, Plus, Settings, Trash2} from 'lucide-react';
 import type {ProjectCatalogEntry} from '../../ocean-desktop/src/renderer/project-catalog.js';
 import {useUiLanguage} from '../../ocean-desktop/src/renderer/i18n.js';
+import iconUrl from '../../ocean-desktop/src/renderer/assets/brand/oceanx-icon.svg';
 
 type Props = {
   projects: ProjectCatalogEntry[];
@@ -23,7 +24,7 @@ export function ProjectTaskSidebar({projects, activeProjectPath, activeTaskId, o
   }, [project, activeTaskId]);
   return <aside className="task-sidebar web-task-sidebar">
     <div className="window-drag" />
-    <div className="sidebar-brand"><span className="sidebar-brand-mark"><span /><span /><span /></span><strong>OceanX</strong></div>
+    <div className="sidebar-brand"><img src={iconUrl} alt="" /><strong>OceanX</strong></div>
     <div className="project-list-heading"><span>{text('Tasks', '任务')}</span><button type="button" className="web-new-task" disabled={!project} onClick={() => project && onNewTask(project.path)} title={text('New task', '新建任务')} aria-label={text('New task', '新建任务')}><Plus size={17} /></button></div>
     <nav className="project-list web-task-list" aria-label={text('Research tasks', '研究任务')}>
       {project?.tasks.filter(t => t.status !== 'archived').map(task => {

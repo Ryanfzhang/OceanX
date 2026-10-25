@@ -1,16 +1,20 @@
-import type {WorkspaceSourceSelection} from '../../ocean-desktop/src/shared/bridge.js';
+import type {WorkspaceSourceKind, WorkspaceSourceSelection} from '../../ocean-desktop/src/shared/bridge.js';
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
 
-export function chooseSource(): Promise<WorkspaceSourceSelection | null> {
+// The + menu names the kind: a PDF is uploaded, a data folder is a server path. Without a kind both modes show.
+export function chooseSource(_allowImages = false, kind?: WorkspaceSourceKind): Promise<WorkspaceSourceSelection | null> {
   // Settings updates html.lang; the picker uses the same selection.
   const chinese = document.documentElement.lang.startsWith('zh');
   const text = (english: string, zh: string) => chinese ? zh : english;
   return new Promise((resolve) => {
     const dialog = document.createElement('dialog');
     dialog.className = 'web-source-dialog';
-    dialog.setAttribute('aria-label', text('Add data or a paper', '添加数据或论文'));
+    if (document.querySelector('.ocean-shell.theme-dark')) dialog.classList.add('theme-dark');
+    dialog.setAttribute('aria-label', kind === 'pdf' ? text('Add PDF', '添加 PDF') : kind === 'data' ? text('Add data folder', '添加数据文件夹') : text('Add data or a paper', '添加数据或论文'));
     const form = document.createElement('form');
+    const heading = document.createElement('h2');
+    heading.textContent = dialog.getAttribute('aria-label');
     const modes = document.createElement('div');
     modes.className = 'web-source-modes';
     const pathMode = document.createElement('button');
@@ -18,6 +22,7 @@ export function chooseSource(): Promise<WorkspaceSourceSelection | null> {
     const pdfMode = document.createElement('button');
     pdfMode.type = 'button'; pdfMode.textContent = text('Upload PDF', '上传 PDF');
     modes.append(pathMode, pdfMode);
+    modes.hidden = kind !== undefined;
 
     const pathPanel = document.createElement('section');
     const label = document.createElement('label');
@@ -52,7 +57,7 @@ export function chooseSource(): Promise<WorkspaceSourceSelection | null> {
     cancel.type = 'button'; cancel.textContent = text('Cancel', '取消');
     const submit = document.createElement('button'); submit.type = 'submit';
     actions.append(cancel, submit);
-    form.append(modes, pathPanel, pdfPanel, error, actions); dialog.append(form);
+    form.append(heading, modes, pathPanel, pdfPanel, error, actions); dialog.append(form);
     let upload = false, settled = false;
     const controller = new AbortController();
     const setMode = (pdf: boolean) => {
@@ -105,6 +110,6 @@ export function chooseSource(): Promise<WorkspaceSourceSelection | null> {
         submit.textContent = upload ? text('Upload and add', '上传并添加') : text('Add', '添加');
       }
     };
-    document.body.append(dialog); dialog.showModal(); setMode(false);
+    document.body.append(dialog); dialog.showModal(); setMode(kind === 'pdf');
   });
 }

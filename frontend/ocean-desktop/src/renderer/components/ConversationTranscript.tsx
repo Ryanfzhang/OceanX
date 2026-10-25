@@ -8,7 +8,7 @@ import type {PendingInteraction} from '../pending-interaction.js';
 import {resultsForRequest, taskResultRefKey, taskResultsForRequest} from '../types.js';
 import type {DeliveryManifest, ResearchTask, TaskOutput, TaskResultRecord, TeamSnapshot, TranscriptItem} from '../types.js';
 import {useUiLanguage} from '../i18n.js';
-import {toolActivityLabel, workflowActivityLabel, type RequestActivity} from '../request-activity.js';
+import {currentStep, stepLabel, type RequestActivity} from '../request-activity.js';
 import {AgentCollaborationCanvas, timerClock} from './AgentCollaborationCanvas.js';
 import {InteractionDrawer} from './InteractionDrawer.js';
 
@@ -18,6 +18,30 @@ function text(item: TranscriptItem): string {
 
 function plainInlineMarkdown(value: string): string {
   return value.replace(/[*_~`]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+const TEAM_CANVAS_KEY = 'oceanx.team-canvas-collapsed.v1';
+
+/** Whether the user folded or opened a team's canvas for this request; null when they never chose. */
+function rememberedCanvasCollapsed(requestId: string | null | undefined): boolean | null {
+  if (!requestId || typeof window === 'undefined') return null;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(TEAM_CANVAS_KEY) ?? '{}') as Record<string, unknown>;
+    return typeof stored[requestId] === 'boolean' ? stored[requestId] : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberCanvasCollapsed(requestId: string | null | undefined, collapsed: boolean): void {
+  if (!requestId || typeof window === 'undefined') return;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(TEAM_CANVAS_KEY) ?? '{}') as Record<string, boolean>;
+    const entries = Object.entries(stored).filter(([key]) => key !== requestId);
+    window.localStorage.setItem(TEAM_CANVAS_KEY, JSON.stringify(Object.fromEntries([...entries, [requestId, collapsed]].slice(-200))));
+  } catch {
+    // A restricted storage context keeps the default: open while running, folded when done.
+  }
 }
 
 export function taskResultKeys(result: TaskResultRecord): string[] {
@@ -204,7 +228,10 @@ function Working({
 }): React.JSX.Element | null {
   const {text: uiText} = useUiLanguage();
   const traceRef = useRef<HTMLDivElement>(null);
-  const [canvasCollapsed, setCanvasCollapsed] = useState(false);
+  // A team's canvas is open while it works and folds to its header once the answer is in,
+  // unless the user opened or folded it for this request before.
+  const [canvasCollapsed, setCanvasCollapsed] = useState(() => rememberedCanvasCollapsed(group.requestId) ?? !group.active);
+  const [stepsOpen, setStepsOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const process = group.processItems.filter((item) =>
     (item.role === 'assistant' || item.role === 'system') && item.item_id !== hiddenProcessItemId,
@@ -264,51 +291,71 @@ function Working({
       - (timestamp(right.updated_at ?? right.created_at ?? undefined) ?? Number.MAX_SAFE_INTEGER),
     );
   // The backend sends a team only once the research team works on the request; until then the
-  // single agent works alone and speaks as OceanX.
+  // single agent works alone, and its notes and activity line need no speaker label.
   const speaker = matchingTeam ? 'Coordinator:' : 'OceanX:';
-  const toolActivities = group.active && !matchingTeam && !waitingForInput && requestActivity?.requestId === group.requestId
-    ? requestActivity.calls : [];
-  const restoredActivity = group.active && !matchingTeam && !waitingForInput && !toolActivities.length
-    ? workflowActivityLabel(workflow, group.requestId, uiText) : null;
-  const showResearchLog = group.active;
+  // One line says what happens now. A team's members and their work are in the canvas above;
+  // a single agent's recent tool steps fold under the line behind Details.
+  const steps = group.active && !matchingTeam && requestActivity?.requestId === group.requestId ? requestActivity.calls : [];
+  const latest = currentActivities.at(-1);
+  const nowLine = !group.active || waitingForInput ? null : matchingTeam
+    ? latest
+      ? {speaker: latest.authority === 'coordinator' ? 'Coordinator:' : `${expertDisplayName(latest)}:`, text: latest.activity}
+      : {speaker, text: uiText('Preparing the first research update…', '正在准备第一条研究动态…')}
+    : {speaker, text: currentStep(requestActivity, workflow, group.requestId, uiText)};
+  // A finished team shows its notes again when the user opens its card.
+  const showResearchLog = group.active || Boolean(matchingTeam && !canvasCollapsed);
   const hasLiveTrace = group.active && Boolean(researchLog.length || live || currentActivities.length);
   const timing = requestTimeBounds(group);
   useEffect(() => {
-    setCanvasCollapsed(false);
-  }, [group.active, group.key]);
+    setCanvasCollapsed(rememberedCanvasCollapsed(group.requestId) ?? !group.active);
+    setStepsOpen(false);
+  }, [group.active, group.key, group.requestId]);
   useEffect(() => {
     if (traceRef.current) traceRef.current.scrollTop = traceRef.current.scrollHeight;
-  }, [process.length, live, expertResults.length, requestActivity, restoredActivity]);
+  }, [process.length, live, expertResults.length]);
   useEffect(() => {
     if (!group.active || timing.startedAt === null) return;
     setNow(Date.now());
     const interval = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(interval);
   }, [group.active, timing.startedAt]);
-  if (!group.active && !matchingTeam) return null;
+  if (!group.active && !matchingTeam) {
+    // A finished single agent keeps its working notes behind one fold above the answer.
+    const notes = process.filter((item) => text(item).trim());
+    return notes.length ? <details className="process-notes">
+      <summary>{uiText(`Working notes (${notes.length})`, `过程说明（${notes.length}）`)}</summary>
+      <div className="process-notes-body">{notes.map((item) => <div className="research-log-content" key={item.item_id}><CompactLogMarkdown content={text(item)} /></div>)}</div>
+    </details> : null;
+  }
   const status = group.active ? 'working' : matchingTeam?.status ?? 'completed';
   const elapsed = timing.startedAt === null ? null : Math.max(0, (group.active ? now : timing.endedAt ?? timing.startedAt) - timing.startedAt);
   const timerLabel = group.active && elapsed !== null ? timerClock(elapsed) : null;
-  return <section className={`working-stream ${group.active ? 'active' : 'completed'} status-${status}${matchingTeam ? ' has-team' : ''}${canvasCollapsed ? ' details-collapsed' : ''}${hasLiveTrace ? ' has-trace' : ''}`}>
-    <header className="working-stream-header"><i /><span>{matchingTeam ? uiText('Research team', '研究团队') : 'OceanX'}</span>{timerLabel ? <small className="working-stream-timer"><Timer size={12} />{timerLabel}</small> : null}
-      {matchingTeam ? <button
+  // A finished team that did not complete says so on its header, which stays visible when the card is folded.
+  const outcomeLabel = group.active ? null : {
+    incomplete: uiText('Partial result', '部分结果'),
+    blocked: uiText('Blocked', '受阻'),
+    failed: uiText('Failed', '失败'),
+  }[status as 'incomplete' | 'blocked' | 'failed'] ?? null;
+  return <><section className={`working-stream ${group.active ? 'active' : 'completed'} status-${status}${matchingTeam ? ' has-team' : ' solo'}${canvasCollapsed ? ' details-collapsed' : ''}${hasLiveTrace ? ' has-trace' : ''}`}>
+    {matchingTeam ? <header className="working-stream-header"><i /><span>{uiText('Research team', '研究团队')}</span>{timerLabel ? <small className="working-stream-timer"><Timer size={12} />{timerLabel}</small> : null}{outcomeLabel ? <small>{outcomeLabel}</small> : null}
+      <button
         className="working-stream-toggle"
         type="button"
         aria-expanded={!canvasCollapsed}
         aria-label={canvasCollapsed ? uiText('View team', '查看团队') : uiText('Hide team', '收起团队')}
         title={canvasCollapsed ? uiText('View team', '查看团队') : uiText('Hide team', '收起团队')}
-        onClick={() => setCanvasCollapsed((value) => !value)}
+        onClick={() => {rememberCanvasCollapsed(group.requestId, !canvasCollapsed); setCanvasCollapsed(!canvasCollapsed);}}
       >
         {canvasCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-      </button> : null}
-    </header>
+      </button>
+    </header> : null}
     <div className="working-stream-content">
       {matchingTeam && !canvasCollapsed ? <AgentCollaborationCanvas snapshot={matchingTeam} /> : null}
       {showResearchLog ? <section className="live-research-log" aria-label={uiText('Research activity', '研究动态')}>
-        <div className="live-research-log-body" ref={traceRef} aria-live="polite">
+        {researchLog.length ? <div className="live-research-log-body" ref={traceRef} aria-live="polite">
           {researchLog.map((entry) => entry.kind === 'coordinator'
             ? <article className={`research-log-entry ${entry.item.role === 'system' ? 'system' : 'coordinator'}`} key={entry.item.item_id}>
-              <strong>{entry.item.role === 'system' ? 'OceanX:' : speaker}</strong>
+              {matchingTeam ? <strong>{entry.item.role === 'system' ? 'OceanX:' : speaker}</strong> : null}
               <div className="research-log-content"><CompactLogMarkdown content={text(entry.item)} /></div>
             </article>
             : <article className="research-log-entry expert-result" key={`result:${entry.agent.agent_id}:${entry.agent.report_path}`}>
@@ -321,27 +368,24 @@ function Working({
                   onClick={() => onOpenReport(entry.agent.report_path!, entry.title)}
                 ><InlineMarkdown content={entry.title} /></button></div>
             </article>)}
-          {currentActivities.map((agent) => <article className="research-log-entry agent-activity" key={`activity:${agent.agent_id}`}>
-            <strong>{agent.authority === 'coordinator' ? 'Coordinator:' : `${expertDisplayName(agent)}:`}</strong>
-            <div className="research-log-content"><p>{agent.activity}</p></div>
-          </article>)}
-          {toolActivities.length || restoredActivity ? <section className="request-tool-progress" aria-label={uiText('Current progress', '当前进度')} aria-live="polite">
-            {toolActivities.map(activity => <article className={`research-log-entry tool-activity ${activity.status}`} key={activity.callId}>
-              <strong>{toolActivityLabel(activity, uiText)}</strong>
-              {activity.purpose ? <div className="research-log-content"><p>{activity.purpose}</p></div> : null}
-            </article>)}
-            {restoredActivity ? <p className="restored-request-activity">{restoredActivity}</p> : null}
-            {toolActivities.length && !toolActivities.some(activity => activity.status === 'running')
-              ? <p className="restored-request-activity">{uiText('Reviewing the latest tool result…', '正在检查最新工具结果…')}</p> : null}
-          </section> : null}
-          {live ? <article className="research-log-entry coordinator streaming"><strong>{speaker}</strong><div className="research-log-content"><CompactLogMarkdown content={live} /></div></article> : null}
-          {!researchLog.length && !live && !currentActivities.length
-            ? <article className="research-log-entry coordinator streaming"><strong>{speaker}</strong><div className="research-log-content"><p>{matchingTeam ? uiText('Preparing the first research update…', '正在准备第一条研究动态…') : uiText('Working on the request…', '正在处理请求…')}</p></div></article>
-            : null}
-        </div>
+        </div> : null}
+        {nowLine ? <div className="activity-bar" aria-live="polite">
+          {matchingTeam ? <strong>{nowLine.speaker}</strong> : null}
+          <span title={nowLine.text}>{nowLine.text}</span>
+          {steps.length ? <button className="activity-steps-toggle" type="button" aria-expanded={stepsOpen} onClick={() => setStepsOpen((open) => !open)}>
+            {uiText('Details', '详情')}{stepsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          </button> : null}
+        </div> : null}
+        {nowLine && stepsOpen && steps.length ? <ol className="activity-steps">
+          {steps.map((step) => <li className={step.status} key={step.callId}>
+            <span>{stepLabel(step.toolName, uiText)}</span>{step.purpose ? <small title={step.purpose}>{step.purpose}</small> : null}
+          </li>)}
+        </ol> : null}
       </section> : null}
     </div>
-  </section>;
+  </section>
+  {/* Text the model is writing streams in as prose where the answer appears. */}
+  {live ? <article className="message assistant streaming-answer" aria-live="polite"><MessageMarkdown content={live} /></article> : null}</>;
 }
 
 function InlinePaperSelection({

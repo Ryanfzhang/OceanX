@@ -14,7 +14,6 @@
     "typecheck": "npm run check",
     "benchmark:smoke": "npm run build && node scripts/benchmark-desktop.mjs",
     "start": "node scripts/ensure-sidecar.mjs && node scripts/ensure-frontend.mjs && node scripts/start-electron.mjs",
-    "start:cached": "node scripts/ensure-sidecar.mjs && node scripts/start-electron.mjs",
     "dev": "node scripts/ensure-sidecar.mjs && tsc -p tsconfig.main.json && node scripts/build-preload.mjs && node scripts/dev-electron.mjs",
     "verify:sidecar": "node scripts/verify-sidecar.mjs",
     "verify:package": "node scripts/verify-packaged-sidecar.mjs",
@@ -62,7 +61,7 @@
   "build": {
     "appId": "org.oceanpartner.desktop",
     "productName": "OceanX",
-    "icon": "assets/ocean-partner-icon.png",
+    "icon": "assets/oceanx-icon.png",
     "files": [
       "dist/renderer/**",
       "dist-electron/**",
@@ -82,7 +81,7 @@
       }
     ],
     "mac": {
-      "icon": "assets/ocean-partner-icon.icns",
+      "icon": "assets/oceanx-icon.icns",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "OceanX uses the microphone only when you start voice input in the message composer."
       },
@@ -92,7 +91,7 @@
       ]
     },
     "win": {
-      "icon": "assets/ocean-partner-icon.ico",
+      "icon": "assets/oceanx-icon.ico",
       "target": [
         "nsis"
       ]

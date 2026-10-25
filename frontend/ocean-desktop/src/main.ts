@@ -10,7 +10,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {parseArtifactResourceGrant, shouldResetTaskResourceGrants} from './shared/artifact-resource-grant.js';
 import {shouldPublishBackendExit} from './shared/backend-lifecycle.js';
 import {artifactPathSegments, isSafeContainedRelativePath} from './shared/contained-path.js';
-import type {BackendFrame, DesktopBackendLaunch, DesktopBackendStatus, DesktopProjectEntry, DesktopUpdateStatus, ModelProviderSetup, ModelProviderStatus, ModelRoleProviderSetup, ModelRoleProviderStatus, OpenArtifactResourceResult} from './shared/bridge.js';
+import type {BackendFrame, DesktopBackendLaunch, DesktopBackendStatus, DesktopProjectEntry, DesktopUpdateStatus, ModelProviderSetup, ModelProviderStatus, ModelRoleProviderSetup, ModelRoleProviderStatus, OpenArtifactResourceResult, WorkspaceSourceKind} from './shared/bridge.js';
 import {parseDesktopUpdateConfig} from './shared/update-config.js';
 import {loadElectronPlatformUpdater} from './shared/electron-updater-adapter.js';
 import {parseStrictJsonBytes} from './shared/strict-json.js';
@@ -768,7 +768,7 @@ class OceanBackendSidecar {
     return {opened: false, revealed: true, message};
   }
 
-  async chooseWorkspaceSource(allowImages: boolean): Promise<{kind: 'file' | 'folder'; relativePath?: string; localPath?: string} | null> {
+  async chooseWorkspaceSource(allowImages: boolean, kind?: WorkspaceSourceKind): Promise<{kind: 'file' | 'folder'; relativePath?: string; localPath?: string} | null> {
     if (!this.workspacePath) {
       throw new Error('Open a project before importing a local source.');
     }
@@ -778,9 +778,17 @@ class OceanBackendSidecar {
       'grb', 'grb2', 'zarr', 'zip', 'gz', 'parquet', 'feather', 'xlsx', 'xls',
       ...(allowImages ? ['png', 'jpg', 'jpeg', 'webp', 'gif'] : []),
     ];
-    const result = await dialog.showOpenDialog({
-      title: 'Select a research file, or select the current folder to import the complete directory.',
-      buttonLabel: 'Use selected path',
+    // The + menu asks for a PDF or a data folder; without a kind the dialog takes any research file or folder.
+    const result = await dialog.showOpenDialog(kind === 'pdf' ? {
+      title: 'Select a PDF.',
+      buttonLabel: 'Add PDF',
+      properties: ['openFile'],
+      filters: [{name: 'PDF', extensions: ['pdf']}],
+    } : {
+      title: kind === 'data'
+        ? 'Select a data folder, or a single data file.'
+        : 'Select a research file, or select the current folder to import the complete directory.',
+      buttonLabel: kind === 'data' ? 'Add data' : 'Use selected path',
       properties: ['openFile', 'openDirectory'],
       filters: [{name: allowImages ? 'Research files' : 'Research files (images unavailable)', extensions}],
     });
@@ -1158,10 +1166,11 @@ app.whenReady().then(() => {
     }
     return forgetDesktopProject(projectPath);
   });
-  ipcMain.handle('ocean:choose-workspace-source', (event, allowImages: unknown) => {
+  ipcMain.handle('ocean:choose-workspace-source', (event, allowImages: unknown, kind: unknown) => {
     assertMainRenderer(event);
     if (typeof allowImages !== 'boolean') throw new Error('Image capability is required.');
-    return sidecar.chooseWorkspaceSource(allowImages);
+    if (kind !== undefined && kind !== 'pdf' && kind !== 'data') throw new Error('Unknown source kind.');
+    return sidecar.chooseWorkspaceSource(allowImages, kind);
   });
   ipcMain.handle('ocean:stage-image-attachment', (event, attachment: unknown) => {
     assertMainRenderer(event);

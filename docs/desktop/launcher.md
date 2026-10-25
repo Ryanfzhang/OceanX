@@ -3,8 +3,7 @@
 From a source checkout, use `scripts/run_desktop.sh` and `desktop.toml`.
 The script calls `npm start`: its sidecar check, Electron,
 project catalog, model helpers, agents, cleanup and task execution are unchanged.
-A frontend build runs only when source/dependencies changed, outputs are missing
-or modified, or no build stamp exists. Configuration changes do not invalidate it.
+It rebuilds the frontend only when its sources, dependencies or outputs changed.
 
 ## First setup
 
@@ -33,7 +32,9 @@ conda activate oceanx
 bash scripts/run_desktop.sh
 ```
 
-The script reads `desktop.toml`, passes only the browser map key to the Electron main process at runtime, and uses the active Python environment for the native backend and
+The script reads `desktop.toml`, hands the browser map key to the app at runtime
+(it is never built into the frontend; without a key the map uses bundled Natural
+Earth geography), and uses the active Python environment for the native backend and
 scientific runtime. `desktop.sandbox_python` optionally selects a different
 scientific Python. The launcher does not read `web.toml` or web task state.
 
@@ -47,11 +48,7 @@ When using this launcher, `desktop.toml` is authoritative at every startup.
 API changes made through the original settings dialog affect the generated
 profiles for that session; put persistent changes in `desktop.toml` before the
 next script launch. Native appearance, language and other UI preferences keep
-their original behavior. The map key travels through a narrow preload API at runtime. It is not baked
-into frontend assets. No frontend `.env.local` is needed; old files no longer
-control the map. Both web and Desktop use the same map style provider. An empty
-key, or launching the app without a runtime map key, uses bundled Natural Earth
-geography rather than making unauthenticated CARTO tile requests.
+their original behavior.
 
 For configuration validation without opening the app or writing runtime state:
 
@@ -61,5 +58,4 @@ bash scripts/run_desktop.sh --check
 
 `--config /path/to/desktop.toml` selects a different file. The normal entry remains
 the same script. `npm start`, development commands and installed desktop packages
-remain available for their original uses. Apps launched without a runtime CARTO
-key use the bundled offline map.
+remain available for their original uses.

@@ -102,21 +102,16 @@ Changing the code location does not require moving the task data or these logs.
 Model API keys and internal filesystem paths are not sent in browser config.
 The map key is a browser key, described below.
 
-The shared Desktop/web conversation shows tool progress even when the agent
-does not write another chat message. It keeps a short trail of step descriptions,
-without displaying code or raw tool output, and restores the current workflow
-status after refresh. Requests remain in `auto` mode: the agent decides whether
-to hand over to the research team; the interface shows a team only after handoff.
+While a request runs, the conversation shows one line with the current step and
+folds the earlier tool steps beneath it; code and tool output are not shown.
 
 ## Add data or a PDF
 
 Create or select a task and click the attachment button. The dialog follows the
-language selected in Settings. Choose **Upload PDF** to select a paper from your
-computer (up to 25 MiB). A private copy is stored under
-`<workspace>/Uploaded papers/<unique directory>/` and attached through native
-source import; the original file is unchanged. Interrupted or rejected uploads
-leave no partial file. Uploaded papers are sources, not temporary computation
-caches, and remain in the workspace with its task data.
+language selected in Settings. Choose **Upload PDF** to send a paper from your
+computer (up to 25 MiB). It is saved under `<workspace>/Uploaded papers/`, kept
+with the task data and attached as a task source; an interrupted or rejected
+upload leaves no file.
 
 Choose **Server path** for an existing server data file, PDF or folder. Enter the complete
 server path to a file or directory. OceanX validates the path against source roots

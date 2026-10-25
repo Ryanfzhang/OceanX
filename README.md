@@ -274,11 +274,9 @@ named `oceanx` environment.
 
 ### CARTO basemap key
 
-Set `[map].carto_api_key` in `desktop.toml` or `web.toml`. These are the only
-user-edited map settings for the two normal launchers. Both renderers read the
-browser map key at runtime; changing it requires a restart, not a frontend build.
-An empty key uses bundled Natural Earth geography. Legacy frontend `.env.local`
-files no longer control the map.
+Set `[map].carto_api_key` in `desktop.toml` or `web.toml`. Both apps read it at
+startup, so a change needs a restart, not a rebuild. Without a key the map uses
+bundled Natural Earth geography.
 
 The [CARTO Basemaps key](https://carto.com/basemaps/apikey/) is visible in tile
 requests; model API keys stay private. Keep CARTO and OpenStreetMap attribution

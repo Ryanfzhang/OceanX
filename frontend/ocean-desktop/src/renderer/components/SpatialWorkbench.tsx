@@ -18,7 +18,7 @@ import {
   viewLabel,
 } from './InteractiveViewWorkbench.js';
 
-import {getBasemapStyle} from '../basemap.js';
+import {applyBasemapTheme, getBasemapStyle} from '../basemap.js';
 
 const OVERLAY_SOURCE = 'ocean-result-overlay';
 const OVERLAY_LAYER = 'ocean-result-overlay';
@@ -44,6 +44,7 @@ type ResultWorkbenchProps = {
   downloadUrl?: string | null;
   error?: string | null;
   onClose?: () => void;
+  dark?: boolean;
 };
 
 type HoverValue = {longitude: number; latitude: number; value: number | null};
@@ -468,6 +469,7 @@ export function ResultWorkbench({
   downloadUrl = null,
   error = null,
   onClose = () => undefined,
+  dark = false,
 }: ResultWorkbenchProps = {}): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -539,6 +541,11 @@ export function ResultWorkbench({
       mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && ready) applyBasemapTheme(map, dark);
+  }, [dark, ready]);
 
   useEffect(() => {
     const map = mapRef.current;

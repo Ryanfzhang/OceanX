@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {configureBasemap, createBasemapStyle, getBasemapStyle} from './basemap.js';
+import {applyBasemapTheme, configureBasemap, createBasemapStyle, getBasemapStyle} from './basemap.js';
 import {desktopMapConfig} from '../shared/map-config.js';
 
 describe('runtime map configuration', () => {
@@ -23,6 +23,24 @@ describe('runtime map configuration', () => {
     expect(second.attribution).toContain('CARTO');
     configureBasemap('');
     expect(getBasemapStyle().sources['carto-light']).toBeUndefined();
+  });
+
+  it('follows the dark theme with dark geography and dark CARTO tiles', () => {
+    const paints: Record<string, unknown> = {};
+    let tiles: string[] = [];
+    const map = {
+      getLayer: () => ({}),
+      getSource: () => ({setTiles: (next: string[]) => {tiles = next;}}),
+      setPaintProperty: (layer: string, name: string, value: unknown) => {paints[`${layer}:${name}`] = value;},
+    };
+    configureBasemap('key');
+    applyBasemapTheme(map, true);
+    expect(paints['land:fill-color']).not.toBe(paints['ocean-background:background-color']);
+    expect(tiles[0]).toContain('/dark_all/');
+    applyBasemapTheme(map, false);
+    expect(paints['land:fill-color']).toBe('#f0eee6');
+    expect(tiles[0]).toContain('/light_all/');
+    configureBasemap('');
   });
 
   it('exposes only the browser map key and ignores legacy build settings', () => {

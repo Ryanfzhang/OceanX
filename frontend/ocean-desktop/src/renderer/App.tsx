@@ -1,11 +1,12 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Check, ImageOff, LoaderCircle, Mic, Plus, SendHorizontal, Square, Trash2, X} from 'lucide-react';
+import {ArrowUp, Check, ImageOff, LoaderCircle, Mic, Square, Trash2, X} from 'lucide-react';
 
-import type {BackendFrame, DesktopUpdateStatus, ModelProviderSetup, ModelProviderStatus} from '../shared/bridge.js';
+import type {BackendFrame, DesktopUpdateStatus, ModelProviderSetup, ModelProviderStatus, WorkspaceSourceKind} from '../shared/bridge.js';
 import {artifactFileName, asRecord, changedResultsTaskId, isActiveForegroundRequest, isTaskCreationReady, parseDesktopRuntimeCapabilities, projectNameFromPath, shouldApplyTaskSnapshot, sourceTitleFromPath} from './app-utils.js';
 import {ConversationTranscript, taskResultKeys} from './components/ConversationTranscript.js';
 import {InteractionDrawer} from './components/InteractionDrawer.js';
 import {OceanXWelcome} from './components/OceanXWelcome.js';
+import {SourceMenu} from './components/SourceMenu.js';
 import {ProjectTaskSidebar} from './components/ProjectTaskSidebar.js';
 import {ReportWorkbench} from './components/ReportWorkbench.js';
 import {ResultWorkbench} from './components/SpatialWorkbench.js';
@@ -27,7 +28,7 @@ import type {AppearanceTheme, ArtifactSummary, ArtifactVersion, DeliveryManifest
 
 type SourceSelection = {kind: 'file' | 'folder'; relativePath?: string; localPath?: string};
 type PendingImageAttachment = {fileName: string; mimeType: string; bytes: Uint8Array; previewUrl: string};
-type PendingTaskCreate = {projectPath: string; title: string};
+type PendingTaskCreate = {projectPath: string; title: string; sources: SourceSelection[]};
 type ResultSurface = {kind: 'interactive_view' | 'report'; document: ResultDocument} | null;
 type RequestHandler = (result: EventPayload) => void;
 type RequestErrorHandler = (message: string, error: EventPayload) => void;
@@ -44,6 +45,20 @@ type TaskResultGrantPurpose =
   | 'result_file';
 const TERMINAL_WORKFLOW_STATES = new Set(['completed', 'incomplete', 'failed', 'cancelled']);
 const PROJECT_CATALOG_STORAGE_KEY = 'oceanx.project-catalog.native-v1';
+const WORKBENCH_WIDTH_STORAGE_KEY = 'oceanx.workbench-width.v1';
+
+function readWorkbenchWidth(): number | null {
+  try {
+    const width = Number(window.localStorage.getItem(WORKBENCH_WIDTH_STORAGE_KEY));
+    return Number.isFinite(width) && width >= 300 ? width : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeWorkbenchWidth(width: number): void {
+  try {window.localStorage.setItem(WORKBENCH_WIDTH_STORAGE_KEY, String(width));} catch {/* the width is a convenience */}
+}
 
 type DeleteCandidate = {task: ResearchTask; projectPath: string};
 type SpeechResult = {isFinal: boolean; 0: {transcript: string}};
@@ -178,6 +193,9 @@ export function App(): React.JSX.Element {
   const pendingTaskRestore = useRef<string | null>(null);
   const pendingTaskDelete = useRef<string | null>(null);
   const pendingTaskCreate = useRef<PendingTaskCreate | null>(null);
+  // PDFs and data folders chosen on the welcome page, kept until the task exists and then imported one at a time.
+  const [welcomeSources, setWelcomeSources] = useState<Array<{selection: SourceSelection; name: string}>>([]);
+  const queuedSources = useRef<{taskId: string; items: SourceSelection[]} | null>(null);
   const projectActivationGeneration = useRef(0);
   const pendingImageRef = useRef<PendingImageAttachment | null>(null);
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -220,6 +238,17 @@ export function App(): React.JSX.Element {
   }, []);
 
   const resolvedTheme = appearanceTheme === 'system' ? systemTheme : appearanceTheme;
+  const shellRef = useRef<HTMLElement>(null);
+  const [workbenchWidth, setWorkbenchWidth] = useState<number | null>(() => readWorkbenchWidth());
+  // The map stays open beside the conversation; the divider between them moves it.
+  const resizeWorkbench = (clientX: number, persist: boolean) => {
+    const shell = shellRef.current?.getBoundingClientRect();
+    const sidebar = shellRef.current?.firstElementChild?.getBoundingClientRect().width ?? 0;
+    if (!shell) return;
+    const width = Math.round(Math.min(Math.max(shell.right - clientX, 300), shell.width - sidebar - 420));
+    setWorkbenchWidth(width);
+    if (persist) writeWorkbenchWidth(width);
+  };
   const send = useCallback(async (frame: EventPayload): Promise<boolean> => {
     try {await window.oceanDesktop.sendBackendFrame(frame); return true;}
     catch (error) {setInlineStatus(error instanceof Error ? error.message : 'Backend request failed.'); return false;}
@@ -609,6 +638,7 @@ export function App(): React.JSX.Element {
           setProjects((catalog) => rememberProject(catalog, pending.projectPath, next));
           return next;
         });
+        if (pending.sources.length) queuedSources.current = {taskId: task.task_id, items: [...pending.sources]};
         openTask(task.task_id, task);
       },
       false,
@@ -624,7 +654,8 @@ export function App(): React.JSX.Element {
     const title = newTaskTitle.trim();
     const projectPath = workspacePathRef.current;
     if (!title || !projectPath) return;
-    const pending = {projectPath, title};
+    const pending = {projectPath, title, sources: welcomeSources.map((source) => source.selection)};
+    setWelcomeSources([]);
     if (!dispatchTaskCreate(pending)) {
       // system.ready arrives before workspace.open completes. Keep the user's
       // title and submit once the workspace is actually ready for task writes.
@@ -743,6 +774,13 @@ export function App(): React.JSX.Element {
     );
     if (!id) failed(text('Backend is not connected.', '后端未连接。'), {});
   };
+  useEffect(() => {
+    const queue = queuedSources.current;
+    if (!queue || sourceImporting || taskLoading || activeTask?.task_id !== queue.taskId) return;
+    const next = queue.items.shift();
+    if (!queue.items.length) queuedSources.current = null;
+    if (next) importSource(next);
+  });
   const clearPendingImage = () => setPendingImage((current) => {
     if (current) URL.revokeObjectURL(current.previewUrl);
     return null;
@@ -823,9 +861,14 @@ export function App(): React.JSX.Element {
     const value = fixed ?? interactionAnswer.trim(); if (!pendingInteraction || !value) return;
     request('interaction.respond', {interaction_id: pendingInteraction.interactionId, answer: value}, undefined, true); setPendingInteraction(null); setInteractionAnswer('');
   };
-  const chooseSource = async () => {
+  const chooseSource = async (kind?: WorkspaceSourceKind, beforeTask = false) => {
     try {
-      const selected = await window.oceanDesktop.chooseWorkspaceSource(modelProvider?.expert.imageInputs === true); if (!selected) return;
+      const selected = await window.oceanDesktop.chooseWorkspaceSource(modelProvider?.expert.imageInputs === true, kind); if (!selected) return;
+      if (beforeTask) {
+        const selectedPath = selected.relativePath ?? selected.localPath;
+        if (selectedPath) setWelcomeSources((current) => [...current, {selection: selected, name: sourceTitleFromPath(selectedPath)}]);
+        return;
+      }
       importSource(selected);
     } catch (error) {
       const message = error instanceof Error ? error.message : text('Could not add the selected source.', '无法添加所选来源。');
@@ -1125,7 +1168,8 @@ export function App(): React.JSX.Element {
     ? stoppingRequestId === activeRequestId ? text('Stopping', '正在停止') : text('Working', '运行中')
     : text('Ready', '已就绪') : workspacePath ? text('Connecting', '连接中') : text('No project', '未选择项目');
 
-  return <main className={`ocean-shell density-${density} theme-${resolvedTheme}${activeTask ? '' : ' welcome-mode'}`}>
+  return <main ref={shellRef} className={`ocean-shell density-${density} theme-${resolvedTheme}${activeTask ? '' : ' welcome-mode'}`}
+    style={workbenchWidth ? {'--workbench-width': `${workbenchWidth}px`} as React.CSSProperties : undefined}>
     <ProjectTaskSidebar
       projects={projects}
       activeProjectPath={workspacePath}
@@ -1147,7 +1191,7 @@ export function App(): React.JSX.Element {
     />
     <section className="conversation-pane">
       <header className="conversation-toolbar">{activeTask ? <div className="conversation-title"><strong>{activeTask.title}</strong></div> : <span />}{activeTask ? <div className="conversation-actions"><button onClick={() => setDeleteCandidate({task: activeTask, projectPath: workspacePath ?? ''})} title={text('Delete task', '删除任务')}><Trash2 size={16} /></button></div> : <span />}</header>
-      <div className={`conversation-scroll${activeTask ? '' : ' welcome-scroll'}`}>{activeTask ? <ConversationTranscript loading={taskLoading} transcript={transcript} streaming={streaming} activeRequestId={activeRequestId} requestActivity={requestActivity} task={activeTask} workspacePath={workspacePath} outputs={outputs} manifests={manifests} taskResults={taskResults} team={team} teamSnapshots={teamSnapshots} pendingInteraction={pendingInteraction} interactionAnswer={interactionAnswer} onInteractionAnswer={setInteractionAnswer} onInteractionSubmit={answer} onOpenResult={openResult} onOpenTaskResult={openTaskResult} onOpenTaskResultFile={openTaskResultFile} onOpenReport={openExpertReport} /> : <OceanXWelcome projectName={projectName} hasProject={Boolean(workspacePath)} title={newTaskTitle} onTitle={setNewTaskTitle} onCreateTask={createTask} onChooseProject={() => void chooseProject()} />}</div>
+      <div className={`conversation-scroll${activeTask ? '' : ' welcome-scroll'}`}>{activeTask ? <ConversationTranscript loading={taskLoading} transcript={transcript} streaming={streaming} activeRequestId={activeRequestId} requestActivity={requestActivity} task={activeTask} workspacePath={workspacePath} outputs={outputs} manifests={manifests} taskResults={taskResults} team={team} teamSnapshots={teamSnapshots} pendingInteraction={pendingInteraction} interactionAnswer={interactionAnswer} onInteractionAnswer={setInteractionAnswer} onInteractionSubmit={answer} onOpenResult={openResult} onOpenTaskResult={openTaskResult} onOpenTaskResultFile={openTaskResultFile} onOpenReport={openExpertReport} /> : <OceanXWelcome projectName={projectName} hasProject={Boolean(workspacePath)} title={newTaskTitle} onTitle={setNewTaskTitle} onCreateTask={createTask} onChooseProject={() => void chooseProject()} pendingSources={welcomeSources.map((source) => source.name)} sourceBusy={sourceImporting} onAddSource={(kind) => void chooseSource(kind, true)} onRemoveSource={(index) => setWelcomeSources((current) => current.filter((_, position) => position !== index))} />}</div>
       {activeTask ? <div className="composer-wrap">
         {inlineStatus ? <div className="inline-status"><span>{inlineStatus}</span><button onClick={() => setInlineStatus(null)}><X size={14} /></button></div> : null}
         <div className="composer-stack">
@@ -1161,7 +1205,7 @@ export function App(): React.JSX.Element {
             <div className="composer-actions">
               <div className="attachment-anchor">
                 {attachmentNotice ? <div className="attachment-notice" role="status"><ImageOff size={14} /><span>{attachmentNotice}</span><button type="button" onClick={() => setAttachmentNotice(null)} aria-label={text('Dismiss', '关闭')}><X size={12} /></button></div> : null}
-                <button onClick={() => void chooseSource()} disabled={!activeTask || sourceImporting || pendingInteraction?.kind === 'paper_selection'} aria-busy={sourceImporting} aria-label={sourceImporting ? text('Adding source', '正在添加来源') : text('Add file or folder', '添加文件或文件夹')} title={sourceImporting ? text('Adding source…', '正在添加来源…') : text('Add file or folder', '添加文件或文件夹')}>{sourceImporting ? <LoaderCircle className="spin" size={17} /> : <Plus size={19} />}</button>
+                <SourceMenu disabled={!activeTask || pendingInteraction?.kind === 'paper_selection'} busy={sourceImporting} onChoose={(kind) => void chooseSource(kind)} />
               </div>
               <div className="composer-actions-spacer" />
               <div className="voice-anchor">
@@ -1176,13 +1220,36 @@ export function App(): React.JSX.Element {
                   title={listening ? text('Stop voice input', '停止语音输入') : text('Voice input', '语音输入')}
                 ><Mic size={17} /></button>
               </div>
-              {activeRequestId ? <button className="send-button stop" onClick={cancel} disabled={stoppingRequestId === activeRequestId} aria-label={stoppingRequestId === activeRequestId ? text('Stopping task', '正在停止任务') : text('Stop task', '停止任务')} title={stoppingRequestId === activeRequestId ? text('Stopping…', '正在停止…') : text('Stop task', '停止任务')}>{stoppingRequestId === activeRequestId ? <LoaderCircle className="spin" size={17} /> : <Square size={15} />}</button> : <button className="send-button" onClick={submit} disabled={(!prompt.trim() && !pendingImage) || !activeTask || activeArchived || sourceImporting}><SendHorizontal size={17} /></button>}
+              {activeRequestId ? <button className="send-button stop" onClick={cancel} disabled={stoppingRequestId === activeRequestId} aria-label={stoppingRequestId === activeRequestId ? text('Stopping task', '正在停止任务') : text('Stop task', '停止任务')} title={stoppingRequestId === activeRequestId ? text('Stopping…', '正在停止…') : text('Stop task', '停止任务')}>{stoppingRequestId === activeRequestId ? <LoaderCircle className="spin" size={17} /> : <Square size={15} />}</button> : <button className="send-button" onClick={submit} disabled={(!prompt.trim() && !pendingImage) || !activeTask || activeArchived || sourceImporting} aria-label={text('Send', '发送')} title={text('Send', '发送')}><ArrowUp size={17} /></button>}
             </div>
           </div>}
         </div>
       </div> : null}
     </section>
-    {resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} error={resultError} onClose={closeResult} />}
+    {activeTask ? <div
+      className="workbench-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={text('Resize the map panel', '调整地图面板宽度')}
+      tabIndex={0}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {if (event.currentTarget.hasPointerCapture(event.pointerId)) resizeWorkbench(event.clientX, false);}}
+      onPointerUp={(event) => {
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        resizeWorkbench(event.clientX, true);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const handle = event.currentTarget.getBoundingClientRect();
+        resizeWorkbench(handle.left + handle.width / 2 + (event.key === 'ArrowLeft' ? -24 : 24), true);
+      }}
+    /> : null}
+    {resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} error={resultError} onClose={closeResult} dark={resolvedTheme === 'dark'} />}
     <DesktopSettingsDialog open={settingsOpen} status={status} projectName={projectName} runtime={runtime} modelProvider={modelProvider} modelProviderSaving={modelSaving} displayDensity={density} onDisplayDensity={setDensity} appearanceTheme={appearanceTheme} onAppearanceTheme={setAppearanceTheme} parallelExperts={parallelExperts} onParallelExperts={setParallelExperts} onConfigureModelProvider={configureModel} update={update} onCheckForUpdate={() => void window.oceanDesktop.checkForUpdate().then(setUpdate)} onInstallUpdate={() => void window.oceanDesktop.installPreparedUpdate().then(setUpdate)} onClose={() => setSettingsOpen(false)} />
     <ResearchLibraryDialog open={libraryOpen} onClose={() => setLibraryOpen(false)} request={libraryRequest} />
     <TaskDeleteDialog task={deleteCandidate?.task ?? null} onCancel={() => setDeleteCandidate(null)} onConfirm={deleteTask} />

@@ -48,6 +48,27 @@ describe('OceanX entry layout', () => {
     expect(markup).toContain('type="submit"');
   });
 
+  it('adds PDFs and data folders from the name box before the task exists', () => {
+    const markup = renderToStaticMarkup(<OceanXWelcome
+      projectName="gulf"
+      hasProject
+      title=""
+      onTitle={() => undefined}
+      onCreateTask={() => undefined}
+      onChooseProject={() => undefined}
+      pendingSources={['zheng2026.pdf', 'cmoms']}
+      onAddSource={() => undefined}
+      onRemoveSource={() => undefined}
+    />);
+
+    expect(markup).toContain('aria-label="Add a PDF or a data folder"');
+    expect(markup).toContain('aria-haspopup="menu"');
+    expect(markup).toContain('zheng2026.pdf');
+    expect(markup).toContain('aria-label="Remove cmoms"');
+    expect(markup).toContain('class="welcome-project"');
+    expect(markup).toContain('oceanx-icon');
+  });
+
   it('provides the same three starting points in Chinese', () => {
     vi.stubGlobal('window', {
       localStorage: {
@@ -90,6 +111,7 @@ describe('OceanX entry layout', () => {
     />);
 
     expect(markup).toContain('gulf');
+    expect(markup).not.toContain('sidebar-brand');
     expect(markup).toContain('分析温盐结构');
     expect(markup).toContain('比较卫星数据');
     expect(markup).toContain('Add local project');

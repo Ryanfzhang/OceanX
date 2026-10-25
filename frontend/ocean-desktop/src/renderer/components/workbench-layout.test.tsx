@@ -755,7 +755,7 @@ describe('research workbench layout', () => {
     expect(markup).toContain('status-incomplete');
   });
 
-  it('speaks as OceanX and shows no team while the single agent works alone', () => {
+  it('shows a single agent as notes and one activity line, without a team or speaker labels', () => {
     const common = {
       loading: false,
       streaming: '',
@@ -770,8 +770,9 @@ describe('research workbench layout', () => {
     };
     const user = {item_id: 'user_quick', role: 'user' as const, text: 'Plot the SST on 15 August.', request_id: 'req_quick'};
     const starting = renderToStaticMarkup(<ConversationTranscript {...common} transcript={[user]} activeRequestId="req_quick" />);
-    expect(starting).toContain('<span>OceanX</span>');
-    expect(starting).toContain('<strong>OceanX:</strong>');
+    expect(starting).toContain('class="working-stream active status-working solo');
+    expect(starting).not.toContain('working-stream-header');
+    expect(starting).not.toContain('<strong>OceanX:</strong>');
     expect(starting).toContain('Working on the request…');
     expect(starting).not.toContain('Coordinator:');
     expect(starting).not.toContain('agent-canvas');
@@ -781,7 +782,7 @@ describe('research workbench layout', () => {
       transcript={[user, {item_id: 'narration_quick', role: 'assistant', text: 'Reading the 15 August slice.', request_id: 'req_quick'}]}
       activeRequestId="req_quick"
     />);
-    expect(narrated).toContain('<strong>OceanX:</strong>');
+    expect(narrated).not.toContain('<strong>OceanX:</strong>');
     expect(narrated).toContain('Reading the 15 August slice.');
 
     const done = renderToStaticMarkup(<ConversationTranscript
@@ -793,7 +794,35 @@ describe('research workbench layout', () => {
     expect(done).not.toContain('working-stream');
   });
 
-  it('keeps the completed Canvas between its duration divider and final answer', () => {
+  it('streams the answer as prose and folds a finished single agent’s notes', () => {
+    const common = {
+      loading: false,
+      task: null,
+      workspacePath: '/tmp/workspace',
+      outputs: [] as TaskOutput[],
+      manifests: [] as DeliveryManifest[],
+      taskResults: [],
+      team: null,
+      onOpenResult: () => undefined,
+      onOpenTaskResult: () => undefined,
+    };
+    const user = {item_id: 'user_notes', role: 'user' as const, text: 'Map the SST front.', request_id: 'req_notes'};
+    const note = {item_id: 'note_notes', role: 'assistant' as const, text: 'Reading the August slice first.', request_id: 'req_notes'};
+    const writing = renderToStaticMarkup(<ConversationTranscript {...common} transcript={[user, note]} streaming="The front sits at 22°N" activeRequestId="req_notes" />);
+    expect(writing).toContain('class="message assistant streaming-answer"');
+    expect(writing).toContain('The front sits at 22°N');
+    const done = renderToStaticMarkup(<ConversationTranscript
+      {...common}
+      streaming=""
+      transcript={[user, note, {item_id: 'answer_notes', role: 'assistant', text: 'The front sits at 22°N.', request_id: 'req_notes'}]}
+      activeRequestId={null}
+    />);
+    expect(done).toContain('<details class="process-notes">');
+    expect(done.indexOf('Reading the August slice first.')).toBeLessThan(done.indexOf('The front sits at 22°N.'));
+    expect(done).not.toContain('streaming-answer');
+  });
+
+  it('folds the completed Canvas to its header between its duration divider and final answer', () => {
     const snapshot: TeamSnapshot = {
       request_id: 'req_supplement',
       revision: 4,
@@ -844,8 +873,10 @@ describe('research workbench layout', () => {
     />);
 
     expect(markup.indexOf('Analyze the field.')).toBeLessThan(markup.indexOf('Completed in 19m 39s'));
-    expect(markup.indexOf('Completed in 19m 39s')).toBeLessThan(markup.indexOf('agent-canvas'));
-    expect(markup.indexOf('agent-canvas')).toBeLessThan(markup.indexOf('The scientific conclusion is ready.'));
+    expect(markup.indexOf('Completed in 19m 39s')).toBeLessThan(markup.indexOf('working-stream-header'));
+    expect(markup.indexOf('working-stream-header')).toBeLessThan(markup.indexOf('The scientific conclusion is ready.'));
+    expect(markup).not.toContain('agent-canvas');
+    expect(markup).toContain('aria-expanded="false"');
     expect(markup.indexOf('The scientific conclusion is ready.')).toBeLessThan(markup.indexOf('Supplementary Materials'));
     expect(markup.match(/Completed in 19m 39s/g)).toHaveLength(1);
     expect(markup).not.toContain('Analysis notebook');
@@ -946,9 +977,9 @@ describe('research workbench layout', () => {
     expect(activeMarkup).not.toContain('Final evidence-backed answer.');
     expect(finalMarkup).toContain('Final evidence-backed answer.');
     expect(finalMarkup).not.toContain('Research Tasks');
-    expect(finalMarkup).toContain('Hide team');
-    expect(finalMarkup).toContain('aria-label="Active OceanX Team"');
-    expect(finalMarkup).toContain('Resolve the circulation structure.');
+    expect(finalMarkup).toContain('View team');
+    expect(finalMarkup).not.toContain('aria-label="Active OceanX Team"');
+    expect(finalMarkup).not.toContain('Resolve the circulation structure.');
     expect(finalMarkup).not.toContain('Coordinator activity and conversation');
   });
 
@@ -1401,13 +1432,18 @@ describe('live request progress', () => {
     task: null, workspacePath: '/tmp/workspace', outputs: [], manifests: [], taskResults: [],
     team: null, onOpenResult: () => undefined, onOpenTaskResult: () => undefined};
 
-  it('shows actual tool work beside an older message while remaining a single agent', () => {
+  it('shows the running step in one line beside an older message, its earlier steps folded', () => {
     const markup = renderToStaticMarkup(<ConversationTranscript {...base} requestActivity={{requestId: 'req_progress', calls: [
+      {callId: 'b', toolName: 'read_file', purpose: 'Read the paper', status: 'completed'},
       {callId: 'c', toolName: 'ocean_expert_run_code', purpose: 'Assemble the annual circulation series', status: 'running'},
     ]}} />);
     expect(markup).toContain('I will inspect the paper and data.');
-    expect(markup).toContain('Running analysis');
-    expect(markup).toContain('Assemble the annual circulation series');
+    expect(markup).toContain('Running analysis · Assemble the annual circulation series');
+    expect(markup.match(/class="activity-bar"/g)).toHaveLength(1);
+    expect(markup).toContain('Details');
+    expect(markup).not.toContain('Steps 2');
+    expect(markup).not.toContain('activity-steps"');
+    expect(markup).not.toContain('Read the paper');
     expect(markup).not.toContain('Research team');
     expect(markup).not.toContain('Active OceanX Team');
   });
@@ -1415,17 +1451,18 @@ describe('live request progress', () => {
   it('restores progress from a snapshot and hides it after completion', () => {
     const task = {task_id: 'task', workspace_id: 'ws', title: 'Task', task_revision: 1, status: 'active' as const,
       workflow: {request_id: 'req_progress', state: 'working' as const, activity: 'Expert interpreting the code result'}};
-    expect(renderToStaticMarkup(<ConversationTranscript {...base} task={task} />)).toContain('Reviewing analysis results');
-    expect(renderToStaticMarkup(<ConversationTranscript {...base} task={task} activeRequestId={null} />)).not.toContain('Reviewing analysis results');
+    expect(renderToStaticMarkup(<ConversationTranscript {...base} task={task} />)).toContain('Reviewing the result');
+    expect(renderToStaticMarkup(<ConversationTranscript {...base} task={task} activeRequestId={null} />)).not.toContain('Reviewing the result');
   });
 
-  it('keeps current team activities visible after an initial Coordinator message', () => {
+  it('keeps the current team activity in the line after an initial Coordinator message', () => {
     const team: TeamSnapshot = {request_id: 'req_progress', revision: 1, status: 'working', strategy: 'parallel_team',
       agents: [{agent_id: 'coordinator', semantic_role: 'Coordinator', authority: 'coordinator', status: 'working', activity: 'Comparing the returned evidence'}],
       dependencies: [], interactions: [], todos: []};
     const markup = renderToStaticMarkup(<ConversationTranscript {...base} team={team} />);
     const log = markup.slice(markup.indexOf('class="live-research-log"'));
     expect(log).toContain('Comparing the returned evidence');
+    expect(log).not.toContain('agent-activity');
     expect(markup).toContain('Research team');
   });
 });
