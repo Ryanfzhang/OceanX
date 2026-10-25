@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_deepseek import ChatDeepSeek
 from langchain_openai import ChatOpenAI
 
@@ -254,25 +254,53 @@ def save_desktop_model_profile(
     )
 
 
-class OceanChatDeepSeek(ChatDeepSeek):
-    """Keep genuine provider reasoning across tools, checkpoints and follow-ups.
+# DeepSeek's multimodal Flash models on its own endpoint (its Vision guide).
+_DEEPSEEK_VISION_MODELS = frozenset({"deepseek-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"})
 
-    ChatDeepSeek extracts streamed reasoning_content; the installed integration
-    does not yet serialize it on subsequent requests. Never synthesize it.
+
+def _official_deepseek_vision(model: str, base_url: str | None) -> bool:
+    hostname = (urlparse(base_url or "").hostname or "").lower()
+    return hostname == "api.deepseek.com" and model.strip().lower() in _DEEPSEEK_VISION_MODELS
+
+
+def _holds_image(content: Any) -> bool:
+    return isinstance(content, list) and any(
+        isinstance(block, dict) and block.get("type") in ("image", "image_url") for block in content)
+
+
+class OceanChatDeepSeek(ChatDeepSeek):
+    """Send DeepSeek the conversation as its API defines it.
+
+    ChatDeepSeek extracts streamed reasoning_content but does not send it back, and it turns
+    the content parts of a tool message into JSON text. In thinking mode a request with tools
+    must give every assistant message its reasoning_content; a message no DeepSeek reasoning
+    produced (a notice written by code, an answer delivered from a report, another model's
+    reply) gets an empty one, never an invented one. A tool message may carry image parts, so
+    a figure opened with read_file reaches the model as an image, not as base64 text.
     """
 
     def _get_request_payload(self, input_, *, stop=None, **kwargs):
         messages = self._convert_input(input_).to_messages()
         payload = super()._get_request_payload(messages, stop=stop, **kwargs)
         for message, serialized in zip(messages, payload["messages"], strict=True):
-            if isinstance(message, AIMessage) and "reasoning_content" in message.additional_kwargs:
-                serialized["reasoning_content"] = message.additional_kwargs["reasoning_content"]
+            if isinstance(message, AIMessage):
+                reasoning = message.additional_kwargs.get("reasoning_content")
+                if reasoning is not None or payload.get("tools"):
+                    serialized["reasoning_content"] = reasoning or ""
+            elif (isinstance(message, ToolMessage) and _holds_image(message.content)
+                  and isinstance(serialized["content"], str)):
+                serialized["content"] = json.loads(serialized["content"])  # the parts ChatDeepSeek dumped
         return payload
 
     def _resolve_model_profile(self):
         # Send DeepSeek no PDF attachments, which its API is not known to accept: a PDF opened
         # with read_file returns a note instead, and agents read its extracted text (ADR 0023).
-        return {**(super()._resolve_model_profile() or {}), "pdf_inputs": False}
+        # LangChain's profiles mark every DeepSeek model text-only, which would make the agent
+        # replace images with a note before they are sent; the Flash models read images.
+        profile = {**(super()._resolve_model_profile() or {}), "pdf_inputs": False}
+        if _official_deepseek_vision(self.model_name, self.api_base):
+            profile["image_inputs"] = True
+        return profile
 
 
 def create_chat_model(
@@ -354,10 +382,10 @@ def profile_supports_vision(profile: OceanModelProfile) -> bool:
     """Return whether this exact provider/model pairing accepts image input.
 
     LangChain's model profiles do not cover every OpenAI-compatible model. In
-    particular, DeepSeek's current public Flash model is multimodal but has no
-    adapter profile, so an adapter-only lookup incorrectly reports ``False``.
-    Keep the explicit official-endpoint mapping here rather than guessing from
-    a generic model name used by an arbitrary compatible endpoint.
+    particular, DeepSeek's Flash models are multimodal but LangChain reports
+    them text-only or not at all. Keep the explicit official-endpoint mapping
+    (``_official_deepseek_vision``) rather than guessing from a generic model
+    name used by an arbitrary compatible endpoint.
     """
 
     if not all(hasattr(profile, field) for field in ("model", "api_key", "max_tokens")):
@@ -367,13 +395,7 @@ def profile_supports_vision(profile: OceanModelProfile) -> bool:
     capabilities = getattr(create_chat_model(profile), "profile", None)
     if isinstance(capabilities, dict) and capabilities.get("image_inputs"):
         return True
-    hostname = (urlparse(profile.base_url or "").hostname or "").lower()
-    model = profile.model.strip().lower()
-    return hostname == "api.deepseek.com" and model in {
-        "deepseek-flash",
-        "deepseek-v4-flash",
-        "deepseek-v4-flash-vision-exp",
-    }
+    return _official_deepseek_vision(profile.model, profile.base_url)
 
 
 __all__ = [

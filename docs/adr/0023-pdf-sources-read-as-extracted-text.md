@@ -22,6 +22,10 @@ pixels are taken for logos and skipped), and each page of the text names the fig
 page, next to their captions. The context lists them too, and the sandbox may read them. A model
 that reads images opens one with `read_file` like any image; an agent whose model reads images is
 told to look at a paper's figure before reproducing it and to compare its own figure with it once.
+For DeepSeek the image stays an image part of the tool message, which its Chat Completions API
+accepts: the LangChain integration would otherwise send it as base64 text, and LangChain's profiles,
+which mark DeepSeek models text-only, would have the agent replace it with a note; the Flash models
+on DeepSeek's own endpoint are marked as reading images (`model_config.py`).
 
 Unchanged: `paper.import` and `paper.register` (no desktop entry uses them), portable exports, and
 the agents' tools and permissions.

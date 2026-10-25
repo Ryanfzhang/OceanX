@@ -214,15 +214,15 @@ one-line `title` attribute, so a later step can tell what it holds without openi
 `from oceanx.scientific_view import ScientificFigure`, supply the computed arrays and complete panel/layer
 structure, then call `figure.save('concise-name.nc')` when the researcher requested a visual or the visual is
 necessary scientific evidence. That explicit save is the delivery boundary; ordinary
-NetCDF files are not figures. Use ScientificFigure whenever it can show the figure. When it cannot, such as
-bars or a histogram, significance stippling, a polar or Taylor diagram, twin y-axes, a map projection other than
-the Workbench's, streamlines or a schematic, or when a published figure is reproduced in a form it cannot match,
-make that figure with matplotlib (cartopy for maps) and save it as a PNG under OCEAN_OUTPUT_DIR, for example
-`fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'), dpi=150, bbox_inches='tight')`;
+NetCDF files are not figures. Use ScientificFigure for the figures it suits. Draw a figure it does not suit
+yourself, as you see fit, for example with matplotlib (cartopy for maps): bars or a histogram, significance
+stippling, a polar or Taylor diagram, twin y-axes, a map projection other than the Workbench's, streamlines, a
+schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution, and save it as a PNG
+under OCEAN_OUTPUT_DIR, for example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'))`;
 that image is delivered too. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
 plus filename stem (the whole file name for an image) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
-comparisons and scientific scales. Omit style arguments to use the Workbench defaults. Do not spend a separate
-round polishing or reviewing the rendered layout. Inspect a generated preview only when the image itself is
+comparisons and scientific scales. Omit style arguments to ScientificFigure to use the Workbench defaults.
+Do not spend a separate round polishing or reviewing its rendered layout. Inspect a generated preview only when the image itself is
 scientific evidence you need to interpret, such as a spatial pattern. For spatial fields, preserve the source
 validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather than plotted
 values. Every spatial field must pass an explicit Boolean `valid_mask` to `field2d`; zero remains valid where

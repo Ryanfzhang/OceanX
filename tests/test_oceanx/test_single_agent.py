@@ -41,6 +41,7 @@ from oceanx.research.routing import (
     LAST_CALL_HANDOFF,
     PLAIN_TEXT_RETRY,
     SINGLE_AGENT,
+    SINGLE_AGENT_CALL_LIMIT,
     TEAM,
     HandoffMiddleware,
     HelperMiddleware,
@@ -294,12 +295,13 @@ async def test_research_mode_goes_to_the_team_at_once_and_standard_never_hands_o
 
 @pytest.mark.asyncio
 async def test_an_exhausted_budget_hands_the_request_over(world):
-    world.replies["single"] = [AIMessage(content="Model call limits exceeded: run limit (40/40)")]
+    limit = SINGLE_AGENT_CALL_LIMIT
+    world.replies["single"] = [AIMessage(content=f"Model call limits exceeded: run limit ({limit}/{limit})")]
     config = _config("auto")
     graph = await graphs.coordinator(config)
     await graph.ainvoke({"messages": [HumanMessage(content="Plot it")]}, config)
     assert len(world.calls["team"]) == 1
-    assert "used all 40 model calls" in world.calls["handoffs"][0]
+    assert f"used all {limit} model calls" in world.calls["handoffs"][0]
 
 
 @pytest.mark.asyncio

@@ -95,7 +95,7 @@ to up to three helpers of its own (not the Experts). When a request is an open r
 (why something happens, which mechanism holds, how much each factor contributes), or the
 researcher asks for deep research, it calls `hand_to_research_team` and the same server run goes
 on with the Coordinator and its Experts in research mode, as below. It decides on the call that
-starts the work, so a simple request pays nothing for the choice; if its 40 calls run out first,
+starts the work, so a simple request pays nothing for the choice; if its 100 calls run out first,
 its last call may only answer or hand over. Headless runs (`ocean run`, `ocean batch`, the
 benchmark) send the team at once unless `--workflow-mode auto` or `standard` (the single agent
 alone) is given. Lessons stay in the team's skills; the single agent reads the learned helper

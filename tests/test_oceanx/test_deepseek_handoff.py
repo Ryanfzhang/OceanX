@@ -86,8 +86,46 @@ def test_stream_checkpoint_resume_preserves_reasoning_for_tools_and_final_text()
     ]
     assert assistants[1]["content"] == "Waiting for the Expert."
     assert "tool_calls" not in assistants[1]
-    # No empty/guessed reasoning is inserted for synthetic or older messages.
-    legacy = model._get_request_payload(
-        [HumanMessage(content="q"), AIMessage(content="old answer")]
-    )
-    assert "reasoning_content" not in legacy["messages"][-1]
+
+
+TOOL = {"type": "function", "function": {"name": "read_file", "description": "Read a file.",
+                                         "parameters": {"type": "object", "properties": {}}}}
+
+
+def test_with_tools_every_assistant_message_carries_reasoning_and_none_is_invented():
+    """DeepSeek rejects a request with tools when any assistant message lacks reasoning_content.
+    A message no DeepSeek reasoning produced, such as the call-limit notice the agent framework
+    adds before a handoff, gets an empty one; without tools such a message is sent as it is."""
+    model = create_chat_model(profile())
+    notice = AIMessage(content="Model call limits exceeded: run limit (100/100)")
+    thought = AIMessage(content="answer", additional_kwargs={"reasoning_content": "real reasoning"})
+    conversation = [HumanMessage(content="q"), notice, thought, HumanMessage(content="next")]
+    with_tools = [m for m in model._get_request_payload(conversation, tools=[TOOL])["messages"]
+                  if m["role"] == "assistant"]
+    assert [m["reasoning_content"] for m in with_tools] == ["", "real reasoning"]
+    without = [m for m in model._get_request_payload(conversation)["messages"] if m["role"] == "assistant"]
+    assert "reasoning_content" not in without[0] and without[1]["reasoning_content"] == "real reasoning"
+
+
+def test_a_figure_read_by_a_tool_reaches_deepseek_as_an_image():
+    from deepagents.middleware.filesystem import _scrub_unsupported_multimodal_content
+
+    call = AIMessage(content="", additional_kwargs={"reasoning_content": "open the figure"},
+                     tool_calls=[{"id": "r1", "name": "read_file", "args": {"file_path": "/f.jpg"}}])
+    figure = ToolMessage(content_blocks=[{"type": "image", "base64": "aGVsbG8=", "mime_type": "image/jpeg"}],
+                         tool_call_id="r1", name="read_file")
+    text = ToolMessage(content=[{"type": "text", "text": "plain"}], tool_call_id="r2", name="execute")
+    for name in ("deepseek-flash", "deepseek-v4-flash"):
+        model = create_chat_model(profile(model=name))
+        # LangChain's profile calls deepseek-v4-flash text-only; the agent would then replace the image.
+        assert _scrub_unsupported_multimodal_content([figure], model) == [figure]
+        sent = model._get_request_payload([HumanMessage(content="q"), call, figure], tools=[TOOL])
+        assert sent["messages"][-1]["content"] == [
+            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,aGVsbG8="}}]
+    pro = create_chat_model(profile(model="deepseek-v4-pro"))
+    assert _scrub_unsupported_multimodal_content([figure], pro) != [figure]  # Pro reads no images
+    # A text-only result is sent as before.
+    plain = create_chat_model(profile(model="deepseek-flash"))._get_request_payload(
+        [HumanMessage(content="q"), call.model_copy(update={"tool_calls": [
+            {"id": "r2", "name": "execute", "args": {}}]}), text])
+    assert isinstance(plain["messages"][-1]["content"], str)

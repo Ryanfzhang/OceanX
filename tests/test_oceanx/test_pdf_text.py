@@ -180,9 +180,9 @@ async def test_an_imported_pdf_source_is_listed_with_its_text_unless_the_policy_
 
 def test_deepseek_models_are_sent_no_pdf_attachments():
     flash = OceanChatDeepSeek(model="deepseek-flash", api_key="test")
-    assert flash.profile == {"pdf_inputs": False}
+    assert flash.profile == {"pdf_inputs": False, "image_inputs": True}
     listed = OceanChatDeepSeek(model="deepseek-v4-flash", api_key="test")
-    assert listed.profile["pdf_inputs"] is False
+    assert listed.profile["pdf_inputs"] is False and listed.profile["image_inputs"] is True
     assert listed.profile["max_input_tokens"] == 1_000_000  # the rest of the profile is kept
 
 

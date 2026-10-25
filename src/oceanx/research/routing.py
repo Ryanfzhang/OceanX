@@ -23,7 +23,7 @@ AGENT_TAG = "oceanx_agent"  # which of SINGLE_AGENT and TEAM wrote a message of 
 HANDOFF_TOOL = "hand_to_research_team"
 HELPER_TOOL = "assign_helper"
 
-SINGLE_AGENT_CALL_LIMIT = 40
+SINGLE_AGENT_CALL_LIMIT = 100
 HELPER_CALL_LIMIT = 20
 MAX_HELPERS = 3  # helpers of one request that work at once
 BUDGET_NOTE_CALLS = 5  # the last calls of a budget end their tool result with the calls left
