@@ -360,13 +360,13 @@ function Working({
             </article>
             : <article className="research-log-entry expert-result" key={`result:${entry.agent.agent_id}:${entry.agent.report_path}`}>
               <strong>{expertDisplayName(entry.agent)}:</strong>
-              <div className="research-log-content"><button
+              <div className="research-log-content"><InlineMarkdown content={entry.title} /> <button
                   className="research-report-link"
                   type="button"
                   title={entry.agent.report_path!}
                   aria-label={`${uiText('Open report', '打开正文')}: ${plainInlineMarkdown(entry.title)}`}
                   onClick={() => onOpenReport(entry.agent.report_path!, entry.title)}
-                ><InlineMarkdown content={entry.title} /></button></div>
+                >{uiText('Open report', '打开报告')} ›</button></div>
             </article>)}
         </div> : null}
         {nowLine ? <div className="activity-bar" aria-live="polite">
@@ -378,7 +378,7 @@ function Working({
         </div> : null}
         {nowLine && stepsOpen && steps.length ? <ol className="activity-steps">
           {steps.map((step) => <li className={step.status} key={step.callId}>
-            <span>{stepLabel(step.toolName, uiText)}</span>{step.purpose ? <small title={step.purpose}>{step.purpose}</small> : null}
+            <span>{stepLabel(step.toolName, uiText)}</span>{step.purpose || step.target ? <small title={step.purpose || step.target}>{step.purpose || step.target}</small> : null}
           </li>)}
         </ol> : null}
       </section> : null}
@@ -386,6 +386,21 @@ function Working({
   </section>
   {/* Text the model is writing streams in as prose where the answer appears. */}
   {live ? <article className="message assistant streaming-answer" aria-live="polite"><MessageMarkdown content={live} /></article> : null}</>;
+}
+
+/** One result under an answer, or under a request still running: a figure shows its preview. */
+function ResultRow({result, thumbnail, onOpen}: {
+  result: TaskResultRecord;
+  thumbnail?: string;
+  onOpen: () => void;
+}): React.JSX.Element {
+  const {text: uiText} = useUiLanguage();
+  const figure = isStaticFigure(result);
+  return <button className={`result-${result.kind}`} type="button" onClick={onOpen}>
+    {thumbnail ? <img className="result-thumbnail" src={thumbnail} alt="" />
+      : result.kind === 'interactive_view' ? <BarChart3 size={16} /> : figure ? <ImageIcon size={16} /> : <BookOpen size={16} />}
+    <span><strong>{result.kind === 'interactive_view' ? uiText('Interactive View', '交互视图') : figure ? uiText('Figure', '图') : uiText('Research Report', '研究报告')}</strong><small>{result.title}</small></span>
+  </button>;
 }
 
 function InlinePaperSelection({
@@ -439,6 +454,7 @@ export function ConversationTranscript({
   onOpenTaskResult,
   onOpenTaskResultFile = () => undefined,
   onOpenReport = () => undefined,
+  thumbnails = {},
 }: {
   loading: boolean;
   transcript: TranscriptItem[];
@@ -460,6 +476,8 @@ export function ConversationTranscript({
   onOpenTaskResult: (result: TaskResultRecord, featureId?: string) => void;
   onOpenTaskResultFile?: (result: TaskResultRecord, file: TaskResultRecord['files'][number]) => void;
   onOpenReport?: (path: string, title: string) => void;
+  /** Preview URLs of figure results, by result key. */
+  thumbnails?: Readonly<Record<string, string>>;
 }): React.JSX.Element {
   const {text: uiText} = useUiLanguage();
   if (loading) return <div className="empty-state" role="status"><p>{uiText('Loading task…', '正在加载任务…')}</p></div>;
@@ -471,6 +489,13 @@ export function ConversationTranscript({
   // them visible after a backend restart by attaching them only to the latest
   // completed exchange instead of silently filtering every figure out.
   const legacyResultGroupKey = [...groups].reverse().find((group) => group.finalItem)?.key ?? null;
+  // A saved image names no request; it belongs to the last request that had started when it was saved.
+  const starts = groups.map((group) => ({key: group.key, start: requestTimeBounds(group).startedAt}));
+  const resultOwner = (result: TaskResultRecord): string | null => {
+    const saved = Date.parse(result.created_at);
+    if (!isStaticFigure(result) || Number.isNaN(saved)) return legacyResultGroupKey;
+    return [...starts].reverse().find((group) => group.start !== null && group.start <= saved)?.key ?? legacyResultGroupKey;
+  };
   return <>
     {groups.map((group) => {
       const historicalTeam = group.requestId ? teamSnapshots[group.requestId] : null;
@@ -485,9 +510,7 @@ export function ConversationTranscript({
         : null;
       const requestResults = [
         ...taskResultsForRequest(taskResults, group.requestId),
-        ...(group.key === legacyResultGroupKey
-          ? taskResults.filter((result) => !result.origin_request_id)
-          : []),
+        ...taskResults.filter((result) => !result.origin_request_id && resultOwner(result) === group.key),
       ];
       const directResults = requestResults
         .filter((result) => result.kind === 'interactive_view' || result.kind === 'report' || isStaticFigure(result));
@@ -567,6 +590,13 @@ export function ConversationTranscript({
           hiddenProcessItemId={checkpointSummary?.item_id ?? null}
           onOpenReport={onOpenReport}
         />
+        {group.active && !group.finalItem && directResults.length ? <section className="interim-results" aria-label={uiText('Results so far', '目前的结果')}>
+          <p>{uiText('Results so far', '目前的结果')}</p>
+          <div className="message-artifact-actions">
+            {directResults.map((result) => <ResultRow key={taskResultRefKey(result.result_ref)} result={result}
+              thumbnail={thumbnails[taskResultRefKey(result.result_ref)]} onOpen={() => onOpenTaskResult(result)} />)}
+          </div>
+        </section> : null}
         {paperSelection ? <InlinePaperSelection
           interaction={paperSelection}
           summary={checkpointSummary}
@@ -594,10 +624,8 @@ export function ConversationTranscript({
           {unreferencedResults.length || legacyResults.length ? <details className="additional-results" open={hasRecoveredFigures}>
             <summary>{uiText('Additional Results', '其他结果')} ({unreferencedResults.length + legacyResults.length})</summary>
             <div className="message-artifact-actions">
-              {unreferencedResults.map((result) => <button key={taskResultRefKey(result.result_ref)} className={`result-${result.kind}`} onClick={() => onOpenTaskResult(result)}>
-                {result.kind === 'interactive_view' ? <BarChart3 size={16} /> : isStaticFigure(result) ? <ImageIcon size={16} /> : <BookOpen size={16} />}
-                <span><strong>{result.kind === 'interactive_view' ? uiText('Interactive View', '交互视图') : isStaticFigure(result) ? uiText('Figure', '图') : uiText('Research Report', '研究报告')}</strong><small>{result.title}</small></span>
-              </button>)}
+              {unreferencedResults.map((result) => <ResultRow key={taskResultRefKey(result.result_ref)} result={result}
+                thumbnail={thumbnails[taskResultRefKey(result.result_ref)]} onOpen={() => onOpenTaskResult(result)} />)}
               {legacyResults.map(({entry, output}) => <button key={entry.entry_id} className={`result-${entry.kind}`} onClick={() => onOpenResult(output)}>
                 {entry.kind === 'interactive_view' ? <BarChart3 size={16} /> : <BookOpen size={16} />}
                 <span><strong>{entry.kind === 'interactive_view' ? uiText('Interactive View', '交互视图') : uiText('Research Report', '研究报告')}</strong><small>{entry.title}</small></span>

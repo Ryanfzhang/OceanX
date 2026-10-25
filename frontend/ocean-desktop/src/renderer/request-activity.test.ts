@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {currentStep, stepLabel, updateRequestActivity, type RequestActivity} from './request-activity.js';
+import {currentStep, stepLabel, stepTarget, updateRequestActivity, type RequestActivity} from './request-activity.js';
 import type {OceanEvent} from './types.js';
 
 const start = (id: string, purpose = 'Check the regional grid'): OceanEvent => ({
@@ -19,7 +19,7 @@ describe('request activity', () => {
   it('keeps a purpose through tool completion without exposing code, arguments or output', () => {
     const running = updateRequestActivity(null, start('a'), 'request-1');
     const complete = updateRequestActivity(running, end('a'), 'request-1');
-    expect(complete?.calls).toEqual([{callId: 'a', toolName: 'ocean_expert_run_code', purpose: 'Check the regional grid', status: 'completed'}]);
+    expect(complete?.calls).toEqual([{callId: 'a', toolName: 'ocean_expert_run_code', purpose: 'Check the regional grid', target: '', status: 'completed'}]);
     expect(JSON.stringify(complete)).not.toContain('PRIVATE');
   });
 
@@ -53,6 +53,24 @@ describe('request activity', () => {
     const recorded = {request_id: 'request-1', state: 'working' as const, activity: 'Expert running code'};
     expect(currentStep(null, recorded, 'request-1', zh)).toBe('运行分析');
     expect(currentStep(null, {...recorded, state: 'completed'}, 'request-1', en)).toBe('Working on the request…');
-    expect(stepLabel('an_unlisted_tool', en)).toBe('Using a research tool');
+    expect(stepLabel('an_unlisted_tool', en)).toBe('Using an unlisted tool');
+  });
+
+  it('names what each step acts on without code, file content or full paths', () => {
+    const en = (english: string) => english;
+    const zh = (_: string, chinese: string) => chinese;
+    const paper = '/srv/ws/.oceanx/cache/pdf-text/31f1e3b0c1609c93.v2';
+    expect(stepTarget('read_file', {file_path: `${paper}.txt`, offset: 120}, zh)).toBe('论文正文');
+    expect(stepTarget('read_file', {file_path: `${paper}.figures/page-04-figure-1.jpg`}, en)).toBe("the paper's figure on page 4");
+    expect(stepTarget('read_file', {file_path: '/srv/ocean-data/cmoms/u_2011.nc'}, en)).toBe('u_2011.nc');
+    expect(stepTarget('write_file', {file_path: '/w/agents/a/compute_vorticity.py', content: 'PRIVATE CODE'}, en)).toBe('compute_vorticity.py');
+    expect(stepTarget('execute', {command: 'cd /w && python scripts/layer_budget.py --years 2011 2022'}, en)).toBe('layer_budget.py');
+    expect(stepTarget('execute', {command: "python - <<'EOF'\nPRIVATE CODE\nEOF"}, zh)).toBe('一段 Python');
+    expect(stepTarget('execute', {command: 'ncdump -h u_2011.nc'}, en)).toBe('ncdump -h u_2011.nc');
+    expect(stepTarget('glob', {pattern: '**/*.nc'}, en)).toBe('**/*.nc');
+    expect(stepTarget('web_search', {query: 'South China Sea three-layer circulation PDO'}, en)).toBe('South China Sea three-layer circulation PDO');
+    const read = updateRequestActivity(null, {type: 'tool.call.started', request_id: 'request-1', payload: {
+      tool_call_id: 'r', tool_name: 'read_file', input: {file_path: `${paper}.txt`}}}, 'request-1', en);
+    expect(currentStep(read, null, 'request-1', en)).toBe('Reading a file · the text of the paper');
   });
 });

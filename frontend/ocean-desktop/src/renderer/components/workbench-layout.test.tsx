@@ -822,6 +822,43 @@ describe('research workbench layout', () => {
     expect(done).not.toContain('streaming-answer');
   });
 
+  it('lists the results so far under a running request and gives a saved image to the request that made it', () => {
+    const image = (name: string, id: string, savedAt: string): TaskResultRecord => ({
+      result_ref: {task_id: 'task_figure', result_id: id, version: 1},
+      workspace_id: 'ws_figure',
+      kind: 'file',
+      title: name.replace('.png', '').replace('_', ' '),
+      summary: '',
+      created_at: savedAt,
+      content: {result_key: `single/${name}`, render_status: 'static', preview_file: name},
+      files: [{path: name, mime_type: 'image/png', size: 10, sha256: 'd'.repeat(64)}],
+    });
+    const markup = renderToStaticMarkup(<ConversationTranscript
+      loading={false}
+      transcript={[
+        {item_id: 'user_first', role: 'user', text: 'First question.', request_id: 'req_first', created_at: '2026-10-25T10:00:00Z'},
+        {item_id: 'answer_first', role: 'assistant', text: 'First answer.', request_id: 'req_first', created_at: '2026-10-25T10:05:00Z'},
+        {item_id: 'user_second', role: 'user', text: 'Second question.', request_id: 'req_second', created_at: '2026-10-25T11:00:00Z'},
+      ]}
+      streaming=""
+      activeRequestId="req_second"
+      task={null}
+      workspacePath="/tmp/workspace"
+      outputs={[]}
+      manifests={[]}
+      taskResults={[image('trend_map.png', 'figure_new', '2026-10-25T11:02:00Z'), image('old_map.png', 'figure_old', '2026-10-25T10:03:00Z')]}
+      team={null}
+      onOpenResult={() => undefined}
+      onOpenTaskResult={() => undefined}
+      thumbnails={{'task_figure/figure_new@v1': 'ocean-artifact://resource/res_new'}}
+    />);
+
+    expect(markup).toContain('Results so far');
+    expect(markup).toContain('<img class="result-thumbnail" src="ocean-artifact://resource/res_new" alt=""/>');
+    expect(markup.indexOf('old map')).toBeLessThan(markup.indexOf('Second question.'));
+    expect(markup.indexOf('trend map')).toBeGreaterThan(markup.indexOf('Second question.'));
+  });
+
   it('links a saved image like a view and lists an uncited one as a figure', () => {
     const figure = (name: string, id: string): TaskResultRecord => ({
       result_ref: {task_id: 'task_figure', result_id: id, version: 1},
@@ -1473,8 +1510,8 @@ describe('live request progress', () => {
 
   it('shows the running step in one line beside an older message, its earlier steps folded', () => {
     const markup = renderToStaticMarkup(<ConversationTranscript {...base} requestActivity={{requestId: 'req_progress', calls: [
-      {callId: 'b', toolName: 'read_file', purpose: 'Read the paper', status: 'completed'},
-      {callId: 'c', toolName: 'ocean_expert_run_code', purpose: 'Assemble the annual circulation series', status: 'running'},
+      {callId: 'b', toolName: 'read_file', purpose: 'Read the paper', target: '', status: 'completed'},
+      {callId: 'c', toolName: 'ocean_expert_run_code', purpose: 'Assemble the annual circulation series', target: '', status: 'running'},
     ]}} />);
     expect(markup).toContain('I will inspect the paper and data.');
     expect(markup).toContain('Running analysis · Assemble the annual circulation series');

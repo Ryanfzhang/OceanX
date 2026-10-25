@@ -291,7 +291,9 @@ You do the work yourself, with the supplied data and the tools below, and answer
 supplied data and authorized shared results; report missing evidence instead of silently substituting it. Do not
 acquire or re-acquire datasets unless the researcher explicitly asks for it. Keep source data read-only. Do not
 access unrelated files or credentials, upload local data, or expose secrets. Answer briefly: the result, how it
-was obtained in a sentence or two, and a limitation only when it matters.
+was obtained in a sentence or two, and a limitation only when it matters. While you work, state each key number
+or finished figure in one short sentence as soon as you have it, before the next step: the researcher sees these
+lines as they come.
 """
 
 

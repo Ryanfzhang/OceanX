@@ -28,6 +28,8 @@ import type {AppearanceTheme, ArtifactSummary, ArtifactVersion, DeliveryManifest
 
 type SourceSelection = {kind: 'file' | 'folder'; relativePath?: string; localPath?: string};
 type PendingImageAttachment = {fileName: string; mimeType: string; bytes: Uint8Array; previewUrl: string};
+// Tools whose completion can leave a new figure, view or report for the running request.
+const RESULT_TOOLS = new Set(['execute', 'ocean_expert_run_code', 'task', 'assign_helper']);
 type PendingTaskCreate = {projectPath: string; title: string; sources: SourceSelection[]};
 type ResultSurface = {kind: 'interactive_view' | 'report'; document: ResultDocument} | null;
 type RequestHandler = (result: EventPayload) => void;
@@ -190,6 +192,13 @@ export function App(): React.JSX.Element {
   const backendCapabilities = useRef(new Set<string>());
   const taskResultDataCache = useRef(new Map<string, unknown>());
   const openResultKey = useRef<string | null>(null);
+  // The results already listed for the open task: one that appears later is new, and while a request runs
+  // the newest new figure opens in the right panel if nothing is open there.
+  const seenResults = useRef<{taskId: string; keys: Set<string>} | null>(null);
+  const returnedReports = useRef(0);
+  const openTaskResultRef = useRef<(result: TaskResultRecord) => void>(() => undefined);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+  const thumbnailRequests = useRef(new Set<string>());
   const pendingTaskRestore = useRef<string | null>(null);
   const pendingTaskDelete = useRef<string | null>(null);
   const pendingTaskCreate = useRef<PendingTaskCreate | null>(null);
@@ -335,6 +344,10 @@ export function App(): React.JSX.Element {
     setReportMarkdown('');
     setReportResources([]);
     setSourceImporting(false);
+    seenResults.current = null;
+    returnedReports.current = 0;
+    thumbnailRequests.current.clear();
+    setThumbnails({});
     setPendingImage((current) => {
       if (current) URL.revokeObjectURL(current.previewUrl);
       return null;
@@ -370,7 +383,13 @@ export function App(): React.JSX.Element {
       if (selectedTaskIdRef.current !== taskId || sequence !== resultLoadSequence.current) return;
       setOutputs(Array.isArray(result.outputs) ? result.outputs as TaskOutput[] : []);
       setManifests(Array.isArray(result.delivery_manifests) ? result.delivery_manifests as DeliveryManifest[] : []);
-      setTaskResults(Array.isArray(result.task_results) ? result.task_results as TaskResultRecord[] : []);
+      const records = Array.isArray(result.task_results) ? result.task_results as TaskResultRecord[] : [];
+      setTaskResults(records);
+      const seen = seenResults.current?.taskId === taskId ? seenResults.current.keys : null;
+      seenResults.current = {taskId, keys: new Set([...(seen ?? []), ...records.map((record) => taskResultRefKey(record.result_ref))])};
+      const fresh = seen ? records.filter((record) => !seen.has(taskResultRefKey(record.result_ref))
+        && (record.kind === 'interactive_view' || isStaticFigure(record))) : [];
+      if (fresh.length && activeRequestRef.current && openResultKey.current === null) openTaskResultRef.current(fresh.at(-1)!);
     });
   }, [request]);
   const connectReady = useCallback((payload: EventPayload, path: string, restoreTaskId?: string | null) => {
@@ -523,7 +542,10 @@ export function App(): React.JSX.Element {
     const visible = !event.task_id || event.task_id === taskRef.current?.task_id;
     if (!visible) {if (event.type === 'request.completed' || event.type === 'request.failed') refreshTasks(); return;}
     if (event.type === 'tool.call.started' || event.type === 'tool.call.completed') {
-      setRequestActivity(current => updateRequestActivity(current, event, activeRequestRef.current));
+      setRequestActivity(current => updateRequestActivity(current, event, activeRequestRef.current, text));
+    }
+    if (event.type === 'tool.call.completed' && RESULT_TOOLS.has(String(payload.tool_name)) && taskRef.current) {
+      loadTaskResults(taskRef.current.task_id);  // a figure saved by a script announces nothing itself
     }
     const resultsTaskId = changedResultsTaskId(selectedTaskIdRef.current, event);
     if (resultsTaskId) {
@@ -535,6 +557,11 @@ export function App(): React.JSX.Element {
       setTeam(snapshotTeam);
       if (snapshotTeam.request_id) {
         setTeamSnapshots((current) => ({...current, [snapshotTeam.request_id!]: snapshotTeam}));
+      }
+      const returned = (snapshotTeam.todos ?? []).filter((todo) => todo.state === 'result_returned').length;
+      if (returned !== returnedReports.current && taskRef.current) {
+        returnedReports.current = returned;
+        loadTaskResults(taskRef.current.task_id);  // an Expert that returned may have left figures
       }
     }
     if (event.type === 'transcript.item.appended') setTranscript((current) => reconcile(current, {...payload as unknown as TranscriptItem, created_at: typeof payload.created_at === 'string' ? payload.created_at : event.timestamp, request_id: typeof payload.request_id === 'string' ? payload.request_id : event.request_id ?? null}));
@@ -984,6 +1011,18 @@ export function App(): React.JSX.Element {
       if (openResultKey.current === resultKey) {setResultError('Figure is unavailable.'); setResultLoading(false);}
     });
   };
+  // A small preview of each figure result, for the rows in the conversation.
+  useEffect(() => {
+    for (const result of taskResults) {
+      const key = taskResultRefKey(result.result_ref);
+      const preview = declaredResultFile(result, 'preview_file', (file) => file.mime_type.startsWith('image/'));
+      if (!preview || thumbnailRequests.current.has(key)) continue;
+      thumbnailRequests.current.add(key);
+      void grantTaskResult(result, preview, result.kind === 'interactive_view' ? 'interactive_view_preview' : 'result_file')
+        .then((url) => setThumbnails((current) => ({...current, [key]: url})))
+        .catch(() => undefined);
+    }
+  });
   const openTaskResult = (result: TaskResultRecord, featureId?: string) => {
     setResultFeatureId(featureId);
     if (isStaticFigure(result)) {openStaticFigure(result); return;}
@@ -1118,6 +1157,7 @@ export function App(): React.JSX.Element {
       }
     });
   };
+  openTaskResultRef.current = openTaskResult;
   const closeResult = () => {openResultKey.current = null; setResultSurface(null); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]); setResultError(null);};
   const configureModel = (setup: ModelProviderSetup) => {setModelSaving(true); void window.oceanDesktop.configureModelProvider(setup).then((next) => {setModelProvider(next); setModelSaving(false); if (next.configured) setSettingsOpen(false);}).catch(() => setModelSaving(false));};
   const deleteTask = () => {
@@ -1210,7 +1250,7 @@ export function App(): React.JSX.Element {
     />
     <section className="conversation-pane">
       <header className="conversation-toolbar">{activeTask ? <div className="conversation-title"><strong>{activeTask.title}</strong></div> : <span />}{activeTask ? <div className="conversation-actions"><button onClick={() => setDeleteCandidate({task: activeTask, projectPath: workspacePath ?? ''})} title={text('Delete task', '删除任务')}><Trash2 size={16} /></button></div> : <span />}</header>
-      <div className={`conversation-scroll${activeTask ? '' : ' welcome-scroll'}`}>{activeTask ? <ConversationTranscript loading={taskLoading} transcript={transcript} streaming={streaming} activeRequestId={activeRequestId} requestActivity={requestActivity} task={activeTask} workspacePath={workspacePath} outputs={outputs} manifests={manifests} taskResults={taskResults} team={team} teamSnapshots={teamSnapshots} pendingInteraction={pendingInteraction} interactionAnswer={interactionAnswer} onInteractionAnswer={setInteractionAnswer} onInteractionSubmit={answer} onOpenResult={openResult} onOpenTaskResult={openTaskResult} onOpenTaskResultFile={openTaskResultFile} onOpenReport={openExpertReport} /> : <OceanXWelcome projectName={projectName} hasProject={Boolean(workspacePath)} title={newTaskTitle} onTitle={setNewTaskTitle} onCreateTask={createTask} onChooseProject={() => void chooseProject()} pendingSources={welcomeSources.map((source) => source.name)} sourceBusy={sourceImporting} onAddSource={(kind) => void chooseSource(kind, true)} onRemoveSource={(index) => setWelcomeSources((current) => current.filter((_, position) => position !== index))} />}</div>
+      <div className={`conversation-scroll${activeTask ? '' : ' welcome-scroll'}`}>{activeTask ? <ConversationTranscript loading={taskLoading} transcript={transcript} streaming={streaming} activeRequestId={activeRequestId} requestActivity={requestActivity} task={activeTask} workspacePath={workspacePath} outputs={outputs} manifests={manifests} taskResults={taskResults} team={team} teamSnapshots={teamSnapshots} pendingInteraction={pendingInteraction} interactionAnswer={interactionAnswer} onInteractionAnswer={setInteractionAnswer} onInteractionSubmit={answer} onOpenResult={openResult} onOpenTaskResult={openTaskResult} onOpenTaskResultFile={openTaskResultFile} onOpenReport={openExpertReport} thumbnails={thumbnails} /> : <OceanXWelcome projectName={projectName} hasProject={Boolean(workspacePath)} title={newTaskTitle} onTitle={setNewTaskTitle} onCreateTask={createTask} onChooseProject={() => void chooseProject()} pendingSources={welcomeSources.map((source) => source.name)} sourceBusy={sourceImporting} onAddSource={(kind) => void chooseSource(kind, true)} onRemoveSource={(index) => setWelcomeSources((current) => current.filter((_, position) => position !== index))} />}</div>
       {activeTask ? <div className="composer-wrap">
         {inlineStatus ? <div className="inline-status"><span>{inlineStatus}</span><button onClick={() => setInlineStatus(null)}><X size={14} /></button></div> : null}
         <div className="composer-stack">
