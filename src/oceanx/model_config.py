@@ -263,33 +263,55 @@ def _official_deepseek_vision(model: str, base_url: str | None) -> bool:
     return hostname == "api.deepseek.com" and model.strip().lower() in _DEEPSEEK_VISION_MODELS
 
 
-def _holds_image(content: Any) -> bool:
-    return isinstance(content, list) and any(
-        isinstance(block, dict) and block.get("type") in ("image", "image_url") for block in content)
+def _is_image(block: Any) -> bool:
+    return isinstance(block, dict) and block.get("type") in ("image", "image_url")
+
+
+def _images_after_tool_results(messages: list) -> list:
+    """Chat Completions takes images in user messages: the images a tool returned, such as a
+    figure opened with read_file, move into one user message right after that turn's tool
+    results, and each result says so in text."""
+
+    moved: list = []
+    pending: list = []
+    for message in messages:
+        if pending and not isinstance(message, ToolMessage):
+            moved.append(HumanMessage(content=pending))
+            pending = []
+        if isinstance(message, ToolMessage) and isinstance(message.content, list) and any(
+                map(_is_image, message.content)):
+            images = [block for block in message.content if _is_image(block)]
+            path = message.additional_kwargs.get("read_file_path")
+            label = f"{message.name or 'a tool'} for {path}" if path else message.name or "a tool"
+            text = [block if isinstance(block, str) else block.get("text", "")
+                    for block in message.content if not _is_image(block)]
+            note = f"[The image returned by {label} follows in the next message.]"
+            message = message.model_copy(update={"content": "\n".join([*filter(None, text), note])})
+            pending += [{"type": "text", "text": f"Image returned by {label}:"}, *images]
+        moved.append(message)
+    if pending:
+        moved.append(HumanMessage(content=pending))
+    return moved
 
 
 class OceanChatDeepSeek(ChatDeepSeek):
     """Send DeepSeek the conversation as its API defines it.
 
-    ChatDeepSeek extracts streamed reasoning_content but does not send it back, and it turns
-    the content parts of a tool message into JSON text. In thinking mode a request with tools
-    must give every assistant message its reasoning_content; a message no DeepSeek reasoning
-    produced (a notice written by code, an answer delivered from a report, another model's
-    reply) gets an empty one, never an invented one. A tool message may carry image parts, so
-    a figure opened with read_file reaches the model as an image, not as base64 text.
+    ChatDeepSeek extracts streamed reasoning_content but does not send it back. In thinking
+    mode a request with tools must give every assistant message its reasoning_content; a
+    message no DeepSeek reasoning produced (a notice written by code, an answer delivered from
+    a report, another model's reply) gets an empty one, never an invented one. ChatDeepSeek
+    also turns the images in a tool result into JSON text, so they move to a user message.
     """
 
     def _get_request_payload(self, input_, *, stop=None, **kwargs):
-        messages = self._convert_input(input_).to_messages()
+        messages = _images_after_tool_results(self._convert_input(input_).to_messages())
         payload = super()._get_request_payload(messages, stop=stop, **kwargs)
         for message, serialized in zip(messages, payload["messages"], strict=True):
             if isinstance(message, AIMessage):
                 reasoning = message.additional_kwargs.get("reasoning_content")
                 if reasoning is not None or payload.get("tools"):
                     serialized["reasoning_content"] = reasoning or ""
-            elif (isinstance(message, ToolMessage) and _holds_image(message.content)
-                  and isinstance(serialized["content"], str)):
-                serialized["content"] = json.loads(serialized["content"])  # the parts ChatDeepSeek dumped
         return payload
 
     def _resolve_model_profile(self):

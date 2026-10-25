@@ -18,10 +18,10 @@ conda activate oceanx
 
 这条安装命令同时安装 OceanX 主程序和科学计算依赖，不需要额外创建 `ocean` 环境，也不需要再执行 `pip install -e .`。项目仍只使用 `oceanx` 和 `oceanx-bench` 两个环境；Node.js 与 Python 共用 `oceanx`。
 
-读取任务来源里的 PDF（ADR 0023）需要 `pypdf>=6.0`，它在 `pyproject.toml` 的主依赖里，随上面的命令安装。2026-10-21 以前建立的环境执行一次上面的 `conda env update` 即可。在激活的 `oceanx` 中检查（基础环境的 Python 3.8 装不了 pypdf 6）：
+读取任务来源里的 PDF（ADR 0023）需要 `pypdf>=6.0` 和 `pypdfium2>=4.30`（把每页渲染成图片，公式和表格靠它保留），它们在 `pyproject.toml` 的主依赖里，随上面的命令安装。2026-10-26 以前建立的环境执行一次上面的 `conda env update` 即可。在激活的 `oceanx` 中检查（基础环境的 Python 3.8 装不了 pypdf 6）：
 
 ```bash
-python -c "import pypdf; print(pypdf.__version__)"
+python -c "import pypdf, pypdfium2; print(pypdf.__version__, pypdfium2.version.PYPDFIUM_INFO)"
 ```
 
 OceanX 默认科学计算环境名称已改为 `oceanx`。如果终端以前设置过旧环境覆盖，清除它：

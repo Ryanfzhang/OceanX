@@ -16,25 +16,30 @@ result. When the workspace disclosure policy does not allow `document_text`, the
 text is withheld and the files are not readable. DeepSeek models are marked as taking no PDF
 attachments, so a PDF opened directly returns a note instead of an unknown provider error.
 
-The figures a PDF embeds as images are saved beside its text, in the same cache and under the same
-rules (`<sha256>.v2.figures/page-NN-figure-K.jpg`, long edge at most 1600 px; images under 200 000
-pixels are taken for logos and skipped), and each page of the text names the figure images on that
-page, next to their captions. The context lists them too, and the sandbox may read them. A model
-that reads images opens one with `read_file` like any image; an agent whose model reads images is
-told to look at a paper's figure before reproducing it and to compare its own figure with it once.
-For DeepSeek the image stays an image part of the tool message, which its Chat Completions API
-accepts: the LangChain integration would otherwise send it as base64 text, and LangChain's profiles,
-which mark DeepSeek models text-only, would have the agent replace it with a note; the Flash models
-on DeepSeek's own endpoint are marked as reading images (`model_config.py`).
+Text extraction garbles equations, symbols and tables and misses figures drawn as vector graphics,
+so each of the first 40 pages is also rendered as an image with pdfium (`page-NN.jpg`, long edge at
+most 1600 px), as Claude reads a PDF page by page as text and image and DeepSeek's own harness
+renders pages with pdfium for its image reader. The figures a PDF embeds as images are saved too
+(`page-NN-figure-K.jpg`; images under 200 000 pixels are taken for logos and skipped). Both lie
+beside the text in the same cache and under the same rules (`<sha256>.v3.figures/`), and each page
+of the text names its page image and figures above its text. The context lists the figures, the
+note tells agents to read a page's image where its text is garbled, and the sandbox may read both.
+A model that reads images opens one with `read_file` like any image; an agent whose model reads
+images is told to look at a paper's figure before reproducing it and to compare its own figure
+with it once. For DeepSeek, which takes images in user messages over Chat Completions, the images a
+tool returned move into a user message right after that turn's tool results, as OpenCode does: the
+LangChain integration would otherwise send them as base64 text, and LangChain's profiles, which mark
+DeepSeek models text-only, would have the agent replace them with a note; the Flash models on
+DeepSeek's own endpoint are marked as reading images (`model_config.py`).
 
 Unchanged: `paper.import` and `paper.register` (no desktop entry uses them), portable exports, and
 the agents' tools and permissions.
 
 Consequences. The model provider receives the text of an attached PDF when an agent reads it; for a
 paper whose publisher reserves text and data mining or AI use, attaching it is the user's decision.
-Scanned or password-protected PDFs give an error note in the context; there is no OCR. Equations
-do not survive extraction, and a figure drawn as vector graphics has no image file; a model that
-cannot read images still has only the captions. pypdf (pure Python, BSD licence) is a new core
-dependency; saving figures uses Pillow, already installed.
+Scanned or password-protected PDFs give an error note in the context; there is no OCR. A model that
+cannot read images has only the garbled text and the captions for equations and figures. pypdf
+(pure Python, BSD licence) and pypdfium2 (Apache-2.0 or BSD-3, prebuilt wheels) are core
+dependencies; saving images uses Pillow, already installed. Page images take about 0.5 MB each.
 
 Regression coverage: `tests/test_oceanx/test_pdf_text.py`.

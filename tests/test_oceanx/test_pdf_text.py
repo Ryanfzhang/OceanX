@@ -68,8 +68,9 @@ def test_text_is_extracted_page_by_page_once_and_follows_the_file(tmp_path, monk
 
     assert text.parent == paths.cache / "pdf-text"
     content = text.read_text(encoding="utf-8")
-    assert "=== Page 1 of 2 ===\nUpper layer cyclonic" in content
-    assert "=== Page 2 of 2 ===\nMiddle layer anticyclonic" in content
+    images = text.with_suffix(".figures")
+    assert f"=== Page 1 of 2 ===\n[Page image: {images / 'page-01.jpg'}]\nUpper layer cyclonic" in content
+    assert f"=== Page 2 of 2 ===\n[Page image: {images / 'page-02.jpg'}]\nMiddle layer anticyclonic" in content
     if os.name == "posix":
         assert stat.S_IMODE(text.stat().st_mode) == 0o600
     import pypdf
@@ -108,8 +109,9 @@ def test_a_folder_offers_its_first_pdfs_and_other_sources_nothing(tmp_path):
         f"paper{number:02d}.pdf" for number in range(MAX_FOLDER_PDFS)]
     assert context["pdf_texts_omitted"] == 2
     assert context["text_note"] == TEXT_NOTE
-    assert sorted(readable_texts(folder, paths)) == sorted(
-        Path(item["text_path"]) for item in context["pdf_texts"])
+    texts = [Path(item["text_path"]) for item in context["pdf_texts"]]
+    assert sorted(readable_texts(folder, paths)) == sorted(  # each text and its page images
+        [*texts, *(text.with_suffix(".figures") for text in texts)])
     assert source_text_context(folder / "data.nc", paths, allowed=True) == {}
     assert source_text_context(folder, paths, allowed=False) == {
         "document_text": "withheld by the workspace disclosure policy"}
@@ -165,7 +167,7 @@ async def test_an_imported_pdf_source_is_listed_with_its_text_unless_the_policy_
         assert entry["pdf_texts"][0]["pdf"] == "zheng2026.pdf"
         assert "Deep layer strengthens after 2009" in text.read_text(encoding="utf-8")
         assert document_text_allowed(host.store, WORKSPACE)
-        assert readable_texts(source, host.paths) == [text]
+        assert readable_texts(source, host.paths) == [text, text.with_suffix(".figures")]
 
         builder.set_policy(workspace_id=WORKSPACE, policy=ModelDataDisclosurePolicy(
             provider_id="deepseek", policy_version=2, document_text="deny"))
@@ -234,7 +236,9 @@ def test_embedded_figures_are_saved_beside_the_text_and_named_under_their_page(t
 
     (figure,) = pdf_figures(text)  # the small logo-sized image is not a figure
     assert figure.name == "page-01-figure-1.jpg" and figure.parent.name == text.name.replace(".txt", ".figures")
-    assert f"=== Page 1 of 1 ===\n[Figure image: {figure}]\nFig. 2 Layer vorticity" in text.read_text(encoding="utf-8")
+    page = figure.parent / "page-01.jpg"
+    assert (f"=== Page 1 of 1 ===\n[Page image: {page}]\n[Figure image: {figure}]\nFig. 2 Layer vorticity"
+            in text.read_text(encoding="utf-8"))
     from PIL import Image
 
     with Image.open(figure) as saved:
@@ -243,3 +247,35 @@ def test_embedded_figures_are_saved_beside_the_text_and_named_under_their_page(t
         assert stat.S_IMODE(figure.stat().st_mode) == 0o600
     assert readable_texts(pdf, paths) == [text, figure.parent]
     assert source_text_context(pdf, paths, allowed=True)["pdf_texts"][0]["figure_images"] == [str(figure)]
+
+
+def test_each_page_is_rendered_for_a_model_that_reads_images(tmp_path, monkeypatch):
+    """Equations, symbols and tables survive only in a page image, as Claude reads a PDF page by page."""
+
+    import sys
+
+    from PIL import Image
+
+    import oceanx.pdf_text as pdf_module
+
+    paths = _paths(tmp_path)
+    pdf = _write_pdf(tmp_path / "paper.pdf", ["Eq. (1)", "Eq. (2)"])
+    text = pdf_text(pdf, paths)
+    pages = sorted(text.with_suffix(".figures").glob("page-??.jpg"))
+    assert [page.name for page in pages] == ["page-01.jpg", "page-02.jpg"]
+    with Image.open(pages[0]) as image:
+        assert max(image.size) == 1600  # long edge bounded like a figure's
+    if os.name == "posix":
+        assert stat.S_IMODE(pages[0].stat().st_mode) == 0o600
+    assert pdf_figures(text) == []  # a page image is not an embedded figure
+    assert readable_texts(pdf, paths) == [text, pages[0].parent]
+    # Only the first pages are rendered.
+    monkeypatch.setattr(pdf_module, "MAX_PAGE_IMAGES", 1)
+    first, second = pdf_text(_write_pdf(tmp_path / "long.pdf", ["One", "Two"]), paths).read_text(
+        encoding="utf-8").split("=== Page 2")
+    assert "[Page image:" in first and "[Page image:" not in second
+    # Without the renderer the text stands alone.
+    monkeypatch.setitem(sys.modules, "pypdfium2", None)
+    plain = pdf_text(_write_pdf(tmp_path / "plain.pdf", ["Text only"]), paths)
+    assert "[Page image:" not in plain.read_text(encoding="utf-8")
+    assert not plain.with_suffix(".figures").exists()

@@ -115,13 +115,18 @@ def test_a_figure_read_by_a_tool_reaches_deepseek_as_an_image():
     figure = ToolMessage(content_blocks=[{"type": "image", "base64": "aGVsbG8=", "mime_type": "image/jpeg"}],
                          tool_call_id="r1", name="read_file")
     text = ToolMessage(content=[{"type": "text", "text": "plain"}], tool_call_id="r2", name="execute")
+    answer = AIMessage(content="It is a red circle.", additional_kwargs={"reasoning_content": "looked"})
     for name in ("deepseek-flash", "deepseek-v4-flash"):
         model = create_chat_model(profile(model=name))
         # LangChain's profile calls deepseek-v4-flash text-only; the agent would then replace the image.
         assert _scrub_unsupported_multimodal_content([figure], model) == [figure]
-        sent = model._get_request_payload([HumanMessage(content="q"), call, figure], tools=[TOOL])
-        assert sent["messages"][-1]["content"] == [
-            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,aGVsbG8="}}]
+        # Chat Completions takes images in user messages: the image follows the tool result.
+        sent = model._get_request_payload([HumanMessage(content="q"), call, figure, answer], tools=[TOOL])
+        roles = [m["role"] for m in sent["messages"]]
+        assert roles == ["user", "assistant", "tool", "user", "assistant"]
+        tool, image = sent["messages"][2], sent["messages"][3]
+        assert tool["tool_call_id"] == "r1" and "follows in the next message" in tool["content"]
+        assert {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,aGVsbG8="}} in image["content"]
     pro = create_chat_model(profile(model="deepseek-v4-pro"))
     assert _scrub_unsupported_multimodal_content([figure], pro) != [figure]  # Pro reads no images
     # A text-only result is sent as before.

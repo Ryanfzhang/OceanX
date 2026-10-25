@@ -32,6 +32,7 @@ dependencies = [
     "cryptography>=46,<50",
     "pyyaml>=6.0",
     "pypdf>=6.0", # text of the PDFs a user attaches to a Task (ADR 0023)
+    "pypdfium2>=4.30", # page images of those PDFs, where equations and tables survive (ADR 0023)
 ]
 
 [project.optional-dependencies]

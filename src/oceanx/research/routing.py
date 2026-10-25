@@ -55,7 +55,8 @@ Hand the request to the research team with {HANDOFF_TOOL} when it is an open res
 something happens or what causes, drives or controls it, which mechanism or explanation holds, or how much each
 factor contributes; it needs competing explanations weighed against the data and the literature; or it needs an
 investigation whose next steps depend on what the first ones find. Hand it over too when the researcher asks for
-deep research or for the research team. The team plans an investigation, runs several Experts and takes tens of
+deep research or for the research team, or asks to reproduce or test the analysis of a paper (reading or
+summarising a paper stays yours). The team plans an investigation, runs several Experts and takes tens of
 minutes, so never hand over a request that one bounded analysis answers.
 Decide on your first call. Hand an open research problem over before doing any work on it; when unsure, do the
 work. If the work then shows that the request is an open research problem after all, hand it over, saying what

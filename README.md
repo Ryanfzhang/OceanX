@@ -93,7 +93,7 @@ Every desktop request goes first to one agent that works alone: it has the Exper
 the data and search Experts' skills, answers in chat, and may give independent parts of a request
 to up to three helpers of its own (not the Experts). When a request is an open research problem
 (why something happens, which mechanism holds, how much each factor contributes), or the
-researcher asks for deep research, it calls `hand_to_research_team` and the same server run goes
+researcher asks for deep research or to reproduce a paper's analysis, it calls `hand_to_research_team` and the same server run goes
 on with the Coordinator and its Experts in research mode, as below. It decides on the call that
 starts the work, so a simple request pays nothing for the choice; if its 100 calls run out first,
 its last call may only answer or hand over. Headless runs (`ocean run`, `ocean batch`, the
