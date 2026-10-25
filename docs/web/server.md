@@ -107,13 +107,14 @@ folds the earlier tool steps beneath it; code and tool output are not shown.
 
 ## Add data or a PDF
 
-Create or select a task and click the attachment button. The dialog follows the
-language selected in Settings. Choose **Upload PDF** to send a paper from your
+Click **+** in the message box of a task, or in the name box on the welcome page before
+the task exists (the sources are attached once it is created). The dialog follows the
+language selected in Settings. **Add PDF** sends a paper from your
 computer (up to 25 MiB). It is saved under `<workspace>/Uploaded papers/`, kept
 with the task data and attached as a task source; an interrupted or rejected
 upload leaves no file.
 
-Choose **Server path** for an existing server data file, PDF or folder. Enter the complete
+**Add data folder** takes the server path of an existing data file, PDF or folder. Enter the complete
 server path to a file or directory. OceanX validates the path against source roots
 and reuses read-only source import. A successful validation returns the canonical
 form of that specific user-entered path to the attachment bridge; it never lists

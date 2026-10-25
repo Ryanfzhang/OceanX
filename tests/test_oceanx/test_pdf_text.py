@@ -18,6 +18,7 @@ from oceanx.pdf_text import (
     TEXT_NOTE,
     PdfTextError,
     document_text_allowed,
+    pdf_figures,
     pdf_text,
     readable_texts,
     source_text_context,
@@ -183,3 +184,62 @@ def test_deepseek_models_are_sent_no_pdf_attachments():
     listed = OceanChatDeepSeek(model="deepseek-v4-flash", api_key="test")
     assert listed.profile["pdf_inputs"] is False
     assert listed.profile["max_input_tokens"] == 1_000_000  # the rest of the profile is kept
+
+
+def _write_pdf_with_images(path: Path, caption: str, images: list[tuple[int, int]]) -> Path:
+    """One page of text that also draws JPEG images of the given (width, height)."""
+
+    from io import BytesIO
+
+    from PIL import Image
+
+    jpegs = []
+    for width, height in images:
+        buffer = BytesIO()
+        Image.new("RGB", (width, height), (20, 90, 160)).save(buffer, format="JPEG")
+        jpegs.append(buffer.getvalue())
+    names = " ".join(f"/Im{i} {6 + i} 0 R" for i in range(len(images)))
+    draws = " ".join(f"q 200 0 0 100 72 {600 - 120 * i} cm /Im{i} Do Q" for i in range(len(images)))
+    content = f"BT /F1 12 Tf 72 720 Td ({caption}) Tj ET {draws}".encode("latin-1")
+    objects: list[bytes] = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+         f"/Resources << /Font << /F1 5 0 R >> /XObject << {names} >> >> >>").encode(),
+        b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    for (width, height), jpeg in zip(images, jpegs):
+        objects.append(
+            (f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB "
+             f"/BitsPerComponent 8 /Filter /DCTDecode /Length {len(jpeg)} >>\nstream\n").encode()
+            + jpeg + b"\nendstream")
+    body, offsets = b"%PDF-1.4\n", []
+    for number, item in enumerate(objects, start=1):
+        offsets.append(len(body))
+        body += f"{number} 0 obj\n".encode() + item + b"\nendobj\n"
+    table = len(body)
+    body += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    body += "".join(f"{offset:010d} 00000 n \n" for offset in offsets).encode()
+    body += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{table}\n%%EOF\n".encode()
+    path.write_bytes(body)
+    return path
+
+
+def test_embedded_figures_are_saved_beside_the_text_and_named_under_their_page(tmp_path):
+    paths = _paths(tmp_path)
+    pdf = _write_pdf_with_images(tmp_path / "paper.pdf", "Fig. 2 Layer vorticity", [(2400, 1200), (120, 80)])
+
+    text = pdf_text(pdf, paths)
+
+    (figure,) = pdf_figures(text)  # the small logo-sized image is not a figure
+    assert figure.name == "page-01-figure-1.jpg" and figure.parent.name == text.name.replace(".txt", ".figures")
+    assert f"=== Page 1 of 1 ===\n[Figure image: {figure}]\nFig. 2 Layer vorticity" in text.read_text(encoding="utf-8")
+    from PIL import Image
+
+    with Image.open(figure) as saved:
+        assert saved.size == (1600, 800)  # long edge bounded, aspect kept
+    if os.name == "posix":
+        assert stat.S_IMODE(figure.stat().st_mode) == 0o600
+    assert readable_texts(pdf, paths) == [text, figure.parent]
+    assert source_text_context(pdf, paths, allowed=True)["pdf_texts"][0]["figure_images"] == [str(figure)]

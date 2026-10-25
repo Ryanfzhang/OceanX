@@ -30,6 +30,7 @@ from oceanx.deep_runtime import build_deep_agent_graph
 from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
 from oceanx.figure_delivery import static_figures
+from oceanx.pdf_text import FIGURE_RULE
 from oceanx.model_config import load_model_profile
 from oceanx.research.background_experts import (
     AWAIT_TOOL, BackgroundDelegationMiddleware, RunningExperts, appended)
@@ -934,6 +935,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
             "is scientific evidence needed for your reasoning, such as a spatial pattern; preview "
             "inspection is not a separate visual-delivery review."
         )
+    if svc.native_vision and role not in {"coordinator", "scientific_discussion_partner"}:
+        prompt += "\n" + FIGURE_RULE  # a paper's figures reach the model as images (pdf_text.py)
     if role != "coordinator" and not quick:
         prompt += "\n" + profile_system_prompt(get_agent_profile(role))
     if role not in {"coordinator", SINGLE_AGENT}:  # the single agent has the conversation itself
