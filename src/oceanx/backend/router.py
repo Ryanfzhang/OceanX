@@ -210,6 +210,10 @@ def _local_dataset_format(path: Path) -> str:
 
 _LOGGER = logging.getLogger(__name__)
 
+# The tools that run an agent's analysis code: the Python kernel, and the shell where its scripts run.
+CODE_TOOLS = frozenset({"ocean_expert_run_code", "execute"})
+TOOL_FAILURE_ACTIVITY = "Expert adjusting its method after a tool failure"
+
 
 class CrashAfterTerminalCommit(RuntimeError):
     """Test-only crash seam for the commit-before-broadcast recovery contract."""
@@ -295,6 +299,8 @@ class OceanRequestRouter:
         # Protocol v2 payload or the router-wide default.
         self._cancelling_agent_requests: set[str] = set()
         self._pending_questions: dict[str, tuple[str, str, asyncio.Future[str]]] = {}
+        # Requests whose recorded activity is still a tool failure, so that the next success clears it.
+        self._after_tool_failure: set[str] = set()
         # "Update now" requests that run off the connection's request loop.
         self._library_updates: set[asyncio.Task[None]] = set()
         # One writer of the project's lessons and tools at a time: "Update now", the regular
@@ -2610,6 +2616,7 @@ class OceanRequestRouter:
             self._agent_request_sessions.pop(request.request_id, None)
             self._agent_request_clients.pop(request.request_id, None)
             self._team_snapshot_revisions.pop(request.request_id, None)
+            self._after_tool_failure.discard(request.request_id)
             self._schedule_research_consolidation(request)
             await self._publish_request_notebook(agent_session, request.request_id)
 
@@ -2655,7 +2662,7 @@ class OceanRequestRouter:
         activity: str | None = None
         failure_fingerprint: str | None = None
         if isinstance(event, ToolExecutionStarted):
-            if event.tool_name == "ocean_expert_run_code":
+            if event.tool_name in CODE_TOOLS:
                 state, activity = "working", "Expert running code"
             elif event.tool_name == "web_search":
                 state, activity = "working", "Searching external scientific evidence"
@@ -2670,11 +2677,11 @@ class OceanRequestRouter:
         elif isinstance(event, ToolExecutionCompleted):
             if event.is_error:
                 state = "working"
-                activity = "Expert adjusting its method after a tool failure"
+                activity = TOOL_FAILURE_ACTIVITY
                 failure_fingerprint = hashlib.sha256(
                     f"{event.tool_name}\0{event.output}".encode()
                 ).hexdigest()
-            elif event.tool_name == "ocean_expert_run_code":
+            elif event.tool_name in CODE_TOOLS:
                 state, activity = "working", "Expert interpreting the code result"
             elif event.tool_name == "web_search":
                 state, activity = "working", "Reviewing external search evidence"
@@ -2684,9 +2691,17 @@ class OceanRequestRouter:
                 state, activity = "working", "Expert result returned"
             elif event.tool_name == HELPER_TOOL:
                 state, activity = "working", "Helper result returned"
+            elif request.request_id in self._after_tool_failure:
+                # Most steps (reading or writing a file, listing a folder) record no activity of their
+                # own; a success after a failure still ends the failure the activity line showed.
+                state, activity = "working", "Working on the request"
         elif isinstance(event, AssistantTurnComplete) and not event.message.tool_uses:
             state, activity = "working", "Preparing the final answer"
         if state is not None and activity is not None:
+            if activity == TOOL_FAILURE_ACTIVITY:
+                self._after_tool_failure.add(request.request_id)
+            else:
+                self._after_tool_failure.discard(request.request_id)
             self.store.transition_task_workflow(
                 request_id=request.request_id,
                 state=state,
