@@ -50,7 +50,13 @@ def static_figure_files(task_root: Path) -> Iterator[tuple[str, Path]]:
             subfolders.sort()
             for name in sorted(names):
                 path = Path(directory) / name
-                if (name.startswith(("_", ".")) or path.suffix.lower() not in STATIC_FIGURE_SUFFIXES
-                        or name.lower().endswith(".preview.png") or path.is_symlink() or not path.is_file()):
-                    continue
-                yield agent.name, path
+                if is_delivered_figure(path):
+                    yield agent.name, path
+
+
+def is_delivered_figure(path: Path) -> bool:
+    """Whether a file under an agent's ``outputs`` folder is a delivered image (static_figure_files)."""
+
+    name = path.name
+    return not (name.startswith(("_", ".")) or path.suffix.lower() not in STATIC_FIGURE_SUFFIXES
+                or name.lower().endswith(".preview.png") or path.is_symlink() or not path.is_file())

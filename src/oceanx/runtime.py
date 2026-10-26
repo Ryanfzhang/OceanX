@@ -217,8 +217,9 @@ necessary scientific evidence. That explicit save is the delivery boundary; ordi
 NetCDF files are not figures. Use ScientificFigure for the figures it suits. Draw a figure it does not suit
 yourself, as you see fit, for example with matplotlib (cartopy for maps): bars or a histogram, significance
 stippling, a polar or Taylor diagram, twin y-axes, a map projection other than the Workbench's, streamlines, a
-schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution, as
-/references/coding/matplotlib.md describes for publication figures, and save it as a PNG
+schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution, and draw a spatial
+field on a map with coastlines, as /references/coding/matplotlib.md describes for publication figures and maps,
+and save it as a PNG
 under OCEAN_OUTPUT_DIR, for example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'))`;
 that image is delivered too. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
 plus filename stem (the whole file name for an image) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
@@ -239,7 +240,8 @@ estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel
 not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
 as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
 one-line `title` attribute, so a later step can tell what it holds without opening it. When the researcher
-requested a visual or a figure is necessary scientific evidence, make the final figure with matplotlib and
+requested a visual or a figure is necessary scientific evidence, make the final figure with matplotlib, a
+spatial field on a map with coastlines as /references/coding/matplotlib.md describes under Maps, and
 save it as a PNG under OCEAN_OUTPUT_DIR, for
 example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'), dpi=150,
 bbox_inches='tight')`; that file is the delivered figure. Keep exploratory plots in your working directory.

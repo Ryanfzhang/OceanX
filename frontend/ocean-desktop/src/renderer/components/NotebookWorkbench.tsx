@@ -4,14 +4,25 @@ import {useUiLanguage} from '../i18n.js';
 import {MessageMarkdown} from '../message-markdown.js';
 import type {ResultDocument} from '../types.js';
 
+type NotebookOutput = {output_type?: string; name?: string; text?: string[] | string; data?: Record<string, string[] | string>};
+
 export type NotebookCell = {
   cell_type: string;
   source?: string[] | string;
   execution_count?: number | null;
-  outputs?: Array<{output_type?: string; name?: string; text?: string[] | string}>;
+  outputs?: NotebookOutput[];
 };
 
 const joined = (value: string[] | string | undefined): string => Array.isArray(value) ? value.join('') : value ?? '';
+
+/** A figure a run saved, embedded under its code (expert_execution.py), as an image address. */
+function outputImage(output: NotebookOutput): string | null {
+  for (const mime of ['image/png', 'image/jpeg']) {
+    const value = output.data?.[mime];
+    if (value) return `data:${mime};base64,${joined(value).replace(/\s+/g, '')}`;
+  }
+  return null;
+}
 
 /** The code every agent ran for one request, with what it printed (request_notebook.py), and its download. */
 export function NotebookWorkbench({document, loading, error, cells, downloadUrl, onClose}: {
@@ -42,8 +53,12 @@ export function NotebookWorkbench({document, loading, error, cells, downloadUrl,
             <span className="notebook-prompt">[{cell.execution_count ?? ' '}]</span>
             <div>
               <pre className="notebook-source"><code>{joined(cell.source)}</code></pre>
-              {(cell.outputs ?? []).map((output, number) => <pre key={number}
-                className={output.name === 'stderr' ? 'notebook-output stderr' : 'notebook-output'}>{joined(output.text)}</pre>)}
+              {(cell.outputs ?? []).map((output, number) => {
+                const image = outputImage(output);
+                if (image) return <img key={number} className="notebook-image" src={image} alt={joined(output.data?.['text/plain'])} />;
+                return output.output_type === 'stream' ? <pre key={number}
+                  className={output.name === 'stderr' ? 'notebook-output stderr' : 'notebook-output'}>{joined(output.text)}</pre> : null;
+              })}
             </div>
           </div>)}</div>}
     </div>

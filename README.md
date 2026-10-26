@@ -184,9 +184,10 @@ scientific acceptance test or a whole-research token budget.
 Each code run keeps its executed notebook under its agent's `.runtime/executions/<id>/code/`.
 When a request ends, whether it finished, failed or was stopped, the runs of every agent that
 worked on it are joined into one `analysis.ipynb`, a section per agent and a cell per run with
-what it printed (shell commands as `%%bash` cells). It is listed under Supplementary Materials
-at the end of the answer, opens in the right panel and can be downloaded; it holds code and
-printed output, never the data the code read (`src/oceanx/request_notebook.py`).
+what it printed (shell commands as `%%bash` cells) and the delivered figures it saved, each
+version under the run that saved it. It is listed under Supplementary Materials at the end of
+the answer, opens in the right panel and can be downloaded; it holds code, printed output and
+figures, never the data the code read (`src/oceanx/request_notebook.py`).
 
 ## Experience and Skills
 

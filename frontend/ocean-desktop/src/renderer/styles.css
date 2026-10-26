@@ -701,6 +701,7 @@ button, input, textarea, select { transition: border-color 150ms ease, backgroun
 .notebook-source { padding: 8px 10px; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--soft); white-space: pre; }
 .notebook-output { max-height: 320px; margin-top: 4px; padding: 6px 10px; overflow: auto; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .notebook-output.stderr { color: var(--red); background: color-mix(in srgb, var(--red) 6%, transparent); border-radius: var(--r-s); }
+.notebook-image { display: block; max-width: 100%; height: auto; margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-s); background: #fff; }
 .additional-results { margin-top: 18px; color: var(--muted); }
 .additional-results > summary { cursor: pointer; }
 /* Object identity is shared by plot labels, legend buttons and prose links. */

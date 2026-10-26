@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -20,6 +21,7 @@ from oceanx.execution_manifest import (
     execution_result_fingerprint,
     write_execution_result_manifest,
 )
+from oceanx.figure_delivery import is_delivered_figure
 from oceanx.sandbox import (
     ResourceLimits,
     SandboxExecutionPolicy,
@@ -123,6 +125,37 @@ def _install_result_runtime(code_root: Path, helper_module: str | None = None) -
         _RESULT_RUNNER,
         encoding="utf-8",
     )
+
+
+NOTEBOOK_IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+MAX_NOTEBOOK_IMAGE_BYTES = 5 * 1024 * 1024  # a larger figure is named in the notebook, not embedded
+
+
+def _output_state(output_root: Path) -> dict[str, tuple[int, int]]:
+    """Each file under an agent's outputs with its modification time and size, to tell what one run saved."""
+    state = {}
+    for path in output_root.rglob("*"):
+        if path.is_file() and not path.is_symlink():
+            status = path.stat()
+            state[path.relative_to(output_root).as_posix()] = (status.st_mtime_ns, status.st_size)
+    return state
+
+
+def _image_outputs(output_root: Path, before: dict[str, tuple[int, int]]) -> list[dict[str, Any]]:
+    """The delivered images a run saved or changed, as notebook display outputs under its code."""
+    outputs: list[dict[str, Any]] = []
+    for name, state in sorted(_output_state(output_root).items()):
+        path = output_root / name
+        mime = NOTEBOOK_IMAGE_TYPES.get(path.suffix.lower())
+        if mime is None or before.get(name) == state or not is_delivered_figure(path):
+            continue
+        if state[1] > MAX_NOTEBOOK_IMAGE_BYTES:
+            outputs.append({"name": "stdout", "output_type": "stream",
+                            "text": [f"[outputs/{name} is too large to show here]\n"]})
+            continue
+        outputs.append({"output_type": "display_data", "metadata": {}, "data": {
+            mime: base64.b64encode(path.read_bytes()).decode("ascii"), "text/plain": [f"outputs/{name}"]}})
+    return outputs
 
 
 @dataclass(frozen=True)
@@ -1003,6 +1036,9 @@ class ExpertCodeExecutionService:
             "OCEAN_ORIGIN_REQUEST_ID": origin_request_id or "",
             "OCEAN_TEMP_DIR": str(temporary_root),
             "PYTHONNOUSERSITE": "1",
+            # Data a library fetches once, such as the Natural Earth coastlines cartopy draws, stay in
+            # the agent's folder rather than in the home of one run.
+            "XDG_DATA_HOME": str(work_root / ".runtime" / "share"),
         }
 
         authority = hashlib.sha256(json.dumps({
@@ -1020,6 +1056,7 @@ class ExpertCodeExecutionService:
                 allow_child_processes=shell_command is not None,
                 allow_network=True,
             )
+        outputs_before = _output_state(output_root)
         if shell_command is not None:
             runtime_environment.update({
                 "PYTHONPATH": str(code_root),
@@ -1064,6 +1101,9 @@ class ExpertCodeExecutionService:
                 if stderr
                 else []
             ),
+            # The delivered images this run saved show under its code, each version under the run
+            # that saved it; the data the code read are never embedded.
+            *_image_outputs(output_root, outputs_before),
         ]
         notebook["metadata"]["oceanmind_execution"] = {
             "execution_id": execution_id,

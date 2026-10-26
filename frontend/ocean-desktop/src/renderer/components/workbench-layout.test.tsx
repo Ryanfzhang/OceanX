@@ -1009,6 +1009,8 @@ describe('research workbench layout', () => {
           outputs: [{output_type: 'stream', name: 'stdout', text: ['4.1e-05\n']}]},
         {cell_type: 'code', execution_count: 2, source: '%%bash\nncdump -h data.nc',
           outputs: [{output_type: 'stream', name: 'stderr', text: 'No such file\n'}]},
+        {cell_type: 'code', execution_count: 3, source: 'fig.savefig("fig2.png")',
+          outputs: [{output_type: 'display_data', data: {'image/png': ['iVBORw0K\n', 'Ggo='], 'text/plain': ['outputs/fig2.png']}}]},
       ]} />);
 
     expect(markup).toContain('2 code runs · analysis.ipynb');
@@ -1018,6 +1020,8 @@ describe('research workbench layout', () => {
     expect(markup).toContain('gamma = 4.1e-5\nprint(gamma)\n');
     expect(markup).toContain('<pre class="notebook-output">4.1e-05\n</pre>');
     expect(markup).toContain('<pre class="notebook-output stderr">No such file\n</pre>');
+    // A figure the run saved shows under its code.
+    expect(markup).toContain('<img class="notebook-image" src="data:image/png;base64,iVBORw0KGgo=" alt="outputs/fig2.png"/>');
   });
 
   it('shows skill revisions on the task exchange that caused them', () => {

@@ -30,3 +30,14 @@ with `bbox_inches='tight'`.
 When your model reads images, open the saved figure once and fix what is wrong before delivering
 it: clipped or empty panels, squashed curves, overlapping text, panels of uneven size, type too
 small to read.
+
+## Maps
+
+Draw a spatial field on a map, never on bare longitude and latitude axes: cartopy axes in the paper's
+projection or PlateCarree, the data drawn with `transform=ccrs.PlateCarree()`, land filled light grey and
+coastlines drawn from Natural Earth at the scale of the region
+(`ax.add_feature(cfeature.LAND.with_scale('50m'), facecolor='0.9')`, `ax.coastlines('50m', linewidth=0.5)`,
+and `'10m'` for a strait or a stretch of coast), with labelled degree gridlines
+(`ax.gridlines(draw_labels=True, linewidth=0.3)`). Leave the data's invalid cells empty, so that the map,
+not a colour of the field, shows the land. cartopy fetches the Natural Earth files on first use and keeps
+them in the agent's folder; if that fails, outline the data's land mask as the coastline and say so.

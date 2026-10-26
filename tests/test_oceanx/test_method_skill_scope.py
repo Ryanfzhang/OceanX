@@ -72,9 +72,15 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
     assert "open boundaries are the real straits" in " ".join(physical.split())
     assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
-    assert "## Publication figures" in (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
-    # A figure drawn without the Figure API is told where the craft is described.
-    assert "/references/coding/matplotlib.md" in " ".join(OCEAN_EXPERT_WORKSTREAM_POLICY.split())
+    reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
+    assert "## Publication figures" in reference
+    assert "## Maps" in reference and "ax.coastlines('50m'" in reference
+    # A figure drawn without the Figure API is told where the craft is described, and every spatial
+    # field it draws goes on a map, in either delivery mode.
+    from oceanx.runtime import STATIC_EXPERT_WORKSTREAM_POLICY
+    for policy in (OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY):
+        flat = " ".join(policy.split())
+        assert "/references/coding/matplotlib.md" in flat and "map with coastlines" in flat
 
 
 @pytest.mark.parametrize("name,owner", [
