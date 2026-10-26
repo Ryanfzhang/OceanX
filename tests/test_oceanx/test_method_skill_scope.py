@@ -68,6 +68,9 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
                  "Before drawing the first figure, read /references/coding/matplotlib.md"):
         assert step in reproduction
     assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
+    # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
+    # drawn and marked, not dropped.
+    assert "give their sum as the residual" in reproduction and "marked not significant, never left out" in reproduction
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
     assert "open boundaries are the real straits" in " ".join(physical.split())

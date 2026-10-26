@@ -40,7 +40,10 @@ Before writing code for a vorticity budget or a streamfunction, read
 /skills/ocean-physical-consistency-review/SKILL.md, under Vorticity budgets and streamfunctions. Derive a
 term from the stored variables before calling it missing. A term is missing only when neither the archive
 nor the attached sources hold what it needs. Name that variable, for example the surface wind stress, and
-the conclusions it leaves untested. Do not substitute another dataset unless the researcher allows it.
+the conclusions it leaves untested. When several terms cannot be told apart, give their sum as the residual
+of the terms you computed, labelled with the terms it holds, rather than marking each one missing: where
+the paper finds one of them small, the residual tests the others. Do not substitute another dataset unless
+the researcher allows it.
 
 ## Matching the paper before interpreting
 For the overlapping period, or the same dataset, compare means, magnitudes, signs and trends with the
@@ -61,8 +64,10 @@ it. Name each departure from the paper's method and why.
 Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures.
 Reproduce each of the paper's figures as one figure with the same panels, from the reproduced quantities:
 the same variables, symbols, units, scales, colour encoding, fills, overlays, reference lines, annotations
-and layout. Smoothed curves and their fills run through the whole record as the original's do, over the
-raw series drawn faintly behind them at the paper's time resolution. When you can read images, open the
+and layout. Draw every element the original has, the trend line of each period included; one the record
+is too short to support is drawn and marked not significant, never left out. Smoothed curves and their
+fills run through the whole record as the original's do, over the raw series drawn faintly behind them at
+the paper's time resolution. When you can read images, open the
 original again right before drawing it, since the image read at the start lies far back in the
 conversation. After saving, open the original and yours together, compare them item by item (panel layout,
 fills, line styles, axis ranges and their multipliers, panel letters, legends and annotations, text that
