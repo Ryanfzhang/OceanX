@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from oceanx.figure_delivery import static_figure_files
+from oceanx.figure_delivery import pdf_preview_png, static_figure_files
 
 if TYPE_CHECKING:
     from oceanx.task_workspace import TaskWorkspaceProjector
@@ -295,7 +295,8 @@ class TaskResultStore:
                 stat = path.stat()
                 key = (str(path), stat.st_mtime_ns, stat.st_size, "static")
                 record = self._view_cache.get(key)
-                if record is None:
+                preview = (record.content.get("workspace_files") or {}).get("preview.png") if record else None
+                if record is None or (preview and not (task_root / preview).is_file()):
                     record = self._static_figure_record(
                         task_id=task_id,
                         workspace_id=task.workspace_id,
@@ -332,6 +333,33 @@ class TaskResultStore:
                 digest.update(chunk)
                 size += len(chunk)
         identity = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:32]
+        files = [TaskResultFile(
+            path=path.name,
+            mime_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+            size=size,
+            sha256=digest.hexdigest(),
+        )]
+        content: dict[str, Any] = {
+            "agent_key": agent_key,
+            "result_key": result_key,
+            "output_path": relative,
+            "render_status": "static",
+            "figure_file": path.name,
+            "preview_file": path.name,
+            "workspace_files": {path.name: relative},
+        }
+        # A PDF figure is shown through a PNG of its first page; Download still returns the PDF.
+        preview_png = pdf_preview_png(path) if path.suffix.lower() == ".pdf" else None
+        if preview_png is not None:
+            preview = task_root / ".runtime" / "figure-previews" / f"{identity}.png"
+            preview.parent.mkdir(parents=True, exist_ok=True)
+            staging = preview.with_name(f".{preview.name}.{os.getpid()}.tmp")
+            staging.write_bytes(preview_png)
+            os.replace(staging, preview)
+            files.append(TaskResultFile(path="preview.png", mime_type="image/png", size=len(preview_png),
+                                        sha256=hashlib.sha256(preview_png).hexdigest()))
+            content["workspace_files"]["preview.png"] = preview.relative_to(task_root).as_posix()
+            content["preview_file"] = "preview.png"
         return TaskResultRecord(
             ref=TaskResultRef(task_id=task_id, result_id=f"figure_{identity}"),
             workspace_id=workspace_id,
@@ -340,22 +368,8 @@ class TaskResultStore:
             created_at=datetime.fromtimestamp(modified, UTC).isoformat(),
             agent_run_id=agent_key,
             execution_output_names=(result_key, local_key, path.name, relative),
-            content={
-                "agent_key": agent_key,
-                "result_key": result_key,
-                "output_path": relative,
-                "render_status": "static",
-                "preview_file": path.name,
-                "workspace_files": {path.name: relative},
-            },
-            files=(
-                TaskResultFile(
-                    path=path.name,
-                    mime_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
-                    size=size,
-                    sha256=digest.hexdigest(),
-                ),
-            ),
+            content=content,
+            files=tuple(files),
         )
 
     def _agent_views(self, *, task_id: str) -> tuple[TaskResultRecord, ...]:

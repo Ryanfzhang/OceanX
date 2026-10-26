@@ -995,19 +995,26 @@ export function App(): React.JSX.Element {
     };
     readPage(0, '');
   };
-  // A saved image opens as the figure itself; its file is also what Download returns.
+  // A saved image opens as the figure itself; its file is also what Download returns. A PDF figure is
+  // shown through the PNG the backend draws from its first page, and Download returns the PDF.
   const openStaticFigure = (result: TaskResultRecord) => {
     const resultKey = taskResultRefKey(result.result_ref);
     const file = result.files[0];
+    const image = (item: TaskResultFile | undefined): item is TaskResultFile => Boolean(item?.mime_type.startsWith('image/'));
+    const declared = declaredResultFile(result, 'preview_file', image);
+    const preview = image(file) ? file : image(declared) ? declared : undefined;
     openResultKey.current = resultKey;
     setResultSurface({kind: 'interactive_view', document: directResultDocument(result)});
     setResultLoading(Boolean(file)); setResultError(file ? null : 'Figure file is missing.');
     setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]);
     if (!file) return;
-    void grantTaskResult(result, file, 'result_file').then((url) => {
+    void Promise.all([
+      grantTaskResult(result, file, 'result_file'),
+      preview && preview !== file ? grantTaskResult(result, preview, 'result_file') : Promise.resolve(null),
+    ]).then(([url, previewUrl]) => {
       if (openResultKey.current !== resultKey) return;
       setResultFileUrl(url);
-      if (file.mime_type.startsWith('image/')) setResultPreviewUrl(url);
+      setResultPreviewUrl(preview === file ? url : previewUrl);
       setResultLoading(false);
     }).catch(() => {
       if (openResultKey.current === resultKey) {setResultError('Figure is unavailable.'); setResultLoading(false);}
@@ -1018,7 +1025,8 @@ export function App(): React.JSX.Element {
     for (const result of taskResults) {
       const key = taskResultRefKey(result.result_ref);
       const preview = declaredResultFile(result, 'preview_file', (file) => file.mime_type.startsWith('image/'));
-      if (!preview || thumbnailRequests.current.has(key)) continue;
+      // A figure without an image to show (a PDF whose first page could not be drawn) gets no thumbnail.
+      if (!preview?.mime_type.startsWith('image/') || thumbnailRequests.current.has(key)) continue;
       thumbnailRequests.current.add(key);
       void grantTaskResult(result, preview, result.kind === 'interactive_view' ? 'interactive_view_preview' : 'result_file')
         .then((url) => setThumbnails((current) => ({...current, [key]: url})))

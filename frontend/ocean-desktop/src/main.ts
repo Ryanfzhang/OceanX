@@ -28,6 +28,9 @@ const artifactResourceTypes = new Map([
   ['.json', 'application/json; charset=utf-8'],
   ['.png', 'image/png'],
   ['.webp', 'image/webp'],
+  // A delivered figure may be a vector PDF or an SVG; Download fetches it through this protocol.
+  ['.pdf', 'application/pdf'],
+  ['.svg', 'image/svg+xml'],
   ['.jpg', 'image/jpeg'],
   ['.jpeg', 'image/jpeg'],
   ['.md', 'text/markdown; charset=utf-8'],

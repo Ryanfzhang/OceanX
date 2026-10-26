@@ -9,6 +9,7 @@ an image file, and no plotting interface is described anywhere a model reads. Be
 """
 from __future__ import annotations
 
+import io
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -16,6 +17,9 @@ from pathlib import Path
 FIGURE_DELIVERY_ENV = "OCEANX_FIGURE_DELIVERY"
 FIGURE_DELIVERY_MODES = ("interactive", "static")
 STATIC_FIGURE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".svg", ".pdf"})
+# A PDF figure is shown through a PNG drawn from its first page: the desktop and the browser show images,
+# while the vector file is what Download returns. Pixels along the longer edge, sharp on a large screen.
+PDF_PREVIEW_EDGE = 2000
 # Skills that teach the plotting interface; a static run does not put them in the skill library.
 INTERACTIVE_FIGURE_SKILLS = frozenset({"scientific-figure-design"})
 
@@ -60,3 +64,23 @@ def is_delivered_figure(path: Path) -> bool:
     name = path.name
     return not (name.startswith(("_", ".")) or path.suffix.lower() not in STATIC_FIGURE_SUFFIXES
                 or name.lower().endswith(".preview.png") or path.is_symlink() or not path.is_file())
+
+
+def pdf_preview_png(pdf: Path) -> bytes | None:
+    """The first page of a PDF figure drawn as PNG bytes (PDF_PREVIEW_EDGE); None when it cannot be drawn,
+    and the figure is then still delivered as its file."""
+    try:
+        import pypdfium2 as pdfium  # also draws the pages of the PDFs a researcher attaches (pdf_text.py)
+
+        document = pdfium.PdfDocument(str(pdf))
+        try:
+            page = document[0]
+            scale = PDF_PREVIEW_EDGE / max(*page.get_size(), 1.0)
+            image = page.render(scale=scale).to_pil().convert("RGB")
+        finally:
+            document.close()
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue()
+    except Exception:  # noqa: BLE001 - an unreadable or empty PDF keeps its download
+        return None

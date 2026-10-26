@@ -219,10 +219,11 @@ yourself, as you see fit, for example with matplotlib (cartopy for maps): bars o
 stippling, a polar or Taylor diagram, twin y-axes, a map projection other than the Workbench's, streamlines, a
 schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution, and draw a spatial
 field on a map with coastlines, as /references/coding/matplotlib.md describes for publication figures and maps,
-and save it as a PNG
-under OCEAN_OUTPUT_DIR, for example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'))`;
-that image is delivered too. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
-plus filename stem (the whole file name for an image) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
+and save it as a vector PDF under OCEAN_OUTPUT_DIR, for example
+`fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.pdf'), bbox_inches='tight')`; that file is
+delivered too. Save a PNG instead only when the figure is itself a picture, such as a photograph or a satellite
+true-colour image. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
+plus filename stem (the whole file name for a saved figure file) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
 comparisons and scientific scales. Omit style arguments to ScientificFigure to use the Workbench defaults.
 Do not spend a separate round polishing or reviewing its rendered layout. Inspect a generated preview only when the image itself is
 scientific evidence you need to interpret, such as a spatial pattern. For spatial fields, preserve the source
@@ -311,9 +312,11 @@ asks for, the files you saved (full paths) and a limitation only when it matters
 
 
 async def build_ocean_single_agent_runtime(
-    *, services: OceanToolServices, helper: bool = False
+    *, services: OceanToolServices, helper: bool = False, routing: str = ""
 ) -> OceanRuntimeComposition:
-    """The agent that works on a request alone, or one of its helpers: Expert tools, no report file."""
+    """The agent that works on a request alone, or one of its helpers: Expert tools, no report file.
+    ``routing`` is the rule for handing a request to the research team; it comes before the
+    instructions on how to work, which are for the requests the agent keeps."""
 
     policy = STATIC_EXPERT_WORKSTREAM_POLICY if static_figures() else OCEAN_EXPERT_WORKSTREAM_POLICY
     # The Experts cite their results in report.md; these agents cite them where they answer.
@@ -328,7 +331,8 @@ async def build_ocean_single_agent_runtime(
             "ocean_skill_role": services.skill_role,
         },
     )
-    base = (OCEAN_HELPER_PROMPT,) if helper else (OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT, OCEAN_SINGLE_AGENT_PROMPT)
+    base = (OCEAN_HELPER_PROMPT,) if helper else (
+        OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT, *([routing.strip()] if routing else []), OCEAN_SINGLE_AGENT_PROMPT)
     return OceanRuntimeComposition(
         profile=profile,
         system_prompt="\n\n".join((*base, *profile.system_prompt_sections)),

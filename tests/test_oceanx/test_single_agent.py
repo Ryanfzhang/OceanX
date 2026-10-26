@@ -116,11 +116,20 @@ def test_a_request_handed_over_continues_in_research_mode():
 
 def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     handoff, helpers = " ".join(HANDOFF_POLICY.split()), " ".join(HELPER_POLICY.split())
-    assert HANDOFF_TOOL in handoff and "when unsure, do the work" in handoff
-    assert "asks why" in handoff and "however many parts" in handoff
-    # A paper's reproduction stays with one agent, which holds every result its figures combine, and is
-    # not cut short as bounded work.
-    assert "reproducing or testing the analysis of a paper" in handoff
+    assert HANDOFF_TOOL in handoff and "asks why" in handoff and "however many parts" in handoff
+    # Three rules, the first that fits decides: a paper's reproduction stays with one agent, which holds
+    # every result its figures combine, even where the paper explains a mechanism; then any part that is an
+    # open research problem sends the request to the team, even beside listed data steps and figures (the
+    # Mangkhut request of 2026-10-26 asked whether mixing or upwelling cooled the sea and listed five
+    # downloads, a map and a section, and the agent kept it); then everything else is the agent's.
+    reproduce = handoff.index("1. A request to reproduce or test the analysis of a paper is yours")
+    team = handoff.index("2. A request any part of which is an open research problem goes to the research team")
+    rest = handoff.index("3. Everything else is yours, however many parts it has")
+    assert reproduce < team < rest and "The first of these rules that fits decides" in handoff
+    assert "even where the paper explains why something happens" in handoff
+    assert ("even when the request also lists the data to use or download and the maps, sections or tables to "
+            "make") in handoff and "whether mixing or upwelling did it" in handoff
+    assert "when unsure" not in handoff  # it sent mixed requests to the agent
     reproduction = "Reproducing or testing a paper's analysis is not bounded this way"
     assert reproduction in " ".join(graphs.bounded_work_policy(False).split())
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
@@ -142,6 +151,11 @@ async def test_the_single_agent_and_its_helpers_answer_without_a_report(monkeypa
                                  skill_capabilities=("literature.read", "web.search", "jina.reader"))
     single = await build_ocean_single_agent_runtime(services=services)
     helper = await build_ocean_single_agent_runtime(services=services, helper=True)
+    # In auto mode the rule for handing over comes before the instructions on how to work.
+    routed = (await build_ocean_single_agent_runtime(services=services, routing=HANDOFF_POLICY)).system_prompt
+    assert routed.startswith(OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT)
+    assert routed.index("# First: yours or the research team's") < routed.index(OCEAN_SINGLE_AGENT_PROMPT)
+    assert "research team" not in single.system_prompt and "research team" not in helper.system_prompt
     assert "report.md" not in single.system_prompt and "report.md" not in helper.system_prompt
     assert "in your answer" in single.system_prompt and "in your reply" in helper.system_prompt
     assert single.system_prompt.startswith(OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT)
@@ -314,8 +328,8 @@ async def test_an_exhausted_budget_hands_the_request_over(world):
 async def test_the_single_agent_gets_the_handoff_only_in_auto_mode(monkeypatch, mode):
     captured = {}
 
-    async def fake_build(_config, role, *, run=None, middleware=None, suffix="", **_kwargs):
-        captured.update(role=role, run=run, middleware=middleware, suffix=suffix)
+    async def fake_build(_config, role, *, run=None, middleware=None, suffix="", routing="", **_kwargs):
+        captured.update(role=role, run=run, middleware=middleware, suffix=suffix, routing=routing)
         return "graph"
 
     monkeypatch.setattr(graphs, "build", fake_build)
@@ -327,11 +341,12 @@ async def test_the_single_agent_gets_the_handoff_only_in_auto_mode(monkeypatch, 
     assert captured["role"] == SINGLE_AGENT and captured["run"] is run
     assert HELPER_POLICY in captured["suffix"]
     assert kinds[-1] is ToolCallRepairMiddleware and HelperMiddleware in kinds
+    assert HANDOFF_POLICY not in captured["suffix"]  # the rule is not left to the end of the prompt
     if mode == "auto":
-        assert kinds[0] is HandoffMiddleware and HANDOFF_POLICY in captured["suffix"]
+        assert kinds[0] is HandoffMiddleware and captured["routing"] == HANDOFF_POLICY
         assert budget.last_call == LAST_CALL_HANDOFF and budget.last_tools == {HANDOFF_TOOL}
     else:
-        assert HandoffMiddleware not in kinds and HANDOFF_POLICY not in captured["suffix"]
+        assert HandoffMiddleware not in kinds and not captured["routing"]
         assert budget.last_call == LAST_CALL and not budget.last_tools
 
 

@@ -21,7 +21,7 @@ from oceanx.execution_manifest import (
     execution_result_fingerprint,
     write_execution_result_manifest,
 )
-from oceanx.figure_delivery import is_delivered_figure
+from oceanx.figure_delivery import is_delivered_figure, pdf_preview_png
 from oceanx.sandbox import (
     ResourceLimits,
     SandboxExecutionPolicy,
@@ -146,15 +146,24 @@ def _image_outputs(output_root: Path, before: dict[str, tuple[int, int]]) -> lis
     outputs: list[dict[str, Any]] = []
     for name, state in sorted(_output_state(output_root).items()):
         path = output_root / name
-        mime = NOTEBOOK_IMAGE_TYPES.get(path.suffix.lower())
+        pdf = path.suffix.lower() == ".pdf"
+        mime = "image/png" if pdf else NOTEBOOK_IMAGE_TYPES.get(path.suffix.lower())
         if mime is None or before.get(name) == state or not is_delivered_figure(path):
             continue
-        if state[1] > MAX_NOTEBOOK_IMAGE_BYTES:
+        # A PDF figure is shown through a PNG of its first page (figure_delivery.pdf_preview_png).
+        image = pdf_preview_png(path) if pdf else None
+        size = len(image) if image is not None else state[1]
+        if pdf and image is None:
+            outputs.append({"name": "stdout", "output_type": "stream",
+                            "text": [f"[outputs/{name} could not be drawn here]\n"]})
+            continue
+        if size > MAX_NOTEBOOK_IMAGE_BYTES:
             outputs.append({"name": "stdout", "output_type": "stream",
                             "text": [f"[outputs/{name} is too large to show here]\n"]})
             continue
         outputs.append({"output_type": "display_data", "metadata": {}, "data": {
-            mime: base64.b64encode(path.read_bytes()).decode("ascii"), "text/plain": [f"outputs/{name}"]}})
+            mime: base64.b64encode(image if image is not None else path.read_bytes()).decode("ascii"),
+            "text/plain": [f"outputs/{name}"]}})
     return outputs
 
 

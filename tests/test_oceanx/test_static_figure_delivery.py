@@ -132,7 +132,7 @@ def test_images_are_listed_as_file_results_in_either_delivery_mode(monkeypatch, 
     assert re.fullmatch(r"figure_[0-9a-f]{32}", record.ref.result_id)
     assert record.content == {
         "agent_key": key, "result_key": f"{key}/maps/mld_anomaly.png", "output_path": relative,
-        "render_status": "static", "preview_file": "mld_anomaly.png",
+        "render_status": "static", "figure_file": "mld_anomaly.png", "preview_file": "mld_anomaly.png",
         "workspace_files": {"mld_anomaly.png": relative},
     }
     (declared,) = record.files
@@ -147,6 +147,63 @@ def test_images_are_listed_as_file_results_in_either_delivery_mode(monkeypatch, 
     figure.write_bytes(PNG + b"revised")
     (revised,) = store.list(task_id="task")
     assert revised.ref == record.ref and revised.files[0].sha256 != declared.sha256
+
+
+def _vector_pdf(path: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    figure, axes = plt.subplots(figsize=(7, 3.5))
+    axes.plot([0, 1, 2], [1, 3, 2])
+    axes.set_xlabel("Day")
+    figure.savefig(path, bbox_inches="tight")
+    plt.close(figure)
+
+
+def test_a_pdf_figure_is_shown_through_a_drawing_of_its_first_page(tmp_path):
+    """The desktop and the browser show images: a vector PDF is shown as a PNG of its first page,
+    and Download still returns the PDF."""
+    from PIL import Image
+
+    from oceanx.figure_delivery import PDF_PREVIEW_EDGE
+    key = "single-agent-x"
+    outputs = tmp_path / "agents" / key / "outputs"
+    outputs.mkdir(parents=True)
+    figure = outputs / "sst_response.pdf"
+    _vector_pdf(figure)
+    store = TaskResultStore(task_workspaces=_Projector(tmp_path))
+    (record,) = store.list(task_id="task")
+    assert [(item.path, item.mime_type) for item in record.files] == [
+        ("sst_response.pdf", "application/pdf"), ("preview.png", "image/png")]
+    assert (record.content["figure_file"], record.content["preview_file"]) == ("sst_response.pdf", "preview.png")
+    assert store.file_path(ref=record.ref, relative_path="sst_response.pdf") == figure.resolve()
+    preview = store.file_path(ref=record.ref, relative_path="preview.png")
+    assert preview.parent == (tmp_path / ".runtime" / "figure-previews").resolve()
+    with Image.open(preview) as image:
+        assert image.format == "PNG" and max(image.size) == PDF_PREVIEW_EDGE
+    # The preview is not a figure of its own, and one that was cleaned up is drawn again.
+    assert len(store.list(task_id="task")) == 1
+    preview.unlink()
+    (again,) = store.list(task_id="task")
+    assert store.file_path(ref=again.ref, relative_path="preview.png").is_file()
+    # A PDF that cannot be drawn is still delivered, as its file alone.
+    (outputs / "broken.pdf").write_bytes(b"%PDF-1.7 not really")
+    broken = next(item for item in store.list(task_id="task") if item.content["figure_file"] == "broken.pdf")
+    assert [item.path for item in broken.files] == ["broken.pdf"] and broken.content["preview_file"] == "broken.pdf"
+
+
+def test_the_figure_rules_ask_for_a_vector_pdf_in_the_desktop_and_keep_png_in_static_runs():
+    from oceanx.runtime import OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY
+    from oceanx.skills import ocean_reference_root
+    interactive = " ".join(OCEAN_EXPERT_WORKSTREAM_POLICY.split())
+    assert "save it as a vector PDF under OCEAN_OUTPUT_DIR" in interactive and "'concise-name.pdf'" in interactive
+    assert "Save a PNG instead only when the figure is itself a picture" in interactive
+    # Benchmark runs (static delivery) keep the image every arm delivers, so runs stay comparable.
+    static = " ".join(STATIC_EXPERT_WORKSTREAM_POLICY.split())
+    assert "save it as a PNG under OCEAN_OUTPUT_DIR" in static and "vector PDF" not in static
+    reference = " ".join((ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8").split())
+    assert "as a vector PDF where your instructions ask for one" in reference and "rasterized=True" in reference
+    assert "save the same figure also as a draft PNG, whose name starts with `_`" in reference
 
 
 def test_a_static_receipt_names_saved_figures_and_no_published_results():

@@ -136,6 +136,24 @@ def test_a_run_embeds_the_delivered_images_it_saved(tmp_path, monkeypatch):
             if output["output_type"] == "display_data"] == [["outputs/fig1.png"], ["outputs/maps/fig2.png"]]
 
 
+def test_a_run_shows_a_pdf_figure_it_saved_through_a_drawing_of_its_first_page(tmp_path):
+    import base64
+
+    from oceanx.expert_execution import _image_outputs, _output_state
+    from tests.test_oceanx.test_static_figure_delivery import _vector_pdf
+
+    outputs = tmp_path / "outputs"
+    outputs.mkdir()
+    before = _output_state(outputs)
+    _vector_pdf(outputs / "section.pdf")
+    (outputs / "broken.pdf").write_bytes(b"%PDF-1.7 not really")
+    shown = _image_outputs(outputs, before)
+    assert shown[0] == {"name": "stdout", "output_type": "stream",
+                        "text": ["[outputs/broken.pdf could not be drawn here]\n"]}
+    assert shown[1]["data"]["text/plain"] == ["outputs/section.pdf"]
+    assert base64.b64decode(shown[1]["data"]["image/png"]).startswith(b"\x89PNG")
+
+
 def test_the_request_notebook_keeps_images_within_its_budget(tmp_path, monkeypatch):
     from oceanx import request_notebook as module
 

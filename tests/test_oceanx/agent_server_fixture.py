@@ -81,7 +81,9 @@ class FixtureModel(FakeMessagesListChatModel):
                                                   "progress": ""})
         assert "hand_to_research_team" in self.names  # the desktop sends auto
         system = "\n".join(m.text for m in messages if isinstance(m, SystemMessage))
-        assert "Backend-assigned report file" not in system and "When the research team takes over" in system
+        assert "Backend-assigned report file" not in system
+        # The rule for handing over comes before the instructions on how to work.
+        assert system.index("# First: yours or the research team's") < system.index("# Working on the request")
         last_human = max(i for i, m in enumerate(messages) if isinstance(m, HumanMessage))
         done = [m for m in messages[last_human + 1:] if isinstance(m, ToolMessage)]
         if not done:

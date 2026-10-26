@@ -798,7 +798,7 @@ export function ResultWorkbench({
         <header><div>{previewUrl ? <Image size={16} /> : <Download size={16} />}<span><strong>{document?.title}</strong><small>{renderStatus === 'static' ? uiText('Figure', '图') : renderStatus === 'preview' ? 'Static preview' : 'Result file'}</small></span></div></header>
         {previewUrl ? <div className="result-fallback-preview"><img src={previewUrl} alt={document?.title ?? 'Scientific result preview'} /></div> : null}
         <footer><span>{renderStatus === 'static'
-          ? (typeof document?.content?.preview_file === 'string' ? document.content.preview_file : '')
+          ? [document?.content?.figure_file, document?.content?.preview_file].find((name): name is string => typeof name === 'string') ?? ''
           : renderMessage ?? (previewUrl ? 'Interactive rendering is unavailable; showing the saved preview.' : 'Preview is unavailable; the saved result can still be downloaded.')}</span>
           {downloadUrl ? <a href={downloadUrl} download><Download size={14} />{renderStatus === 'static' ? uiText('Download', '下载') : 'Download result'}</a> : null}
         </footer>

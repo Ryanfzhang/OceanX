@@ -45,22 +45,29 @@ def team_config(config):
         **c.get("request_options", {}), "workflow_mode": "research"}}}
 
 
+# The single agent decides at the top of its instructions, before what tells it how to work: placed after
+# them, the rule lost to their "do the work yourself" on a request that both lists data steps and asks for a
+# mechanism (Typhoon Mangkhut, 2026-10-26: whether mixing or upwelling cooled the sea, why chlorophyll rose).
 HANDOFF_POLICY = f"""\
-# When the research team takes over
-Most requests are yours: looking at, extracting, computing, comparing, mapping or plotting data; downloading a
-dataset the researcher asked for; finding, reading or summarising sources; reproducing or testing the analysis
-of a paper, whose methods the paper already fixes, so that one agent holds every result its figures combine; and
-bounded work in several steps, such as a route through a current field or the same analysis for several
-variables. Do these yourself, however many parts they have.
-Hand the request to the research team with {HANDOFF_TOOL} when it is an open research problem: it asks why
-something happens or what causes, drives or controls it, which mechanism or explanation holds, or how much each
-factor contributes; it needs competing explanations weighed against the data and the literature; or it needs an
-investigation whose next steps depend on what the first ones find. Hand it over too when the researcher asks for
-deep research or for the research team. The team plans an investigation, runs several Experts and takes tens of
-minutes, so never hand over a request that one bounded analysis answers.
-Decide on your first call. Hand an open research problem over before doing any work on it; when unsure, do the
-work. If the work then shows that the request is an open research problem after all, hand it over, saying what
-you did and which saved files can be reused. After {HANDOFF_TOOL}, stop: the team answers the researcher.
+# First: yours or the research team's
+Decide this on your first call, before any other step. The first of these rules that fits decides.
+1. A request to reproduce or test the analysis of a paper is yours, even where the paper explains why something
+   happens: the paper fixes its methods, and one agent holds every result its figures combine.
+2. A request any part of which is an open research problem goes to the research team. A part is open when it
+   asks why something happens or what causes, drives or controls it, which mechanism or explanation holds (for
+   example, whether mixing or upwelling did it), or how much each factor contributes; when it needs competing
+   explanations weighed against the data and the literature; or when it needs an investigation whose next steps
+   depend on what the first ones find. A request for deep research or for the research team goes there too.
+   Call {HANDOFF_TOOL} at once, before any work, even when the request also lists the data to use or download
+   and the maps, sections or tables to make: the team makes those as part of its investigation.
+3. Everything else is yours, however many parts it has: looking at, extracting, computing, comparing, mapping
+   or plotting data; downloading a dataset the researcher asked for; finding, reading or summarising sources;
+   and bounded work in several steps, such as a route through a current field or the same analysis for several
+   variables. The team plans an investigation, runs several Experts and takes tens of minutes, so a request
+   for data, numbers or figures alone is never the team's.
+If your work on a request you kept shows that it is an open research problem after all, hand it over then,
+saying what you did and which saved files can be reused. After {HANDOFF_TOOL}, stop: the team answers the
+researcher. The rest of these instructions is for a request that is yours.
 """
 
 HELPER_POLICY = f"""\
@@ -175,7 +182,7 @@ class HandoffInput(BaseModel):
 
 HANDOFF_DESCRIPTION = (
     "Hand this request to OceanX's research team (a Coordinator and Experts), which takes over at once and "
-    "answers the researcher. Only for an open research problem; see 'When the research team takes over'.")
+    "answers the researcher. Only as 'First: yours or the research team's' says.")
 HANDOFF_RECEIPT = "The research team takes this request over now."
 
 

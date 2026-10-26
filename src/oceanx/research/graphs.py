@@ -862,7 +862,7 @@ def _earlier_attempt(run: AgentRun) -> str:
 
 
 async def build(config, role: str, *, run: AgentRun | None = None, middleware=None,
-                subagents=None, suffix=""):
+                subagents=None, suffix="", routing=""):
     from oceanx.context import OceanContextBuilder
 
     svc = services(config, role, run)
@@ -874,7 +874,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         build_ocean_runtime(services=svc, research_mode=research) if role == "coordinator" else
         build_ocean_discussion_runtime(services=svc)
         if role == "scientific_discussion_partner" else
-        build_ocean_single_agent_runtime(services=svc, helper=role == HELPER) if quick else
+        build_ocean_single_agent_runtime(services=svc, helper=role == HELPER, routing=routing) if quick else
         build_ocean_expert_runtime(services=svc)
     )
     prompt = composition.system_prompt
@@ -910,7 +910,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    "Save only final deliverables under OCEAN_OUTPUT_DIR; "
                    + ("a final figure saved there as a PNG is delivered. " if static else
                       "ScientificFigure.save('name.nc') publishes there automatically, and a figure the "
-                      "Figure API cannot draw is delivered when saved there as a PNG. ")
+                      "Figure API cannot draw is delivered when saved there, as a vector PDF unless it is a "
+                      "picture such as a photograph. ")
                    + "Use supplied absolute data/result paths with native file tools or execute. "
                    "Source data and other agents' evidence are read-only; your working directory is writable.")
         if not static:
@@ -954,7 +955,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                 f"\nYour Agent key is {run.thread_id}. When a saved result supports a claim, write its "
                 f"complete binding right after the claim in your {'reply' if role == HELPER else 'answer'}, "
                 f"for example [{run.thread_id}/result1] for result1.nc; the result name is the .nc path below "
-                f"outputs without its extension, while an image keeps it, as in [{run.thread_id}/figure.png]."
+                f"outputs without its extension, while a saved figure file keeps it, as in "
+                f"[{run.thread_id}/figure.pdf]."
                 + (" Copy the bindings in a helper's reply unchanged." if role == SINGLE_AGENT else "") + "\n")
         if role == SINGLE_AGENT and context_builder.policy_for(
             workspace_id=c["workspace_id"], provider_id=svc.provider_id,
@@ -1303,7 +1305,7 @@ async def _single_agent(config, run: AgentRun):
         QuickCallBudgetMiddleware(SINGLE_AGENT_CALL_LIMIT, last_call=LAST_CALL_HANDOFF if handoff else LAST_CALL,
                                   last_tools=frozenset({HANDOFF_TOOL}) if handoff else frozenset()),
         ToolCallRepairMiddleware(),
-    ], suffix="\n" + (HANDOFF_POLICY + "\n" if handoff else "") + HELPER_POLICY)
+    ], routing=HANDOFF_POLICY if handoff else "", suffix="\n" + HELPER_POLICY)
 
 
 async def coordinator(config):
