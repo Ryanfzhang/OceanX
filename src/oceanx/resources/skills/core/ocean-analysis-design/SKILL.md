@@ -44,6 +44,11 @@ sampling: for example temporal/spatial blocks or dependence-robust regression un
 Explain the block/lag scale and relevant assumptions. A longer series with dependent samples
 does not justify treating its raw length as the independent sample size.
 
+A running mean shares values between neighbouring points: a window of w years leaves about one
+independent value per w years. Keep the window well below the record length (a 7-year window
+leaves fewer than two independent values in 12 years) and judge the trends and correlations of a
+smoothed series by that count, not by its number of points.
+
 ## Uncertainty and comparison
 
 Report the effect estimate with units and uncertainty appropriate to that estimand. Separate

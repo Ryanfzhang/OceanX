@@ -217,7 +217,8 @@ necessary scientific evidence. That explicit save is the delivery boundary; ordi
 NetCDF files are not figures. Use ScientificFigure for the figures it suits. Draw a figure it does not suit
 yourself, as you see fit, for example with matplotlib (cartopy for maps): bars or a histogram, significance
 stippling, a polar or Taylor diagram, twin y-axes, a map projection other than the Workbench's, streamlines, a
-schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution, and save it as a PNG
+schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution, as
+/references/coding/matplotlib.md describes for publication figures, and save it as a PNG
 under OCEAN_OUTPUT_DIR, for example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'))`;
 that image is delivered too. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
 plus filename stem (the whole file name for an image) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,

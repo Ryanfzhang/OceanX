@@ -28,18 +28,11 @@ axes: a circulation integrated along a boundary over a layer is in m3 s-1, so a 
 divided by an area.
 
 ## Deriving what the data do not store
-Model and reanalysis archives rarely store every term of a budget. Before calling a term missing, derive
-it from what is stored:
-- pressure from temperature, salinity and sea surface height through the equation of state and the
-  hydrostatic relation, `p(z) = rho0 * g * eta + integral(rho * g, z..0)`; from it a layer's
-  pressure-gradient torque and the bottom pressure torque;
-- the transport and planetary vorticity flux of each layer through a strait from the velocity normal to
-  the strait section and the Coriolis parameter;
-- advection, tilting and the vorticity tendency from the velocity fields at the archive's time step;
-- one remaining term as the budget residual, labelled as a residual, once every other term is computed.
-A term is missing only when neither the archive nor the attached sources hold what it needs. Name that
-variable, for example the surface wind stress, and the conclusions it leaves untested. Do not substitute
-another dataset unless the researcher allows it.
+Model and reanalysis archives rarely store every term of a budget. Derive a term from the stored
+variables before calling it missing; /skills/ocean-physical-consistency-review/SKILL.md describes how
+for vorticity budgets and streamfunctions. A term is missing only when neither the archive nor the
+attached sources hold what it needs. Name that variable, for example the surface wind stress, and the
+conclusions it leaves untested. Do not substitute another dataset unless the researcher allows it.
 
 ## Matching the paper before interpreting
 For the overlapping period, or the same dataset, compare means, magnitudes, signs and trends with the
@@ -48,17 +41,18 @@ two, or of sign, comes from a definition, normalisation, unit, domain, mask or s
 shown otherwise: find it before drawing any conclusion.
 
 ## Adapting the method to the record
-A method built for a long record can fail on a short one. Keep a smoothing window well below the record
-length: a 7-year running mean leaves almost nothing of a 12-year record, so use annual means or a shorter
-filter. State how many independent values lie behind each trend and correlation, and do not report one
-that so few values cannot support; `references/methods/trend.md` covers trend uncertainty. Name each
-departure from the paper's method and why.
+A method built for a long record can fail on a short one: keep a smoothing window well below the record
+length and judge each trend and correlation by the independent values behind it
+(/skills/ocean-analysis-design/SKILL.md, under dependence). Name each departure from the paper's method
+and why.
 
 ## Figures
-Redraw the paper's figures panel by panel from the reproduced quantities, as you see fit, for example with
-matplotlib: the same variables, symbols, units, scales, colour encoding, overlays, reference lines,
-annotations and layout. When you can read images, look at the original figure first and compare yours with
-it once. Leave out a panel whose data are missing and say why; never fill it with another quantity.
+Reproduce each of the paper's figures as one figure with the same panels, from the reproduced quantities:
+the same variables, symbols, units, scales, colour encoding, overlays, reference lines, annotations and
+layout, drawn as /references/coding/matplotlib.md describes for publication figures. When you can read
+images, look at the original figure first, and after saving compare yours with it once and fix what
+differs. Deliver every panel you computed, with any doubt written on it rather than withholding it. Leave
+out only a panel whose data are missing, say why, and never fill it with another quantity.
 
 ## Reporting
 For each of the paper's conclusions give the paper's value, the reproduced value, whether they agree and

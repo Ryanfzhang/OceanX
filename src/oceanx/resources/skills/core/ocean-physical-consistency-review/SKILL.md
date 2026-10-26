@@ -55,6 +55,29 @@ to temperature tendency is `-u_h dot grad_h(T)`. Check continuity and vertical/b
 before attribution. An isolated property transport may depend on the reference zero when
 volume transport is unbalanced; examine the complete accounting, not a preferred reference.
 
+## Vorticity budgets and streamfunctions
+
+A layer's circulation is the area integral of its vertically integrated relative vorticity or, by
+Stokes' theorem, the line integral of its integrated velocity along the domain boundary, open
+straits included; the two must agree. When they differ, the boundary does not follow the area that
+was integrated (coastal cells removed, staggered C-grid points, a strait left open): fix that rather
+than keep the form that looks right. Divide by an area only when the quantity is defined as a
+domain average, and say which area.
+
+Archives rarely store every term of a vorticity budget; derive a term before calling it missing:
+- pressure from temperature, salinity and sea surface height, through the equation of state and
+  the hydrostatic relation `p(z) = rho0 * g * eta + integral(rho * g, z..0)`; from it a layer's
+  pressure-gradient torque and the bottom pressure torque `J(p_b, H) / rho0`;
+- the planetary vorticity flux through a strait, `f` times the layer transport normal to the
+  strait section, on the section's own grid points;
+- advection and tilting from the velocity fields, and the tendency from successive fields;
+- one remaining term as the budget residual, labelled as a residual.
+A term is missing only when neither the archive nor the attached sources hold what it needs.
+
+A layer's transport streamfunction integrates the layer's depth-integrated transport from a coast,
+`psi(x, y) = integral(V, x0..x)` or of `-U` along y, on the native grid. Inverting vorticity with a
+Poisson solve needs boundary values the data do not give, so its pattern is not evidence.
+
 ## Stratification
 
 Separate density stratification, temperature stratification and mixed-layer depth (MLD).

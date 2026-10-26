@@ -53,6 +53,24 @@ def test_numeric_method_examples_remain_available_on_demand():
     assert "residual" in physical
 
 
+def test_a_paper_reproduction_points_to_where_its_methods_live():
+    """The reproduction skill, which a task with a paper names, says what to do; the method lives in
+    the skill or reference that every analysis reads for it, once."""
+    from oceanx.runtime import OCEAN_EXPERT_WORKSTREAM_POLICY
+    from oceanx.skills import ocean_reference_root
+
+    reproduction, _ = load_ocean_skill("paper-reproduction")
+    for place in ("/skills/ocean-physical-consistency-review/SKILL.md",
+                  "/skills/ocean-analysis-design/SKILL.md", "/references/coding/matplotlib.md"):
+        assert place in reproduction
+    physical, _ = load_ocean_skill("ocean-physical-consistency-review")
+    assert "bottom pressure torque" in physical and "transport streamfunction" in physical
+    assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
+    assert "## Publication figures" in (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
+    # A figure drawn without the Figure API is told where the craft is described.
+    assert "/references/coding/matplotlib.md" in " ".join(OCEAN_EXPERT_WORKSTREAM_POLICY.split())
+
+
 @pytest.mark.parametrize("name,owner", [
     ("ocean-physical-consistency-review", "ocean_process_expert"),
     ("ocean-analysis-design", "statistical_inference_expert"),
