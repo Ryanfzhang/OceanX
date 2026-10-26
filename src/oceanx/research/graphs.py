@@ -593,10 +593,20 @@ def research_mode(config) -> bool:
     return workflow_mode(config) == "research"
 
 
+# A figure drawn with matplotlib is looked at once against the figure standard in matplotlib.md; the
+# Workbench draws a ScientificFigure, so its preview is not opened. A static run has no preview file: the
+# saved image is the figure.
+FIGURE_LOOK = {
+    True: ("Look once at the image of each figure you saved and fix what /references/coding/matplotlib.md "
+           "lists; do not reopen it to polish it."),
+    False: ("Do not open the .preview.png of a ScientificFigure you just saved. Look once at each figure you "
+            "drew with matplotlib, through the `<name>.pdf.preview.png` beside a PDF, and fix what "
+            "/references/coding/matplotlib.md lists; do not reopen it to polish it."),
+}
+
+
 def bounded_work_policy(static: bool) -> str:
-    # A static run has no preview file beside a figure: the saved image is the figure.
-    return BOUNDED_WORK_POLICY.format(saved_view="the image" if static else "the .preview.png",
-                                      seconds=STANDARD_MODE_CODE_SECONDS)
+    return BOUNDED_WORK_POLICY.format(figure_look=FIGURE_LOOK[static], seconds=STANDARD_MODE_CODE_SECONDS)
 
 
 def coordinator_report_path(config) -> Path:

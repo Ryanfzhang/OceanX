@@ -85,7 +85,7 @@ The requested output (a figure, number, table, route or file) is the finish line
 variables, region, depth and period the request needs; never load a whole field or water column when a slice
 answers it. Compute it with one defensible method, publish it, answer and stop. Do not add sensitivity tests,
 extra figures or statistics, investigations of individual cells or values, or re-checks of saved outputs unless a
-result is clearly wrong or the request asks for them. Do not open {saved_view} of a figure you just saved. State a
+result is clearly wrong or the request asks for them. {figure_look} State a
 remaining limitation in one sentence instead of investigating it. Each code run stops after {seconds} s; if one
 times out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
 Reproducing or testing a paper's analysis is not bounded this way: it is finished only when every quantity

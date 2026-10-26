@@ -69,14 +69,23 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
         assert step in reproduction
     assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
     # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
-    # drawn and marked, not dropped.
-    assert "give their sum as the residual" in reproduction and "marked not significant, never left out" in reproduction
+    # drawn and marked, not dropped, while a period the data do not cover is left out, never replaced.
+    assert "give their sum as the residual" in reproduction and "is drawn and marked not significant" in reproduction
+    assert "is left out and named in the answer, never replaced by another period or quantity" in reproduction
+    # The paper's ranges and numbers are not copied over values that do not fit them (2026-10-27: every bar of
+    # a budget clipped at the paper's axis, transports printed from the paper, a field flat in its colour scale).
+    assert "draw your values in full and report the difference as a finding" in reproduction
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
     assert "open boundaries are the real straits" in " ".join(physical.split())
     assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
     reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
     assert "## Publication figures" in reference
+    flat = " ".join(reference.split())
+    for rule in ("89 mm (3.5 in) wide for one column", "white at zero with symmetric limits", "never clip it",
+                 "a paper's value may stand beside yours for comparison, never alone",
+                 "Never draw boxes of text in place of a figure", "go in the answer, not on the figure"):
+        assert rule in flat
     assert "## Maps" in reference and "ax.coastlines('50m'" in reference
     # A figure drawn without the Figure API is told where the craft is described, and every spatial
     # field it draws goes on a map, in either delivery mode.

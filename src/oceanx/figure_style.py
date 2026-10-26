@@ -1,4 +1,4 @@
-"""OceanX's one publication style for matplotlib.
+"""OceanX's one publication style for matplotlib, sized as Nature prints its figures.
 
 The figures agents draw (expert_execution.py points MATPLOTLIBRC at these settings) and the drawing of
 every interactive figure (the renderer in figure_reproduction.py, which analysis notebooks also carry)
@@ -10,7 +10,7 @@ from __future__ import annotations
 # How fonts are stored; nothing on the page changes. Benchmark runs use only these (figure_delivery.py).
 EDITABLE: dict[str, object] = {"pdf.fonttype": 42, "ps.fonttype": 42, "svg.fonttype": "none"}
 
-FONT_SIZE = 9  # points, readable at two-column publication width
+FONT_SIZE = 7  # points as printed; Nature's figures use 5 to 7 pt and 8 pt bold panel letters
 # Each text size as an offset from the base size, so that one number scales them all.
 FONT_SIZES: dict[str, int] = {"font.size": 0, "axes.labelsize": 0, "axes.titlesize": 1,
                               "xtick.labelsize": -1, "ytick.labelsize": -1, "legend.fontsize": -1}
@@ -22,13 +22,16 @@ STYLE: dict[str, object] = {
     "font.family": "sans-serif",
     "font.sans-serif": ["Arial", "Helvetica", "Liberation Sans", "DejaVu Sans"],
     "axes.titleweight": "bold",
-    "axes.linewidth": 0.8,
+    "axes.linewidth": 0.6,
     "axes.spines.top": False,
     "axes.spines.right": False,
     "xtick.direction": "out",
     "ytick.direction": "out",
-    "xtick.major.width": 0.7,
-    "ytick.major.width": 0.7,
+    "xtick.major.width": 0.6,
+    "ytick.major.width": 0.6,
+    "xtick.major.size": 3,
+    "ytick.major.size": 3,
+    "lines.linewidth": 1.0,
     "legend.frameon": False,
     "figure.facecolor": "white",
     "axes.facecolor": "white",

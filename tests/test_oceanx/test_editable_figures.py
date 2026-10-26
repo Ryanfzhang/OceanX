@@ -72,7 +72,7 @@ def test_one_style_serves_the_figures_agents_draw_and_the_drawing_of_interactive
     monkeypatch.setenv(FIGURE_DELIVERY_ENV, "interactive")
     lines = matplotlib_settings().splitlines()
     assert "pdf.fonttype: 42" in lines and "font.sans-serif: Arial, Helvetica, Liberation Sans, DejaVu Sans" in lines
-    assert "font.size: 9" in lines and "axes.prop_cycle: cycler('color', ['147D78'" in matplotlib_settings()
+    assert "font.size: 7" in lines and "axes.prop_cycle: cycler('color', ['147D78'" in matplotlib_settings()
     with mpl.rc_context():
         renderer = compile(_FIXED_RENDERER_SOURCE, "<oceanx-fixed-renderer>", "exec")
         exec(renderer, {})  # noqa: S102 - the bundled renderer

@@ -38,8 +38,9 @@ TEXT_NOTE = (
 # For an agent whose model reads images (see research/graphs.py).
 FIGURE_RULE = (
     "When you reproduce a figure of an attached paper, read that figure's image, named in the paper's "
-    "extracted text, right before you draw it, and follow its panels, axes, colour encoding, fills and "
-    "overlays; then open the original and your saved figure together and correct what differs."
+    "extracted text, right before you draw it, and follow its panels, variables, colour encoding, fills and "
+    "overlays, with axis and colour ranges that hold your own values; then open the original and your saved "
+    "figure together and correct what differs."
 )
 MAX_FOLDER_PDFS = 10  # a folder source offers the texts of its first PDFs, top level only
 MAX_PAGE_IMAGES = 40  # the first pages of a PDF are rendered, enough for a paper and its supplement
