@@ -69,7 +69,8 @@ Archives rarely store every term of a vorticity budget; derive a term before cal
   the hydrostatic relation `p(z) = rho0 * g * eta + integral(rho * g, z..0)`; from it a layer's
   pressure-gradient torque and the bottom pressure torque `J(p_b, H) / rho0`;
 - the planetary vorticity flux through a strait, `f` times the layer transport normal to the
-  strait section, on the section's own grid points;
+  strait section, on the section's own grid points; a boundary cut through open sea to shape the
+  domain carries flux too, so the domain's open boundaries are the real straits and nothing else;
 - advection and tilting from the velocity fields, and the tendency from successive fields;
 - one remaining term as the budget residual, labelled as a residual.
 A term is missing only when neither the archive nor the attached sources hold what it needs.

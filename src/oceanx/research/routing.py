@@ -81,10 +81,10 @@ extra figures or statistics, investigations of individual cells or values, or re
 result is clearly wrong or the request asks for them. Do not open {saved_view} of a figure you just saved. State a
 remaining limitation in one sentence instead of investigating it. Each code run stops after {seconds} s; if one
 times out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
-Reproducing or testing a paper's analysis is not bounded this way: it is finished only when every quantity,
-budget term and figure of the paper that the data allow is computed as the paper defines it and compared with the
-paper's values and figures, and a term counts as missing only after deriving it from the stored variables has
-failed; /skills/paper-reproduction/SKILL.md describes how.
+Reproducing or testing a paper's analysis is not bounded this way: it is finished only when every quantity
+and budget term of the paper that the data allow is computed as the paper defines it and compared with the paper's
+values, every figure is redrawn to look like the paper's, and a term counts as missing only after deriving it from
+the stored variables has failed; /skills/paper-reproduction/SKILL.md describes how.
 """
 
 LAST_CALL = ("# Last model call\nThis is the last model call of your budget, and no tools are available on it. "

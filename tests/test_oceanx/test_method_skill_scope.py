@@ -59,12 +59,18 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     from oceanx.runtime import OCEAN_EXPERT_WORKSTREAM_POLICY
     from oceanx.skills import ocean_reference_root
 
-    reproduction, _ = load_ocean_skill("paper-reproduction")
-    for place in ("/skills/ocean-physical-consistency-review/SKILL.md",
-                  "/skills/ocean-analysis-design/SKILL.md", "/references/coding/matplotlib.md"):
-        assert place in reproduction
+    reproduction = " ".join(load_ocean_skill("paper-reproduction")[0].split())
+    # A pointer is followed when it says what to read before which step, as a run on 2026-10-26 showed:
+    # "first read" was obeyed, "drawn as ... describes" was not.
+    for step in ("Before computing anything, read the page image",
+                 "Before writing code for a vorticity budget or a streamfunction, read /skills/ocean-physical-consistency-review/SKILL.md",
+                 "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
+                 "Before drawing the first figure, read /references/coding/matplotlib.md"):
+        assert step in reproduction
+    assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
+    assert "open boundaries are the real straits" in " ".join(physical.split())
     assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
     assert "## Publication figures" in (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
     # A figure drawn without the Figure API is told where the craft is described.
