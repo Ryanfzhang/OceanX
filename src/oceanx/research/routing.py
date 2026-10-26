@@ -48,15 +48,15 @@ def team_config(config):
 HANDOFF_POLICY = f"""\
 # When the research team takes over
 Most requests are yours: looking at, extracting, computing, comparing, mapping or plotting data; downloading a
-dataset the researcher asked for; finding, reading or summarising sources; and bounded work in several steps,
-such as a route through a current field or the same analysis for several variables. Do these yourself, however
-many parts they have.
+dataset the researcher asked for; finding, reading or summarising sources; reproducing or testing the analysis
+of a paper, whose methods the paper already fixes, so that one agent holds every result its figures combine; and
+bounded work in several steps, such as a route through a current field or the same analysis for several
+variables. Do these yourself, however many parts they have.
 Hand the request to the research team with {HANDOFF_TOOL} when it is an open research problem: it asks why
 something happens or what causes, drives or controls it, which mechanism or explanation holds, or how much each
 factor contributes; it needs competing explanations weighed against the data and the literature; or it needs an
 investigation whose next steps depend on what the first ones find. Hand it over too when the researcher asks for
-deep research or for the research team, or asks to reproduce or test the analysis of a paper (reading or
-summarising a paper stays yours). The team plans an investigation, runs several Experts and takes tens of
+deep research or for the research team. The team plans an investigation, runs several Experts and takes tens of
 minutes, so never hand over a request that one bounded analysis answers.
 Decide on your first call. Hand an open research problem over before doing any work on it; when unsure, do the
 work. If the work then shows that the request is an open research problem after all, hand it over, saying what
@@ -81,6 +81,10 @@ extra figures or statistics, investigations of individual cells or values, or re
 result is clearly wrong or the request asks for them. Do not open {saved_view} of a figure you just saved. State a
 remaining limitation in one sentence instead of investigating it. Each code run stops after {seconds} s; if one
 times out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
+Reproducing or testing a paper's analysis is not bounded this way: it is finished only when every quantity,
+budget term and figure of the paper that the data allow is computed as the paper defines it and compared with the
+paper's values and figures, and a term counts as missing only after deriving it from the stored variables has
+failed; /skills/paper-reproduction/SKILL.md describes how.
 """
 
 LAST_CALL = ("# Last model call\nThis is the last model call of your budget, and no tools are available on it. "

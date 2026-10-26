@@ -118,6 +118,11 @@ def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     handoff, helpers = " ".join(HANDOFF_POLICY.split()), " ".join(HELPER_POLICY.split())
     assert HANDOFF_TOOL in handoff and "when unsure, do the work" in handoff
     assert "asks why" in handoff and "however many parts" in handoff
+    # A paper's reproduction stays with one agent, which holds every result its figures combine, and is
+    # not cut short as bounded work.
+    assert "reproducing or testing the analysis of a paper" in handoff
+    reproduction = "Reproducing or testing a paper's analysis is not bounded this way"
+    assert reproduction in " ".join(graphs.bounded_work_policy(False).split())
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
     interactive, static = graphs.bounded_work_policy(False), graphs.bounded_work_policy(True)
     assert "finish line" in interactive and f"{STANDARD_MODE_CODE_SECONDS} s" in interactive
