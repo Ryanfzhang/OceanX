@@ -228,6 +228,11 @@ export function isStaticFigure(result: TaskResultRecord): boolean {
   return result.kind === 'file' && result.content?.render_status === 'static';
 }
 
+/** The code every agent ran for one request, joined when the request ended (request_notebook.py). */
+export function isAnalysisNotebook(result: TaskResultRecord): boolean {
+  return result.kind === 'file' && result.content?.role === 'analysis_notebook';
+}
+
 export function taskResultsForRequest(
   results: TaskResultRecord[],
   requestId: string | null | undefined,

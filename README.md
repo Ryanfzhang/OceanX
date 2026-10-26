@@ -178,11 +178,12 @@ an execution failure immediately instead of waiting indefinitely for an idle mes
 Each native task receives its own allowance. These are execution boundaries, not a
 scientific acceptance test or a whole-research token budget.
 
-Each analysis round has one editable `supplementary/analysis-*/analysis.ipynb`. A later round
-gets a separate notebook; retries do not overwrite existing files or user edits. Notebooks
-read the accepted NetCDF results in place, without copying scientific data. Their renderer
-preserves contour, uncertainty-band, vector and category layers, axis scales and color domains;
-unsupported layers raise an error rather than silently disappear.
+Each code run keeps its executed notebook under its agent's `.runtime/executions/<id>/code/`.
+When a request ends, whether it finished, failed or was stopped, the runs of every agent that
+worked on it are joined into one `analysis.ipynb`, a section per agent and a cell per run with
+what it printed (shell commands as `%%bash` cells). It is listed under Supplementary Materials
+at the end of the answer, opens in the right panel and can be downloaded; it holds code and
+printed output, never the data the code read (`src/oceanx/request_notebook.py`).
 
 ## Experience and Skills
 

@@ -5,7 +5,7 @@ import {presentTranscript, type PresentedTranscriptGroup} from '../conversation-
 import {agentDisplayName} from '../agent-display-name.js';
 import {CompactLogMarkdown, InlineMarkdown, MessageMarkdown, referencedResultKeys, type MarkdownResultLink} from '../message-markdown.js';
 import type {PendingInteraction} from '../pending-interaction.js';
-import {isStaticFigure, resultsForRequest, taskResultRefKey, taskResultsForRequest} from '../types.js';
+import {isAnalysisNotebook, isStaticFigure, resultsForRequest, taskResultRefKey, taskResultsForRequest} from '../types.js';
 import type {DeliveryManifest, ResearchTask, TaskOutput, TaskResultRecord, TeamSnapshot, TranscriptItem} from '../types.js';
 import {useUiLanguage} from '../i18n.js';
 import {currentStep, stepLabel, type RequestActivity} from '../request-activity.js';
@@ -514,6 +514,7 @@ export function ConversationTranscript({
       ];
       const directResults = requestResults
         .filter((result) => result.kind === 'interactive_view' || result.kind === 'report' || isStaticFigure(result));
+      const analysisNotebooks = requestResults.filter(isAnalysisNotebook);
       const supplementaryNotebooks = requestResults.flatMap((result) => {
         if (result.kind !== 'file' || result.content.role !== 'supplementary_figure_notebook') return [];
         const declared = typeof result.content.file === 'string' ? result.content.file : null;
@@ -613,9 +614,14 @@ export function ConversationTranscript({
               <p>{result.summary}</p>
             </article>)}
           </section> : null}
-          {supplementaryNotebooks.length ? <section className="supplementary-materials" aria-label={uiText('Supplementary Materials', '补充材料')}>
+          {supplementaryNotebooks.length || analysisNotebooks.length ? <section className="supplementary-materials" aria-label={uiText('Supplementary Materials', '补充材料')}>
             <strong>{uiText('Supplementary Materials:', '补充材料：')}</strong>
-            <ul>{supplementaryNotebooks.map(({result, file}) => <li key={taskResultRefKey(result.result_ref)}>
+            <ul>{analysisNotebooks.map((result) => <li key={taskResultRefKey(result.result_ref)}>
+              <button className="supplementary-material-link" type="button" onClick={() => onOpenTaskResult(result)} title={uiText('Open notebook', '打开 notebook')}>
+                <strong>{uiText('Analysis notebook', '分析 notebook')}</strong>
+                {typeof result.content.runs === 'number' ? <small>{uiText(`${result.content.runs} code runs`, `${result.content.runs} 次运行`)}</small> : null}
+              </button>
+            </li>)}{supplementaryNotebooks.map(({result, file}) => <li key={taskResultRefKey(result.result_ref)}>
               <button className="supplementary-material-link" type="button" onClick={() => onOpenTaskResultFile(result, file)} title={uiText('Open notebook', '打开 notebook')}>
                 <strong>{file.path.split(/[\\/]/).filter(Boolean).at(-1) ?? file.path}</strong>
               </button>

@@ -5,6 +5,7 @@ import type {BackendFrame, DesktopUpdateStatus, ModelProviderSetup, ModelProvide
 import {artifactFileName, asRecord, changedResultsTaskId, isActiveForegroundRequest, isTaskCreationReady, parseDesktopRuntimeCapabilities, projectNameFromPath, shouldApplyTaskSnapshot, sourceTitleFromPath} from './app-utils.js';
 import {ConversationTranscript, taskResultKeys} from './components/ConversationTranscript.js';
 import {InteractionDrawer} from './components/InteractionDrawer.js';
+import {NotebookWorkbench, type NotebookCell} from './components/NotebookWorkbench.js';
 import {OceanXWelcome} from './components/OceanXWelcome.js';
 import {SourceMenu} from './components/SourceMenu.js';
 import {ProjectTaskSidebar} from './components/ProjectTaskSidebar.js';
@@ -23,7 +24,7 @@ import {forgetProject, mergeRememberedProjects, parseProjectCatalog, rememberPro
 import {revisionFromRequestFailure} from './request-recovery.js';
 import {requestId} from './request-id.js';
 import {updateRequestActivity, type RequestActivity} from './request-activity.js';
-import {isStaticFigure, taskResultRefKey} from './types.js';
+import {isAnalysisNotebook, isStaticFigure, taskResultRefKey} from './types.js';
 import type {AppearanceTheme, ArtifactSummary, ArtifactVersion, DeliveryManifest, DisplayDensity, EventPayload, OceanEvent, RequestContext, ResearchTask, ResolvedAppearanceTheme, ResultDocument, TaskOutput, TaskResultFile, TaskResultRecord, TeamSnapshot, TranscriptItem, Workspace} from './types.js';
 
 type SourceSelection = {kind: 'file' | 'folder'; relativePath?: string; localPath?: string};
@@ -31,7 +32,7 @@ type PendingImageAttachment = {fileName: string; mimeType: string; bytes: Uint8A
 // Tools whose completion can leave a new figure, view or report for the running request.
 const RESULT_TOOLS = new Set(['execute', 'ocean_expert_run_code', 'task', 'assign_helper']);
 type PendingTaskCreate = {projectPath: string; title: string; sources: SourceSelection[]};
-type ResultSurface = {kind: 'interactive_view' | 'report'; document: ResultDocument} | null;
+type ResultSurface = {kind: 'interactive_view' | 'report' | 'notebook'; document: ResultDocument} | null;
 type RequestHandler = (result: EventPayload) => void;
 type RequestErrorHandler = (message: string, error: EventPayload) => void;
 type TaskResultGrantPurpose =
@@ -160,6 +161,7 @@ export function App(): React.JSX.Element {
   const [resultFeatureId, setResultFeatureId] = useState<string | undefined>();
   const [resultPreviewUrl, setResultPreviewUrl] = useState<string | null>(null);
   const [resultFileUrl, setResultFileUrl] = useState<string | null>(null);
+  const [notebookCells, setNotebookCells] = useState<NotebookCell[]>([]);
   const [reportMarkdown, setReportMarkdown] = useState('');
   const [reportResources, setReportResources] = useState<Array<{name: string; label: string; url: string; mimeType: string}>>([]);
   const [inlineStatus, setInlineStatus] = useState<string | null>(null);
@@ -1023,9 +1025,31 @@ export function App(): React.JSX.Element {
         .catch(() => undefined);
     }
   });
+  // The code every agent ran for one request opens as a notebook; its file is what Download returns.
+  const openAnalysisNotebook = (result: TaskResultRecord) => {
+    const resultKey = taskResultRefKey(result.result_ref);
+    const file = result.files.find((item) => item.path.endsWith('.ipynb'));
+    openResultKey.current = resultKey;
+    setResultSurface({kind: 'notebook', document: directResultDocument(result)});
+    setResultLoading(Boolean(file)); setResultError(file ? null : 'Notebook file is missing.');
+    setNotebookCells([]); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]);
+    if (!file) return;
+    void grantTaskResult(result, file, 'result_file').then((url) => {
+      if (openResultKey.current !== resultKey) return;
+      setResultFileUrl(url);
+      return fetch(url).then((response) => response.json()).then((notebook: {cells?: NotebookCell[]}) => {
+        if (openResultKey.current !== resultKey) return;
+        setNotebookCells(Array.isArray(notebook.cells) ? notebook.cells : []);
+        setResultLoading(false);
+      });
+    }).catch(() => {
+      if (openResultKey.current === resultKey) {setResultError('Notebook is unavailable.'); setResultLoading(false);}
+    });
+  };
   const openTaskResult = (result: TaskResultRecord, featureId?: string) => {
     setResultFeatureId(featureId);
     if (isStaticFigure(result)) {openStaticFigure(result); return;}
+    if (isAnalysisNotebook(result)) {openAnalysisNotebook(result); return;}
     if (result.kind !== 'interactive_view' && result.kind !== 'report') return;
     const kind = result.kind;
     const resultKey = taskResultRefKey(result.result_ref);
@@ -1158,7 +1182,7 @@ export function App(): React.JSX.Element {
     });
   };
   openTaskResultRef.current = openTaskResult;
-  const closeResult = () => {openResultKey.current = null; setResultSurface(null); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]); setResultError(null);};
+  const closeResult = () => {openResultKey.current = null; setResultSurface(null); setNotebookCells([]); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]); setResultError(null);};
   const configureModel = (setup: ModelProviderSetup) => {setModelSaving(true); void window.oceanDesktop.configureModelProvider(setup).then((next) => {setModelProvider(next); setModelSaving(false); if (next.configured) setSettingsOpen(false);}).catch(() => setModelSaving(false));};
   const deleteTask = () => {
     if (!deleteCandidate) return;
@@ -1308,7 +1332,8 @@ export function App(): React.JSX.Element {
         resizeWorkbench(handle.left + handle.width / 2 + (event.key === 'ArrowLeft' ? -24 : 24), true);
       }}
     /> : null}
-    {resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} error={resultError} onClose={closeResult} dark={resolvedTheme === 'dark'} />}
+    {resultSurface?.kind === 'notebook' ? <NotebookWorkbench document={resultSurface.document} loading={resultLoading} error={resultError} cells={notebookCells} downloadUrl={resultFileUrl} onClose={closeResult} />
+      : resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} error={resultError} onClose={closeResult} dark={resolvedTheme === 'dark'} />}
     <DesktopSettingsDialog open={settingsOpen} status={status} projectName={projectName} runtime={runtime} modelProvider={modelProvider} modelProviderSaving={modelSaving} displayDensity={density} onDisplayDensity={setDensity} appearanceTheme={appearanceTheme} onAppearanceTheme={setAppearanceTheme} parallelExperts={parallelExperts} onParallelExperts={setParallelExperts} onConfigureModelProvider={configureModel} update={update} onCheckForUpdate={() => void window.oceanDesktop.checkForUpdate().then(setUpdate)} onInstallUpdate={() => void window.oceanDesktop.installPreparedUpdate().then(setUpdate)} onClose={() => setSettingsOpen(false)} />
     <ResearchLibraryDialog open={libraryOpen} onClose={() => setLibraryOpen(false)} request={libraryRequest} />
     <TaskDeleteDialog task={deleteCandidate?.task ?? null} onCancel={() => setDeleteCandidate(null)} onConfirm={deleteTask} />

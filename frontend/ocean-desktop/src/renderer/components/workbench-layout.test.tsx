@@ -5,6 +5,7 @@ import type {ArtifactVersion, DeliveryManifest, ResultDocument, TaskOutput, Task
 import {activeRoster, AgentCollaborationCanvas} from './AgentCollaborationCanvas.js';
 import {ConversationTranscript} from './ConversationTranscript.js';
 import {InteractiveViewWorkbench} from './InteractiveViewWorkbench.js';
+import {NotebookWorkbench} from './NotebookWorkbench.js';
 import {normalizeScientificFigure} from './scientific-figure.js';
 import {clampScientificDomain, scientificAxisExtent, scientificScatterAppearance} from './ScientificView.js';
 import {boundsForContext, displayContextFor, mapFitPadding, ResultWorkbench, sampleSpatialGrid, shouldFitRegion, spatialRasterDimensions, spatialRasterResampling, spatialRenderedRatio, usableMapViewport} from './SpatialWorkbench.js';
@@ -961,6 +962,62 @@ describe('research workbench layout', () => {
     expect(markup).toContain('<section class="supplementary-materials"');
     expect(markup).toContain('<strong>Supplementary Materials:</strong><ul><li>');
     expect(markup).toContain('<strong>analysis.ipynb</strong>');
+  });
+
+  it('ends an answer with the notebook of the code run for its request', () => {
+    const notebook: TaskResultRecord = {
+      result_ref: {task_id: 'task_notebook', result_id: 'result_analysis_notebook', version: 1},
+      workspace_id: 'ws_notebook',
+      kind: 'file',
+      title: 'Analysis notebook',
+      summary: '12 code runs',
+      created_at: '2026-10-26T10:20:00Z',
+      origin_request_id: 'req_notebook',
+      content: {role: 'analysis_notebook', file: 'analysis.ipynb', runs: 12},
+      files: [{path: 'analysis.ipynb', mime_type: 'application/x-ipynb+json', size: 2048, sha256: 'b'.repeat(64)}],
+    };
+    const markup = renderToStaticMarkup(<ConversationTranscript
+      loading={false}
+      transcript={[
+        {item_id: 'user_notebook', role: 'user', text: 'Reproduce the figure.', request_id: 'req_notebook', created_at: '2026-10-26T10:00:00Z'},
+        {item_id: 'answer_notebook', role: 'assistant', text: 'The figure is reproduced.', request_id: 'req_notebook', created_at: '2026-10-26T10:19:00Z'},
+      ]}
+      streaming=""
+      activeRequestId={null}
+      task={null}
+      workspacePath="/tmp/workspace"
+      outputs={[]}
+      manifests={[]}
+      taskResults={[notebook]}
+      team={null}
+      onOpenResult={() => undefined}
+      onOpenTaskResult={() => undefined}
+    />);
+
+    expect(markup.indexOf('The figure is reproduced.')).toBeLessThan(markup.indexOf('Supplementary Materials'));
+    expect(markup).toContain('<strong>Analysis notebook</strong><small>12 code runs</small>');
+    expect(markup).not.toContain('Additional Results');  // the notebook is not a figure or a view
+  });
+
+  it('shows a notebook with its code, what it printed and its download', () => {
+    const document: ResultDocument = {key: 'task:result_analysis_notebook@v1', title: 'Analysis notebook', summary: '2 code runs',
+      content: {role: 'analysis_notebook', runs: 2}};
+    const markup = renderToStaticMarkup(<NotebookWorkbench document={document} loading={false} error={null}
+      downloadUrl="blob:notebook" onClose={() => undefined} cells={[
+        {cell_type: 'markdown', source: ['## OceanX\n', 'Folder: agents/single-agent-0123456789\n']},
+        {cell_type: 'code', execution_count: 1, source: ['gamma = 4.1e-5\n', 'print(gamma)\n'],
+          outputs: [{output_type: 'stream', name: 'stdout', text: ['4.1e-05\n']}]},
+        {cell_type: 'code', execution_count: 2, source: '%%bash\nncdump -h data.nc',
+          outputs: [{output_type: 'stream', name: 'stderr', text: 'No such file\n'}]},
+      ]} />);
+
+    expect(markup).toContain('2 code runs · analysis.ipynb');
+    expect(markup).toContain('<a href="blob:notebook" download="analysis.ipynb">');
+    expect(markup).toContain('<h2>OceanX</h2>');
+    expect(markup).toContain('<span class="notebook-prompt">[1]</span>');
+    expect(markup).toContain('gamma = 4.1e-5\nprint(gamma)\n');
+    expect(markup).toContain('<pre class="notebook-output">4.1e-05\n</pre>');
+    expect(markup).toContain('<pre class="notebook-output stderr">No such file\n</pre>');
   });
 
   it('shows skill revisions on the task exchange that caused them', () => {

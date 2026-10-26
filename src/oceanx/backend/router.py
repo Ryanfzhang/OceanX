@@ -138,6 +138,8 @@ from oceanx.protocol.v2.models import (
     TaskRenameRequest,
     TaskResultInteractiveViewGetRequest,
     TaskResultResourceGrantRequest,
+    TaskResultsChangedEvent,
+    TaskResultsChangedPayload,
     TaskSnapshotEvent,
     TaskSnapshotGetRequest,
     TaskSnapshotPayload,
@@ -167,6 +169,7 @@ from oceanx.research.routing import HANDOFF_TOOL, HELPER_TOOL
 from oceanx.research.services import ResearchServices
 from oceanx.skills import LITERATURE_CAPABILITY
 from oceanx.storage import is_safe_cross_platform_relative_path
+from oceanx.request_notebook import NOTEBOOK_NAME, NOTEBOOK_ROLE, request_notebook
 from oceanx.task_results import TaskResultError, TaskResultStore
 from oceanx.task_workspace import TaskWorkspaceProjector
 from oceanx.team.models import (
@@ -2608,6 +2611,36 @@ class OceanRequestRouter:
             self._agent_request_clients.pop(request.request_id, None)
             self._team_snapshot_revisions.pop(request.request_id, None)
             self._schedule_research_consolidation(request)
+            await self._publish_request_notebook(agent_session, request.request_id)
+
+    async def _publish_request_notebook(self, agent_session: _AgentSession, request_id: str) -> None:
+        """Join the code every agent ran for this request into the notebook listed after its answer
+        (request_notebook.py), whether the request finished, failed or was stopped."""
+
+        task_id = agent_session.task_id
+        if task_id is None or self.task_results is None:
+            return
+        try:
+            workspaces = self.task_results.task_workspaces
+            built = request_notebook(
+                self.store.list_task_code_executions(workspace_id=agent_session.workspace_id, task_id=task_id),
+                lambda key: workspaces.expert_session_root(task_id, key), request_id=request_id)
+            if built is None:  # no code ran for it
+                return
+            data, runs = built
+            self.task_results.put(
+                workspace_id=agent_session.workspace_id, task_id=task_id, kind="file",
+                title="Analysis notebook", summary=f"{runs} code runs",
+                content={"role": NOTEBOOK_ROLE, "file": NOTEBOOK_NAME, "runs": runs},
+                files={NOTEBOOK_NAME: data}, origin_request_id=request_id,
+                materialization_key=f"analysis-notebook:{request_id}")
+            await self.event_bus.emit_workspace(TaskResultsChangedEvent(
+                protocol_version=2, event_id=new_event_id(), session_id=None,
+                workspace_id=agent_session.workspace_id, task_id=task_id, request_id=request_id,
+                sequence=0, timestamp=datetime.now(UTC), type="task.results.changed",
+                payload=TaskResultsChangedPayload(result_ids=(NOTEBOOK_NAME,))))
+        except Exception:  # the answer stands without its notebook
+            _LOGGER.exception("The analysis notebook of request %s could not be saved", request_id)
 
     def _update_task_workflow_for_event(
         self,
