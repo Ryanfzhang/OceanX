@@ -904,8 +904,9 @@ class OceanRequestRouter:
             raise RequestStoreError("Task result does not belong to the current task")
         self._task_in_workspace(ref.task_id, request)
         try:
-            result = self.task_results.get(ref)
-            path = self.task_results.file_path(ref=ref, relative_path=request.payload.file_name)
+            result = await asyncio.to_thread(self.task_results.get, ref)
+            path = await asyncio.to_thread(
+                self.task_results.file_path, ref=ref, relative_path=request.payload.file_name)
         except TaskResultError as exc:
             raise RequestNotFound(ref.key) from exc
         if result.workspace_id != self._workspace_id(request):
@@ -964,7 +965,7 @@ class OceanRequestRouter:
             raise RequestStoreError("Task result does not belong to the current task")
         self._task_in_workspace(ref.task_id, request)
         try:
-            result = self.task_results.get(ref)
+            result = await asyncio.to_thread(self.task_results.get, ref)
         except TaskResultError as exc:
             raise RequestNotFound(ref.key) from exc
         if result.workspace_id != self._workspace_id(request) or result.kind != "interactive_view":
@@ -3537,7 +3538,7 @@ class OceanRequestRouter:
                     for manifest in build_delivery_manifests(outputs)
                 ],
                 "task_results": (
-                    list(self.task_results.list_payloads(task_id=request.payload.task_id))
+                    list(await asyncio.to_thread(self.task_results.list_payloads, task_id=request.payload.task_id))
                     if self.task_results is not None
                     else []
                 ),
@@ -3569,7 +3570,7 @@ class OceanRequestRouter:
         # immediately after rendering ``task.open``; explicit snapshot reads
         # retain their complete payload for protocol compatibility.
         payload_data["task_results"] = (
-            list(self.task_results.list_payloads(task_id=task_id))
+            list(await asyncio.to_thread(self.task_results.list_payloads, task_id=task_id))
             if isinstance(request, TaskSnapshotGetRequest) and self.task_results is not None
             else []
         )

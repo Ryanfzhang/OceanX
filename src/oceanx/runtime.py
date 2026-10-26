@@ -221,8 +221,8 @@ schematic, or a figure of a paper being reproduced. Choose its layout, style and
 field on a map with coastlines, as /references/coding/matplotlib.md describes for publication figures and maps,
 and save it as a vector PDF under OCEAN_OUTPUT_DIR, for example
 `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.pdf'), bbox_inches='tight')`; that file is
-delivered too. Save a PNG instead only when the figure is itself a picture, such as a photograph or a satellite
-true-colour image. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
+delivered too, and after the run its picture is beside it as `concise-name.pdf.preview.png`, to look at. Save a PNG
+instead only when the figure is itself a picture, such as a photograph or a satellite true-colour image. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
 plus filename stem (the whole file name for a saved figure file) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
 comparisons and scientific scales. Omit style arguments to ScientificFigure to use the Workbench defaults.
 Do not spend a separate round polishing or reviewing its rendered layout. Inspect a generated preview only when the image itself is

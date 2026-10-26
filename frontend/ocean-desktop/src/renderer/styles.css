@@ -398,6 +398,8 @@ button, input, textarea, select { transition: border-color 150ms ease, backgroun
 .spatial-workbench { min-width: 0; display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; margin: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--shadow-soft); }
 .workbench-close { position: absolute; z-index: 6; top: 10px; right: 12px; display: grid; place-items: center; padding: 6px; border: 1px solid var(--line-strong); border-radius: var(--r-s); color: var(--muted); background: color-mix(in srgb, var(--card) 92%, transparent); box-shadow: var(--shadow-soft); }
 .workbench-close:hover { color: var(--ink); background: var(--card); }
+.workbench-pdf { position: absolute; z-index: 6; top: 10px; right: 52px; display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: var(--r-s); color: var(--muted); background: color-mix(in srgb, var(--card) 92%, transparent); box-shadow: var(--shadow-soft); font-size: 12px; font-weight: 600; }
+.workbench-pdf:hover { color: var(--ink); background: var(--card); }
 .spatial-workbench-body { position: relative; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; background: var(--soft); }
 .spatial-workbench-body.with-figure:not(.figure-only) { grid-template-rows: minmax(110px, var(--spatial-map-share, 36%)) 7px minmax(0, 1fr); }
 .spatial-map-stage { position: relative; min-height: 0; overflow: hidden; background: var(--soft); transition: opacity 180ms ease; }
@@ -613,6 +615,8 @@ button, input, textarea, select { transition: border-color 150ms ease, backgroun
 .agent-node-popover.theme-dark-popover > header span, .agent-node-popover.theme-dark-popover dt { color: #c2c0b6; }
 .theme-dark .map-value-readout, .theme-dark .workbench-map-status, .theme-dark .workbench-map-error, .theme-dark .map-region-legend, .theme-dark .map-context-summary, .theme-dark .map-field-colorbar, .theme-dark .map-category-legend, .theme-dark .workbench-close, .theme-dark .spatial-workbench .maplibregl-ctrl-attrib { background-color: rgb(48 48 46 / 95%); }
 .theme-dark .workbench-close:hover { background: var(--soft-2); }
+.theme-dark .workbench-pdf { background-color: rgb(48 48 46 / 95%); }
+.theme-dark .workbench-pdf:hover { background: var(--soft-2); }
 .theme-dark .result-chart-surface { color: #202d33; background-color: #fff; }
 .theme-dark .send-button.stop { background: #bd4651; }
 .theme-dark .settings-density button.active { background: var(--soft-2); }

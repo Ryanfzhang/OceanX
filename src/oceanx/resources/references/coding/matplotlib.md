@@ -25,15 +25,18 @@ years on top and bottom when the original shows them. Fit each axis to the serie
 about: draw a noisier or secondary series lighter behind it and let it run off the axis rather
 than squash the main one, and set bar and colour limits that show every bar and value. Put
 legends and values such as r or a trend in empty space, never across the data. Save with
-`bbox_inches='tight'`, as a vector PDF where your instructions ask for one, so that lines and text
-stay sharp at any size. Give a dense layer (`pcolormesh`, `imshow`, `contourf` on a fine grid, a
-scatter of many points) `rasterized=True` and save with `dpi=300`: the PDF then stays small and
-opens fast while axes, labels and lines stay vector. A PNG is saved at 300 dpi.
+`bbox_inches='tight'`, as a vector PDF where your instructions ask for one, and as SVG too when the
+researcher asks for it.
+
+OceanX's style stores text as TrueType for editing in Illustrator; keep `pdf.fonttype=42`.
+Keep lines and colour bars vector (`cbar.solids.set_rasterized(False)` when the colour bar has solids).
+For a compact publication PDF, a dense field can use `rasterized=True` at `dpi=300`; that field then
+remains an image and cannot be edited as individual shapes. If the researcher needs those shapes
+editable, keep them vector. Fonts must also be available on the editing machine.
 
 When your model reads images, look at the figure once and fix what is wrong before delivering
 it: clipped or empty panels, squashed curves, overlapping text, panels of uneven size, type too
-small to read. A PDF cannot be opened as an image: save the same figure also as a draft PNG,
-whose name starts with `_` so that it is not delivered, and open that.
+small to read.
 
 ## Maps
 

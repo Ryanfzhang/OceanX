@@ -139,7 +139,7 @@ def test_a_run_embeds_the_delivered_images_it_saved(tmp_path, monkeypatch):
 def test_a_run_shows_a_pdf_figure_it_saved_through_a_drawing_of_its_first_page(tmp_path):
     import base64
 
-    from oceanx.expert_execution import _image_outputs, _output_state
+    from oceanx.expert_execution import _image_outputs, _output_state, _prepare_pdf_figures
     from tests.test_oceanx.test_static_figure_delivery import _vector_pdf
 
     outputs = tmp_path / "outputs"
@@ -147,6 +147,9 @@ def test_a_run_shows_a_pdf_figure_it_saved_through_a_drawing_of_its_first_page(t
     before = _output_state(outputs)
     _vector_pdf(outputs / "section.pdf")
     (outputs / "broken.pdf").write_bytes(b"%PDF-1.7 not really")
+    assert _prepare_pdf_figures(outputs, before) == ()  # previews drawn, nothing to fix
+    assert (outputs / "section.pdf.preview.png").is_file()
+    assert not (outputs / "broken.pdf.preview.png").exists()
     shown = _image_outputs(outputs, before)
     assert shown[0] == {"name": "stdout", "output_type": "stream",
                         "text": ["[outputs/broken.pdf could not be drawn here]\n"]}

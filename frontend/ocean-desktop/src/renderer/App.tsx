@@ -161,6 +161,8 @@ export function App(): React.JSX.Element {
   const [resultFeatureId, setResultFeatureId] = useState<string | undefined>();
   const [resultPreviewUrl, setResultPreviewUrl] = useState<string | null>(null);
   const [resultFileUrl, setResultFileUrl] = useState<string | null>(null);
+  // The editable PDF of the open figure, when it has one (an interactive view's export or a PDF figure).
+  const [resultPdfUrl, setResultPdfUrl] = useState<string | null>(null);
   const [notebookCells, setNotebookCells] = useState<NotebookCell[]>([]);
   const [reportMarkdown, setReportMarkdown] = useState('');
   const [reportResources, setReportResources] = useState<Array<{name: string; label: string; url: string; mimeType: string}>>([]);
@@ -342,7 +344,7 @@ export function App(): React.JSX.Element {
     setResultError(null);
     setResultData(null);
     setResultPreviewUrl(null);
-    setResultFileUrl(null);
+    setResultFileUrl(null); setResultPdfUrl(null);
     setReportMarkdown('');
     setReportResources([]);
     setSourceImporting(false);
@@ -1006,7 +1008,7 @@ export function App(): React.JSX.Element {
     openResultKey.current = resultKey;
     setResultSurface({kind: 'interactive_view', document: directResultDocument(result)});
     setResultLoading(Boolean(file)); setResultError(file ? null : 'Figure file is missing.');
-    setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]);
+    setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setResultPdfUrl(null); setReportMarkdown(''); setReportResources([]);
     if (!file) return;
     void Promise.all([
       grantTaskResult(result, file, 'result_file'),
@@ -1015,6 +1017,7 @@ export function App(): React.JSX.Element {
       if (openResultKey.current !== resultKey) return;
       setResultFileUrl(url);
       setResultPreviewUrl(preview === file ? url : previewUrl);
+      if (file.mime_type === 'application/pdf') setResultPdfUrl(url);
       setResultLoading(false);
     }).catch(() => {
       if (openResultKey.current === resultKey) {setResultError('Figure is unavailable.'); setResultLoading(false);}
@@ -1040,7 +1043,7 @@ export function App(): React.JSX.Element {
     openResultKey.current = resultKey;
     setResultSurface({kind: 'notebook', document: directResultDocument(result)});
     setResultLoading(Boolean(file)); setResultError(file ? null : 'Notebook file is missing.');
-    setNotebookCells([]); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]);
+    setNotebookCells([]); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setResultPdfUrl(null); setReportMarkdown(''); setReportResources([]);
     if (!file) return;
     void grantTaskResult(result, file, 'result_file').then((url) => {
       if (openResultKey.current !== resultKey) return;
@@ -1063,7 +1066,7 @@ export function App(): React.JSX.Element {
     const resultKey = taskResultRefKey(result.result_ref);
     openResultKey.current = resultKey;
     setResultSurface({kind, document: directResultDocument(result)});
-    setResultLoading(true); setResultError(null); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]);
+    setResultLoading(true); setResultError(null); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setResultPdfUrl(null); setReportMarkdown(''); setReportResources([]);
     if (kind === 'interactive_view') {
       const dataFile = declaredResultFile(result, 'data_file', (file) => file.mime_type === 'application/json' || file.path.endsWith('.nc'));
       const datasetFile = declaredResultFile(result, 'dataset_file', (file) => file.path.endsWith('.nc'));
@@ -1075,6 +1078,10 @@ export function App(): React.JSX.Element {
       }).catch(() => undefined);
       if (previewFile) void grantTaskResult(result, previewFile, 'interactive_view_preview').then((url) => {
         if (openResultKey.current === resultKey) setResultPreviewUrl(url);
+      }).catch(() => undefined);
+      const pdfFile = declaredResultFile(result, 'pdf_file', (file) => file.mime_type === 'application/pdf');
+      if (pdfFile) void grantTaskResult(result, pdfFile, 'result_file').then((url) => {
+        if (openResultKey.current === resultKey) setResultPdfUrl(url);
       }).catch(() => undefined);
       // Hydration capability is authoritative.  Older saved results may have
       // been conservatively marked as file-only even though their canonical
@@ -1156,7 +1163,7 @@ export function App(): React.JSX.Element {
   };
   const openResult = (output: TaskOutput) => {
     setResultFeatureId(undefined);
-    setResultLoading(true); setResultError(null); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]);
+    setResultLoading(true); setResultError(null); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setResultPdfUrl(null); setReportMarkdown(''); setReportResources([]);
     request('artifact.get', {ref: output.artifact.ref}, (result) => {
       const artifact = result.artifact as ArtifactVersion | undefined;
       if (!artifact) {setResultLoading(false); setResultError('Artifact was not found.'); return;}
@@ -1190,7 +1197,7 @@ export function App(): React.JSX.Element {
     });
   };
   openTaskResultRef.current = openTaskResult;
-  const closeResult = () => {openResultKey.current = null; setResultSurface(null); setNotebookCells([]); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setReportMarkdown(''); setReportResources([]); setResultError(null);};
+  const closeResult = () => {openResultKey.current = null; setResultSurface(null); setNotebookCells([]); setResultData(null); setResultPreviewUrl(null); setResultFileUrl(null); setResultPdfUrl(null); setReportMarkdown(''); setReportResources([]); setResultError(null);};
   const configureModel = (setup: ModelProviderSetup) => {setModelSaving(true); void window.oceanDesktop.configureModelProvider(setup).then((next) => {setModelProvider(next); setModelSaving(false); if (next.configured) setSettingsOpen(false);}).catch(() => setModelSaving(false));};
   const deleteTask = () => {
     if (!deleteCandidate) return;
@@ -1341,7 +1348,7 @@ export function App(): React.JSX.Element {
       }}
     /> : null}
     {resultSurface?.kind === 'notebook' ? <NotebookWorkbench document={resultSurface.document} loading={resultLoading} error={resultError} cells={notebookCells} downloadUrl={resultFileUrl} onClose={closeResult} />
-      : resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} error={resultError} onClose={closeResult} dark={resolvedTheme === 'dark'} />}
+      : resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} onOpenPdf={resultPdfUrl ? () => openReportResource({url: resultPdfUrl}) : undefined} error={resultError} onClose={closeResult} dark={resolvedTheme === 'dark'} />}
     <DesktopSettingsDialog open={settingsOpen} status={status} projectName={projectName} runtime={runtime} modelProvider={modelProvider} modelProviderSaving={modelSaving} displayDensity={density} onDisplayDensity={setDensity} appearanceTheme={appearanceTheme} onAppearanceTheme={setAppearanceTheme} parallelExperts={parallelExperts} onParallelExperts={setParallelExperts} onConfigureModelProvider={configureModel} update={update} onCheckForUpdate={() => void window.oceanDesktop.checkForUpdate().then(setUpdate)} onInstallUpdate={() => void window.oceanDesktop.installPreparedUpdate().then(setUpdate)} onClose={() => setSettingsOpen(false)} />
     <ResearchLibraryDialog open={libraryOpen} onClose={() => setLibraryOpen(false)} request={libraryRequest} />
     <TaskDeleteDialog task={deleteCandidate?.task ?? null} onCancel={() => setDeleteCandidate(null)} onConfirm={deleteTask} />

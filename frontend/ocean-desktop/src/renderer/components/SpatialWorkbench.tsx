@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState, type CSSProperties} from 'react';
-import {ChevronDown, ChevronUp, Download, Image, Layers3, LoaderCircle, X} from 'lucide-react';
+import {ChevronDown, ChevronUp, Download, FileDown, Image, Layers3, LoaderCircle, X} from 'lucide-react';
 import type {FeatureCollection, Geometry, GeoJsonProperties} from 'geojson';
 import maplibregl, {type Map as MapLibreMap} from 'maplibre-gl';
 
@@ -43,6 +43,8 @@ type ResultWorkbenchProps = {
   data?: unknown;
   previewUrl?: string | null;
   downloadUrl?: string | null;
+  /** Opens the figure's editable PDF: the desktop opens it in the system's PDF app, the web page downloads it. */
+  onOpenPdf?: () => void;
   error?: string | null;
   onClose?: () => void;
   dark?: boolean;
@@ -468,6 +470,7 @@ export function ResultWorkbench({
   data = null,
   previewUrl = null,
   downloadUrl = null,
+  onOpenPdf,
   error = null,
   onClose = () => undefined,
   dark = false,
@@ -732,6 +735,7 @@ export function ResultWorkbench({
     <div ref={bodyRef} style={{'--spatial-map-share': `${chartExpanded ? 18 : mapShare}%`} as CSSProperties} className={`spatial-workbench-body${structured ? ' with-figure' : ''}${figureOnly ? ' figure-only' : ''}${chartExpanded ? ' figure-focused' : ''}`}>
       {featureError ? <div role="alert" className="workbench-map-error">{featureError}</div> : null}
       {document ? <button className="workbench-close" onClick={onClose} title="Close result" aria-label="Close result"><X size={17} /></button> : null}
+      {document && onOpenPdf ? <button className="workbench-pdf" onClick={onOpenPdf} title={uiText('Open the figure as a PDF that Illustrator can edit', '打开可在 Illustrator 中编辑的 PDF')}><FileDown size={15} />PDF</button> : null}
       <div className="spatial-map-stage">
         <div className="spatial-map-canvas" ref={containerRef} />
         {!ready && !failed ? <div className="map-loading">Preparing map…</div> : null}

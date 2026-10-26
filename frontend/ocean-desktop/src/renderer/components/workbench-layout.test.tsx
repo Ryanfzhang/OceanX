@@ -11,6 +11,15 @@ import {clampScientificDomain, scientificAxisExtent, scientificScatterAppearance
 import {boundsForContext, displayContextFor, mapFitPadding, ResultWorkbench, sampleSpatialGrid, shouldFitRegion, spatialRasterDimensions, spatialRasterResampling, spatialRenderedRatio, usableMapViewport} from './SpatialWorkbench.js';
 
 describe('research workbench layout', () => {
+  it('offers the editable PDF of a figure only when it has one', () => {
+    const document: ResultDocument = {key: 'figure', title: 'SST response', content: {view_kind: 'spatial_map'}};
+    const without = renderToStaticMarkup(<ResultWorkbench document={document} loading={false} />);
+    expect(without).not.toContain('workbench-pdf');
+    const withPdf = renderToStaticMarkup(<ResultWorkbench document={document} loading={false} onOpenPdf={() => undefined} />);
+    expect(withPdf).toContain('class="workbench-pdf"');
+    expect(withPdf).toContain('Open the figure as a PDF that Illustrator can edit');
+  });
+
   it('keeps sparse scientific scatter points legible without saturating dense clouds', () => {
     expect(scientificScatterAppearance({radius: 1.2, opacity: .25}, 8)).toEqual({radius: 3.4, opacity: .84});
     expect(scientificScatterAppearance({radius: 1.2, opacity: .25}, 5_000)).toEqual({radius: 1.2, opacity: .25});

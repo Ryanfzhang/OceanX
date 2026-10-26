@@ -25,8 +25,30 @@ def _renderer() -> tuple[Callable[[Path], Any], Any]:
     return namespace["render_oceanmind_view"], namespace["plt"]
 
 
-def write_figure_preview(source: Path, target: Path | None = None) -> Path:
-    """Render *source* to an atomic PNG preview and return its path."""
+def figure_pdf_path(source: Path) -> Path:
+    """The editable print version a saved interactive figure keeps beside its NetCDF file. Like its
+    ``.preview.png`` it is derived from the figure, so it is never a figure of its own
+    (figure_delivery.is_delivered_figure)."""
+    return Path(source).with_suffix(".print.pdf")
+
+
+def _write_pdf(figure: Any, target: Path) -> None:
+    """Save the drawing as a PDF that Illustrator can edit: the renderer stores text as TrueType and
+    keeps lines and colour bars vector. A PDF that cannot be written leaves none behind, so that an
+    earlier figure's PDF never stands for this one; the preview is kept either way."""
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp.pdf")
+    try:
+        figure.savefig(temporary, bbox_inches="tight", facecolor="white")
+        os.replace(temporary, target)
+    except Exception:  # noqa: BLE001 - the interactive figure and its preview are already saved
+        target.unlink(missing_ok=True)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def write_figure_preview(source: Path, target: Path | None = None, *, pdf: bool = False) -> Path:
+    """Render *source* to an atomic PNG preview and return its path. With ``pdf`` the same drawing is
+    also saved as an editable PDF beside the figure (figure_pdf_path)."""
 
     source = Path(source)
     if source.suffix.lower() != ".nc":
@@ -37,6 +59,8 @@ def write_figure_preview(source: Path, target: Path | None = None) -> Path:
     render, pyplot = _renderer()
     figure = render(source)
     try:
+        if pdf:
+            _write_pdf(figure, figure_pdf_path(source))
         figure.savefig(temporary, dpi=120, bbox_inches="tight", facecolor="white")
         data = temporary.read_bytes()
         if not data.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -51,4 +75,4 @@ def write_figure_preview(source: Path, target: Path | None = None) -> Path:
     return target
 
 
-__all__ = ["write_figure_preview"]
+__all__ = ["figure_pdf_path", "write_figure_preview"]

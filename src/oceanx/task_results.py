@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from oceanx.figure_delivery import pdf_preview_png, static_figure_files
+from oceanx.figure_delivery import static_figure_files, write_pdf_preview
 
 if TYPE_CHECKING:
     from oceanx.task_workspace import TaskWorkspaceProjector
@@ -293,16 +293,18 @@ class TaskResultStore:
         for agent_key, path in static_figure_files(task_root):
             try:
                 stat = path.stat()
-                key = (str(path), stat.st_mtime_ns, stat.st_size, "static")
+                preview = write_pdf_preview(path) if path.suffix.lower() == ".pdf" else None
+                drawn = preview.stat().st_mtime_ns if preview is not None else None
+                key = (str(path), stat.st_mtime_ns, stat.st_size, "static", drawn)
                 record = self._view_cache.get(key)
-                preview = (record.content.get("workspace_files") or {}).get("preview.png") if record else None
-                if record is None or (preview and not (task_root / preview).is_file()):
+                if record is None:
                     record = self._static_figure_record(
                         task_id=task_id,
                         workspace_id=task.workspace_id,
                         task_root=task_root,
                         agent_key=agent_key,
                         path=path,
+                        preview=preview,
                         modified=stat.st_mtime,
                     )
                     self._view_cache[key] = record
@@ -319,6 +321,7 @@ class TaskResultStore:
         task_root: Path,
         agent_key: str,
         path: Path,
+        preview: Path | None,
         modified: float,
     ) -> TaskResultRecord:
         relative = path.relative_to(task_root).as_posix()
@@ -348,16 +351,12 @@ class TaskResultStore:
             "preview_file": path.name,
             "workspace_files": {path.name: relative},
         }
-        # A PDF figure is shown through a PNG of its first page; Download still returns the PDF.
-        preview_png = pdf_preview_png(path) if path.suffix.lower() == ".pdf" else None
-        if preview_png is not None:
-            preview = task_root / ".runtime" / "figure-previews" / f"{identity}.png"
-            preview.parent.mkdir(parents=True, exist_ok=True)
-            staging = preview.with_name(f".{preview.name}.{os.getpid()}.tmp")
-            staging.write_bytes(preview_png)
-            os.replace(staging, preview)
-            files.append(TaskResultFile(path="preview.png", mime_type="image/png", size=len(preview_png),
-                                        sha256=hashlib.sha256(preview_png).hexdigest()))
+        # A PDF figure shows through the preview beside it (figure_delivery.preview_path); Download
+        # still returns the PDF.
+        if preview is not None:
+            data = preview.read_bytes()
+            files.append(TaskResultFile(path="preview.png", mime_type="image/png", size=len(data),
+                                        sha256=hashlib.sha256(data).hexdigest()))
             content["workspace_files"]["preview.png"] = preview.relative_to(task_root).as_posix()
             content["preview_file"] = "preview.png"
         return TaskResultRecord(
@@ -378,7 +377,7 @@ class TaskResultStore:
         if task is None:
             return ()
         declarations: dict[
-            tuple[str, str], tuple[Any, dict[str, Any], Path, Path, Path | None]
+            tuple[str, str], tuple[Any, dict[str, Any], Path, Path, Path | None, Path | None]
         ] = {}
         for execution in self.task_workspaces.store.list_task_code_executions(
             workspace_id=task.workspace_id,
@@ -435,6 +434,16 @@ class TaskResultStore:
                             preview_path = candidate
                     except (OSError, ValueError, TaskResultError):
                         pass
+                pdf_path: Path | None = None
+                pdf_name = event.get("pdf_output")
+                if isinstance(pdf_name, str):
+                    try:
+                        candidate = (output_root / self._safe_relative_path(pdf_name)).resolve(strict=True)
+                        candidate.relative_to(output_root)
+                        if candidate.is_file() and not candidate.is_symlink() and candidate.suffix.lower() == ".pdf":
+                            pdf_path = candidate
+                    except (OSError, ValueError, TaskResultError):
+                        pass
                 # A later explicit save of the same Agent-owned result replaces
                 # the earlier declaration and bytes as one atomic figure.
                 declarations[(execution.agent_thread_id, output_name)] = (
@@ -443,10 +452,11 @@ class TaskResultStore:
                     path,
                     output_root,
                     preview_path,
+                    pdf_path,
                 )
 
         records: list[TaskResultRecord] = []
-        for execution, event, path, output_root, preview_path in declarations.values():
+        for execution, event, path, output_root, preview_path, pdf_path in declarations.values():
             try:
                 stat = path.stat()
                 event_identity = json.dumps(event, sort_keys=True, ensure_ascii=True)
@@ -470,6 +480,7 @@ class TaskResultStore:
                         event=event,
                         path=path,
                         preview=preview_path,
+                        pdf=pdf_path,
                     )
                     if record is not None:
                         self._view_cache[key] = record
@@ -493,6 +504,7 @@ class TaskResultStore:
         event: dict[str, Any],
         path: Path,
         preview: Path | None,
+        pdf: Path | None = None,
     ) -> TaskResultRecord | None:
         try:
             import xarray as xr
@@ -549,6 +561,9 @@ class TaskResultStore:
         if preview is not None:
             files.append(file_record(preview, "preview.png", "image/png"))
             workspace_files["preview.png"] = preview.relative_to(task_root).as_posix()
+        if pdf is not None:  # the same drawing as an editable PDF (figure_preview.py)
+            files.append(file_record(pdf, "figure.pdf", "application/pdf"))
+            workspace_files["figure.pdf"] = pdf.relative_to(task_root).as_posix()
 
         title = next(
             (
@@ -579,8 +594,10 @@ class TaskResultStore:
             "workspace_files": workspace_files,
             "features": features,
         }
-        if len(files) > 1:
+        if preview is not None:
             content["preview_file"] = "preview.png"
+        if pdf is not None:
+            content["pdf_file"] = "figure.pdf"
         return TaskResultRecord(
             ref=TaskResultRef(task_id=task_id, result_id=f"view_{identity}"),
             workspace_id=workspace_id,

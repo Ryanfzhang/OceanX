@@ -17,6 +17,7 @@ import functools
 import hashlib
 import os
 import shutil
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -45,6 +46,10 @@ MAX_PAGE_IMAGES = 40  # the first pages of a PDF are rendered, enough for a pape
 MIN_FIGURE_PIXELS = 200_000  # smaller embedded images are logos and icons, not figures
 MAX_FIGURE_EDGE = 1600  # long edge of a saved image, enough to read layout, labels and equations
 _FORMAT = 3  # extraction format: a new format extracts cached PDFs again
+
+
+# PDFium is process-global and must not render concurrently on worker threads.
+PDFIUM_LOCK = threading.RLock()
 
 
 class PdfTextError(RuntimeError):
@@ -100,26 +105,30 @@ def _page_image(number: int) -> str:
 def _render_pages(pdf: Path, folder: Path) -> set[int]:
     """Save an image of each of the first pages of `pdf` into `folder`; return the numbers saved."""
 
-    try:
-        import pypdfium2 as pdfium  # only a Task with a PDF source needs it
+    with PDFIUM_LOCK:
+        try:
+            import pypdfium2 as pdfium  # only a Task with a PDF source needs it
 
-        document = pdfium.PdfDocument(pdf)
-    except Exception:  # noqa: BLE001 - without page images the text and figures remain
-        return set()
-    saved: set[int] = set()
-    try:
-        for number in range(1, min(len(document), MAX_PAGE_IMAGES) + 1):
-            try:
-                page = document[number - 1]
-                bitmap = page.render(scale=MAX_FIGURE_EDGE / max(page.get_size()))
-                bitmap.to_pil().convert("RGB").save(folder / _page_image(number), format="JPEG", quality=85)
-            except Exception:  # noqa: BLE001, S112 - a page that will not render must not cost the others
-                continue
-            ensure_private_file(folder / _page_image(number))
-            saved.add(number)
-    finally:
-        document.close()
-    return saved
+            document = pdfium.PdfDocument(pdf)
+        except Exception:  # noqa: BLE001 - without page images the text and figures remain
+            return set()
+        saved: set[int] = set()
+        try:
+            for number in range(1, min(len(document), MAX_PAGE_IMAGES) + 1):
+                try:
+                    page = document[number - 1]
+                    bitmap = page.render(scale=MAX_FIGURE_EDGE / max(page.get_size()))
+                    try:
+                        bitmap.to_pil().convert("RGB").save(folder / _page_image(number), format="JPEG", quality=85)
+                    finally:
+                        bitmap.close()
+                except Exception:  # noqa: BLE001, S112 - a page that will not render must not cost the others
+                    continue
+                ensure_private_file(folder / _page_image(number))
+                saved.add(number)
+        finally:
+            document.close()
+        return saved
 
 
 def pdf_text(pdf: Path, paths: OceanPaths) -> Path:

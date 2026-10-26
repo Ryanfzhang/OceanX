@@ -21,7 +21,13 @@ from oceanx.execution_manifest import (
     execution_result_fingerprint,
     write_execution_result_manifest,
 )
-from oceanx.figure_delivery import is_delivered_figure, pdf_preview_png
+from oceanx.figure_delivery import (
+    is_delivered_figure,
+    matplotlib_settings,
+    pdf_problems,
+    preview_path,
+    write_pdf_preview,
+)
 from oceanx.sandbox import (
     ResourceLimits,
     SandboxExecutionPolicy,
@@ -108,7 +114,8 @@ def _install_result_runtime(code_root: Path, helper_module: str | None = None) -
     without it the packaged functions are installed as they are."""
     package_root = code_root / "oceanx"
     package_root.mkdir(parents=True, exist_ok=True)
-    for support_name in ("scientific_view.py", "figure_preview.py", "figure_reproduction.py", "palettes.py"):
+    for support_name in ("scientific_view.py", "figure_preview.py", "figure_reproduction.py", "figure_style.py",
+                         "palettes.py"):
         shutil.copy2(_result_support_source(support_name), package_root / support_name)
     if helper_module is None:
         shutil.copy2(Path(__file__).resolve().parent / "resources" / "skills" / "core" /
@@ -141,8 +148,24 @@ def _output_state(output_root: Path) -> dict[str, tuple[int, int]]:
     return state
 
 
+def _saved_pdf_figures(output_root: Path, before: dict[str, tuple[int, int]]) -> list[tuple[str, Path]]:
+    """The PDF figures a run saved or changed, by their name under outputs."""
+    return [(name, output_root / name) for name, state in sorted(_output_state(output_root).items())
+            if name.lower().endswith(".pdf") and before.get(name) != state and is_delivered_figure(output_root / name)]
+
+
+def _prepare_pdf_figures(output_root: Path, before: dict[str, tuple[int, int]]) -> tuple[str, ...]:
+    """Prepare saved PDFs' previews and report Type 3 fonts to the agent."""
+    notes = []
+    for name, path in _saved_pdf_figures(output_root, before):
+        write_pdf_preview(path)
+        notes += [f"outputs/{name}: {problem}" for problem in pdf_problems(path)]
+    return tuple(notes)
+
+
 def _image_outputs(output_root: Path, before: dict[str, tuple[int, int]]) -> list[dict[str, Any]]:
-    """The delivered images a run saved or changed, as notebook display outputs under its code."""
+    """The delivered images a run saved or changed, as notebook display outputs under its code. A PDF
+    figure shows through its preview (figure_delivery.preview_path)."""
     outputs: list[dict[str, Any]] = []
     for name, state in sorted(_output_state(output_root).items()):
         path = output_root / name
@@ -150,20 +173,17 @@ def _image_outputs(output_root: Path, before: dict[str, tuple[int, int]]) -> lis
         mime = "image/png" if pdf else NOTEBOOK_IMAGE_TYPES.get(path.suffix.lower())
         if mime is None or before.get(name) == state or not is_delivered_figure(path):
             continue
-        # A PDF figure is shown through a PNG of its first page (figure_delivery.pdf_preview_png).
-        image = pdf_preview_png(path) if pdf else None
-        size = len(image) if image is not None else state[1]
-        if pdf and image is None:
+        shown = preview_path(path) if pdf else path
+        if not shown.is_file():
             outputs.append({"name": "stdout", "output_type": "stream",
                             "text": [f"[outputs/{name} could not be drawn here]\n"]})
             continue
-        if size > MAX_NOTEBOOK_IMAGE_BYTES:
+        if shown.stat().st_size > MAX_NOTEBOOK_IMAGE_BYTES:
             outputs.append({"name": "stdout", "output_type": "stream",
                             "text": [f"[outputs/{name} is too large to show here]\n"]})
             continue
         outputs.append({"output_type": "display_data", "metadata": {}, "data": {
-            mime: base64.b64encode(image if image is not None else path.read_bytes()).decode("ascii"),
-            "text/plain": [f"outputs/{name}"]}})
+            mime: base64.b64encode(shown.read_bytes()).decode("ascii"), "text/plain": [f"outputs/{name}"]}})
     return outputs
 
 
@@ -190,6 +210,8 @@ class ExpertCodeExecutionResult:
     invalid_candidate_results: tuple[str, ...] = ()
     changed_output_files: tuple[str, ...] = ()
     tool_calls: dict[str, int] = field(default_factory=dict)
+    # What keeps a PDF figure this run saved from being edited in Illustrator (figure_delivery.pdf_problems).
+    figure_notes: tuple[str, ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -224,6 +246,7 @@ class ExpertCodeExecutionResult:
             "reused_existing_execution": self.reused_existing_execution,
             "invalid_candidate_results": list(self.invalid_candidate_results),
             "tool_calls": dict(self.tool_calls),
+            "figure_notes": list(self.figure_notes),
         }
 
 
@@ -1029,6 +1052,12 @@ class ExpertCodeExecutionService:
         """Run and persist one already-started execution as one terminal transaction."""
 
         runtime_root = work_root / ".runtime"
+        # Every figure the code saves stores its text as editable text (figure_delivery.py).
+        matplotlib_rc = runtime_root / "matplotlibrc"
+        settings = matplotlib_settings()
+        if not matplotlib_rc.is_file() or matplotlib_rc.read_text(encoding="utf-8") != settings:
+            matplotlib_rc.parent.mkdir(parents=True, exist_ok=True)
+            matplotlib_rc.write_text(settings, encoding="utf-8")
         execution_record = self.store.get_code_execution(execution_id)
         if execution_record is None:
             raise ExpertCodeExecutionError("Expert code execution record is unavailable")
@@ -1045,6 +1074,7 @@ class ExpertCodeExecutionService:
             "OCEAN_ORIGIN_REQUEST_ID": origin_request_id or "",
             "OCEAN_TEMP_DIR": str(temporary_root),
             "PYTHONNOUSERSITE": "1",
+            "MATPLOTLIBRC": str(matplotlib_rc),
             # Data a library fetches once, such as the Natural Earth coastlines cartopy draws, stay in
             # the agent's folder rather than in the home of one run.
             "XDG_DATA_HOME": str(work_root / ".runtime" / "share"),
@@ -1085,6 +1115,7 @@ class ExpertCodeExecutionService:
         notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
         setup_cell = notebook["cells"][1]
         setup_cell["execution_count"] = 1
+        figure_notes = await asyncio.to_thread(_prepare_pdf_figures, output_root, outputs_before)
         code_cell = notebook["cells"][2]
         code_cell["execution_count"] = 1
         code_cell["outputs"] = [
@@ -1213,6 +1244,7 @@ class ExpertCodeExecutionService:
             invalid_candidate_results=tuple(declaration_errors),
             changed_output_files=tuple(changed_output_files),
             tool_calls=dict(result_bundle["tool_calls"]),
+            figure_notes=figure_notes,
         )
         self.store.finish_code_execution(
             execution_id=execution_id,
@@ -1282,9 +1314,10 @@ class ExpertCodeExecutionService:
             if isinstance(dataset_output, str) and dataset_output not in available_outputs:
                 reject(line_number, f"declared dataset is unavailable: {dataset_output}")
                 continue
-            preview = normalized.get("preview_output")
-            if isinstance(preview, str) and preview not in available_outputs:
-                normalized.pop("preview_output", None)
+            for optional in ("preview_output", "pdf_output"):
+                value = normalized.get(optional)
+                if isinstance(value, str) and value not in available_outputs:
+                    normalized.pop(optional, None)
             attachments = normalized.get("attachment_outputs")
             if isinstance(attachments, list):
                 normalized["attachment_outputs"] = [

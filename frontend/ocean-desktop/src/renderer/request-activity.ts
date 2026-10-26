@@ -118,9 +118,14 @@ export function currentStep(
 ): string {
   const calls = activity && activity.requestId === requestId ? activity.calls : [];
   const running = calls.filter(call => call.status === 'running').at(-1);
-  const detail = running ? running.purpose || running.target : '';
-  if (running) return detail ? `${stepLabel(running.toolName, text)} · ${detail}` : stepLabel(running.toolName, text);
-  if (calls.length) return text(...(calls.at(-1)!.status === 'error' ? AFTER_ERROR : REVIEWING));
+  const withDetail = (label: string, call: ToolActivity) => {
+    const detail = call.purpose || call.target;
+    return detail ? `${label} · ${detail}` : label;
+  };
+  if (running) return withDetail(stepLabel(running.toolName, text), running);
+  // Between steps the line keeps what the last one was about, not only that it ended.
+  const last = calls.at(-1);
+  if (last) return withDetail(text(...(last.status === 'error' ? AFTER_ERROR : REVIEWING)), last);
   const recorded = workflow && workflow.request_id === requestId && ['planning', 'working'].includes(workflow.state)
     ? WORKFLOW_LABELS[workflow.activity] : undefined;
   return recorded ? text(...recorded) : text('Working on the request…', '正在处理请求…');

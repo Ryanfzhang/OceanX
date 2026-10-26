@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from pprint import pformat
 from typing import Any
+
+from oceanx import figure_style
 
 
 @dataclass(frozen=True)
@@ -36,44 +39,20 @@ import xarray as xr
 # Publication defaults. These are presentation settings only; the accepted data,
 # axes and scientific colour domains remain unchanged.
 FIGURE_WIDTH = 7.2          # <-- MODIFY: journal figure width in inches
-BASE_FONT_SIZE = 9          # <-- MODIFY: readable at two-column publication width
+BASE_FONT_SIZE = __FONT_SIZE__          # <-- MODIFY: readable at two-column publication width
 SCATTER_SIZE_MIN = 10.0     # <-- MODIFY: minimum marker area (points squared)
 CONTOUR_LEVELS = 24         # <-- MODIFY: smooth filled contours without inventing data
 
-NATURE_COLORS = [
-    "#147D78",  # Ocean teal
-    "#245F82",  # deep blue
-    "#8BCF8B",  # soft green
-    "#9A4D8E",  # violet
-    "#B64342",  # restrained red
-    "#767676",  # neutral
-]
+# OceanX's publication style (oceanx/figure_style.py), shared with the figures agents draw. Text
+# sizes follow BASE_FONT_SIZE; fonts are stored as TrueType so Illustrator can edit the text.
+NATURE_COLORS = __COLORS__
+OCEANX_STYLE = __STYLE__
+OCEANX_FONT_SIZES = __FONT_SIZES__
 
 mpl.rcParams.update({
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "Liberation Sans"],
-    "font.size": BASE_FONT_SIZE,
-    "axes.labelsize": BASE_FONT_SIZE,
-    "axes.titlesize": BASE_FONT_SIZE + 1,
-    "axes.titleweight": "bold",
-    "axes.linewidth": 0.8,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
+    **OCEANX_STYLE,
+    **{key: BASE_FONT_SIZE + offset for key, offset in OCEANX_FONT_SIZES.items()},
     "axes.prop_cycle": plt.cycler(color=NATURE_COLORS),
-    "xtick.labelsize": BASE_FONT_SIZE - 1,
-    "ytick.labelsize": BASE_FONT_SIZE - 1,
-    "xtick.direction": "out",
-    "ytick.direction": "out",
-    "xtick.major.width": 0.7,
-    "ytick.major.width": 0.7,
-    "legend.frameon": False,
-    "legend.fontsize": BASE_FONT_SIZE - 1,
-    "figure.facecolor": "white",
-    "axes.facecolor": "white",
-    "savefig.facecolor": "white",
-    "savefig.dpi": 300,
-    "svg.fonttype": "none",
-    "pdf.fonttype": 42,
 })
 
 
@@ -100,6 +79,8 @@ def _style_axis(ax):
 def _add_colorbar(fig, artist, ax, label):
     colorbar = fig.colorbar(artist, ax=ax, fraction=0.046, pad=0.025, aspect=28)
     colorbar.outline.set_visible(False)
+    if colorbar.solids is not None:  # matplotlib stores 50+ colours as an image; keep them editable
+        colorbar.solids.set_rasterized(False)
     colorbar.ax.tick_params(length=2.5, width=0.6, labelsize=BASE_FONT_SIZE - 1)
     if label:
         colorbar.set_label(label, labelpad=6)
@@ -501,6 +482,12 @@ def render_oceanmind_view(path):
         return _render_spatial_map(dataset, spec)
     return _render_scientific_figure(dataset, spec)
 '''
+_FIXED_RENDERER_SOURCE = (
+    _FIXED_RENDERER_SOURCE.replace("__FONT_SIZE__", repr(figure_style.FONT_SIZE))
+    .replace("__COLORS__", pformat(figure_style.COLORS, width=100))
+    .replace("__STYLE__", pformat(figure_style.STYLE, width=100, sort_dicts=False))
+    .replace("__FONT_SIZES__", pformat(figure_style.FONT_SIZES, width=100, sort_dicts=False))
+)
 
 
 def _cell_id(request_id: str, label: str) -> str:
