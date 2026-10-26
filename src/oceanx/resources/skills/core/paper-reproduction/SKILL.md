@@ -49,19 +49,24 @@ two, or of sign, comes from a definition, normalisation, unit, domain, mask or s
 shown otherwise: find it before drawing any conclusion.
 
 ## Adapting the method to the record
+A method built for a long record can fail on a short one. Scale a smoothing window with the record: keep
+the share of the record it spans as in the paper, and smooth values at the time resolution the paper
+plots, monthly ones rather than annual means. A paper that smooths 28 years with a 7-year window uses a
+quarter of its record, so on 12 years use about 3 years; the paper's own window would leave a few points.
 Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md,
-under Autocorrelation and dependence: keep a smoothing window well below the record length and judge each
-trend and correlation by the independent values behind it. Name each departure from the paper's method
-and why.
+under Autocorrelation and dependence, and judge each trend and correlation by the independent values behind
+it. Name each departure from the paper's method and why.
 
 ## Figures
 Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures.
 Reproduce each of the paper's figures as one figure with the same panels, from the reproduced quantities:
 the same variables, symbols, units, scales, colour encoding, fills, overlays, reference lines, annotations
-and layout. When you can read images, open the original again right before drawing it, since the image
-read at the start lies far back in the conversation. After saving, open the original and yours together,
-compare them item by item (panel layout, fills, line styles, axis ranges and their multipliers, panel
-letters, legends and annotations) and fix every difference the data allow. Deliver every panel you
+and layout. Smoothed curves and their fills run through the whole record as the original's do, over the
+raw series drawn faintly behind them at the paper's time resolution. When you can read images, open the
+original again right before drawing it, since the image read at the start lies far back in the
+conversation. After saving, open the original and yours together, compare them item by item (panel layout,
+fills, line styles, axis ranges and their multipliers, panel letters, legends and annotations, text that
+crosses a line, lines that run off the axes) and fix every difference the data allow. Deliver every panel you
 computed, with any doubt written on it rather than withholding it. Leave out only a panel whose data are
 missing, say why, and never fill it with another quantity.
 
