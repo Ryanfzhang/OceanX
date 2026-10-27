@@ -46,28 +46,71 @@ observations. Use compact axis and colourbar labels with units; put definitions,
 selections, and limitations in the result summary or report instead of forcing them into labels.
 
 ## Publication figures
-A figure drawn for a researcher, or after a paper's figure, is laid out as a journal prints it.
-Size it as printed, about 7 in wide across a page or 3.5 in for one column, with 8 to 10 pt
-text and lines of about 1 pt. Letter each panel in bold inside its top-left corner and leave out
-a figure title; the caption or the answer carries it. Stacked panels share their time axis, with
-years on top and bottom when the original shows them. By default, axis limits show the full range of
-all plotted series, including raw and secondary series. Draw noisier series lighter; use an inset or
-a separate panel when their range obscures the main variation. If a zoomed or cropped view is needed,
-label it explicitly and state which values lie outside the displayed range. Set bar and colour limits
-that show every bar and value. Put
-legends and values such as r or a trend in empty space, never across the data. Save with
-`bbox_inches='tight'`, as a vector PDF where your instructions ask for one, and as SVG too when the
-researcher asks for it.
+
+A figure drawn for a researcher, or after a paper's figure, meets the standard of a Nature figure.
+
+### Size and type
+Size it as printed: 89 mm (3.5 in) wide for one column or 183 mm (7.2 in) across a page, and at most
+247 mm (9.7 in) high. Use a sans-serif type such as Arial: 7 pt for axis labels and other text, 6 pt for
+tick labels and legends, never less than 5 pt, with data lines of about 1 pt and thinner axes and ticks.
+Letter each panel a, b, c in 8 pt bold just above the top-left corner of its axes; a reproduced figure
+keeps its original's letters. Leave out a figure title, which the answer carries; a panel may carry a
+short label of what it shows, such as Upper layer. Write axis labels in sentence case with the unit in
+parentheses, such as Temperature (°C). Create the figure with `layout='constrained'`, as in
+`plt.subplots(2, 2, figsize=(7.2, 5), layout='constrained')`, so that labels and colour bars make room
+for each other. Give panels of one kind the same size and aligned axes, and let stacked panels share
+their time axis, with years on top and bottom when the original shows them.
+
+### Ranges come from the values
+Set every axis and colour range from the values drawn, the panel's main series first. Draw noisier or
+secondary series lighter behind it; use an inset or a separate panel when their range obscures the main
+variation. Keep the main series, every bar and error bar inside the axes; bars start at zero, and a
+colour field spans most of its colour scale. If a zoomed or cropped view is needed, label it explicitly
+and state which values lie outside the displayed range. A range taken from another figure, the paper's
+included, is kept only when the main values fit it; when they do not, draw yours in full and treat the
+difference as a result to explain.
+
+### Colour
+A quantity of one sign, such as temperature, concentration, speed or depth, takes a perceptually uniform
+sequential map such as `viridis` or `cividis`. A quantity with a meaningful zero, such as an anomaly,
+trend, correlation, vorticity, streamfunction or velocity component, takes a diverging map such as
+`RdBu_r`, white at zero with symmetric limits (`vmin=-vmax`, or `norm=TwoSlopeNorm(0)`). Do not use
+`jet` or `rainbow` in a figure of your own: they show edges the data do not have and hide the zero; a
+reproduced figure may keep its original's map, with zero where the original puts it. Lines and
+categories take the style's colour cycle; never tell two series apart by red against green alone, and
+add line styles or markers beyond four series. Every colour field has a colour bar labelled with its
+quantity and unit.
+
+### Words and numbers
+Text on a panel is limited to axis and tick labels, the panel letter, a legend and short labels of
+features or of values you computed. Every number on a figure is yours; a paper's value may stand beside
+yours for comparison, never alone. Put legends and values such as r or a trend in empty space, never
+across the data, another label or a frame. Caveats, missing data, sources and method notes go in the
+answer, not on the figure, and so does what error bars or shading show (standard deviation, standard
+error or a confidence interval) with the number of values behind them.
+
+### Schematics
+A schematic, a globe or a three-dimensional stack of maps is drawn as flat panels of the data it rests
+on, in the same arrangement, with its arrows, labels and numbers taken from your results. Never draw
+boxes of text in place of a figure, and add no 3-D effects, shadows or decoration to any figure.
+
+### Saving
+Save with `bbox_inches='tight'`, as a vector PDF where your instructions ask for one, and as SVG too
+when the researcher asks for it.
 
 ## Maps
+
 Draw a spatial field on a map, never on bare longitude and latitude axes: cartopy axes in the paper's
 projection or PlateCarree, the data drawn with `transform=ccrs.PlateCarree()`, land filled light grey and
 coastlines drawn from Natural Earth at the scale of the region
 (`ax.add_feature(cfeature.LAND.with_scale('50m'), facecolor='0.9')`, `ax.coastlines('50m', linewidth=0.5)`,
 and `'10m'` for a strait or a stretch of coast), with labelled degree gridlines
-(`ax.gridlines(draw_labels=True, linewidth=0.3)`). Leave the data's invalid cells empty, so that the map,
-not a colour of the field, shows the land. cartopy fetches the Natural Earth files on first use and keeps
-them in the agent's folder; if that fails, outline the data's land mask as the coastline and say so.
+(`ax.gridlines(draw_labels=True, linewidth=0.3)`). Show the whole region the figure is about, in a
+reproduction the original's extent. Leave the data's invalid cells empty, so that the map, not a colour
+of the field, shows the land, and set a field that has values on land, such as a streamfunction that is
+constant along the coast, to NaN there. cartopy fetches the Natural Earth files on first use and keeps
+them in the agent's folder; if that fails, outline the data's land mask as the coastline and say so in
+the answer.
 
 ## Reproducing a paper's figure
 Reproduce each of the paper's figures as one figure with the same panels, from the reproduced quantities:
@@ -79,8 +122,7 @@ it, since the image read at the start lies far back in the conversation. After s
 and yours together, compare them item by item (panel layout, fills, line styles, axis ranges and their
 multipliers, panel letters, legends and annotations, text that crosses a line, a series clipped where the
 original does not clip it, or a main curve flattened by its axis range) and fix every
-difference the data allow. Deliver every panel you computed, with any doubt written on it rather than
-withholding it. Leave out only a panel whose data are missing, say why, and never fill it with another
+difference the data allow. Deliver every panel you computed and put its doubts in the answer rather than withholding it. Leave out only a panel whose data are missing, say why, and never fill it with another
 quantity.
 
 ## Checking the figure

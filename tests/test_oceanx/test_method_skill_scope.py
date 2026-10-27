@@ -84,7 +84,7 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     for section in ("## Publication figures", "## Maps", "## Reproducing a paper's figure", "## Checking the figure"):
         assert section in figure
     assert "open the original and yours together" in figure and "ax.coastlines('50m'" in figure
-    assert "axis limits show the full range of all plotted series" in figure
+    assert "the panel's main series first" in figure
     assert "label it explicitly and state which values lie outside the displayed range" in figure
     # A figure draws computed results and does not quietly redefine them; a reproduced one keeps what the
     # original clips (2026-10-27: plotting code turned monthly values into smoothed annual ones).
