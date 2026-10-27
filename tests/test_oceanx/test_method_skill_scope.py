@@ -68,6 +68,10 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
                  "Before drawing the first figure, read /skills/scientific-figure-design/SKILL.md"):
         assert step in reproduction
     assert "## One computation per quantity" in reproduction and "give their sum as the residual" in reproduction
+    # A change of sampling, averaging, smoothing or normalisation is a change of method, compared with the
+    # paper's before it is used (2026-10-27: a run thinned its data and changed its averaging untested).
+    assert "Sampling, averaging, smoothing and normalisation are part of a quantity's definition" in reproduction
+    assert "compare it with the paper's treatment on a common part of the data" in reproduction
     assert "label significance only from a valid statistical test" in reproduction
     assert "do not pad or extrapolate endpoints" in reproduction
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
@@ -82,6 +86,12 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "open the original and yours together" in figure and "ax.coastlines('50m'" in figure
     assert "axis limits show the full range of all plotted series" in figure
     assert "label it explicitly and state which values lie outside the displayed range" in figure
+    # A figure draws computed results and does not quietly redefine them; a reproduced one keeps what the
+    # original clips (2026-10-27: plotting code turned monthly values into smoothed annual ones).
+    assert "## Results, not new analysis" in figure
+    assert "does not resample, average, smooth, detrend or normalise them again" in figure
+    assert "say in the answer that the method changed, and show it beside the result it replaces" in figure
+    assert "a series clipped where the original does not clip it" in figure
     reference = " ".join((ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8").split())
     assert "/skills/scientific-figure-design/SKILL.md" in reference and "rasterized=True" in reference
     # Every agent that draws, in either delivery mode, is told to read that skill before its first figure.

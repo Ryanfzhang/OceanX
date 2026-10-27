@@ -21,6 +21,12 @@ it and the Figure API reference it rests on. Draw with matplotlib, as below, a f
 every figure of a paper being reproduced.
 <!-- /interactive -->
 
+## Results, not new analysis
+A figure draws results that were computed and saved before it. The plotting code reads them and does
+not resample, average, smooth, detrend or normalise them again. When a figure needs another treatment,
+compute it as a step of the analysis, say in the answer that the method changed, and show it beside the
+result it replaces.
+
 ## Choosing the figure
 Match the plot to the data structure: maps for spatial fields, time series for evolution, profiles
 for vertical structure, heatmaps for two-dimensional coordinates, and scatter plots for paired
@@ -59,8 +65,8 @@ ask for one. Show the raw series faintly behind smoothed curves at the paper's t
 can read images, read that figure's image, named in the paper's extracted text, again right before drawing
 it, since the image read at the start lies far back in the conversation. After saving, open the original
 and yours together, compare them item by item (panel layout, fills, line styles, axis ranges and their
-multipliers, panel letters, legends and annotations, text that crosses a line, unmarked clipping of any
-series, or a main curve flattened by its axis range) and fix every
+multipliers, panel letters, legends and annotations, text that crosses a line, a series clipped where the
+original does not clip it, or a main curve flattened by its axis range) and fix every
 difference the data allow. Deliver every panel you computed, with any doubt written on it rather than
 withholding it. Leave out only a panel whose data are missing, say why, and never fill it with another
 quantity.

@@ -33,7 +33,10 @@ Fix one computation of each quantity before drawing any figure, and check it: it
 magnitudes for the overlapping period, and any identity it must satisfy, such as the area and boundary
 forms of Stokes' theorem giving the same circulation. From then on use only that computation: rename or
 remove the outputs of the versions it replaced, and compute every series you compare or correlate from
-the same samples.
+the same samples. Sampling, averaging, smoothing and normalisation are part of a quantity's definition
+and follow the paper. A shortcut that changes any of them, taken for time or memory, is a change of
+method: compare it with the paper's treatment on a common part of the data and report the difference
+before using it.
 
 ## Deriving what the data do not store
 Before writing code for a vorticity budget or a streamfunction, read
