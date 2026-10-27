@@ -22,9 +22,11 @@ Do not assume latitude-cosine weights fit an irregular or curvilinear grid when 
 Use monthly means as the usual starting point for seasonal to interannual background evolution.
 Use daily means for short-lived events, their onset and recovery; retain finer resolution when the
 question concerns variation within a day. Use annual means for whole-year comparisons, or annual
-totals for cumulative budgets, when within-year timing is not the target. In a paper reproduction,
-follow the paper's plotted time resolution. Average only when the input sampling supports that scale;
-do not average to a coarser scale merely to simplify a plot or reduce computation.
+totals for cumulative budgets, when within-year timing is not the target. Choose the scale from the
+research question and the supplied sampling and coverage. In a paper reproduction, use the paper's
+analysis timescale as a comparison target when the data support it; otherwise explain the adaptation
+and what remains comparable. Do not average to a coarser scale merely to simplify a plot or reduce
+computation.
 
 ## Baselines and anomalies
 

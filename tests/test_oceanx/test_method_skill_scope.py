@@ -92,7 +92,8 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "does not resample, average, smooth, detrend or normalise them again" in figure
     assert "say in the answer that the method changed, and compare it with the result it replaces in a separate supplementary figure, not in the main one" in figure
     assert "Draw the coastline and land as Maps says, and leave empty the cells outside the diagnostic's saved validity mask" in figure
-    assert "Smooth at the time resolution the paper plots, not after averaging to a coarser one" in reproduction
+    assert "Use the paper's analysis resolution when compatible; otherwise explain the adaptation" in reproduction
+    assert "Do not coarsen the series merely for plotting" in reproduction
     assert "a comparison of windows goes in a separate supplementary figure" in reproduction
     assert "save the unsmoothed series" in load_ocean_skill("ocean-analysis-design")[0]
     assert "a series clipped where the original does not clip it" in figure

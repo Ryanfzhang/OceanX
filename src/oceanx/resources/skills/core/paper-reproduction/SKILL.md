@@ -38,9 +38,10 @@ delivered figures read those results rather than an older file or variable. A co
 alone does not correct the deliverable. Keep superseded results separate from the selected results;
 retain deliberately compared alternatives with their methods labelled.
 
-Sampling, averaging, smoothing and normalisation are part of a quantity's definition
-and follow the paper. A shortcut that changes any of them, taken for time or memory, is a change of
-method: compare it with the paper's treatment on a common part of the data and report the difference
+Sampling, averaging, smoothing and normalisation are part of a quantity's definition.
+For direct reproduction, match the paper where the supplied data support it; otherwise state the
+adapted treatment and its limits on comparison. A shortcut that changes any of them, taken for time or
+memory, is a change of method: compare it with the paper's treatment on a common part of the data and report the difference
 before using it.
 
 ## Deriving what the data do not store
@@ -64,9 +65,10 @@ shown otherwise: find it before drawing any conclusion.
 A method built for a long record can fail on a short one. Evaluate the paper's smoothing window
 against the available duration, sampling and valid endpoint coverage. When it consumes much of the
 record, use /skills/ocean-analysis-design/SKILL.md, under Smoothing for a short record, to select an
-adapted display window. Smooth at the time resolution the paper plots, not after averaging to a coarser
-one. Save the unsmoothed series and, where supported, the paper-window result as data; the reproduced
-figure draws only the selected treatment, in the original's style, and a comparison of windows goes in
+adapted display window. Smooth at a time resolution appropriate to the question and supported by the
+data. Use the paper's analysis resolution when compatible; otherwise explain the adaptation. Do not
+coarsen the series merely for plotting. Save the unsmoothed series and, where supported, the paper-window
+result as data; the reproduced figure draws only the selected treatment, in the original's style, and a comparison of windows goes in
 a separate supplementary figure. State both windows and the changed timescale.
 A physically defined filter is part of the scientific question: shortening it
 does not establish the paper's long-period conclusion, and insufficient support must be reported.

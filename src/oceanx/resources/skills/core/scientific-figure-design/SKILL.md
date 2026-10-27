@@ -73,8 +73,8 @@ them in the agent's folder; if that fails, outline the data's land mask as the c
 Reproduce each of the paper's figures as one figure with the same panels, from the reproduced quantities:
 the same variables, symbols, units, scales, colour encoding, fills, overlays, reference lines, annotations
 and layout. Use matplotlib for the paper's layout, saving a vector PDF where your delivery instructions
-ask for one. Show the raw series faintly behind smoothed curves at the paper's time resolution. When you
-can read images, read that figure's image, named in the paper's extracted text, again right before drawing
+ask for one. Show the raw series faintly behind smoothed curves at the selected analysis time resolution.
+When you can read images, read that figure's image, named in the paper's extracted text, again right before drawing
 it, since the image read at the start lies far back in the conversation. After saving, open the original
 and yours together, compare them item by item (panel layout, fills, line styles, axis ranges and their
 multipliers, panel letters, legends and annotations, text that crosses a line, a series clipped where the
