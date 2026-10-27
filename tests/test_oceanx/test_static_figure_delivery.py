@@ -124,7 +124,7 @@ def test_images_are_listed_as_file_results_in_either_delivery_mode(monkeypatch, 
     figure = outputs / "maps" / "mld_anomaly.png"
     figure.write_bytes(PNG)
     (outputs / "_probe.png").write_bytes(PNG)
-    (outputs / "data.nc").write_bytes(b"not a figure")
+    (outputs / "_data.nc").write_bytes(b"not a figure")
     (outputs / "data.preview.png").write_bytes(PNG)  # owned by an interactive figure, never its own result
     store = TaskResultStore(task_workspaces=_Projector(tmp_path))
 

@@ -5,6 +5,7 @@ import type {BackendFrame, DesktopUpdateStatus, ModelProviderSetup, ModelProvide
 import {artifactFileName, asRecord, changedResultsTaskId, isActiveForegroundRequest, isTaskCreationReady, parseDesktopRuntimeCapabilities, projectNameFromPath, shouldApplyTaskSnapshot, sourceTitleFromPath} from './app-utils.js';
 import {ConversationTranscript, taskResultKeys} from './components/ConversationTranscript.js';
 import {InteractionDrawer} from './components/InteractionDrawer.js';
+import {DataWorkbench} from './components/DataWorkbench.js';
 import {NotebookWorkbench, type NotebookCell} from './components/NotebookWorkbench.js';
 import {OceanXWelcome} from './components/OceanXWelcome.js';
 import {SourceMenu} from './components/SourceMenu.js';
@@ -24,7 +25,7 @@ import {forgetProject, mergeRememberedProjects, parseProjectCatalog, rememberPro
 import {revisionFromRequestFailure} from './request-recovery.js';
 import {requestId} from './request-id.js';
 import {updateRequestActivity, type RequestActivity} from './request-activity.js';
-import {isAnalysisNotebook, isStaticFigure, taskResultRefKey} from './types.js';
+import {isAnalysisNotebook, isDataResult, isNetCDFFile, isStaticFigure, taskResultRefKey} from './types.js';
 import type {AppearanceTheme, ArtifactSummary, ArtifactVersion, DeliveryManifest, DisplayDensity, EventPayload, OceanEvent, RequestContext, ResearchTask, ResolvedAppearanceTheme, ResultDocument, TaskOutput, TaskResultFile, TaskResultRecord, TeamSnapshot, TranscriptItem, Workspace} from './types.js';
 
 type SourceSelection = {kind: 'file' | 'folder'; relativePath?: string; localPath?: string};
@@ -32,7 +33,7 @@ type PendingImageAttachment = {fileName: string; mimeType: string; bytes: Uint8A
 // Tools whose completion can leave a new figure, view or report for the running request.
 const RESULT_TOOLS = new Set(['execute', 'ocean_expert_run_code', 'task', 'assign_helper']);
 type PendingTaskCreate = {projectPath: string; title: string; sources: SourceSelection[]};
-type ResultSurface = {kind: 'interactive_view' | 'report' | 'notebook'; document: ResultDocument} | null;
+type ResultSurface = {kind: 'interactive_view' | 'report' | 'notebook' | 'data'; document: ResultDocument} | null;
 type RequestHandler = (result: EventPayload) => void;
 type RequestErrorHandler = (message: string, error: EventPayload) => void;
 type TaskResultGrantPurpose =
@@ -1057,10 +1058,29 @@ export function App(): React.JSX.Element {
       if (openResultKey.current === resultKey) {setResultError('Notebook is unavailable.'); setResultLoading(false);}
     });
   };
+  const openDataResult = (result: TaskResultRecord) => {
+    const key = taskResultRefKey(result.result_ref);
+    const file = declaredResultFile(result, 'data_file', () => true);
+    openResultKey.current = key;
+    setResultSurface({kind: 'data', document: directResultDocument(result)});
+    setResultFileUrl(null); setResultLoading(Boolean(file && !isNetCDFFile(file)));
+    setResultError(file ? null : text('Data file is missing.', '数据文件不存在。'));
+    if (file && isNetCDFFile(file)) return;
+    if (!file) return;
+    void grantTaskResult(result, file, 'result_file').then((url) => {
+      if (openResultKey.current !== key) return;
+      setResultFileUrl(url); setResultLoading(false);
+    }).catch(() => {
+      if (openResultKey.current === key) {
+        setResultError(text('Data file is unavailable.', '数据文件无法打开。')); setResultLoading(false);
+      }
+    });
+  };
   const openTaskResult = (result: TaskResultRecord, featureId?: string) => {
     setResultFeatureId(featureId);
     if (isStaticFigure(result)) {openStaticFigure(result); return;}
     if (isAnalysisNotebook(result)) {openAnalysisNotebook(result); return;}
+    if (isDataResult(result)) {openDataResult(result); return;}
     if (result.kind !== 'interactive_view' && result.kind !== 'report') return;
     const kind = result.kind;
     const resultKey = taskResultRefKey(result.result_ref);
@@ -1073,7 +1093,7 @@ export function App(): React.JSX.Element {
       const previewFile = declaredResultFile(result, 'preview_file', (file) => file.mime_type.startsWith('image/'));
       if (!dataFile) {setResultLoading(false); setResultError('Interactive data file is missing.'); return;}
       const downloadFile = datasetFile ?? dataFile;
-      void grantTaskResult(result, downloadFile, 'result_file').then((url) => {
+      if (!isNetCDFFile(downloadFile)) void grantTaskResult(result, downloadFile, 'result_file').then((url) => {
         if (openResultKey.current === resultKey) setResultFileUrl(url);
       }).catch(() => undefined);
       if (previewFile) void grantTaskResult(result, previewFile, 'interactive_view_preview').then((url) => {
@@ -1347,7 +1367,8 @@ export function App(): React.JSX.Element {
         resizeWorkbench(handle.left + handle.width / 2 + (event.key === 'ArrowLeft' ? -24 : 24), true);
       }}
     /> : null}
-    {resultSurface?.kind === 'notebook' ? <NotebookWorkbench document={resultSurface.document} loading={resultLoading} error={resultError} cells={notebookCells} downloadUrl={resultFileUrl} onClose={closeResult} />
+    {resultSurface?.kind === 'data' ? <DataWorkbench document={resultSurface.document} loading={resultLoading} error={resultError} downloadUrl={resultFileUrl} onClose={closeResult} />
+      : resultSurface?.kind === 'notebook' ? <NotebookWorkbench document={resultSurface.document} loading={resultLoading} error={resultError} cells={notebookCells} downloadUrl={resultFileUrl} onClose={closeResult} />
       : resultSurface?.kind === 'report' ? <ReportWorkbench document={resultSurface.document} loading={resultLoading} markdown={reportMarkdown} resources={reportResources} resultLinks={reportResultLinks} error={resultError} onOpenResource={openReportResource} onClose={closeResult} /> : <ResultWorkbench document={resultSurface?.kind === 'interactive_view' ? resultSurface.document : null} loading={resultLoading} data={resultData} featureId={resultFeatureId} previewUrl={resultPreviewUrl} downloadUrl={resultFileUrl} onOpenPdf={resultPdfUrl ? () => openReportResource({url: resultPdfUrl}) : undefined} error={resultError} onClose={closeResult} dark={resolvedTheme === 'dark'} />}
     <DesktopSettingsDialog open={settingsOpen} status={status} projectName={projectName} runtime={runtime} modelProvider={modelProvider} modelProviderSaving={modelSaving} displayDensity={density} onDisplayDensity={setDensity} appearanceTheme={appearanceTheme} onAppearanceTheme={setAppearanceTheme} parallelExperts={parallelExperts} onParallelExperts={setParallelExperts} onConfigureModelProvider={configureModel} update={update} onCheckForUpdate={() => void window.oceanDesktop.checkForUpdate().then(setUpdate)} onInstallUpdate={() => void window.oceanDesktop.installPreparedUpdate().then(setUpdate)} onClose={() => setSettingsOpen(false)} />
     <ResearchLibraryDialog open={libraryOpen} onClose={() => setLibraryOpen(false)} request={libraryRequest} />

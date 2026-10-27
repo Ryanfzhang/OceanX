@@ -4,13 +4,11 @@ The single agent has the Experts' tools and the data and search Experts' skills,
 can give independent parts of a request to helpers of its own. When a request turns out to be an
 open research problem it calls hand_to_research_team, and the same server run goes on with the
 Coordinator and its Experts in research mode (graphs.coordinator). On a simple request the choice
-costs nothing extra: the agent makes it on the call that starts the work. A request to reproduce a
-paper's analysis is never handed over (reproduction_request).
+costs nothing extra: the agent makes it on the call that starts the work.
 """
 from __future__ import annotations
 
 import asyncio
-import re
 from collections.abc import Awaitable, Callable
 
 from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddleware, hook_config
@@ -25,7 +23,7 @@ AGENT_TAG = "oceanx_agent"  # which of SINGLE_AGENT and TEAM wrote a message of 
 HANDOFF_TOOL = "hand_to_research_team"
 HELPER_TOOL = "assign_helper"
 
-SINGLE_AGENT_CALL_LIMIT = 200  # a paper's reproduction, which the single agent finishes itself, needs most of it
+SINGLE_AGENT_CALL_LIMIT = 200
 HELPER_CALL_LIMIT = 20
 MAX_HELPERS = 3  # helpers of one request that work at once
 BUDGET_NOTE_CALLS = 5  # the last calls of a budget end their tool result with the calls left
@@ -40,19 +38,6 @@ def workflow_mode(config) -> str:
     return mode if mode in WORKFLOW_MODES else "research"
 
 
-# Words of a request to reproduce or replicate a published analysis. "reproducible" asks for something
-# else, and 重现 is left out because 重现期 is a return period.
-REPRODUCTION_WORDS = re.compile(r"复现|reproduc(?!ib)|replicat", re.IGNORECASE)
-
-
-def reproduction_request(messages) -> bool:
-    """Whether the researcher's latest message asks to reproduce a published analysis. Such a request stays
-    with the single agent, which then holds every result the paper's figures combine: on 2026-10-27 one that
-    used up the single agent's calls went on to the team, whose Experts each drew one figure apart."""
-    latest = next((message for message in reversed(messages) if isinstance(message, HumanMessage)), None)
-    return latest is not None and REPRODUCTION_WORDS.search(latest.text) is not None
-
-
 def team_config(config):
     """The run's configuration with research mode on, for the team that takes a request over."""
     c = config["configurable"]
@@ -65,17 +50,16 @@ def team_config(config):
 # mechanism (Typhoon Mangkhut, 2026-10-26: whether mixing or upwelling cooled the sea, why chlorophyll rose).
 HANDOFF_POLICY = f"""\
 # First: yours or the research team's
-Decide this on your first call, before any other step. The first of these rules that fits decides.
-1. A request to reproduce or test the analysis of a paper is yours, even where the paper explains why something
-   happens: the paper fixes its methods, and one agent holds every result its figures combine.
-2. A request any part of which is an open research problem goes to the research team. A part is open when it
+Decide from the request and conversation on your first call, before any other step. Paper reproduction
+is a method requirement, not a restriction on using the research team. The first rule that fits decides.
+1. A request any part of which is an open research problem goes to the research team. A part is open when it
    asks why something happens or what causes, drives or controls it, which mechanism or explanation holds (for
    example, whether mixing or upwelling did it), or how much each factor contributes; when it needs competing
    explanations weighed against the data and the literature; or when it needs an investigation whose next steps
    depend on what the first ones find. A request for deep research or for the research team goes there too.
    Call {HANDOFF_TOOL} at once, before any work, even when the request also lists the data to use or download
    and the maps, sections or tables to make: the team makes those as part of its investigation.
-3. Everything else is yours, however many parts it has: looking at, extracting, computing, comparing, mapping
+2. Everything else is yours, however many parts it has: looking at, extracting, computing, comparing, mapping
    or plotting data; downloading a dataset the researcher asked for; finding, reading or summarising sources;
    and bounded work in several steps, such as a route through a current field or the same analysis for several
    variables. The team plans an investigation, runs several Experts and takes tens of minutes, so a request
@@ -104,6 +88,9 @@ result is clearly wrong or the request asks for them. For paper reproductions, i
 saved figure against its original; for other figures, inspect once for visible plotting errors. State a
 remaining limitation in one sentence instead of investigating it. Each code run stops after {seconds} s; if one
 times out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
+Apply the paper-reproduction skill when the user asks to reproduce, test or extend the analysis of an
+identified paper, using the request, attached sources and conversation to establish that intent. A paper
+provided as background or a comparison between model and observations does not by itself establish it.
 Reproducing or testing a paper's analysis is not bounded this way: it is finished only when every quantity
 and budget term of the paper that the data allow is computed as the paper defines it and compared with the paper's
 values, every figure is redrawn to look like the paper's, and a term counts as missing only after deriving it from
@@ -328,7 +315,6 @@ __all__ = [
     "LAST_CALL",
     "LAST_CALL_HANDOFF",
     "MAX_HELPERS",
-    "REPRODUCTION_WORDS",
     "SINGLE_AGENT",
     "SINGLE_AGENT_CALL_LIMIT",
     "TEAM",
@@ -341,7 +327,6 @@ __all__ = [
     "handoff_note",
     "handoff_request",
     "last_answer",
-    "reproduction_request",
     "seen_by",
     "tagged",
     "team_config",

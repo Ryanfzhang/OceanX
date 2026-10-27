@@ -917,6 +917,8 @@ class OceanRequestRouter:
         )
         if declared is None:
             raise RequestStoreError("Requested file is not declared by the task result")
+        if path.suffix.lower() == ".nc" or declared.mime_type in {"application/x-netcdf", "application/netcdf"}:
+            raise RequestStoreError("NetCDF files are available for preview only, not download")
         workspace_files = result.content.get("workspace_files")
         mutable_workspace_file = (
             isinstance(workspace_files, dict)

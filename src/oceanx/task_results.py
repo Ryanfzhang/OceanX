@@ -3,12 +3,14 @@
 Reports and supplementary files may use durable manifests. Interactive views
 are only the self-describing NetCDF files explicitly declared by
 ``ScientificFigure.save()``. Ordinary NetCDF outputs remain data files and
-never become UI results by directory scan. A static-delivery run (see
+are offered as metadata previews, not inferred interactive figures. Saved CSVs
+are exposed as bounded table previews with their original files. A static-delivery run (see
 ``figure_delivery``) instead lists the image files under an Expert's outputs folder.
 """
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import mimetypes
@@ -16,13 +18,14 @@ import os
 import shutil
 import tempfile
 import threading
+from itertools import islice
 from datetime import UTC, datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from oceanx.figure_delivery import static_figure_files, write_pdf_preview
+from oceanx.figure_delivery import agent_output_files, static_figure_files, write_pdf_preview
 
 if TYPE_CHECKING:
     from oceanx.task_workspace import TaskWorkspaceProjector
@@ -252,6 +255,7 @@ class TaskResultStore:
                 for item in (
                     *self._agent_views(task_id=ref.task_id),
                     *self._static_figures(task_id=ref.task_id),
+                    *self._data_files(task_id=ref.task_id),
                 )
                 if item.ref == ref
             ),
@@ -280,7 +284,80 @@ class TaskResultStore:
                     records.append(record)
         records.extend(self._agent_views(task_id=task_id))
         records.extend(self._static_figures(task_id=task_id))
+        records.extend(self._data_files(task_id=task_id, existing=records))
         records.sort(key=lambda item: (item.created_at, item.ref.result_id))
+        return tuple(records)
+
+    def _data_files(
+        self, *, task_id: str, existing: list[TaskResultRecord] | None = None,
+    ) -> tuple[TaskResultRecord, ...]:
+        """Expose saved CSV tables and NetCDF metadata, including older runs."""
+        task = self.task_workspaces.store.get_research_task(task_id)
+        if task is None:
+            return ()
+        root = self.task_workspaces.ensure_task_root(task_id).resolve(strict=True)
+        known = existing if existing is not None else self._agent_views(task_id=task_id)
+        represented = {location for record in known
+                       for location in record.content.get("workspace_files", {}).values()}
+        records = []
+        for agent, path in agent_output_files(root):
+            if path.suffix.lower() not in {".csv", ".nc"}:
+                continue
+            relative = path.relative_to(root).as_posix()
+            if relative in represented:
+                continue
+            stat = path.stat()
+            key = (str(path), stat.st_mtime_ns, stat.st_size, "data")
+            record = self._view_cache.get(key)
+            if record is None:
+                local = path.relative_to(root / "agents" / agent / "outputs").as_posix()
+                result_key = f"{agent}/{local}"
+                content: dict[str, Any] = {
+                    "role": "output_data", "agent_key": agent, "result_key": result_key,
+                    "output_path": relative, "data_file": path.name,
+                    "workspace_files": {path.name: relative},
+                }
+                table = path.suffix.lower() == ".csv"
+                if table:
+                    try:
+                        with path.open(encoding="utf-8-sig", newline="") as stream:
+                            reader = csv.reader(stream)
+                            content["columns"] = next(reader, [])
+                            rows = list(islice(reader, 201))
+                        content.update(rows=rows[:200], truncated=len(rows) > 200)
+                    except (UnicodeError, csv.Error) as exc:
+                        content["preview_error"] = str(exc)
+                else:
+                    import xarray as xr
+
+                    try:
+                        with xr.open_dataset(path, decode_cf=False, mask_and_scale=False) as dataset:
+                            content["columns"] = ["Variable", "Dimensions", "Shape", "Type", "Units"]
+                            content["rows"] = [
+                                [name, ", ".join(var.dims), " × ".join(map(str, var.shape)),
+                                 str(var.dtype), str(var.attrs.get("units", ""))]
+                                for name, var in dataset.variables.items()
+                            ]
+                            content["preview_kind"] = "netcdf_metadata"
+                    except (OSError, ValueError) as exc:
+                        content["preview_error"] = str(exc)
+                digest = hashlib.sha256()
+                with path.open("rb") as stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                aliases = (result_key, local, path.name, relative)
+                if not table:
+                    aliases += (f"{agent}/{Path(local).with_suffix('').as_posix()}",)
+                record = TaskResultRecord(
+                    ref=TaskResultRef(task_id=task_id, result_id="data_" + hashlib.sha256(relative.encode()).hexdigest()[:32]),
+                    workspace_id=task.workspace_id, kind="table" if table else "file",
+                    title=path.name, created_at=datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(),
+                    agent_run_id=agent, execution_output_names=aliases, content=content,
+                    files=(TaskResultFile(path=path.name, mime_type="text/csv" if table else "application/x-netcdf",
+                                          size=stat.st_size, sha256=digest.hexdigest()),),
+                )
+                self._view_cache[key] = record
+            records.append(record)
         return tuple(records)
 
     def _static_figures(self, *, task_id: str) -> tuple[TaskResultRecord, ...]:

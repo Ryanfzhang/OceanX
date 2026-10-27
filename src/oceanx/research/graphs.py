@@ -55,7 +55,6 @@ from oceanx.research.routing import (
     handoff_note,
     handoff_request,
     last_answer,
-    reproduction_request,
     seen_by,
     tagged,
     team_config,
@@ -1289,10 +1288,9 @@ async def _run_helper(config, part: str) -> str:
         f"\n\n(Helper folder: {folder})")
 
 
-async def _single_agent(config, run: AgentRun, *, reproduction: bool = False):
-    """The agent that works on a request alone; in auto mode it can hand the request to the team, except
-    a paper's reproduction, which it finishes itself (routing.reproduction_request)."""
-    handoff = workflow_mode(config) == "auto" and not reproduction
+async def _single_agent(config, run: AgentRun):
+    """The agent works on each request first and can choose the team in auto mode."""
+    handoff = workflow_mode(config) == "auto"
     return await build(config, SINGLE_AGENT, run=run, middleware=[
         *([HandoffMiddleware()] if handoff else []),
         HelperMiddleware(lambda part: _run_helper(config, part)),
@@ -1306,8 +1304,7 @@ async def coordinator(config):
     async def single_agent(state, config):
         run = _single_agent_run(config)
         conversation = seen_by(state["messages"], SINGLE_AGENT)
-        reproduction = reproduction_request(conversation)
-        agent = await _single_agent(config, run, reproduction=reproduction)
+        agent = await _single_agent(config, run)
         try:
             result = await agent.ainvoke({**state, "messages": conversation}, config=config)
         finally:
@@ -1315,7 +1312,7 @@ async def coordinator(config):
         known = {message.id for message in conversation}
         new = [message for message in result.get("messages", ()) if message.id not in known]
         handoff = None
-        if workflow_mode(config) == "auto" and not reproduction:
+        if workflow_mode(config) == "auto":
             handoff = handoff_request(new)
             last = new[-1] if new else None
             if handoff is None and isinstance(last, AIMessage) and last.text.startswith(

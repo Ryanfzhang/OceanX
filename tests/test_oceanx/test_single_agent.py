@@ -47,7 +47,6 @@ from oceanx.research.routing import (
     HelperMiddleware,
     QuickCallBudgetMiddleware,
     handoff_request,
-    reproduction_request,
     seen_by,
     tagged,
     team_config,
@@ -118,18 +117,12 @@ def test_a_request_handed_over_continues_in_research_mode():
 def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     handoff, helpers = " ".join(HANDOFF_POLICY.split()), " ".join(HELPER_POLICY.split())
     assert HANDOFF_TOOL in handoff and "asks why" in handoff and "however many parts" in handoff
-    # Three rules, the first that fits decides: a paper's reproduction stays with one agent, which holds
-    # every result its figures combine, even where the paper explains a mechanism; then any part that is an
-    # open research problem sends the request to the team, even beside listed data steps and figures (the
-    # Mangkhut request of 2026-10-26 asked whether mixing or upwelling cooled the sea and listed five
-    # downloads, a map and a section, and the agent kept it); then everything else is the agent's.
-    reproduce = handoff.index("1. A request to reproduce or test the analysis of a paper is yours")
-    team = handoff.index("2. A request any part of which is an open research problem goes to the research team")
-    rest = handoff.index("3. Everything else is yours, however many parts it has")
-    assert reproduce < team < rest and "The first of these rules that fits decides" in handoff
-    assert "even where the paper explains why something happens" in handoff
-    assert ("even when the request also lists the data to use or download and the maps, sections or tables to "
-            "make") in handoff and "whether mixing or upwelling did it" in handoff
+    assert "Paper reproduction is a method requirement, not a restriction" in handoff
+    assert handoff.index("1. A request") < handoff.index("2. Everything else")
+    assert "whether mixing or upwelling did it" in handoff
+    scope = " ".join(graphs.bounded_work_policy(False).split())
+    assert "identified paper" in scope and "request, attached sources and conversation" in scope
+    assert "background or a comparison between model and observations does not by itself" in scope
     assert "when unsure" not in handoff  # it sent mixed requests to the agent
     reproduction = "Reproducing or testing a paper's analysis is not bounded this way"
     assert reproduction in " ".join(graphs.bounded_work_policy(False).split())
@@ -238,9 +231,8 @@ def world(monkeypatch, tmp_path):
     calls = {"single": [], "team": [], "team_configs": [], "handoffs": [], "closed": []}
     replies = {"single": [AIMessage(content="图已画好。")], "team": [AIMessage(content="The team's answer.")]}
 
-    async def single_agent(config, run, *, reproduction=False):
+    async def single_agent(config, run):
         calls["single_built"] = (workflow_mode(config), run.thread_id)
-        calls["reproduction"] = reproduction
         return _Agent(replies["single"], calls["single"])
 
     async def coordinator_agent(config, experts, *, handoff=""):
@@ -326,43 +318,25 @@ async def test_an_exhausted_budget_hands_the_request_over(world):
 
 
 @pytest.mark.asyncio
-async def test_a_reproduction_stays_with_the_single_agent_even_past_its_budget(world):
-    # 2026-10-27: a reproduction that used up the single agent's calls went on to the team, whose Experts
-    # each drew one figure apart; now neither the agent nor an exhausted budget hands it over.
-    limit = SINGLE_AGENT_CALL_LIMIT
-    for last in (AIMessage(content=f"Model call limits exceeded: run limit ({limit}/{limit})"),
-                 _call(HANDOFF_TOOL, {"reason": "r"})):
-        world.replies["single"] = [last]
-        config = _config("auto")
-        graph = await graphs.coordinator(config)
-        result = await graph.ainvoke({"messages": [HumanMessage(content="复现这篇论文的 Fig. 2 和 Fig. 3")]}, config)
-        assert world.calls["team"] == [] and result["handoff"] == "" and world.calls["reproduction"] is True
-
-
-@pytest.mark.parametrize("text,expected", [
-    ("复现 Zheng et al. 2026 的 Fig. 2", True), ("Reproduce Fig. 3 of the attached paper", True),
-    ("Please replicate the budget analysis of this paper", True), ("Make this analysis reproducible", False),
-    ("计算百年一遇重现期的风暴潮增水", False), ("画出 8 月 15 日的海表温度", False)])
-def test_a_reproduction_is_known_by_the_words_of_the_latest_request(text, expected):
-    messages = [HumanMessage(content="复现论文的图"), AIMessage(content="好的。"), HumanMessage(content=text)]
-    assert reproduction_request(messages) is expected
-
-
-@pytest.mark.asyncio
-async def test_a_reproduction_has_no_handoff_and_the_whole_budget(monkeypatch):
-    captured = {}
-
-    async def fake_build(_config, role, *, run=None, middleware=None, suffix="", routing="", **_kwargs):
-        captured.update(middleware=middleware, routing=routing)
-        return "graph"
-
-    monkeypatch.setattr(graphs, "build", fake_build)
-    run = AgentRun(workspace_id="ws", task_id="task", request_id="r", thread_id="single-agent-x",
-                   server_run_id="s", role=SINGLE_AGENT)
-    assert await graphs._single_agent(_config("auto"), run, reproduction=True) == "graph"
-    budget = next(item for item in captured["middleware"] if isinstance(item, QuickCallBudgetMiddleware))
-    assert HandoffMiddleware not in [type(item) for item in captured["middleware"]] and not captured["routing"]
-    assert budget.last_call == LAST_CALL and not budget.last_tools and budget.run_limit == SINGLE_AGENT_CALL_LIMIT == 200
+@pytest.mark.parametrize("question", [
+    "Test whether CMOMS reproduces what the satellites and floats observed.",
+    "Reproduce Fig. 3 of the attached paper.",
+    "复现这篇论文的 Fig. 2 和 Fig. 3",
+    "Continue with the remaining figures.",
+])
+@pytest.mark.parametrize("use_team", [False, True])
+async def test_request_wording_does_not_override_the_agents_team_choice(world, question, use_team):
+    world.replies["single"] = ([_call(HANDOFF_TOOL, {"reason": "Compare competing explanations",
+                                                  "progress": "Reuse the saved analysis"})]
+                                if use_team else [AIMessage(content="Analysis finished.")])
+    config = _config("auto")
+    graph = await graphs.coordinator(config)
+    messages = [HumanMessage(content="Use the attached paper as context."),
+                AIMessage(content="I have read the paper."), HumanMessage(content=question)]
+    result = await graph.ainvoke({"messages": messages}, config)
+    assert len(world.calls["team"]) == int(use_team)
+    assert result["final_answer"] == ("The team's answer." if use_team else "Analysis finished.")
+    assert world.calls["single"][0][0] == messages
 
 
 @pytest.mark.asyncio

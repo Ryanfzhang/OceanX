@@ -63,6 +63,13 @@ def static_figure_files(task_root: Path) -> Iterator[tuple[str, Path]]:
     with ``_`` or ``.`` is a draft and is skipped, as is anything reached through a symlink and a file
     derived from a figure (DERIVED_SUFFIXES).
     """
+    for agent, path in agent_output_files(task_root):
+        if is_delivered_figure(path):
+            yield agent, path
+
+
+def agent_output_files(task_root: Path) -> Iterator[tuple[str, Path]]:
+    """Saved outputs only; never follow symlinks or include private draft folders."""
     agents = task_root / "agents"
     if agents.is_symlink() or not agents.is_dir():
         return
@@ -71,10 +78,10 @@ def static_figure_files(task_root: Path) -> Iterator[tuple[str, Path]]:
         if agent.is_symlink() or not agent.is_dir() or outputs.is_symlink() or not outputs.is_dir():
             continue
         for directory, subfolders, names in os.walk(outputs, followlinks=False):
-            subfolders.sort()
+            subfolders[:] = sorted(name for name in subfolders if not name.startswith(("_", ".")))
             for name in sorted(names):
                 path = Path(directory) / name
-                if is_delivered_figure(path):
+                if not name.startswith(("_", ".")) and not path.is_symlink() and path.is_file():
                     yield agent.name, path
 
 
