@@ -75,6 +75,13 @@ Archives rarely store every term of a vorticity budget; derive a term before cal
 - one remaining term as the budget residual, labelled as a residual.
 A term is missing only when neither the archive nor the attached sources hold what it needs.
 
+Translate each budget term's full mathematical operator before implementing it. For a horizontal
+layer transport `V`, `div_h(f V) = f div_h(V) + V dot grad_h(f)`; using only the first term omits the
+spatial variation of `f`. Use the equation's flux sign and include all components of a grouped term,
+such as advection and tilting, or label the computed subset. Apply the same domain, layer and
+normalisation to every term. A residual also contains omitted components and reconstruction errors;
+it is not a separately measured forcing or an independent closure check.
+
 A layer's transport streamfunction integrates the layer's depth-integrated transport from a coast,
 `psi(x, y) = integral(V, x0..x)` or of `-U` along y, on the native grid. Inverting vorticity with a
 Poisson solve needs boundary values the data do not give, so its pattern is not evidence.

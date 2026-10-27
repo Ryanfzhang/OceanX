@@ -31,6 +31,7 @@ from starlette.responses import FileResponse, JSONResponse, Response, StreamingR
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 from websockets.asyncio.client import connect
+from websockets.exceptions import ConnectionClosed
 
 from oceanx.backend.auth import REQUEST_CAPABILITIES
 from oceanx.web.config import WebModelConfig
@@ -40,6 +41,12 @@ from oceanx.web.uploads import InvalidUpload, stage_pdf
 _LOG = logging.getLogger(__name__)
 _WORKSPACE_ALIAS = "web-project"
 _FRAME_LIMIT = 1024 * 1024
+_UPSTREAM_PING_TIMEOUT = 120
+_UPSTREAM_RECONNECT_SECONDS = 300
+
+
+class BackendUnavailable(RuntimeError):
+    """The protocol connection is unavailable; never replay a submitted request."""
 
 
 @dataclass(frozen=True)
@@ -131,6 +138,8 @@ class ProtocolBackend:
         self.lock = self.log = None
         self.failure = None
         self.closing = False
+        self._upstream_url = ""
+        self._upstream_headers = {}
 
     async def start(self):
         self.settings.workspace.mkdir(parents=True, exist_ok=True)
@@ -175,22 +184,62 @@ class ProtocolBackend:
                     except httpx.HTTPError:
                         pass
                     await asyncio.sleep(.2)
-            self.upstream = await connect(
-                f"ws://127.0.0.1:{port}/ocean/protocol",
-                additional_headers={**headers, "x-ocean-desktop-token": desktop_token},
-                max_size=32 * 1024 * 1024, proxy=None,
-            )
+            self._upstream_url = f"ws://127.0.0.1:{port}/ocean/protocol"
+            self._upstream_headers = {**headers, "x-ocean-desktop-token": desktop_token}
+            await self._connect()
             self.reader = asyncio.create_task(self._read())
-            await self.upstream.send(json.dumps({"protocol_version": 2,
-                "request_id": "req_web_handshake_" + uuid4().hex, "type": "system.handshake",
-                "payload": {"client_kind": "desktop", "client_version": "oceanx-web",
-                            "supported_protocol_versions": [2]}}))
-            await asyncio.wait_for(self._ready.wait(), 45)
-            if self.ready is None:
-                raise RuntimeError("Web backend handshake failed; see the server-local log")
         except BaseException:
             await self.close()
             raise
+
+    async def _connect(self):
+        connection = await connect(
+            self._upstream_url, additional_headers=self._upstream_headers,
+            max_size=32 * 1024 * 1024, proxy=None,
+            ping_interval=20, ping_timeout=_UPSTREAM_PING_TIMEOUT,
+        )
+        try:
+            async with asyncio.timeout(45):
+                await connection.send(json.dumps({"protocol_version": 2,
+                    "request_id": "req_web_handshake_" + uuid4().hex, "type": "system.handshake",
+                    "payload": {"client_kind": "desktop", "client_version": "oceanx-web",
+                                "supported_protocol_versions": [2]}}))
+                ready = json.loads(await connection.recv())
+                if ready.get("type") != "system.ready":
+                    raise RuntimeError("Web backend handshake failed; see the server-local log")
+        except BaseException:
+            await connection.close()
+            raise
+        self.upstream, self.ready = connection, ready
+        self._ready.set()
+
+    def _resync_browsers(self):
+        # The browser reconnects and reloads persisted task state. Requests whose
+        # delivery is uncertain are never resent (especially session.submit).
+        for queue in tuple(self.browser_queues):
+            while not queue.empty():
+                queue.get_nowait()
+            queue.put_nowait({"kind": "resync"})
+
+    async def _reconnect(self):
+        self._ready.clear()
+        self._resync_browsers()
+        self.request_queues.clear()
+        old, self.upstream = self.upstream, None
+        if old is not None:
+            await old.close()
+        async with asyncio.timeout(_UPSTREAM_RECONNECT_SECONDS):
+            delay = 1
+            while not self.closing:
+                if self.process is not None and self.process.returncode is not None:
+                    raise RuntimeError("Agent Server exited; restart the web service")
+                try:
+                    await self._connect()
+                    _LOG.info("Web upstream reconnected; research requests were not replayed")
+                    return
+                except (OSError, TimeoutError, ConnectionClosed):
+                    await asyncio.sleep(delay)
+                    delay = min(delay * 2, 10)
 
     def public_frame(self, event):
         result = event.get("payload", {}).get("result")
@@ -207,15 +256,15 @@ class ProtocolBackend:
 
     async def _read(self):
         try:
-            async for raw in self.upstream:
-                event = json.loads(raw)
-                if event.get("type") == "system.ready":
-                    self.ready = event
-                    self._ready.set()
-                    continue
-                if self.ready is None and event.get("type") in {"system.error", "request.failed"}:
-                    self._ready.set()
-                self.deliver(event)
+            while not self.closing:
+                try:
+                    async for raw in self.upstream:
+                        self.deliver(json.loads(raw))
+                except (ConnectionClosed, OSError) as exc:
+                    _LOG.warning("Web upstream disconnected (%s); reconnecting for up to %s seconds",
+                                 type(exc).__name__, _UPSTREAM_RECONNECT_SECONDS)
+                if not self.closing:
+                    await self._reconnect()
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - isolate and log failures at the transport boundary
@@ -224,7 +273,7 @@ class ProtocolBackend:
         finally:
             if not self.closing:
                 self.failure = "Backend connection ended; restart the web service."
-            self._ready.set()
+            self._ready.clear()
             for queue in tuple(self.browser_queues):
                 with suppress(asyncio.QueueFull):
                     queue.put_nowait({"kind": "exit", "code": 1})
@@ -253,10 +302,10 @@ class ProtocolBackend:
         self.request_queues = {key: owner for key, owner in self.request_queues.items() if owner is not queue}
 
     async def send(self, incoming, *, browser_queue=None):
-        if self.failure or self.upstream is None:
-            raise RuntimeError("backend_unavailable")
         frame = prepare_frame(self.settings, incoming)
         async with self._send_lock:
+            if self.failure or not self._ready.is_set() or self.upstream is None:
+                raise BackendUnavailable("backend_unavailable")
             if browser_queue is not None:
                 if isinstance(frame.get("request_id"), str):
                     self.request_queues[frame["request_id"]] = browser_queue
@@ -265,22 +314,25 @@ class ProtocolBackend:
                     task_id = frame["payload"].get("task_id")
                 if isinstance(task_id, str):
                     self.browser_queues[browser_queue] = task_id
-            await self.upstream.send(json.dumps(frame, ensure_ascii=False))
+            try:
+                await self.upstream.send(json.dumps(frame, ensure_ascii=False))
+            except ConnectionClosed as exc:
+                raise BackendUnavailable("backend_unavailable") from exc
 
     def status(self):
-        return {"running": self.ready is not None and self.failure is None,
+        return {"running": self._ready.is_set() and self.failure is None,
                 "workspacePath": _WORKSPACE_ALIAS,
-                "readyEvent": self.public_frame(copy.deepcopy(self.ready))["payload"] if self.ready else None}
+                "readyEvent": self.public_frame(copy.deepcopy(self.ready))["payload"] if self._ready.is_set() else None}
 
     async def close(self):
         self.closing = True
-        if self.upstream is not None:
-            await self.upstream.close()
-            self.upstream = None
         if self.reader is not None:
             self.reader.cancel()
             await asyncio.gather(self.reader, return_exceptions=True)
             self.reader = None
+        if self.upstream is not None:
+            await self.upstream.close()
+            self.upstream = None
         if self.process is not None and self.process.returncode is None:
             self.process.terminate()
             try:
@@ -384,6 +436,9 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
             await socket.close(code=1008)
             return
         await socket.accept()
+        if not backend.status()["running"]:
+            await socket.close(code=1013)
+            return
         queue = asyncio.Queue(maxsize=256)
         backend.browser_queues[queue] = None
 
@@ -407,6 +462,9 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
                     if not isinstance(frame, dict):
                         raise TypeError("invalid_request")
                     await backend.send(frame, browser_queue=queue)
+                except BackendUnavailable:
+                    await socket.close(code=1013)
+                    return
                 except (TypeError, ValueError, OSError, RuntimeError) as exc:
                     # No internal path/traceback is sent back as an error detail.
                     _LOG.info("Rejected web frame: %s", type(exc).__name__)

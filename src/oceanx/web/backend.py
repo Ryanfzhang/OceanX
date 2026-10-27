@@ -100,7 +100,21 @@ class WebRequestRouter(OceanRequestRouter):
         # second time. No global class, Desktop instance or source is patched.
         router = cls.__new__(cls)
         router.__dict__.update(vars(native))
+        router._web_protocol_client = None
         return router
+
+    async def _handle_handshake(self, client, request):
+        # One authenticated gateway owns this web-only backend. Preserve its
+        # native session so pending questions remain answerable after reconnect.
+        previous = self._web_protocol_client
+        if previous is not None:
+            client.resume_client_id = previous.client_id
+            client.resume_session_id = previous.session_id
+            client.resume_workspace_id = previous.workspace_id
+            client.resume_principal = previous.principal
+        await super()._handle_handshake(client, request)
+        if client.authenticated:
+            self._web_protocol_client = client
 
     def _schedule_research_consolidation(self, request):
         return None

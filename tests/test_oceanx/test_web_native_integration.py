@@ -1,4 +1,5 @@
 """A browser connection reaches native task execution and immutable report delivery."""
+import asyncio
 import json
 from uuid import uuid4
 
@@ -86,6 +87,22 @@ def test_web_native_task_reconnect_and_report_grant(tmp_path, monkeypatch):
                     break
         # Closing a browser tab must not own or cancel the native run.
         assert app.state.backend.process.returncode is None
+        backend = app.state.backend
+        pid = backend.process.pid
+        original_identity = dict(backend.ready["payload"])
+
+        async def interrupt_upstream():
+            original = backend.upstream
+            await original.close(code=1012, reason="Simulated connection interruption")
+            async with asyncio.timeout(15):
+                while backend.upstream is original or not backend._ready.is_set():
+                    await asyncio.sleep(.05)
+
+        client.portal.call(interrupt_upstream)
+        assert backend.process.pid == pid
+        assert backend.ready["payload"]["client_id"] == original_identity["client_id"]
+        assert backend.ready["payload"]["session_id"] == original_identity["session_id"]
+        assert backend.failure is None
         with client.websocket_connect("ws://127.0.0.1:8765/api/protocol", headers={"Origin": origin}) as ws:
             import time
             deadline = time.monotonic() + 90

@@ -27,6 +27,11 @@ not resample, average, smooth, detrend or normalise them again. When a figure ne
 compute it as a step of the analysis, say in the answer that the method changed, and show it beside the
 result it replaces.
 
+Fits, correlations and budget residuals are analysis results too: save them with the series, sample
+selection and processing they describe, then read them for annotations. An annotation describing a
+plotted curve uses that curve's samples, filtering and period. If a statistic instead describes the
+raw series or another timescale, label that distinction explicitly.
+
 Plot the diagnostic's saved validity mask: a surface coastline alone does not define the support of
 a depth layer or derived field. Keep signed quantities signed; show an absolute magnitude only when
 labelled as such and retain its direction separately. Interpretation labels must follow the computed
@@ -78,6 +83,10 @@ withholding it. Leave out only a panel whose data are missing, say why, and neve
 quantity.
 
 ## Checking the figure
+Check the figure's inputs against the selected saved results, including their units, signs, masks and
+the series behind annotations. If a mismatch is in the computation, correct the analysis and regenerate
+the affected figure; changing its sign, limits or labels is not a numerical correction.
+
 When your model reads images, look at the figure once and fix what is wrong before delivering
 it: clipped or empty panels, squashed curves, overlapping text, panels of uneven size, type too
 small to read.

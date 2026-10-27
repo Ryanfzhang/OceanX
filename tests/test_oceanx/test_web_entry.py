@@ -295,6 +295,61 @@ def test_shared_native_events_are_routed_by_task_and_request_owner(setup):
 
 
 @pytest.mark.asyncio
+async def test_upstream_retries_without_replaying_requests(setup, monkeypatch):
+    from unittest.mock import AsyncMock
+    from oceanx.web.server import BackendUnavailable
+
+    settings, app, _ = setup
+    backend = ProtocolBackend(settings, app.state.grants)
+    backend.upstream = old = AsyncMock()
+    backend._ready.set()
+    queue = asyncio.Queue()
+    backend.browser_queues[queue] = "task_running"
+    backend.request_queues["already_submitted"] = queue
+    queue.put_nowait({"kind": "event"})
+    attempts = 0
+
+    async def connect_again():
+        nonlocal attempts
+        attempts += 1
+        assert not backend.status()["running"]
+        with pytest.raises(BackendUnavailable):
+            await backend.send({"type": "session.submit", "payload": {}})
+        if attempts < 3:
+            raise OSError("Temporarily unavailable")
+        backend.upstream = AsyncMock()
+        backend._ready.set()
+
+    monkeypatch.setattr(backend, "_connect", connect_again)
+    monkeypatch.setattr("oceanx.web.server.asyncio.sleep", AsyncMock())
+    await backend._reconnect()
+    assert attempts == 3
+    old.close.assert_awaited_once()
+    old.send.assert_not_called()
+    backend.upstream.send.assert_not_called()
+    assert not backend.request_queues
+    assert queue.get_nowait() == {"kind": "resync"}
+    assert queue.empty()
+
+
+@pytest.mark.asyncio
+async def test_upstream_retry_deadline_and_shutdown(setup, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    settings, app, _ = setup
+    backend = ProtocolBackend(settings, app.state.grants)
+    monkeypatch.setattr("oceanx.web.server._UPSTREAM_RECONNECT_SECONDS", .02)
+    backend._connect = AsyncMock(side_effect=OSError("Unavailable"))
+    with pytest.raises(TimeoutError):
+        await backend._reconnect()
+    assert not backend.status()["running"]
+    backend.reader = asyncio.create_task(backend._reconnect())
+    await asyncio.sleep(0)
+    await backend.close()
+    assert backend.reader is None and backend.closing
+
+
+@pytest.mark.asyncio
 async def test_web_review_hooks_do_not_modify_the_desktop_router(tmp_path, monkeypatch):
     from oceanx.backend.host import OceanBackendHost
     from oceanx.backend.router import OceanRequestRouter

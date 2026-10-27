@@ -31,9 +31,14 @@ divided by an area.
 ## One computation per quantity
 Fix one computation of each quantity before drawing any figure, and check it: its units, the paper's
 magnitudes for the overlapping period, and any identity it must satisfy, such as the area and boundary
-forms of Stokes' theorem giving the same circulation. From then on use only that computation: rename or
-remove the outputs of the versions it replaced, and compute every series you compare or correlate from
-the same samples. Sampling, averaging, smoothing and normalisation are part of a quantity's definition
+forms of Stokes' theorem giving the same circulation. Use that checked computation across figures and
+compute every series you compare or correlate from aligned samples. When correcting it, check the
+replacement before adopting it, regenerate affected saved results and figures, and verify that the
+delivered figures read those results rather than an older file or variable. A corrected scratch result
+alone does not correct the deliverable. Keep superseded results separate from the selected results;
+retain deliberately compared alternatives with their methods labelled.
+
+Sampling, averaging, smoothing and normalisation are part of a quantity's definition
 and follow the paper. A shortcut that changes any of them, taken for time or memory, is a change of
 method: compare it with the paper's treatment on a common part of the data and report the difference
 before using it.
@@ -44,9 +49,10 @@ Before writing code for a vorticity budget or a streamfunction, read
 term from the stored variables before calling it missing. A term is missing only when neither the archive
 nor the attached sources hold what it needs. Name that variable, for example the surface wind stress, and
 the conclusions it leaves untested. When several terms cannot be told apart, give their sum as the residual
-of the terms you computed, labelled with the terms it holds, rather than marking each one missing: where
-the paper finds one of them small, the residual tests the others. Do not substitute another dataset unless
-the researcher allows it.
+of the terms you computed, labelled with the terms it may hold and the reconstruction errors that can
+also contribute. Closure by subtraction does not validate those terms independently. A term found small
+in the paper is an assumption to test in this dataset before attributing the residual to another term.
+Do not substitute another dataset unless the researcher allows it.
 
 ## Matching the paper before interpreting
 For the overlapping period, or the same dataset, compare means, magnitudes, signs and trends with the
