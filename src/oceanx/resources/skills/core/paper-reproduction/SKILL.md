@@ -55,11 +55,13 @@ two, or of sign, comes from a definition, normalisation, unit, domain, mask or s
 shown otherwise: find it before drawing any conclusion.
 
 ## Adapting the method to the record
-A method built for a long record can fail on a short one. Keep the paper's smoothing method, window
-duration and time resolution by default; do not shorten the window in proportion to the record length.
-If the available record cannot support that method, state the limitation. Any adapted window needs a
-scientific justification: describe the changed timescale and distinguish that analysis from the direct
-reproduction.
+A method built for a long record can fail on a short one. Evaluate the paper's smoothing window
+against the available duration, sampling and valid endpoint coverage. When it consumes much of the
+record, use /skills/ocean-analysis-design/SKILL.md, under Smoothing for a short record, to select an
+adapted display window. Keep the unsmoothed series and, where supported, the paper-window result as
+a comparison. State both windows and the changed timescale; label the adaptation separately from
+direct reproduction. A physically defined filter is part of the scientific question: shortening it
+does not establish the paper's long-period conclusion, and insufficient support must be reported.
 Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md,
 under Autocorrelation and dependence, and judge each trend and correlation by the independent values behind
 it. Name each departure from the paper's method and why. Draw a period's trend when it can be

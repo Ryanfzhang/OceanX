@@ -27,6 +27,12 @@ not resample, average, smooth, detrend or normalise them again. When a figure ne
 compute it as a step of the analysis, say in the answer that the method changed, and show it beside the
 result it replaces.
 
+Plot the diagnostic's saved validity mask: a surface coastline alone does not define the support of
+a depth layer or derived field. Keep signed quantities signed; show an absolute magnitude only when
+labelled as such and retain its direction separately. Interpretation labels must follow the computed
+evidence. When copying a paper's layout, distinguish its claimed pattern from what this run actually
+establishes; do not copy the conclusion as a label merely because the original figure uses it.
+
 ## Choosing the figure
 Match the plot to the data structure: maps for spatial fields, time series for evolution, profiles
 for vertical structure, heatmaps for two-dimensional coordinates, and scatter plots for paired

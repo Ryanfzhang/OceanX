@@ -30,6 +30,17 @@ Removing a trend or fitting a seasonal cycle changes the question; use it when w
 than automatically. A fitted component is not proof of a physical mechanism. For prediction or
 held-out validation, estimate preprocessing from the training data rather than leaking test data.
 
+## Smoothing for a short record
+
+Choose a smoothing window in time units for the process of interest, considering sampling gaps and
+the valid span left at the endpoints. For descriptive display without a prescribed physical cutoff,
+start with a window no longer than roughly 20-25% of the record duration. This is a display heuristic,
+not a universal scientific threshold; retain the unsmoothed series and state the chosen window.
+Do not choose a window to obtain a desired sign, correlation or resemblance to a published figure.
+Apply consistent temporal treatment to series being compared, or explain why their treatments differ.
+Compute and save the smoothed series in the analysis step, before plotting. A shorter window describes
+a different timescale; it cannot recover long-period variability unsupported by the available record.
+
 ## Autocorrelation and dependence
 
 Timestamps or neighboring grid cells are not automatically independent replicates. Examine
@@ -44,10 +55,10 @@ sampling: for example temporal/spatial blocks or dependence-robust regression un
 Explain the block/lag scale and relevant assumptions. A longer series with dependent samples
 does not justify treating its raw length as the independent sample size.
 
-A running mean shares values between neighbouring points: a window of w years leaves about one
-independent value per w years. Keep the window well below the record length (a 7-year window
-leaves fewer than two independent values in 12 years) and judge the trends and correlations of a
-smoothed series by that count, not by its number of points.
+A running mean shares values between neighbouring points. Record duration divided by window duration
+is a warning about limited temporal support, not an effective sample size or a significance test.
+For trends and correlations, state whether the estimate uses the original or smoothed series and
+account for its dependence; a smoother-looking curve does not add independent evidence.
 
 ## Uncertainty and comparison
 

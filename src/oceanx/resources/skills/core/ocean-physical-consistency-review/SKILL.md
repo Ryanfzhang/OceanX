@@ -79,6 +79,20 @@ A layer's transport streamfunction integrates the layer's depth-integrated trans
 `psi(x, y) = integral(V, x0..x)` or of `-U` along y, on the native grid. Inverting vorticity with a
 Poisson solve needs boundary values the data do not give, so its pattern is not evidence.
 
+Use the layer's wet thickness and valid-data mask, not just the surface land mask. A column without
+water in that layer is outside its support; an all-missing column is unknown, not observed zero
+transport. If zeros are used internally for integration, retain these distinctions and restore the
+layer mask before interpreting or plotting the result. Do not integrate across disconnected water
+bodies without specifying their separate boundaries and reference constants.
+
+Check a reconstructed streamfunction against both transport components, with the chosen sign and
+grid metrics: `U = -dpsi/dy`, `V = dpsi/dx`. Layer transport can be divergent through exchange across
+its top and bottom; if so, state which component or approximation the streamfunction represents.
+A single constant changes only the reference zero. Subtracting a different value for every row or
+column changes a spatial derivative and therefore the represented transport; derive and check such
+a correction as analysis, not as a cosmetic adjustment. Investigate boundary-aligned bands through
+the masks, integration path and reference choice before interpreting them or smoothing them away.
+
 ## Stratification
 
 Separate density stratification, temperature stratification and mixed-layer depth (MLD).
