@@ -64,9 +64,11 @@ shown otherwise: find it before drawing any conclusion.
 A method built for a long record can fail on a short one. Evaluate the paper's smoothing window
 against the available duration, sampling and valid endpoint coverage. When it consumes much of the
 record, use /skills/ocean-analysis-design/SKILL.md, under Smoothing for a short record, to select an
-adapted display window. Keep the unsmoothed series and, where supported, the paper-window result as
-a comparison. State both windows and the changed timescale; label the adaptation separately from
-direct reproduction. A physically defined filter is part of the scientific question: shortening it
+adapted display window. Smooth at the time resolution the paper plots, not after averaging to a coarser
+one. Save the unsmoothed series and, where supported, the paper-window result as data; the reproduced
+figure draws only the selected treatment, in the original's style, and a comparison of windows goes in
+a separate supplementary figure. State both windows and the changed timescale.
+A physically defined filter is part of the scientific question: shortening it
 does not establish the paper's long-period conclusion, and insufficient support must be reported.
 Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md,
 under Autocorrelation and dependence, and judge each trend and correlation by the independent values behind

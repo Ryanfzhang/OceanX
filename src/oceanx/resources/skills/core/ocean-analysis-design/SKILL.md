@@ -19,6 +19,13 @@ duration for a time-integrated mean, or sampling weights for a sampling design. 
 and duration-weighted averages answer different questions; retain a user-specified convention.
 Do not assume latitude-cosine weights fit an irregular or curvilinear grid when cell areas exist.
 
+Use monthly means as the usual starting point for seasonal to interannual background evolution.
+Use daily means for short-lived events, their onset and recovery; retain finer resolution when the
+question concerns variation within a day. Use annual means for whole-year comparisons, or annual
+totals for cumulative budgets, when within-year timing is not the target. In a paper reproduction,
+follow the paper's plotted time resolution. Average only when the input sampling supports that scale;
+do not average to a coarser scale merely to simplify a plot or reduce computation.
+
 ## Baselines and anomalies
 
 Define the reference population/period, aggregation order, calendar, seasonal treatment and
@@ -35,7 +42,7 @@ held-out validation, estimate preprocessing from the training data rather than l
 Choose a smoothing window in time units for the process of interest, considering sampling gaps and
 the valid span left at the endpoints. For descriptive display without a prescribed physical cutoff,
 start with a window no longer than roughly 20-25% of the record duration. This is a display heuristic,
-not a universal scientific threshold; retain the unsmoothed series and state the chosen window.
+not a universal scientific threshold; save the unsmoothed series and state the chosen window.
 Do not choose a window to obtain a desired sign, correlation or resemblance to a published figure.
 Apply consistent temporal treatment to series being compared, or explain why their treatments differ.
 Compute and save the smoothed series in the analysis step, before plotting. A shorter window describes

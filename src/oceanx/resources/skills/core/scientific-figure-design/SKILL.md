@@ -24,16 +24,17 @@ every figure of a paper being reproduced.
 ## Results, not new analysis
 A figure draws results that were computed and saved before it. The plotting code reads them and does
 not resample, average, smooth, detrend or normalise them again. When a figure needs another treatment,
-compute it as a step of the analysis, say in the answer that the method changed, and show it beside the
-result it replaces.
+compute it as a step of the analysis, say in the answer that the method changed, and compare it with the
+result it replaces in a separate supplementary figure, not in the main one.
 
 Fits, correlations and budget residuals are analysis results too: save them with the series, sample
 selection and processing they describe, then read them for annotations. An annotation describing a
 plotted curve uses that curve's samples, filtering and period. If a statistic instead describes the
 raw series or another timescale, label that distinction explicitly.
 
-Plot the diagnostic's saved validity mask: a surface coastline alone does not define the support of
-a depth layer or derived field. Keep signed quantities signed; show an absolute magnitude only when
+Draw the coastline and land as Maps says, and leave empty the cells outside the diagnostic's saved
+validity mask: a surface coastline alone does not define the support of a depth layer or derived field.
+Keep signed quantities signed; show an absolute magnitude only when
 labelled as such and retain its direction separately. Interpretation labels must follow the computed
 evidence. When copying a paper's layout, distinguish its claimed pattern from what this run actually
 establishes; do not copy the conclusion as a label merely because the original figure uses it.
