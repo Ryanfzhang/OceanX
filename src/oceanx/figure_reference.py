@@ -21,7 +21,7 @@ DRAFT_RULE = (
 )
 
 _READING_RULE = (
-    "Before drawing your first figure, read the complete Figure API at {path} to its end "
+    "Before drawing your first interactive figure, read the complete Figure API at {path} to its end "
     "({lines} lines: call read_file with limit=300 and continue from the offset it reports "
     "until no lines remain). Do not read OceanX source code or probe the API by trial."
 )

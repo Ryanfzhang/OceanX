@@ -23,6 +23,7 @@ from oceanx.figure_delivery import (
 )
 from oceanx.native_skills import prepare_skill_library
 from oceanx.research import graphs, services
+from oceanx.skills import load_ocean_skill
 from oceanx.research.services import (
     ResearchServices,
     expert_agent_key,
@@ -250,8 +251,10 @@ def test_the_figure_rules_ask_for_a_vector_pdf_in_the_desktop_and_keep_png_in_st
     static = " ".join(STATIC_EXPERT_WORKSTREAM_POLICY.split())
     assert "save it as a PNG under OCEAN_OUTPUT_DIR" in static and "vector PDF" not in static
     reference = " ".join((ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8").split())
-    assert "as a vector PDF where your instructions ask for one" in reference and "rasterized=True" in reference
-    assert "cannot be edited as individual shapes" in reference and ".preview.png" not in reference
+    assert "rasterized=True" in reference and "cannot be edited as individual shapes" in reference
+    figure = " ".join(load_ocean_skill("scientific-figure-design")[0].split())
+    assert "as a vector PDF where your instructions ask for one" in figure  # static runs read both
+    assert ".preview.png" not in reference and ".preview.png" not in figure
     assert "its picture is beside it as `concise-name.pdf.preview.png`" in interactive
 
 
@@ -426,16 +429,26 @@ def test_cache_cleanup_keeps_delivered_images_in_either_delivery_mode(monkeypatc
     assert not (agent / "scratch" / "explore.png").exists()
 
 
-def test_a_static_skill_library_has_no_plotting_skill(monkeypatch, tmp_path):
+def test_a_static_skill_library_keeps_the_figure_skill_without_the_plotting_interface(monkeypatch, tmp_path):
     monkeypatch.delenv(FIGURE_DELIVERY_ENV, raising=False)
     interactive = prepare_skill_library(tmp_path / "interactive", role="ocean_process_expert")
-    assert (interactive / "skills" / "scientific-figure-design" / "SKILL.md").is_file()
+    skill = interactive / "skills" / "scientific-figure-design"
+    assert {"SKILL.md", "interactive.md", "API.md"} <= {path.name for path in skill.iterdir()}
+    entry = (skill / "SKILL.md").read_text(encoding="utf-8")
+    assert "(interactive.md)" in entry and "<!--" not in entry  # the interface's part kept, its markers not
     monkeypatch.setenv(FIGURE_DELIVERY_ENV, "static")
     static = prepare_skill_library(tmp_path / "static", role="ocean_process_expert")
     assert static != interactive
-    assert not (static / "skills" / "scientific-figure-design").exists()
-    others = {path.name for path in (interactive / "skills").iterdir()} - {"scientific-figure-design"}
-    assert others and others == {path.name for path in (static / "skills").iterdir()}
+    kept = static / "skills" / "scientific-figure-design"
+    assert {path.name for path in kept.iterdir()} == {"SKILL.md"}
+    # The rules for every figure stay with a static run; nothing names the plotting interface
+    # (2026-10-27: they used to leave with the interface).
+    text = (kept / "SKILL.md").read_text(encoding="utf-8")
+    assert "## Publication figures" in text and "## Reproducing a paper's figure" in text
+    assert not [name for name in INTERFACE_NAMES if name in text]
+    assert "interactive.md" not in text and "<!--" not in text
+    assert {path.name for path in (interactive / "skills").iterdir()} == {
+        path.name for path in (static / "skills").iterdir()}
 
 
 @pytest.mark.parametrize("delivery, names_the_interface", [("interactive", True), ("static", False)])
@@ -522,10 +535,12 @@ async def test_a_static_run_shows_no_model_a_plotting_interface(tmp_path, monkey
                 if delivery == "static":
                     assert not leaked, f"{label} shows {leaked}"
                     assert not result_api.exists(), label  # not even a stale file from an earlier mode
-                    if library is not None:
-                        assert not (Path(library) / "skills" / "scientific-figure-design").exists(), label
+                    if library is not None:  # the figure skill, without its part about the interface
+                        skill = Path(library) / "skills" / "scientific-figure-design"
+                        assert not (skill / "interactive.md").exists() and not (skill / "API.md").exists(), label
                     if role in {"ocean_process_expert", "statistical_inference_expert"}:
                         assert "PNG" in text and "OCEAN_OUTPUT_DIR" in text, label
+                        assert (Path(library) / "skills" / "scientific-figure-design" / "SKILL.md").is_file(), label
                     if role == "coordinator":
                         assert "Saved figures" in text, label
                 elif role == "coordinator":
@@ -533,7 +548,8 @@ async def test_a_static_run_shows_no_model_a_plotting_interface(tmp_path, monkey
                     assert "Published results" in text, label
                 elif role != "scientific_discussion_partner":
                     assert "Figure API" in text and result_api.is_file(), label
-                    if role in {"ocean_process_expert", "statistical_inference_expert"}:  # the skill's roles
+                    if role in {"ocean_process_expert", "statistical_inference_expert",
+                                "literature_reproduction_expert"}:  # the skill's roles
                         assert (Path(library) / "skills" / "scientific-figure-design").is_dir(), label
     finally:
         await host.close()

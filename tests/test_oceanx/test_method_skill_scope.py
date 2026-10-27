@@ -65,30 +65,31 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     for step in ("Before computing anything, read the page image",
                  "Before writing code for a vorticity budget or a streamfunction, read /skills/ocean-physical-consistency-review/SKILL.md",
                  "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
-                 "Before drawing the first figure, read /references/coding/matplotlib.md"):
+                 "Before drawing the first figure, read /skills/scientific-figure-design/SKILL.md"):
         assert step in reproduction
-    assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
-    assert "give their sum as the residual" in reproduction
+    assert "## One computation per quantity" in reproduction and "give their sum as the residual" in reproduction
     assert "label significance only from a valid statistical test" in reproduction
     assert "do not pad or extrapolate endpoints" in reproduction
-    # The axis follows the main curve and the faint raw series may run off it (2026-10-27: the two rules said
-    # the opposite, and a run fitted the axis to the monthly values and flattened the curve).
-    assert ("a main curve cut off or flattened by its axis range, while the faint raw series behind it may run "
-            "off the axes") in reproduction
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
     assert "open boundaries are the real straits" in " ".join(physical.split())
     assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
-    reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
-    assert "## Publication figures" in reference
-    assert "set the limits from the main series after drawing (`ax.set_ylim`)" in " ".join(reference.split())
-    assert "## Maps" in reference and "ax.coastlines('50m'" in reference
-    # A figure drawn without the Figure API is told where the craft is described, and every spatial
-    # field it draws goes on a map, in either delivery mode.
+    # How every figure is drawn, a reproduced one included, lives in one skill; the code-level matplotlib
+    # details stay in the reference it names (2026-10-27: the rules were spread over six places).
+    figure = " ".join(load_ocean_skill("scientific-figure-design")[0].split())
+    for section in ("## Publication figures", "## Maps", "## Reproducing a paper's figure", "## Checking the figure"):
+        assert section in figure
+    assert "open the original and yours together" in figure and "ax.coastlines('50m'" in figure
+    assert "axis limits show the full range of all plotted series" in figure
+    assert "label it explicitly and state which values lie outside the displayed range" in figure
+    reference = " ".join((ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8").split())
+    assert "/skills/scientific-figure-design/SKILL.md" in reference and "rasterized=True" in reference
+    # Every agent that draws, in either delivery mode, is told to read that skill before its first figure.
     from oceanx.runtime import STATIC_EXPERT_WORKSTREAM_POLICY
     for policy in (OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY):
         flat = " ".join(policy.split())
-        assert "/references/coding/matplotlib.md" in flat and "map with coastlines" in flat
+        assert "Before drawing your first figure, read /skills/scientific-figure-design/SKILL.md" in flat
+        assert "/references/coding/matplotlib.md" not in flat
 
 
 @pytest.mark.parametrize("name,owner", [

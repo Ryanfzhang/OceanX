@@ -210,7 +210,8 @@ Keep verified calculations and code. Derive reported values and labels from save
 estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
 not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
 as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
-one-line `title` attribute, so a later step can tell what it holds without opening it. For a user-facing interactive figure, use
+one-line `title` attribute, so a later step can tell what it holds without opening it.
+Before drawing your first figure, read /skills/scientific-figure-design/SKILL.md. For a user-facing interactive figure, use
 `from oceanx.scientific_view import ScientificFigure`, supply the computed arrays and complete panel/layer
 structure, then call `figure.save('concise-name.nc')` when the researcher requested a visual or the visual is
 necessary scientific evidence. That explicit save is the delivery boundary; ordinary
@@ -218,16 +219,14 @@ NetCDF files are not figures. For a paper's figure and layout, use matplotlib an
 ScientificFigure supports its plot type. Use ScientificFigure for interactive exploration. Draw a figure it does not suit
 yourself, as you see fit, for example with matplotlib (cartopy for maps): bars or a histogram, significance
 stippling, a polar or Taylor diagram, twin y-axes, a map projection other than the Workbench's, streamlines, a
-schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution, and draw a spatial
-field on a map with coastlines, as /references/coding/matplotlib.md describes for publication figures and maps,
-and save it as a vector PDF under OCEAN_OUTPUT_DIR, for example
+schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution as that skill
+describes, and save it as a vector PDF under OCEAN_OUTPUT_DIR, for example
 `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.pdf'), bbox_inches='tight')`; that file is
 delivered too, and after the run its picture is beside it as `concise-name.pdf.preview.png`, to look at. Save a PNG
 instead only when the figure is itself a picture, such as a photograph or a satellite true-colour image. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
 plus filename stem (the whole file name for a saved figure file) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
 comparisons and scientific scales. Omit style arguments to ScientificFigure to use the Workbench defaults.
-When your model reads images, inspect the saved preview once for visible plotting errors. For a paper
-reproduction, compare it with the original and correct differences the data allow. For spatial fields, preserve the source
+For spatial fields, preserve the source
 validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather than plotted
 values. Every spatial field must pass an explicit Boolean `valid_mask` to `field2d`; zero remains valid where
 that mask is True.
@@ -242,15 +241,15 @@ estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel
 not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
 as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
 one-line `title` attribute, so a later step can tell what it holds without opening it. When the researcher
-requested a visual or a figure is necessary scientific evidence, make the final figure with matplotlib, a
-spatial field on a map with coastlines as /references/coding/matplotlib.md describes under Maps, and
+requested a visual or a figure is necessary scientific evidence, make the final figure with matplotlib and
 save it as a PNG under OCEAN_OUTPUT_DIR, for
 example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'), dpi=150,
-bbox_inches='tight')`; that file is the delivered figure. Keep exploratory plots in your working directory.
+bbox_inches='tight')`; that file is the delivered figure.
+Before drawing your first figure, read /skills/scientific-figure-design/SKILL.md. Keep exploratory plots in
+your working directory.
 Name the figure file in report.md immediately after the supported claim. You own the scientific visual
 encoding, including plot type, axes, layers, comparisons and scientific scales; label axes with units.
-When your model reads images, inspect the saved image once for visible plotting errors. For a paper
-reproduction, compare it with the original and correct differences the data allow. For spatial fields, preserve
+For spatial fields, preserve
 the source validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather
 than plotted values, so mask them (NaN or a masked array); zero remains valid where the mask is True.
 """

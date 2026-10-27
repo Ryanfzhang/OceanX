@@ -10,6 +10,7 @@ from oceanx.runtime import (
     build_ocean_runtime_composition,
 )
 from oceanx.deep_runtime import NATIVE_TASK_DESCRIPTION
+from oceanx.skills import load_ocean_skill
 from oceanx.team.models import ChildAuthority
 from oceanx.team.profiles import AGENT_PROFILES, profile_system_prompt
 from oceanx.tools import OceanToolServices
@@ -115,7 +116,9 @@ def test_experts_keep_evidence_without_workflow_checklists():
     policy = _flatten(OCEAN_EXPERT_WORKSTREAM_POLICY)
     assert "Keep verified calculations and code" in policy
     assert "Derive reported values and labels from saved calculations" in policy
-    assert "Do not spend a separate round polishing" in policy
+    # A figure is looked at once, as the figure skill the policy names says, not polished in rounds.
+    assert "read /skills/scientific-figure-design/SKILL.md" in policy
+    assert "look at the figure once" in _flatten(load_ocean_skill("scientific-figure-design")[0])
     # Most failed code runs across tasks were shape/axis mistakes after dropping to bare arrays.
     assert "select and reduce by dimension name" in policy and "not as bare .npz" in policy
 

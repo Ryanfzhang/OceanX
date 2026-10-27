@@ -43,6 +43,10 @@ Saved interactive figures whose filenames start with `_` or `.` are drafts, incl
 output subdirectories: their files and previews remain on disk but are not listed as results.
 Before drawing, interactive Experts read one generated API reference with current signatures,
 plot-kind restrictions and runnable examples; the task reference and figure-design skill use the same text.
+Every agent that draws is told, in both delivery modes, to read the `scientific-figure-design` skill
+before its first figure: it holds the rules for every figure (choosing the plot, publication layout,
+maps, reproducing a paper's figure, checking the result), and its interactive part (`interactive.md` and
+the generated `API.md`) is left out of static runs.
 Their previews and interactive views are generated deterministically; there is no Visualization
 Expert or model-authored figure specification. Old
 JSON/column payloads and previous scientific figure schemas are not converted. The former

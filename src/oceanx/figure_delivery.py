@@ -32,8 +32,10 @@ STATIC_FIGURE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".svg", ".pdf"})
 # Files derived from a figure beside it, never figures of their own: its picture for screens and the print
 # version of an interactive figure (figure_preview.figure_pdf_path).
 DERIVED_SUFFIXES = (".preview.png", ".print.pdf")
-# Skills that teach the plotting interface; a static run does not put them in the skill library.
-INTERACTIVE_FIGURE_SKILLS = frozenset({"scientific-figure-design"})
+# What of the figure skill teaches the plotting interface: a static run leaves these files out of the skill
+# library and the skill's text between these markers (native_skills.py); the rest is for every figure.
+INTERACTIVE_FIGURE_FILES = frozenset({"scientific-figure-design/interactive.md", "scientific-figure-design/API.md"})
+INTERACTIVE_MARKERS = ("<!-- interactive -->", "<!-- /interactive -->")
 
 
 def figure_delivery() -> str:

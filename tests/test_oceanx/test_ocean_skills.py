@@ -42,14 +42,17 @@ def test_core_ocean_skills_are_loaded_through_extra_skill_dirs_only():
     assert "compute_" not in content
 
 
-@pytest.mark.parametrize("role", ["ocean_process_expert", "statistical_inference_expert"])
+@pytest.mark.parametrize("role", ["ocean_process_expert", "statistical_inference_expert",
+                                  "literature_reproduction_expert"])
 def test_scientific_figure_skill_exposes_shared_palette_semantics(role):
-    content, metadata = load_ocean_skill("scientific-figure-design", role=role)
+    _content, metadata = load_ocean_skill("scientific-figure-design", role=role)
+    # The palette names belong to the interactive interface, in the skill's interactive part.
+    interactive = (ocean_skill_dirs()[0] / "scientific-figure-design" / "interactive.md").read_text(encoding="utf-8")
 
     assert role in metadata.roles
-    assert "ocean_teal" in content
-    assert "blue_red" in content
-    assert "grouped" in content
+    assert "ocean_teal" in interactive
+    assert "blue_red" in interactive
+    assert "grouped" in interactive
 
 
 def test_literature_skill_remains_hidden_until_its_capability_is_enabled():
