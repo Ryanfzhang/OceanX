@@ -74,7 +74,10 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "is left out and named in the answer, never replaced by another period or quantity" in reproduction
     # The paper's ranges and numbers are not copied over values that do not fit them (2026-10-27: every bar of
     # a budget clipped at the paper's axis, transports printed from the paper, a field flat in its colour scale).
-    assert "draw your values in full and report the difference as a finding" in reproduction
+    assert "draw it in full and report the difference as a finding" in reproduction
+    # The raw series stays behind the smoothed one and runs off the axis (2026-10-27: one run fitted the axis
+    # to the monthly series and flattened the curve, the next left the monthly series out to keep it inside).
+    assert "the raw series runs off it as in the original" in reproduction
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
     assert "open boundaries are the real straits" in " ".join(physical.split())
@@ -84,7 +87,11 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     flat = " ".join(reference.split())
     for rule in ("89 mm (3.5 in) wide for one column", "white at zero with symmetric limits", "never clip it",
                  "a paper's value may stand beside yours for comparison, never alone",
-                 "Never draw boxes of text in place of a figure", "go in the answer, not on the figure"):
+                 "Never draw boxes of text in place of a figure", "go in the answer, not on the figure",
+                 "let the axes cut it off; that is intended", "A faint raw series running off the axes is not a fault",
+                 # 2026-10-27: two colour bars set at hand-chosen positions covered each other's labels
+                 "Never place a colour bar, legend or text at hand-set figure coordinates",
+                 "Two colour bars for one map go one to the right and one below"):
         assert rule in flat
     assert "## Maps" in reference and "ax.coastlines('50m'" in reference
     # A figure drawn without the Figure API is told where the craft is described, and every spatial

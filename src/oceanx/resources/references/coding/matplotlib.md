@@ -32,12 +32,14 @@ for each other. Give panels of one kind the same size and aligned axes, and let 
 their time axis, with years on top and bottom when the original shows them.
 
 ### Ranges come from the values
-Set every axis and colour range from the values drawn, the panel's main series first: draw a noisier or
-secondary series lighter behind it and let it run off the axis rather than squash the main one. Every
-bar and error bar and the main series stay inside the axes, bars start at zero, and a colour field
-spans most of its colour scale. A range taken from another figure, the paper's included, is kept only
-when your values fit in it; when they do not, draw yours in full and treat the difference as a result
-to explain, never clip it.
+Fit each axis to the panel's main series, in a time series the smoothed curve with its fills and trend
+lines, and set the limits from it after drawing (`ax.set_ylim(...)`): matplotlib otherwise widens the axis
+to every line drawn, and a noisy monthly series then flattens the curve the panel is about. Draw the raw
+or a secondary series faintly behind the main one and let the axes cut it off; that is intended, never a
+reason to widen the axis or to leave the series out. Every bar, every error bar and the main series stay
+inside the axes, bars start at zero, and a colour field spans most of its colour scale. A range taken
+from another figure, the paper's included, is kept only when your main series fits in it; when it does
+not, draw it in full and treat the difference as a result to explain, never clip it.
 
 ### Colour
 A quantity of one sign, such as temperature, concentration, speed or depth, takes a perceptually uniform
@@ -58,6 +60,19 @@ across the data, another label or a frame. Caveats, missing data, sources and me
 answer, not on the figure, and so does what error bars or shading show (standard deviation, standard
 error or a confidence interval) with the number of values behind them.
 
+### No overlaps
+Nothing on a figure covers anything else: no text, tick label, legend, colour bar or panel letter touches
+another one, a frame or data it does not label. Let the layout place them: create the figure with
+`layout='constrained'`, attach every colour bar to its axes with `fig.colorbar(mappable, ax=ax, label=...)`,
+and place a legend with `ax.legend` or `fig.legend(loc='outside right upper')`. Never place a colour bar,
+legend or text at hand-set figure coordinates (`fig.add_axes`, `fig.text`, or a `cax` made with them):
+the layout does not move them, and they land on each other. Two colour bars for one map go one to the
+right and one below (`location='bottom'`); side by side they need a figure about 5 in wide or more, or
+they squeeze the map away. Keep tick labels apart with fewer ticks (`ax.locator_params(axis='y', nbins=5)`),
+`matplotlib.dates.ConciseDateFormatter` for dates, and on a map degree labels on the left and bottom
+only (`gl.top_labels = gl.right_labels = False`). Break a long label over two lines rather than let it
+run into its neighbour.
+
 ### Schematics
 A schematic, a globe or a three-dimensional stack of maps is drawn as flat panels of the data it rests
 on, in the same arrangement, with its arrows, labels and numbers taken from your results. Never draw
@@ -72,8 +87,10 @@ that field then remains an image and cannot be edited as individual shapes. If t
 those shapes editable, keep them vector. Fonts must also be available on the editing machine.
 
 When your model reads images, look at the figure once and fix what is wrong before delivering it: a
-bar, line or panel cut off by the axes, a colour field without a visible pattern, text over data or
-over other text, panels of uneven size, type too small to read.
+bar, error bar, main series or panel cut off by the axes, a main series flattened by a range set for
+something else, a colour field without a visible pattern, anything covering something else (text, tick
+labels, legends, colour bars, panel letters), a panel squeezed small by its colour bars, panels of uneven
+size, type too small to read. A faint raw series running off the axes is not a fault.
 
 ## Maps
 
