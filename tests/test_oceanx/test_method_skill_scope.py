@@ -67,29 +67,21 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
                  "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
                  "Before drawing the first figure, read /references/coding/matplotlib.md"):
         assert step in reproduction
-    assert "## One computation per quantity" in reproduction
-    # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is drawn
-    # and marked, while a period the data do not cover is left out and named, never replaced.
-    assert "give their sum as the residual" in reproduction and "a trend too short to hold marked not significant" in reproduction
-    assert "name it in the answer, never replacing it with another period or quantity" in reproduction
-    # The original is the specification, and OceanX puts it beside the figure named after it (2026-10-27: the
-    # agent looked at the original some fifty calls before drawing and afterwards only at its own figure).
-    assert "The original is the specification" in reproduction and "as fig2_layer_vorticity.pdf for Fig. 2" in reproduction
+    assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
+    assert "give their sum as the residual" in reproduction
+    assert "label significance only from a valid statistical test" in reproduction
+    assert "do not pad or extrapolate endpoints" in reproduction
+    # The axis follows the main curve and the faint raw series may run off it (2026-10-27: the two rules said
+    # the opposite, and a run fitted the axis to the monthly values and flattened the curve).
+    assert ("a main curve cut off or flattened by its axis range, while the faint raw series behind it may run "
+            "off the axes") in reproduction
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
     assert "open boundaries are the real straits" in " ".join(physical.split())
     assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
     reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
     assert "## Publication figures" in reference
-    flat = " ".join(reference.split())
-    # A short core that is read and kept, not a long list (2026-10-27: some 2,000 words of figure rules in six
-    # places, of which the branch that drew Fig. 2 read none).
-    publication = flat[flat.index("## Publication figures"):flat.index("## Maps")]
-    assert len(publication.split()) < 320
-    for rule in ("89 mm (3.5 in) wide for one column", "white at zero with symmetric limits",
-                 "Never place a colour bar, legend or text at hand-set figure coordinates",
-                 "let the axes cut it off", "in the answer, not on the figure"):
-        assert rule in publication
+    assert "set the limits from the main series after drawing (`ax.set_ylim`)" in " ".join(reference.split())
     assert "## Maps" in reference and "ax.coastlines('50m'" in reference
     # A figure drawn without the Figure API is told where the craft is described, and every spatial
     # field it draws goes on a map, in either delivery mode.

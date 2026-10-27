@@ -30,6 +30,7 @@ from oceanx.deep_runtime import build_deep_agent_graph
 from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
 from oceanx.figure_delivery import static_figures
+from oceanx.pdf_text import FIGURE_RULE
 from oceanx.model_config import load_model_profile
 from oceanx.research.background_experts import (
     AWAIT_TOOL, BackgroundDelegationMiddleware, RunningExperts, appended)
@@ -593,20 +594,10 @@ def research_mode(config) -> bool:
     return workflow_mode(config) == "research"
 
 
-# A figure drawn with matplotlib is looked at once against the figure standard in matplotlib.md; the
-# Workbench draws a ScientificFigure, so its preview is not opened. A static run has no preview file: the
-# saved image is the figure.
-FIGURE_LOOK = {
-    True: ("Look once at the image of each figure you saved and fix what breaks the rules of "
-           "/references/coding/matplotlib.md; do not reopen it to polish it."),
-    False: ("Do not open the .preview.png of a ScientificFigure you just saved. Look once at each figure you "
-            "drew with matplotlib, through the `<name>.pdf.preview.png` beside a PDF, and fix what breaks the "
-            "rules of /references/coding/matplotlib.md; do not reopen it to polish it."),
-}
-
-
 def bounded_work_policy(static: bool) -> str:
-    return BOUNDED_WORK_POLICY.format(figure_look=FIGURE_LOOK[static], seconds=STANDARD_MODE_CODE_SECONDS)
+    # A static run has no preview file beside a figure: the saved image is the figure.
+    return BOUNDED_WORK_POLICY.format(saved_view="the image" if static else "the .preview.png",
+                                      seconds=STANDARD_MODE_CODE_SECONDS)
 
 
 def coordinator_report_path(config) -> Path:
@@ -919,9 +910,11 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    + "here, not in outputs. Scratch may be removed after the task becomes idle. "
                    "Save only final deliverables under OCEAN_OUTPUT_DIR; "
                    + ("a final figure saved there as a PNG is delivered. " if static else
-                      "ScientificFigure.save('name.nc') publishes there automatically, and a figure the "
-                      "Figure API cannot draw is delivered when saved there, as a vector PDF unless it is a "
-                      "picture such as a photograph. ")
+                      "For interactive exploration, ScientificFigure.save('name.nc') publishes there "
+                      "automatically. To reproduce a paper's figure and layout, use matplotlib and save a "
+                      "vector PDF there, even when the Figure API supports its plot type. Other figures "
+                      "the Figure API cannot draw are also delivered as vector PDFs unless they are "
+                      "pictures such as photographs. ")
                    + "Use supplied absolute data/result paths with native file tools or execute. "
                    "Source data and other agents' evidence are read-only; your working directory is writable.")
         if not static:
@@ -939,13 +932,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                        "to carry state within one attempt. Save only a checkpoint another node or retry needs.")
             if role in DATA_EXPERT_ROLES and learned:
                 prompt += " " + learned_skills_rule(learned)
-    if (svc.native_vision and research and not static
-            and role not in {"coordinator", "scientific_discussion_partner"}):
-        prompt += (
-            "\nA saved figure may have a sibling .preview.png. Inspect it only when the image itself "
-            "is scientific evidence needed for your reasoning, such as a spatial pattern; preview "
-            "inspection is not a separate visual-delivery review."
-        )
+    if svc.native_vision and role not in {"coordinator", "scientific_discussion_partner"}:
+        prompt += "\n" + FIGURE_RULE  # a paper's figures reach the model as images (pdf_text.py)
     if role != "coordinator" and not quick:
         prompt += "\n" + profile_system_prompt(get_agent_profile(role))
     if role not in {"coordinator", SINGLE_AGENT}:  # the single agent has the conversation itself

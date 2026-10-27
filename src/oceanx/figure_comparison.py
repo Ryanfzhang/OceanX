@@ -6,6 +6,10 @@ picture and the original are put side by side in one image beside it, ``_compare
 draft, never delivered), and the agent is asked to compare them there. Left to reopen the original
 itself, an agent drew from a look taken some fifty calls earlier and afterwards opened only its own
 figure (2026-10-27). Each figure is compared at most MAX_COMPARISONS times in one request.
+
+Switched off (ENABLED) on 2026-10-27: its first image was larger than the 500 KiB that read_file opens,
+so no agent saw it, and the figure rules were rolled back at the same time; it is to be switched on
+alone, once the rolled-back rules have been run again, so that its effect can be told apart.
 """
 from __future__ import annotations
 
@@ -17,6 +21,7 @@ from pathlib import Path
 from oceanx.figure_delivery import preview_path
 from oceanx.pdf_text import paper_figure
 
+ENABLED = False
 FIGURE_NAME = re.compile(r"^fig(?:ure)?[_\- ]?(\d+)(?!\d)", re.IGNORECASE)
 MAX_COMPARISONS = 2
 COMPARISON_LEDGER = "figure-comparisons.json"  # in the agent's .runtime folder: comparisons per request

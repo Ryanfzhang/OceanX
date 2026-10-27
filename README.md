@@ -109,9 +109,8 @@ stays with the single agent, even where the paper explains a mechanism: it then 
 paper's figures combine, and is finished only when every quantity, term and figure the data allow is
 compared with the paper's (the `paper-reproduction` skill). A request whose words ask for a reproduction
 (reproduce, replicate, 复现; `routing.reproduction_request`) is never handed over, not even when the
-agent's calls run out. A figure it saves under a paper's figure number, such as `fig2_*.pdf`, is put
-beside that figure of the attached paper in one image after the run, `_compare_fig2_*.png`, which the
-agent is asked to compare (`figure_comparison.py`, twice per figure at most). The rule comes first in the
+agent's calls run out. `figure_comparison.py` can put a figure saved under a paper's figure number, such as `fig2_*.pdf`,
+beside that figure of the attached paper after the run; it is switched off for now (`ENABLED`). The rule comes first in the
 single agent's instructions and it decides on the call that starts the work, so a simple request pays
 nothing for the choice; if its 200 calls run out first, its last call may only answer or hand over. Headless runs (`ocean run`, `ocean batch`, the
 benchmark) send the team at once unless `--workflow-mode auto` or `standard` (the single agent

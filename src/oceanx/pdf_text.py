@@ -28,6 +28,12 @@ from oceanx.storage import OceanPaths, ensure_private_file
 if TYPE_CHECKING:
     from oceanx.backend.store import RequestStore
 
+# For an agent whose model reads images (see research/graphs.py).
+FIGURE_RULE = (
+    "When you reproduce a figure of an attached paper, read that figure's image, named in the paper's "
+    "extracted text, right before you draw it, and follow its panels, axes, colour encoding, fills and "
+    "overlays; then open the original and your saved figure together and correct what differs."
+)
 TEXT_NOTE = (
     "The text of each PDF, extracted page by page; read it with read_file. Each page names an image of "
     "the whole page and the image files of the figures embedded on it, which a model that reads images "
@@ -276,6 +282,7 @@ def document_text_allowed(store: RequestStore, workspace_id: str) -> bool:
 
 
 __all__ = [
+    "FIGURE_RULE",
     "MAX_FOLDER_PDFS",
     "TEXT_NOTE",
     "PdfTextError",

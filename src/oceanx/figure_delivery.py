@@ -21,14 +21,14 @@ from collections.abc import Iterator
 from pathlib import Path
 from uuid import uuid4
 
+from oceanx.figure_preview import MAX_PREVIEW_BYTES, preview_png
+from oceanx.figure_preview import PREVIEW_EDGE as PDF_PREVIEW_EDGE
 from oceanx.figure_style import COLORS, EDITABLE, publication_style, rc_text
 from oceanx.pdf_text import PDFIUM_LOCK
 
 FIGURE_DELIVERY_ENV = "OCEANX_FIGURE_DELIVERY"
 FIGURE_DELIVERY_MODES = ("interactive", "static")
 STATIC_FIGURE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".svg", ".pdf"})
-# Pixels along the longer edge of a PDF figure's preview: sharp on a large screen.
-PDF_PREVIEW_EDGE = 2000
 # Files derived from a figure beside it, never figures of their own: its picture for screens and the print
 # version of an interactive figure (figure_preview.figure_pdf_path).
 DERIVED_SUFFIXES = (".preview.png", ".print.pdf")
@@ -96,7 +96,8 @@ def write_pdf_preview(pdf: Path) -> Path | None:
     there; None when the PDF cannot be drawn, and the figure is then still delivered as its file."""
     target = preview_path(pdf)
     try:
-        if target.is_file() and target.stat().st_mtime_ns >= pdf.stat().st_mtime_ns:
+        if (target.is_file() and target.stat().st_mtime_ns >= pdf.stat().st_mtime_ns
+                and target.stat().st_size <= MAX_PREVIEW_BYTES):
             return target
         import pypdfium2 as pdfium  # also draws the pages of the PDFs a researcher attaches (pdf_text.py)
 
@@ -104,11 +105,11 @@ def write_pdf_preview(pdf: Path) -> Path | None:
             page = document[0]
             bitmap = page.render(scale=PDF_PREVIEW_EDGE / max(*page.get_size(), 1.0))
             try:
-                image = bitmap.to_pil().convert("RGB")
+                data = preview_png(bitmap.to_pil())
             finally:
                 bitmap.close()
         staging = target.with_name(f".{target.name}.{uuid4().hex}.tmp.png")
-        image.save(staging, format="PNG")
+        staging.write_bytes(data)
         os.replace(staging, target)
         return target
     except Exception:  # noqa: BLE001 - an unreadable or empty PDF keeps its download

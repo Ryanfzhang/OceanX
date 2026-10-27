@@ -102,6 +102,9 @@ async def test_a_run_compares_a_reproduced_figure_with_the_attached_papers(tmp_p
     if not capabilities.available:
         pytest.skip(capabilities.reason or "sandbox backend is unavailable")
     monkeypatch.setenv("OCEAN_SANDBOX_PYTHON", sys.executable)
+    from oceanx import figure_comparison
+    assert figure_comparison.ENABLED is False  # off until the rolled-back figure rules have been run again
+    monkeypatch.setattr(figure_comparison, "ENABLED", True)
     host = OceanBackendHost(tmp_path / "state", write_frame=lambda _frame: None)
     try:
         client, recorder, context = await _open_project(host, tmp_path, "ws_compare")

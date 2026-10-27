@@ -21,6 +21,7 @@ from oceanx.execution_manifest import (
     execution_result_fingerprint,
     write_execution_result_manifest,
 )
+from oceanx import figure_comparison
 from oceanx.figure_comparison import COMPARISON_LEDGER, compare_reproduced_figures
 from oceanx.figure_delivery import (
     is_delivered_figure,
@@ -1125,7 +1126,7 @@ class ExpertCodeExecutionService:
         setup_cell = notebook["cells"][1]
         setup_cell["execution_count"] = 1
         figure_notes = await asyncio.to_thread(_prepare_pdf_figures, output_root, outputs_before)
-        if papers:  # a figure named after a paper's figure is put beside its original (figure_comparison.py)
+        if papers and figure_comparison.ENABLED:  # a figure named after a paper's figure beside its original
             figure_notes += await asyncio.to_thread(
                 compare_reproduced_figures, output_root, _saved_figures(output_root, outputs_before), papers,
                 runtime_root / COMPARISON_LEDGER, origin_request_id or "")

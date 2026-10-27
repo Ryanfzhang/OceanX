@@ -17,28 +17,28 @@ verify the field dimensions, units, coordinate order, and outer edges.
 
 ## Publication figures
 
-A figure for a researcher, or after a paper's figure, is drawn as Nature prints one. Size it as printed,
-89 mm (3.5 in) wide for one column or 183 mm (7.2 in) across a page, with 7 pt text, 6 pt tick labels and
-legends, and panel letters a, b, c in 8 pt bold above each panel's top-left corner; a reproduced figure
-keeps its original's letters. Leave out a figure title, and put caveats, sources and missing data in the
-answer, not on the figure.
+A figure drawn for a researcher, or after a paper's figure, is laid out as a journal prints it.
+Size it as printed, about 7 in wide across a page or 3.5 in for one column, with 8 to 10 pt
+text and lines of about 1 pt. Letter each panel in bold inside its top-left corner and leave out
+a figure title; the caption or the answer carries it. Stacked panels share their time axis, with
+years on top and bottom when the original shows them. Fit each axis to the series the panel is
+about: draw a noisier or secondary series lighter behind it and let it run off the axis rather
+than squash the main one, and set the limits from the main series after drawing (`ax.set_ylim`), since
+matplotlib otherwise widens the axis to every line drawn. Set bar and colour limits that show every bar
+and value. Put
+legends and values such as r or a trend in empty space, never across the data. Save with
+`bbox_inches='tight'`, as a vector PDF where your instructions ask for one, and as SVG too when the
+researcher asks for it.
 
-Create the figure with `layout='constrained'` and attach each colour bar with
-`fig.colorbar(mappable, ax=ax, label=...)`. Never place a colour bar, legend or text at hand-set figure
-coordinates (`fig.add_axes`, `fig.text`): they land on each other. Nothing may cover anything else; put
-legends and values in empty space, never across the data.
+OceanX's style stores text as TrueType for editing in Illustrator; keep `pdf.fonttype=42`.
+Keep lines and colour bars vector (`cbar.solids.set_rasterized(False)` when the colour bar has solids).
+For a compact publication PDF, a dense field can use `rasterized=True` at `dpi=300`; that field then
+remains an image and cannot be edited as individual shapes. If the researcher needs those shapes
+editable, keep them vector. Fonts must also be available on the editing machine.
 
-Fit each axis to the panel's main series and set its limits after drawing, since matplotlib otherwise
-widens it to every line. Draw a raw series faintly behind the main one and let the axes cut it off, as
-monthly means when daily values would cross the panel from edge to edge. A quantity with a meaningful
-zero, such as an anomaly, trend, vorticity or streamfunction, takes a diverging map such as `RdBu_r`,
-white at zero with symmetric limits; never use `jet` or `rainbow` in a figure of your own.
-
-Save with `bbox_inches='tight'`, as a vector PDF where your instructions ask for one. OceanX's style stores
-text as TrueType for editing in Illustrator; keep `pdf.fonttype=42`, keep colour bars vector
-(`cbar.solids.set_rasterized(False)`), and give only a dense field `rasterized=True`, which then cannot
-be edited as individual shapes. When your model reads images, look at the figure once and fix what
-breaks these rules.
+When your model reads images, look at the figure once and fix what is wrong before delivering
+it: clipped or empty panels, squashed curves, overlapping text, panels of uneven size, type too
+small to read.
 
 ## Maps
 
@@ -47,9 +47,6 @@ projection or PlateCarree, the data drawn with `transform=ccrs.PlateCarree()`, l
 coastlines drawn from Natural Earth at the scale of the region
 (`ax.add_feature(cfeature.LAND.with_scale('50m'), facecolor='0.9')`, `ax.coastlines('50m', linewidth=0.5)`,
 and `'10m'` for a strait or a stretch of coast), with labelled degree gridlines
-(`ax.gridlines(draw_labels=True, linewidth=0.3)`). Show the whole region the figure is about, in a
-reproduction the original's extent. Leave the data's invalid cells empty, so that the map, not a colour
-of the field, shows the land, and set a field that has values on land, such as a streamfunction that is
-constant along the coast, to NaN there. cartopy fetches the Natural Earth files on first use and keeps
-them in the agent's folder; if that fails, outline the data's land mask as the coastline and say so in
-the answer.
+(`ax.gridlines(draw_labels=True, linewidth=0.3)`). Leave the data's invalid cells empty, so that the map,
+not a colour of the field, shows the land. cartopy fetches the Natural Earth files on first use and keeps
+them in the agent's folder; if that fails, outline the data's land mask as the coastline and say so.

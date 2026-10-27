@@ -214,7 +214,8 @@ one-line `title` attribute, so a later step can tell what it holds without openi
 `from oceanx.scientific_view import ScientificFigure`, supply the computed arrays and complete panel/layer
 structure, then call `figure.save('concise-name.nc')` when the researcher requested a visual or the visual is
 necessary scientific evidence. That explicit save is the delivery boundary; ordinary
-NetCDF files are not figures. Use ScientificFigure for the figures it suits. Draw a figure it does not suit
+NetCDF files are not figures. For a paper's figure and layout, use matplotlib and a vector PDF even when
+ScientificFigure supports its plot type. Use ScientificFigure for interactive exploration. Draw a figure it does not suit
 yourself, as you see fit, for example with matplotlib (cartopy for maps): bars or a histogram, significance
 stippling, a polar or Taylor diagram, twin y-axes, a map projection other than the Workbench's, streamlines, a
 schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution, and draw a spatial
@@ -225,8 +226,8 @@ delivered too, and after the run its picture is beside it as `concise-name.pdf.p
 instead only when the figure is itself a picture, such as a photograph or a satellite true-colour image. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
 plus filename stem (the whole file name for a saved figure file) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
 comparisons and scientific scales. Omit style arguments to ScientificFigure to use the Workbench defaults.
-Do not spend a separate round polishing or reviewing its rendered layout. Inspect a generated preview only when the image itself is
-scientific evidence you need to interpret, such as a spatial pattern. For spatial fields, preserve the source
+When your model reads images, inspect the saved preview once for visible plotting errors. For a paper
+reproduction, compare it with the original and correct differences the data allow. For spatial fields, preserve the source
 validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather than plotted
 values. Every spatial field must pass an explicit Boolean `valid_mask` to `field2d`; zero remains valid where
 that mask is True.
@@ -247,9 +248,9 @@ save it as a PNG under OCEAN_OUTPUT_DIR, for
 example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'), dpi=150,
 bbox_inches='tight')`; that file is the delivered figure. Keep exploratory plots in your working directory.
 Name the figure file in report.md immediately after the supported claim. You own the scientific visual
-encoding, including plot type, axes, layers, comparisons and scientific scales; label axes with units. Do not
-spend a separate round polishing or reviewing the rendered layout. Inspect a saved image only when the image
-itself is scientific evidence you need to interpret, such as a spatial pattern. For spatial fields, preserve
+encoding, including plot type, axes, layers, comparisons and scientific scales; label axes with units.
+When your model reads images, inspect the saved image once for visible plotting errors. For a paper
+reproduction, compare it with the original and correct differences the data allow. For spatial fields, preserve
 the source validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather
 than plotted values, so mask them (NaN or a masked array); zero remains valid where the mask is True.
 """

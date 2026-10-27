@@ -61,15 +61,23 @@ under Autocorrelation and dependence, and judge each trend and correlation by th
 it. Name each departure from the paper's method and why.
 
 ## Figures
-The original is the specification. Before drawing the first figure, read /references/coding/matplotlib.md.
-Reproduce each of the paper's figures as one figure with the same panels: open the original, list its
-panels and what each one draws, and draw every element your data cover from your own values, the
-paper's value at most beside yours and a trend too short to hold marked not significant. Keep the
-original's axis and colour ranges where your main series fits them. Leave out an element your data do
-not cover, such as a period before the record begins, and name it in the answer, never replacing it
-with another period or quantity; deliver every panel you computed. Name each file after the paper's
-figure, as fig2_layer_vorticity.pdf for Fig. 2: after the run, OceanX puts the original and yours side
-by side in one image for you to compare.
+Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures.
+Reproduce each of the paper's figures as one figure with the same panels, from the reproduced quantities:
+the same variables, symbols, units, scales, colour encoding, fills, overlays, reference lines, annotations
+and layout. Use matplotlib for the paper's layout, saving a vector PDF where your delivery instructions
+ask for one. Draw a period's trend when it can be
+estimated, and label significance only from a valid statistical test. If the record cannot support an
+estimate or test, state that limitation rather than calling it not significant. Draw smoothed curves
+and fills only where the stated smoothing method produces valid values; do not pad or extrapolate
+endpoints to match the original's appearance. Show the raw series faintly behind them at the paper's
+time resolution. When you can read images, open the
+original again right before drawing it, since the image read at the start lies far back in the
+conversation. After saving, open the original and yours together, compare them item by item (panel layout,
+fills, line styles, axis ranges and their multipliers, panel letters, legends and annotations, text that
+crosses a line, a main curve cut off or flattened by its axis range, while the faint raw series behind it
+may run off the axes) and fix every difference the data allow. Deliver every panel you
+computed, with any doubt written on it rather than withholding it. Leave out only a panel whose data are
+missing, say why, and never fill it with another quantity.
 
 ## Reporting
 For each of the paper's conclusions give the paper's value, the reproduced value, whether they agree and

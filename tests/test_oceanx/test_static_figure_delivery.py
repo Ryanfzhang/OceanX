@@ -202,6 +202,44 @@ def test_a_pdf_figure_is_shown_through_the_preview_beside_it(tmp_path):
     assert [item.path for item in broken.files] == ["broken.pdf"] and broken.content["preview_file"] == "broken.pdf"
 
 
+@pytest.mark.parametrize("delivery", ["pdf", "interactive"])
+def test_a_figures_preview_stays_small_enough_for_a_model_to_open(tmp_path, monkeypatch, delivery):
+    """read_file opens an image only up to 500 KiB: a dense field's preview is drawn smaller until it fits
+    (2026-10-27: an agent shrank each of its previews itself before it could look at them)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    from oceanx.figure_delivery import MAX_PREVIEW_BYTES, preview_path, write_pdf_preview
+    y, x = np.mgrid[0:6:400j, 0:8:500j]
+    field = np.sin(x * 3) * np.cos(y * 2) + 0.4 * np.random.default_rng(1).standard_normal(x.shape)
+    if delivery == "pdf":
+        figure, axes = plt.subplots(figsize=(7.2, 5))
+        axes.pcolormesh(x, y, field, cmap="viridis")
+        pdf = tmp_path / "dense.pdf"
+        figure.savefig(pdf)
+        plt.close(figure)
+        # An old oversized preview must not bypass the new size limit through the cache.
+        preview_path(pdf).write_bytes(b"old-preview" * MAX_PREVIEW_BYTES)
+        assert write_pdf_preview(pdf) == preview_path(pdf)
+        preview = preview_path(pdf)
+    else:
+        from oceanx.scientific_view import ScientificFigure
+
+        monkeypatch.setenv("OCEAN_OUTPUT_DIR", str(tmp_path))
+        figure = ScientificFigure(plot_kind="section", title="Dense field")
+        figure.panel(x=x[0], y=y[:, 0]).field2d(field, units="1", render="cells")
+        figure.save("dense.nc")
+        preview = tmp_path / "dense.preview.png"
+        assert (tmp_path / "dense.print.pdf").is_file()
+    from PIL import Image
+
+    assert preview.stat().st_size <= MAX_PREVIEW_BYTES
+    with Image.open(preview) as image:
+        image.verify()
+
+
 def test_the_figure_rules_ask_for_a_vector_pdf_in_the_desktop_and_keep_png_in_static_runs():
     from oceanx.runtime import OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY
     from oceanx.skills import ocean_reference_root

@@ -121,6 +121,6 @@ figure.save("comparison-domain.nc")
 For a model-chosen sequential alternative, pass `palette="viridis"` to the layer. For a centred
 anomaly, pass `palette="blue_red"` and a scientifically justified symmetric `color_domain`.
 
-Preview images are optional scientific evidence. Inspect one only when interpreting the image is
-part of the analysis, for example to identify a spatial pattern. Do not add a separate visual review
-or repair round after the figure has been saved.
+When your model reads images, inspect the saved preview once for visible plotting errors.
+For a paper reproduction, use matplotlib for its layout and compare the saved figure with the original,
+as /skills/paper-reproduction/SKILL.md describes. Use the Figure API for interactive exploration.
