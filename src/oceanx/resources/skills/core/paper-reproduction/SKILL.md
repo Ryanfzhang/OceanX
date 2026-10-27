@@ -61,32 +61,15 @@ under Autocorrelation and dependence, and judge each trend and correlation by th
 it. Name each departure from the paper's method and why.
 
 ## Figures
-Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures and
-Maps: that standard holds for a reproduced figure too. Reproduce each of the paper's figures as one
-figure with the same panels in the same arrangement, from the reproduced quantities: the same variables,
-symbols, units, map extent, colour encoding, fills, overlays, reference lines and panel letters. Keep the
-original's axis and colour ranges where your main series fits them; where it does not, draw it in full
-and report the difference as a finding. The numbers on the figure are yours: a value the paper
-writes on its figure, such as a transport, is drawn once you have computed it, with the paper's value
-beside it for comparison if you wish, never the paper's alone.
-
-Draw every element of the original that your data cover, the trend line of each period included; a
-trend over too few independent values is drawn and marked not significant. An element your data do not
-cover, such as a period before the record begins, is left out and named in the answer, never replaced
-by another period or quantity. Smoothed curves and their fills run through the whole record as the
-original's do, over the raw series drawn faintly behind them at the paper's time resolution; the axis
-fits the smoothed curves, and the raw series runs off it as in the original. A schematic
-is redrawn as flat panels of the data it rests on, as Publication figures says.
-
-When you can read images, open the original again right before drawing it, since the image read at the
-start lies far back in the conversation. After saving, open the original and yours together, compare
-them item by item (panel layout, fills, line styles, axis ranges and their multipliers, colour scales,
-panel letters, legends and labels) and check the standard: no bar or main series cut off or flattened,
-the faint raw series behind it present and free to run off the axes, no colour field without a visible
-pattern, nothing covering anything else (text, tick labels, legends, colour bars, panel letters). Fix
-every difference the data allow.
-Deliver every panel you computed and put its doubts in the answer; leave out only a panel whose data
-are missing, say why, and never fill it with another quantity.
+The original is the specification. Before drawing the first figure, read /references/coding/matplotlib.md.
+Reproduce each of the paper's figures as one figure with the same panels: open the original, list its
+panels and what each one draws, and draw every element your data cover from your own values, the
+paper's value at most beside yours and a trend too short to hold marked not significant. Keep the
+original's axis and colour ranges where your main series fits them. Leave out an element your data do
+not cover, such as a period before the record begins, and name it in the answer, never replacing it
+with another period or quantity; deliver every panel you computed. Name each file after the paper's
+figure, as fig2_layer_vorticity.pdf for Fig. 2: after the run, OceanX puts the original and yours side
+by side in one image for you to compare.
 
 ## Reporting
 For each of the paper's conclusions give the paper's value, the reproduced value, whether they agree and

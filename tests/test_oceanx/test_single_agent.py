@@ -47,6 +47,7 @@ from oceanx.research.routing import (
     HelperMiddleware,
     QuickCallBudgetMiddleware,
     handoff_request,
+    reproduction_request,
     seen_by,
     tagged,
     team_config,
@@ -237,8 +238,9 @@ def world(monkeypatch, tmp_path):
     calls = {"single": [], "team": [], "team_configs": [], "handoffs": [], "closed": []}
     replies = {"single": [AIMessage(content="图已画好。")], "team": [AIMessage(content="The team's answer.")]}
 
-    async def single_agent(config, run):
+    async def single_agent(config, run, *, reproduction=False):
         calls["single_built"] = (workflow_mode(config), run.thread_id)
+        calls["reproduction"] = reproduction
         return _Agent(replies["single"], calls["single"])
 
     async def coordinator_agent(config, experts, *, handoff=""):
@@ -321,6 +323,46 @@ async def test_an_exhausted_budget_hands_the_request_over(world):
     await graph.ainvoke({"messages": [HumanMessage(content="Plot it")]}, config)
     assert len(world.calls["team"]) == 1
     assert f"used all {limit} model calls" in world.calls["handoffs"][0]
+
+
+@pytest.mark.asyncio
+async def test_a_reproduction_stays_with_the_single_agent_even_past_its_budget(world):
+    # 2026-10-27: a reproduction that used up the single agent's calls went on to the team, whose Experts
+    # each drew one figure apart; now neither the agent nor an exhausted budget hands it over.
+    limit = SINGLE_AGENT_CALL_LIMIT
+    for last in (AIMessage(content=f"Model call limits exceeded: run limit ({limit}/{limit})"),
+                 _call(HANDOFF_TOOL, {"reason": "r"})):
+        world.replies["single"] = [last]
+        config = _config("auto")
+        graph = await graphs.coordinator(config)
+        result = await graph.ainvoke({"messages": [HumanMessage(content="复现这篇论文的 Fig. 2 和 Fig. 3")]}, config)
+        assert world.calls["team"] == [] and result["handoff"] == "" and world.calls["reproduction"] is True
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("复现 Zheng et al. 2026 的 Fig. 2", True), ("Reproduce Fig. 3 of the attached paper", True),
+    ("Please replicate the budget analysis of this paper", True), ("Make this analysis reproducible", False),
+    ("计算百年一遇重现期的风暴潮增水", False), ("画出 8 月 15 日的海表温度", False)])
+def test_a_reproduction_is_known_by_the_words_of_the_latest_request(text, expected):
+    messages = [HumanMessage(content="复现论文的图"), AIMessage(content="好的。"), HumanMessage(content=text)]
+    assert reproduction_request(messages) is expected
+
+
+@pytest.mark.asyncio
+async def test_a_reproduction_has_no_handoff_and_the_whole_budget(monkeypatch):
+    captured = {}
+
+    async def fake_build(_config, role, *, run=None, middleware=None, suffix="", routing="", **_kwargs):
+        captured.update(middleware=middleware, routing=routing)
+        return "graph"
+
+    monkeypatch.setattr(graphs, "build", fake_build)
+    run = AgentRun(workspace_id="ws", task_id="task", request_id="r", thread_id="single-agent-x",
+                   server_run_id="s", role=SINGLE_AGENT)
+    assert await graphs._single_agent(_config("auto"), run, reproduction=True) == "graph"
+    budget = next(item for item in captured["middleware"] if isinstance(item, QuickCallBudgetMiddleware))
+    assert HandoffMiddleware not in [type(item) for item in captured["middleware"]] and not captured["routing"]
+    assert budget.last_call == LAST_CALL and not budget.last_tools and budget.run_limit == SINGLE_AGENT_CALL_LIMIT == 200
 
 
 @pytest.mark.asyncio

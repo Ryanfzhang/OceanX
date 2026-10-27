@@ -67,17 +67,14 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
                  "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
                  "Before drawing the first figure, read /references/coding/matplotlib.md"):
         assert step in reproduction
-    assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
-    # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
-    # drawn and marked, not dropped, while a period the data do not cover is left out, never replaced.
-    assert "give their sum as the residual" in reproduction and "is drawn and marked not significant" in reproduction
-    assert "is left out and named in the answer, never replaced by another period or quantity" in reproduction
-    # The paper's ranges and numbers are not copied over values that do not fit them (2026-10-27: every bar of
-    # a budget clipped at the paper's axis, transports printed from the paper, a field flat in its colour scale).
-    assert "draw it in full and report the difference as a finding" in reproduction
-    # The raw series stays behind the smoothed one and runs off the axis (2026-10-27: one run fitted the axis
-    # to the monthly series and flattened the curve, the next left the monthly series out to keep it inside).
-    assert "the raw series runs off it as in the original" in reproduction
+    assert "## One computation per quantity" in reproduction
+    # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is drawn
+    # and marked, while a period the data do not cover is left out and named, never replaced.
+    assert "give their sum as the residual" in reproduction and "a trend too short to hold marked not significant" in reproduction
+    assert "name it in the answer, never replacing it with another period or quantity" in reproduction
+    # The original is the specification, and OceanX puts it beside the figure named after it (2026-10-27: the
+    # agent looked at the original some fifty calls before drawing and afterwards only at its own figure).
+    assert "The original is the specification" in reproduction and "as fig2_layer_vorticity.pdf for Fig. 2" in reproduction
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
     assert "open boundaries are the real straits" in " ".join(physical.split())
@@ -85,14 +82,14 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
     assert "## Publication figures" in reference
     flat = " ".join(reference.split())
-    for rule in ("89 mm (3.5 in) wide for one column", "white at zero with symmetric limits", "never clip it",
-                 "a paper's value may stand beside yours for comparison, never alone",
-                 "Never draw boxes of text in place of a figure", "go in the answer, not on the figure",
-                 "let the axes cut it off; that is intended", "A faint raw series running off the axes is not a fault",
-                 # 2026-10-27: two colour bars set at hand-chosen positions covered each other's labels
+    # A short core that is read and kept, not a long list (2026-10-27: some 2,000 words of figure rules in six
+    # places, of which the branch that drew Fig. 2 read none).
+    publication = flat[flat.index("## Publication figures"):flat.index("## Maps")]
+    assert len(publication.split()) < 320
+    for rule in ("89 mm (3.5 in) wide for one column", "white at zero with symmetric limits",
                  "Never place a colour bar, legend or text at hand-set figure coordinates",
-                 "Two colour bars for one map go one to the right and one below"):
-        assert rule in flat
+                 "let the axes cut it off", "in the answer, not on the figure"):
+        assert rule in publication
     assert "## Maps" in reference and "ax.coastlines('50m'" in reference
     # A figure drawn without the Figure API is told where the craft is described, and every spatial
     # field it draws goes on a map, in either delivery mode.

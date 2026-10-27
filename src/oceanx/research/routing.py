@@ -4,11 +4,13 @@ The single agent has the Experts' tools and the data and search Experts' skills,
 can give independent parts of a request to helpers of its own. When a request turns out to be an
 open research problem it calls hand_to_research_team, and the same server run goes on with the
 Coordinator and its Experts in research mode (graphs.coordinator). On a simple request the choice
-costs nothing extra: the agent makes it on the call that starts the work.
+costs nothing extra: the agent makes it on the call that starts the work. A request to reproduce a
+paper's analysis is never handed over (reproduction_request).
 """
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Awaitable, Callable
 
 from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddleware, hook_config
@@ -23,7 +25,7 @@ AGENT_TAG = "oceanx_agent"  # which of SINGLE_AGENT and TEAM wrote a message of 
 HANDOFF_TOOL = "hand_to_research_team"
 HELPER_TOOL = "assign_helper"
 
-SINGLE_AGENT_CALL_LIMIT = 100
+SINGLE_AGENT_CALL_LIMIT = 200  # a paper's reproduction, which the single agent finishes itself, needs most of it
 HELPER_CALL_LIMIT = 20
 MAX_HELPERS = 3  # helpers of one request that work at once
 BUDGET_NOTE_CALLS = 5  # the last calls of a budget end their tool result with the calls left
@@ -36,6 +38,19 @@ def workflow_mode(config) -> str:
     standard: the single agent alone; research: the team at once (the default of headless runs)."""
     mode = config["configurable"].get("request_options", {}).get("workflow_mode", "research")
     return mode if mode in WORKFLOW_MODES else "research"
+
+
+# Words of a request to reproduce or replicate a published analysis. "reproducible" asks for something
+# else, and 重现 is left out because 重现期 is a return period.
+REPRODUCTION_WORDS = re.compile(r"复现|reproduc(?!ib)|replicat", re.IGNORECASE)
+
+
+def reproduction_request(messages) -> bool:
+    """Whether the researcher's latest message asks to reproduce a published analysis. Such a request stays
+    with the single agent, which then holds every result the paper's figures combine: on 2026-10-27 one that
+    used up the single agent's calls went on to the team, whose Experts each drew one figure apart."""
+    latest = next((message for message in reversed(messages) if isinstance(message, HumanMessage)), None)
+    return latest is not None and REPRODUCTION_WORDS.search(latest.text) is not None
 
 
 def team_config(config):
@@ -300,9 +315,34 @@ def last_answer(messages) -> str:
 
 
 __all__ = [
-    "AGENT_TAG", "BOUNDED_WORK_POLICY", "HANDOFF_POLICY", "HANDOFF_TOOL", "HELPER", "HELPER_CALL_LIMIT",
-    "HELPER_LAST_CALL", "HELPER_POLICY", "HELPER_TOOL", "LAST_CALL", "LAST_CALL_HANDOFF", "MAX_HELPERS",
-    "SINGLE_AGENT", "SINGLE_AGENT_CALL_LIMIT", "TEAM", "HandoffMiddleware", "HelperMiddleware",
-    "QuickCallBudgetMiddleware", "budget_handoff", "call_budget_sentence", "handed_over", "handoff_note",
-    "handoff_request", "last_answer", "seen_by", "tagged", "team_config", "workflow_mode",
+    "AGENT_TAG",
+    "BOUNDED_WORK_POLICY",
+    "HANDOFF_POLICY",
+    "HANDOFF_TOOL",
+    "HELPER",
+    "HELPER_CALL_LIMIT",
+    "HELPER_LAST_CALL",
+    "HELPER_POLICY",
+    "HELPER_TOOL",
+    "LAST_CALL",
+    "LAST_CALL_HANDOFF",
+    "MAX_HELPERS",
+    "REPRODUCTION_WORDS",
+    "SINGLE_AGENT",
+    "SINGLE_AGENT_CALL_LIMIT",
+    "TEAM",
+    "HandoffMiddleware",
+    "HelperMiddleware",
+    "QuickCallBudgetMiddleware",
+    "budget_handoff",
+    "call_budget_sentence",
+    "handed_over",
+    "handoff_note",
+    "handoff_request",
+    "last_answer",
+    "reproduction_request",
+    "seen_by",
+    "tagged",
+    "team_config",
+    "workflow_mode",
 ]

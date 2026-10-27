@@ -21,6 +21,7 @@ from oceanx.execution_manifest import (
     execution_result_fingerprint,
     write_execution_result_manifest,
 )
+from oceanx.figure_comparison import COMPARISON_LEDGER, compare_reproduced_figures
 from oceanx.figure_delivery import (
     is_delivered_figure,
     matplotlib_settings,
@@ -148,10 +149,15 @@ def _output_state(output_root: Path) -> dict[str, tuple[int, int]]:
     return state
 
 
+def _saved_figures(output_root: Path, before: dict[str, tuple[int, int]]) -> list[tuple[str, Path]]:
+    """The delivered figures a run saved or changed, by their name under outputs."""
+    return [(name, output_root / name) for name, state in sorted(_output_state(output_root).items())
+            if before.get(name) != state and is_delivered_figure(output_root / name)]
+
+
 def _saved_pdf_figures(output_root: Path, before: dict[str, tuple[int, int]]) -> list[tuple[str, Path]]:
     """The PDF figures a run saved or changed, by their name under outputs."""
-    return [(name, output_root / name) for name, state in sorted(_output_state(output_root).items())
-            if name.lower().endswith(".pdf") and before.get(name) != state and is_delivered_figure(output_root / name)]
+    return [(name, path) for name, path in _saved_figures(output_root, before) if name.lower().endswith(".pdf")]
 
 
 def _prepare_pdf_figures(output_root: Path, before: dict[str, tuple[int, int]]) -> tuple[str, ...]:
@@ -828,6 +834,7 @@ class ExpertCodeExecutionService:
             workspace_id=workspace_id, task_id=task_id, agent_thread_id=agent_thread_id)
         attempt_number, attempt_limit = len(prior_records) + 1, 0
         sources = self.resolve_task_sources(workspace_id=workspace_id, task_id=task_id)
+        papers = self._paper_texts(workspace_id, sources)
 
         work_root = self.task_workspaces.expert_session_root(task_id, agent_thread_id)
         execution_id = f"codeexec_{uuid4().hex}"
@@ -1000,6 +1007,7 @@ class ExpertCodeExecutionService:
                 attempt_limit=attempt_limit,
                 shell_command=_shell_command,
                 timeout=_timeout,
+                papers=papers,
             )
         except BaseException as exc:
             terminal_state = "cancelled" if isinstance(exc, asyncio.CancelledError) else "failed"
@@ -1048,6 +1056,7 @@ class ExpertCodeExecutionService:
         attempt_limit: int,
         shell_command: str | None = None,
         timeout: int | None = None,
+        papers: tuple[Path, ...] = (),
     ) -> ExpertCodeExecutionResult:
         """Run and persist one already-started execution as one terminal transaction."""
 
@@ -1116,6 +1125,10 @@ class ExpertCodeExecutionService:
         setup_cell = notebook["cells"][1]
         setup_cell["execution_count"] = 1
         figure_notes = await asyncio.to_thread(_prepare_pdf_figures, output_root, outputs_before)
+        if papers:  # a figure named after a paper's figure is put beside its original (figure_comparison.py)
+            figure_notes += await asyncio.to_thread(
+                compare_reproduced_figures, output_root, _saved_figures(output_root, outputs_before), papers,
+                runtime_root / COMPARISON_LEDGER, origin_request_id or "")
         code_cell = notebook["cells"][2]
         code_cell["execution_count"] = 1
         code_cell["outputs"] = [
@@ -1329,6 +1342,16 @@ class ExpertCodeExecutionService:
             # must describe those bytes, not a superseded title or conclusion.
             discovered[output_name] = normalized
         return tuple(discovered.values())
+
+    def _paper_texts(self, workspace_id: str, sources: tuple[ExpertMountedSource, ...]) -> tuple[Path, ...]:
+        """The extracted texts of the PDFs attached to the task (pdf_text.py), which name their figures'
+        images, when the workspace lets a model read document text."""
+        from oceanx.pdf_text import document_text_allowed, readable_texts
+
+        if not document_text_allowed(self.store, workspace_id):
+            return ()
+        return tuple(path for source in sources for root in source.paths
+                     for path in readable_texts(root, self.paths) if path.is_file())
 
     def resolve_task_sources(
         self,

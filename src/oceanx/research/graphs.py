@@ -30,7 +30,6 @@ from oceanx.deep_runtime import build_deep_agent_graph
 from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
 from oceanx.figure_delivery import static_figures
-from oceanx.pdf_text import FIGURE_RULE
 from oceanx.model_config import load_model_profile
 from oceanx.research.background_experts import (
     AWAIT_TOOL, BackgroundDelegationMiddleware, RunningExperts, appended)
@@ -56,6 +55,7 @@ from oceanx.research.routing import (
     handoff_note,
     handoff_request,
     last_answer,
+    reproduction_request,
     seen_by,
     tagged,
     team_config,
@@ -597,11 +597,11 @@ def research_mode(config) -> bool:
 # Workbench draws a ScientificFigure, so its preview is not opened. A static run has no preview file: the
 # saved image is the figure.
 FIGURE_LOOK = {
-    True: ("Look once at the image of each figure you saved and fix what /references/coding/matplotlib.md "
-           "lists; do not reopen it to polish it."),
+    True: ("Look once at the image of each figure you saved and fix what breaks the rules of "
+           "/references/coding/matplotlib.md; do not reopen it to polish it."),
     False: ("Do not open the .preview.png of a ScientificFigure you just saved. Look once at each figure you "
-            "drew with matplotlib, through the `<name>.pdf.preview.png` beside a PDF, and fix what "
-            "/references/coding/matplotlib.md lists; do not reopen it to polish it."),
+            "drew with matplotlib, through the `<name>.pdf.preview.png` beside a PDF, and fix what breaks the "
+            "rules of /references/coding/matplotlib.md; do not reopen it to polish it."),
 }
 
 
@@ -946,8 +946,6 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
             "is scientific evidence needed for your reasoning, such as a spatial pattern; preview "
             "inspection is not a separate visual-delivery review."
         )
-    if svc.native_vision and role not in {"coordinator", "scientific_discussion_partner"}:
-        prompt += "\n" + FIGURE_RULE  # a paper's figures reach the model as images (pdf_text.py)
     if role != "coordinator" and not quick:
         prompt += "\n" + profile_system_prompt(get_agent_profile(role))
     if role not in {"coordinator", SINGLE_AGENT}:  # the single agent has the conversation itself
@@ -1306,9 +1304,10 @@ async def _run_helper(config, part: str) -> str:
         f"\n\n(Helper folder: {folder})")
 
 
-async def _single_agent(config, run: AgentRun):
-    """The agent that works on a request alone; in auto mode it can hand the request to the team."""
-    handoff = workflow_mode(config) == "auto"
+async def _single_agent(config, run: AgentRun, *, reproduction: bool = False):
+    """The agent that works on a request alone; in auto mode it can hand the request to the team, except
+    a paper's reproduction, which it finishes itself (routing.reproduction_request)."""
+    handoff = workflow_mode(config) == "auto" and not reproduction
     return await build(config, SINGLE_AGENT, run=run, middleware=[
         *([HandoffMiddleware()] if handoff else []),
         HelperMiddleware(lambda part: _run_helper(config, part)),
@@ -1321,8 +1320,9 @@ async def _single_agent(config, run: AgentRun):
 async def coordinator(config):
     async def single_agent(state, config):
         run = _single_agent_run(config)
-        agent = await _single_agent(config, run)
         conversation = seen_by(state["messages"], SINGLE_AGENT)
+        reproduction = reproduction_request(conversation)
+        agent = await _single_agent(config, run, reproduction=reproduction)
         try:
             result = await agent.ainvoke({**state, "messages": conversation}, config=config)
         finally:
@@ -1330,7 +1330,7 @@ async def coordinator(config):
         known = {message.id for message in conversation}
         new = [message for message in result.get("messages", ()) if message.id not in known]
         handoff = None
-        if workflow_mode(config) == "auto":
+        if workflow_mode(config) == "auto" and not reproduction:
             handoff = handoff_request(new)
             last = new[-1] if new else None
             if handoff is None and isinstance(last, AIMessage) and last.text.startswith(
