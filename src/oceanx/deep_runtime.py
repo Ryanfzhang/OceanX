@@ -176,8 +176,9 @@ class DeepAgentEngine:
         completed_model_runs: set[str] = set()
         turn_index = self._stream_turn_index
         last_model_message: AIMessage | None = None
+        events = self.graph.astream_events(inputs, config=config, version="v2")
         try:
-            async for event in self.graph.astream_events(inputs, config=config, version="v2"):
+            async for event in events:
                 name = str(event.get("event") or "")
                 run_id = str(event.get("run_id") or "")
                 parent_ids = {
@@ -344,6 +345,8 @@ class DeepAgentEngine:
         except Exception as exc:  # noqa: BLE001 - provider adapters have no common error base
             await self._refresh_messages(config)
             yield model_error_event(exc)
+        finally:
+            await events.aclose()
 
 
 async def build_deep_agent_graph(*, profile, tools, system_prompt, cwd, operation_id_factory,

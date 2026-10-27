@@ -321,3 +321,28 @@ async def test_web_review_hooks_do_not_modify_the_desktop_router(tmp_path, monke
     finally:
         await web.close()
         await desktop.close()
+
+
+def test_large_csv_download_streams_original_and_checks_contents(setup, monkeypatch):
+    settings, app, _ = setup
+    table = settings.workspace / "tracks.csv"
+    data = b"track,note\n" + b"001,observation\n" * 1800000
+    table.write_bytes(data)
+    grant = grant_for(table)
+    grant.update(mime_type="text/csv", purpose="result_file")
+
+    def no_whole_file_read(*_):
+        raise AssertionError("Downloads must not load the whole file into memory")
+
+    monkeypatch.setattr(Path, "read_bytes", no_whole_file_read)
+    app.state.grants.capture(grant)
+    assert "resource_token" in grant
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        response = client.get("/api/resources/res_test123")
+        assert response.status_code == 200
+        assert response.content == data
+        assert response.headers["content-disposition"].startswith("attachment;")
+        assert int(response.headers["content-length"]) == len(data)
+        with table.open("r+b") as stream:
+            stream.write(b"other")  # same length, different contents
+        assert client.get("/api/resources/res_test123").status_code == 404

@@ -445,6 +445,8 @@ export function App(): React.JSX.Element {
       return;
     }
     if (event.type === 'request.completed') {
+      if (isActiveForegroundRequest(event.request_id, activeRequestRef.current)
+          || (event.request_id && projectsRef.current.some(project => project.tasks.some(task => task.active_request_id === event.request_id)))) refreshTasks();
       const handler = event.request_id ? handlers.current.get(event.request_id) : undefined;
       if (event.request_id) {handlers.current.delete(event.request_id); errorHandlers.current.delete(event.request_id);}
       handler?.(asRecord(payload.result));
@@ -452,11 +454,12 @@ export function App(): React.JSX.Element {
         setActiveRequestId(null); setStoppingRequestId(null); setStreaming('');
         const taskId = event.task_id ?? taskRef.current?.task_id;
         if (taskId) openTask(taskId);
-        refreshTasks();
       }
       return;
     }
     if (event.type === 'request.failed' || event.type === 'request.cancelled' || event.type === 'system.error') {
+      if (isActiveForegroundRequest(event.request_id, activeRequestRef.current)
+          || (event.request_id && projectsRef.current.some(project => project.tasks.some(task => task.active_request_id === event.request_id)))) refreshTasks();
       const error = asRecord(payload.error);
       const recoveryState = asRecord(error.details).recovery_state;
       const message = recoveryState === 'awaiting_user_retry'
@@ -473,7 +476,6 @@ export function App(): React.JSX.Element {
         setPendingInteraction(null); setInteractionAnswer('');
         const taskId = event.task_id ?? taskRef.current?.task_id;
         if (taskId) openTask(taskId);
-        refreshTasks();
       }
       setTaskLoading(false);
       return;

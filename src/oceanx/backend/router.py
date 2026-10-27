@@ -936,7 +936,8 @@ class OceanRequestRouter:
         # The manifest declares which file may be opened. Mutable supplementary
         # files use their current size/hash because the user is expected to edit
         # them; accepted scientific payloads retain the manifest checksum.
-        if current_size > 25 * 1024 * 1024:
+        csv_download = declared.mime_type == "text/csv" and request.payload.purpose == "result_file"
+        if current_size > 25 * 1024 * 1024 and not csv_download:
             raise RequestStoreError("Requested task result file exceeds the bounded resource limit")
         terminal = self._completed_event(
             client,
@@ -2361,6 +2362,9 @@ class OceanRequestRouter:
         turn_count = 0
         last_assistant_text = ""
         model_error: ErrorEvent | None = None
+        stream = _coordinator_events(
+            agent_session.runtime.engine, submitted_text, request.request_id,
+        )
         # API latency is not a model-resource budget. Token/turn limits bound
         # reasoning; cancellation and tool-progress checks remain independent.
         try:
@@ -2373,9 +2377,6 @@ class OceanRequestRouter:
                 # contain exactly what the researcher submitted.
                 text=visible_text,
             )
-            stream = _coordinator_events(
-                agent_session.runtime.engine, submitted_text, request.request_id,
-            ).__aiter__()
             native_team_tools = {"task"}
             while True:
                 try:
@@ -2615,6 +2616,7 @@ class OceanRequestRouter:
                     details={"reason": str(exc)},
                 )
         finally:
+            await stream.aclose()
             self._agent_tasks.pop(request.request_id, None)
             self._agent_request_sessions.pop(request.request_id, None)
             self._agent_request_clients.pop(request.request_id, None)
@@ -2725,8 +2727,7 @@ class OceanRequestRouter:
         if isinstance(event, AssistantTextDelta):
             if event.turn_id is None:
                 return
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 AssistantDeltaEvent(
                     **self._event_fields(
                         client,
@@ -2753,8 +2754,7 @@ class OceanRequestRouter:
                     text=event.message.text,
                     turn_id=event.turn_id,
                 )
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 AssistantTurnCompletedEvent(
                     **self._event_fields(
                         client,
@@ -2776,8 +2776,7 @@ class OceanRequestRouter:
         if isinstance(event, ToolExecutionStarted):
             if event.turn_id is None or event.tool_call_id is None:
                 return
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 ToolCallStartedEvent(
                     **self._event_fields(
                         client,
@@ -2803,8 +2802,7 @@ class OceanRequestRouter:
             activity_only = bool(
                 event.metadata is not None and event.metadata.get("display") == "activity"
             )
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 ToolCallCompletedEvent(
                     **self._event_fields(
                         client,
@@ -2829,8 +2827,7 @@ class OceanRequestRouter:
             )
             return
         if isinstance(event, CompactProgressEvent):
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 ContextCompactionProgressEvent(
                     **self._event_fields(
                         client,

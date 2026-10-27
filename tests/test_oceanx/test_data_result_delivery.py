@@ -80,3 +80,37 @@ async def test_netcdf_cannot_be_granted_as_a_download(tmp_path, purpose):
                               payload=SimpleNamespace(result_ref=record.ref, file_name="data.nc", purpose=purpose))
     with pytest.raises(RequestStoreError, match="preview only, not download"):
         await OceanRequestRouter._task_result_resource_grant(router, None, request)
+
+
+@pytest.mark.asyncio
+async def test_large_csv_keeps_head_preview_and_grants_full_download(tmp_path):
+    from oceanx.backend.router import OceanRequestRouter
+
+    outputs = tmp_path / "agents/single/outputs"
+    outputs.mkdir(parents=True)
+    table = outputs / "tracks.csv"
+    with table.open("w") as stream:
+        stream.write("track,note\n")
+        for i in range(27000):
+            stream.write(f"{i}," + "x" * 1024 + "\n")
+    store = TaskResultStore(task_workspaces=Projector(tmp_path))
+    record, = store.list(task_id="task")
+    assert record.files[0].size > 25 * 1024 * 1024
+    assert len(record.content["rows"]) == 200 and record.content["truncated"]
+    assert record.content["rows"][-1][0] == "199"
+    committed = []
+
+    async def broadcast(*_):
+        pass
+
+    router = SimpleNamespace(task_results=store, _task_in_workspace=lambda *_: None,
+                             _workspace_id=lambda _: "workspace",
+                             _completed_event=lambda *_, result: result,
+                             store=SimpleNamespace(commit_terminal=lambda _, event: committed.append(event)),
+                             _broadcast_committed_terminal=broadcast)
+    request = SimpleNamespace(request_id="request", context=SimpleNamespace(task_id="task"),
+                              payload=SimpleNamespace(result_ref=record.ref, file_name="tracks.csv",
+                                                      purpose="result_file"))
+    await OceanRequestRouter._task_result_resource_grant(router, None, request)
+    assert committed[0]["size_bytes"] == table.stat().st_size
+    assert committed[0]["resource_uri"] == table.as_uri()
