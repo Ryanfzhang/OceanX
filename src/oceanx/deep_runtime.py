@@ -10,7 +10,6 @@ from typing import Any
 
 from deepagents import create_deep_agent
 from deepagents.backends import StateBackend
-from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.profiles import (
     GeneralPurposeSubagentProfile,
     HarnessProfile,
@@ -37,6 +36,7 @@ from oceanx.agent_contract import (
 )
 from oceanx.model_config import create_chat_model
 from oceanx.model_recovery import model_error_event
+from oceanx.pdf_reading import PdfFilesystemMiddleware
 
 log = logging.getLogger(__name__)
 
@@ -352,7 +352,7 @@ class DeepAgentEngine:
 async def build_deep_agent_graph(*, profile, tools, system_prompt, cwd, operation_id_factory,
                                  subagents=None, middleware=None, checkpointer=None, skill_library=None,
                                  filesystem_backend=None, filesystem_tools="all",
-                                 research_tree=None):
+                                 research_tree=None, pdf_documents=None):
     """Build only a graph. Agent Server supplies persistence and executes it."""
     model = create_chat_model(profile)
     from deepagents._models import get_model_provider
@@ -372,7 +372,8 @@ async def build_deep_agent_graph(*, profile, tools, system_prompt, cwd, operatio
         skills=["/skills/"] if skill_library is not None else None, permissions=permissions,
         checkpointer=checkpointer, name="oceanx", middleware=[
             *(middleware or []), provider_retry_middleware(),
-            FilesystemMiddleware(backend=backend, tools=filesystem_tools, _permissions=permissions,
+            PdfFilesystemMiddleware(backend=backend, tools=filesystem_tools, _permissions=permissions,
+                                 pdf_documents=pdf_documents,
                                  tool_token_limit_before_evict=4_000)])
 
 

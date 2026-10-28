@@ -139,14 +139,11 @@ async def test_computing_agents_receive_core_rules_without_reading_a_skill(monke
     else:
         composition = await build_ocean_expert_runtime(services=services)
     prompt = _flatten(composition.system_prompt)
-    for rule in ("averaging versus integration", "Check shared coordinates exactly",
+    for rule in ("Keep measured zero, missing observations, land",
                  "Do not infer land from NaNs", "an all-missing selection stays missing",
-                 "Reopen saved results", "resampling, smoothing and normalisation belong to the analysis",
-                 "regenerate affected results, figures and claims", "open the final figure",
-                 "editable plotting script", "preserve unaffected data, panels, axes and layers",
-                 "After an interruption or context handoff, reopen that script and its preview"):
+                 "numerator and denominator", "Preserve the diagnostic's validity mask"):
         assert rule in prompt
-    assert prompt.count("# Scientific computation") == 1
+    assert prompt.count("# Missing data and masks") == 1
 
 
 def test_data_work_does_not_wait_for_the_literature_consultation():

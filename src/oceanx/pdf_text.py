@@ -6,8 +6,8 @@ The text is extracted locally with pypdf, one block per page, and cached under t
 is also rendered as an image with pdfium, as Claude reads a PDF page by page as text and image: the
 equations, symbols and tables the text garbles and the figures drawn as vector graphics survive
 only there. The figures embedded in the PDF as images are saved too. All are JPEG files beside the
-text, and each page block names its page image and figures, so a model that reads images can look
-at them next to the text. Agents reach these only as read-only files named in their context; they
+text, and each page block names its page image and figures. The PDF read_file adapter returns
+each selected page's text and image together. Agents reach these only as read-only files named in their context; they
 are the document's content, never instructions. A provider is not sent the PDF itself.
 """
 
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import io
 import os
 import re
 import shutil
@@ -46,7 +47,8 @@ MAX_FOLDER_PDFS = 10  # a folder source offers the texts of its first PDFs, top 
 MAX_PAGE_IMAGES = 40  # the first pages of a PDF are rendered, enough for a paper and its supplement
 MIN_FIGURE_PIXELS = 200_000  # smaller embedded images are logos and icons, not figures
 MAX_FIGURE_EDGE = 1600  # long edge of a saved image, enough to read layout, labels and equations
-_FORMAT = 3  # extraction format: a new format extracts cached PDFs again
+MAX_IMAGE_BYTES = 450 * 1024  # below the native filesystem reader's 500 KiB limit
+_FORMAT = 4  # extraction format: a new format extracts cached PDFs again
 
 
 # PDFium is process-global and must not render concurrently on worker threads.
@@ -74,6 +76,19 @@ def _figure_folder(text: Path) -> Path:
     return text.with_suffix(".figures")
 
 
+def page_jpeg(image: Any) -> bytes:
+    """Keep page labels readable; reduce JPEG quality before reducing resolution."""
+    image = image.convert("RGB")
+    image.thumbnail((MAX_FIGURE_EDGE, MAX_FIGURE_EDGE))
+    while True:
+        for quality in (88, 80, 70, 60):
+            stream = io.BytesIO()
+            image.save(stream, format="JPEG", quality=quality, optimize=True)
+            if stream.tell() <= MAX_IMAGE_BYTES:
+                return stream.getvalue()
+        image.thumbnail((max(1, image.width * 3 // 4), max(1, image.height * 3 // 4)))
+
+
 def _save_figures(reader: Any, folder: Path) -> dict[int, list[str]]:
     """Save the figures embedded on each page into `folder`; return their file names by page."""
 
@@ -91,7 +106,7 @@ def _save_figures(reader: Any, folder: Path) -> dict[int, list[str]]:
                 image = image.convert("RGB")
                 image.thumbnail((MAX_FIGURE_EDGE, MAX_FIGURE_EDGE))
                 name = f"page-{number:02d}-figure-{len(figures.get(number, [])) + 1}.jpg"
-                image.save(folder / name, format="JPEG", quality=88)
+                (folder / name).write_bytes(page_jpeg(image))
             except Exception:  # noqa: BLE001, S112 - one undecodable image must not cost the text
                 continue
             ensure_private_file(folder / name)
@@ -120,7 +135,7 @@ def _render_pages(pdf: Path, folder: Path) -> set[int]:
                     page = document[number - 1]
                     bitmap = page.render(scale=MAX_FIGURE_EDGE / max(page.get_size()))
                     try:
-                        bitmap.to_pil().convert("RGB").save(folder / _page_image(number), format="JPEG", quality=85)
+                        (folder / _page_image(number)).write_bytes(page_jpeg(bitmap.to_pil()))
                     finally:
                         bitmap.close()
                 except Exception:  # noqa: BLE001, S112 - a page that will not render must not cost the others
@@ -244,7 +259,7 @@ def source_text_context(source: Path, paths: OceanPaths, *, allowed: bool) -> di
         except (OSError, PdfTextError) as exc:
             texts.append({"pdf": pdf.name, "text_error": str(exc)})
             continue
-        entry: dict[str, Any] = {"pdf": pdf.name, "text_path": str(text)}
+        entry: dict[str, Any] = {"pdf": pdf.name, "pdf_path": str(pdf), "text_path": str(text)}
         figures = pdf_figures(text)
         if figures:
             entry["figure_images"] = [str(figure) for figure in figures]

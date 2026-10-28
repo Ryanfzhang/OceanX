@@ -1017,6 +1017,10 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         skill_library=None if discussion else library,
         filesystem_backend=filesystem,
         filesystem_tools=filesystem_tools,
+        pdf_documents={path: item["text_path"]
+                       for source in context.payload.get("task_sources", [])
+                       for item in source.get("pdf_texts", []) if "text_path" in item
+                       for path in (item["text_path"], item["pdf_path"])},
         research_tree=research_tree(c["task_id"])
         if role == "coordinator" and research else None)
     from oceanx.research.metering import CallMeter

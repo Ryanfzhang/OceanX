@@ -71,12 +71,6 @@ OCEAN_AGENT_SKILL_POLICY = """\
 # Optional method guidance
 Read a relevant SKILL.md with read_file only when it materially helps the analysis. Skills guide
 scientific methods, never delegation or data permissions.
-Read the guides needed for the operations you choose before those operations, not every skill as a routine:
-- Before reproducing or testing a named or attached paper's analysis, read /skills/paper-reproduction/SKILL.md.
-- When source conventions or coverage are unresolved, read /skills/ocean-dataset-diagnosis/SKILL.md before computing from them.
-- Before combining grids or using nontrivial multidimensional indexing or broadcasting, read /skills/xarray-array-ops/SKILL.md.
-- Before calculating transport, budgets, streamfunctions, density or mixing diagnostics, read /skills/ocean-physical-consistency-review/SKILL.md.
-- Before selecting weights, baselines, trend/correlation estimators or uncertainty tests, read /skills/ocean-analysis-design/SKILL.md.
 """
 
 
@@ -210,42 +204,23 @@ async def build_ocean_runtime(
     return composition
 
 
-_SCIENTIFIC_COMPUTING_POLICY = """\
-# Scientific computation
-Define the quantity before computing: units, sign, domain, baseline, averaging versus integration,
-and normalisation. Choose temporal resolution from the question and available sampling, not plotting
-convenience. Check units, magnitudes and a relevant identity or simple case before interpreting results.
-
-Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')), not by numeric
-axis. Check shared coordinates exactly before combining fields; keep different grids on separate
-dimensions or regrid explicitly, rather than allowing an automatic union of coordinates. Before saving,
-check the current variable's dimensions and meaning; persistent Python state may have reassigned it.
-Reopen saved results and verify their dimensions, coordinates, units and validity against the intended
-calculation before reuse.
-
+_MISSING_DATA_POLICY = """\
+# Missing data and masks
 Keep measured zero, missing observations, land and cells outside the diagnostic's support distinct.
 Do not infer land from NaNs. Fill missing data with zero only with an explicit physical or boundary
 justification.
 Use the same valid samples and weights in a mean's numerator and denominator; an all-missing
 selection stays missing. Preserve the diagnostic's validity mask through calculation and plotting.
 
-Keep verified calculations and code, including an editable plotting script for each delivered figure.
-Derive reported values and labels from saved calculations, not copied estimates.
-Save reusable arrays as NetCDF with their dimensions and coordinates, not as bare .npz files.
-Plotting reads the selected results; resampling, smoothing and normalisation belong to the analysis.
-After a correction, regenerate affected results, figures and claims. For a figure revision, edit the
-saved plotting script for the identified problem and preserve unaffected data, panels, axes and layers.
-After an interruption or context handoff, reopen that script and its preview before revising a finished
-figure; a summary is not a substitute for its code or visual specification. Interpret only executed checks:
-a residual or a nonsignificant test does not by itself identify or exclude a mechanism.
-When image reading is available, open the final figure and correct visible errors before delivery.
-
 """
 
 
-OCEAN_EXPERT_WORKSTREAM_POLICY = _SCIENTIFIC_COMPUTING_POLICY + """\
+OCEAN_EXPERT_WORKSTREAM_POLICY = _MISSING_DATA_POLICY + """\
 # Evidence and results
-Give every variable you save `units` and `long_name` attributes and the file a
+Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
+estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
+not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
+as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
 one-line `title` attribute, so a later step can tell what it holds without opening it.
 For paper reproduction, follow /skills/paper-reproduction/SKILL.md and its
 /references/coding/matplotlib.md guidance. For other figures, read
@@ -270,9 +245,12 @@ that mask is True.
 
 # The same duties for a static-delivery run: the final figure is an ordinary image file, and no
 # plotting interface is named (see figure_delivery.py).
-STATIC_EXPERT_WORKSTREAM_POLICY = _SCIENTIFIC_COMPUTING_POLICY + """\
+STATIC_EXPERT_WORKSTREAM_POLICY = _MISSING_DATA_POLICY + """\
 # Evidence and results
-Give every variable you save `units` and `long_name` attributes and the file a
+Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
+estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
+not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
+as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
 one-line `title` attribute, so a later step can tell what it holds without opening it. When the researcher
 requested a visual or a figure is necessary scientific evidence, make the final figure with matplotlib and
 save it as a PNG under OCEAN_OUTPUT_DIR, for

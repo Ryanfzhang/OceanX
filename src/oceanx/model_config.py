@@ -280,14 +280,15 @@ def _images_after_tool_results(messages: list) -> list:
             pending = []
         if isinstance(message, ToolMessage) and isinstance(message.content, list) and any(
                 map(_is_image, message.content)):
-            images = [block for block in message.content if _is_image(block)]
+            blocks = message.content
             path = message.additional_kwargs.get("read_file_path")
             label = f"{message.name or 'a tool'} for {path}" if path else message.name or "a tool"
             text = [block if isinstance(block, str) else block.get("text", "")
                     for block in message.content if not _is_image(block)]
             note = f"[The image returned by {label} follows in the next message.]"
             message = message.model_copy(update={"content": "\n".join([*filter(None, text), note])})
-            pending += [{"type": "text", "text": f"Image returned by {label}:"}, *images]
+            # Preserve page-text/image order for PDF reads, including page labels.
+            pending += [{"type": "text", "text": f"Image returned by {label}:"}, *blocks]
         moved.append(message)
     if pending:
         moved.append(HumanMessage(content=pending))
