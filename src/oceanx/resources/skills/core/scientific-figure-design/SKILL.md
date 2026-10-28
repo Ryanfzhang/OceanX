@@ -112,6 +112,10 @@ when the researcher asks for it.
 
 ## Maps
 
+For continuous, gridded spatial patterns, prefer filled contours (`contourf`) to a scatter of grid
+points. Use scatter for genuinely discrete observations; do not interpolate sparse samples merely
+to obtain filled contours.
+
 Draw a spatial field on a map, never on bare longitude and latitude axes: cartopy axes in the paper's
 projection or PlateCarree, the data drawn with `transform=ccrs.PlateCarree()`, land filled light grey and
 coastlines drawn from Natural Earth at the scale of the region
