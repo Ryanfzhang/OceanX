@@ -31,6 +31,7 @@ from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
 from oceanx.figure_delivery import static_figures
 from oceanx.model_config import load_model_profile
+from oceanx.pdf_text import FIGURE_RULE
 from oceanx.research.background_experts import (
     AWAIT_TOOL, BackgroundDelegationMiddleware, RunningExperts, appended)
 from oceanx.research.metering import INSIDE_EXPERT
@@ -930,6 +931,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                        "to carry state within one attempt. Save only a checkpoint another node or retry needs.")
             if role in DATA_EXPERT_ROLES and learned:
                 prompt += " " + learned_skills_rule(learned)
+    if svc.native_vision and role not in {"coordinator", "scientific_discussion_partner"}:
+        prompt += "\n" + FIGURE_RULE
     if role != "coordinator" and not quick:
         prompt += "\n" + profile_system_prompt(get_agent_profile(role))
     if role not in {"coordinator", SINGLE_AGENT}:  # the single agent has the conversation itself
