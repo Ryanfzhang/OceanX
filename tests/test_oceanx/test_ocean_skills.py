@@ -132,7 +132,7 @@ def test_skill_prompt_is_metadata_only_and_respects_the_literature_gate():
     )
 
     assert "ocean-physical-consistency-review" in prompt
-    assert "ocean-analysis-design" not in prompt
+    assert "ocean-analysis-design" in prompt
     assert "questions_to_resolve" not in prompt
     assert "paper-evidence-review" not in prompt
     assert "paper-evidence-review" in enabled_prompt
@@ -152,7 +152,7 @@ def test_every_packaged_skill_declares_roles_and_role_gate_controls_loading():
         )
     }
     assert {"paper-navigator", "paper-evidence-review", "reproducibility-audit"} <= literature_names
-    assert "ocean-dataset-diagnosis" not in literature_names
+    assert "ocean-dataset-diagnosis" in literature_names
 
     content, _metadata = load_ocean_skill(
         "paper-evidence-review",

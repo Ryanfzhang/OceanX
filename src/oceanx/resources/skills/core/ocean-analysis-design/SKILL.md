@@ -1,10 +1,12 @@
 ---
 name: ocean-analysis-design
-description: Select statistical methods for weighting, baselines, autocorrelation and uncertainty in ocean comparisons, trends and anomaly analyses.
+description: Read before selecting weights, baselines, trend or correlation estimators, EOF/PCA preprocessing or uncertainty tests for an ocean analysis.
 metadata:
   origin: oceanmind
   roles:
     - statistical_inference_expert
+    - ocean_process_expert
+    - literature_reproduction_expert
 ---
 
 # Ocean Statistical Methods
@@ -40,6 +42,9 @@ Define the reference population/period, aggregation order, calendar, seasonal tr
 missing-data convention. Spatial contrasts, deviations from one year's mean and anomalies
 relative to a multi-year climatology are different quantities. A single year cannot supply an
 independent multi-year climatology. Separate the baseline and target windows explicitly.
+Before grouping timestamps, confirm the source calendar, interval bounds and timestamp meaning.
+Preserve non-Gregorian calendars and state how incomplete periods and leap days are treated;
+ordinary date conversion must not silently change the samples or durations.
 
 Removing a trend or fitting a seasonal cycle changes the question; use it when warranted rather
 than automatically. A fitted component is not proof of a physical mechanism. For prediction or
@@ -88,6 +93,13 @@ or label the result exploratory. Apply sensitivity checks to choices that could 
 not as an automatic additional study. Report insufficient precision or unresolved assumptions
 when the data cannot support the proposed inference.
 
+## EOF and PCA
+
+Before decomposition, specify the domain, validity mask, baseline, seasonal and trend treatment,
+spatial weights and normalisation. Modes are statistical patterns, not independently identified
+mechanisms; assess sensitivity and mode separation before interpreting them. Read
+/references/methods/eof.md for the relevant method choices.
+
 ## research_objective
 Translate a scientific question into inspectable selections, transformations, comparisons, and falsifiable checks that an agent may later implement in editable code.
 
@@ -132,6 +144,6 @@ limitations that could change the answer rather than describing an unperformed c
 <!-- /oceanx:lessons -->
 
 ## relevant_references
-Read `references/methods/anomaly.md` for anomaly definitions, `references/methods/trend.md` for
-trend estimation, or `references/coding/large-array-practices.md` for large-array execution only
+Read `/references/methods/anomaly.md` for anomaly definitions, `/references/methods/trend.md` for
+trend estimation, or `/references/coding/large-array-practices.md` for large-array execution only
 when the analysis involves that method.

@@ -37,6 +37,9 @@ replacement before adopting it, regenerate affected saved results and figures, a
 delivered figures read those results rather than an older file or variable. A corrected scratch result
 alone does not correct the deliverable. Keep superseded results separate from the selected results;
 retain deliberately compared alternatives with their methods labelled.
+Choose corrections from the equations, data conventions and numerical checks, not because they move
+the result closer to the paper. Keep justified alternative definitions labelled and compare their
+results rather than tuning parameters or choosing a preferred version solely for agreement.
 
 Sampling, averaging, smoothing and normalisation are part of a quantity's definition.
 For direct reproduction, match the paper where the supplied data support it; otherwise state the
@@ -62,10 +65,17 @@ two, or of sign, comes from a definition, normalisation, unit, domain, mask or s
 shown otherwise: find it before drawing any conclusion.
 
 ## Adapting the method to the record
+Choose temporal resolution from the question and the supplied sampling: monthly values are the usual
+starting point for seasonal to interannual evolution, daily values for event onset and recovery, and
+annual values for whole-year comparisons. Use the paper's resolution when compatible with these data;
+an annual summary does not require an annual time axis in the evolution plot.
+
 A method built for a long record can fail on a short one. Evaluate the paper's smoothing window
 against the available duration, sampling and valid endpoint coverage. When it consumes much of the
-record, use /skills/ocean-analysis-design/SKILL.md, under Smoothing for a short record, to select an
-adapted display window. Smooth at a time resolution appropriate to the question and supported by the
+record, start with a descriptive display window no longer than roughly 20-25% of the record duration,
+unless a physical cutoff is prescribed. This is a display heuristic, not a universal scientific
+threshold or a significance test. Use /skills/ocean-analysis-design/SKILL.md for the statistical
+details. Smooth at a time resolution appropriate to the question and supported by the
 data. Use the paper's analysis resolution when compatible; otherwise explain the adaptation. Do not
 coarsen the series merely for plotting. Save the unsmoothed series and, where supported, the paper-window
 result as data; the reproduced figure draws only the selected treatment, in the original's style, and a comparison of windows goes in
@@ -81,8 +91,41 @@ and fills only where the stated smoothing method produces valid values; do not p
 endpoints to match the original's appearance.
 
 ## Figures
-Before drawing the first figure, read /skills/scientific-figure-design/SKILL.md, under Reproducing a
-paper's figure.
+For a reproduced figure, the original's layout, colours, symbols and line styles take precedence over
+generic style defaults; use those defaults where the original is unspecified. This does not override
+the computed values, valid support, coordinate registration or the delivery format.
+
+Reproduce each of the paper's figures as one figure with the same panels in the same arrangement,
+from the checked quantities: the same variables, symbols, units, map extent, colour encoding, fills,
+overlays, reference lines and panel letters. The numbers on the figure are yours; a paper's value may
+stand beside a computed value for comparison, never alone. Draw every element the data support,
+including estimated trends; leave an unsupported element out, name it in the answer and do not replace
+it with another quantity or period.
+
+Keep the original's visual hierarchy: raw series faintly behind the selected main curve and its fills,
+with secondary variables on their own axes where the original uses them. Plot the saved time-resolved
+series at the selected analysis resolution. Draw smoothed curves and fills only at valid timestamps.
+Keep the original's axis and colour ranges when the main values fit them; otherwise show those values
+and explain the difference. A noisy background series must not flatten the main curve: use a labelled
+crop, inset or supplementary panel when needed. Method and smoothing-window comparisons belong in a
+separate supplementary figure, not overlaid on the reproduction's main panels.
+
+Draw maps with Cartopy coastlines and light-grey land, keeping the original's extent and projection
+where the data cover them. Keep cells outside the diagnostic's saved validity mask empty; that mask
+does not replace the coastline. Prefer filled contours for continuous gridded patterns and use readable,
+scaled arrows with a reference key for vector fields. If coastline files are unavailable, use a verified
+land mask and state the limitation in the answer.
+
+Before drawing the first figure, read /skills/scientific-figure-design/SKILL.md for publication sizing,
+typography, maps and export details. Use matplotlib for the paper's layout and save in the format the
+delivery instructions require. Keep explanations and caveats in the answer; figure text is limited to
+axis labels, panel letters, legends and short feature or computed-value labels, placed clear of the data.
+
+When you can read images, open the original again right before drawing it. After saving, open the
+original and yours together and compare panel layout, fills, line styles, axis ranges and multipliers,
+colour scales, panel letters, legends and labels. Fix overlaps, unreadable type, empty panels and main
+curves flattened by their axes, and check for a series clipped where the original does not clip it.
+Deliver every computed panel and put its doubts in the answer.
 
 ## Reporting
 For each of the paper's conclusions give the paper's value, the reproduced value, whether they agree and

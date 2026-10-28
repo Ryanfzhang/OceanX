@@ -1,10 +1,12 @@
 ---
 name: ocean-physical-consistency-review
-description: Select and check ocean-physics methods for heat budgets, transport, stratification and mixing when investigating a physical subquestion or reviewing its evidence.
+description: Read before calculating transport, budgets, streamfunctions, density, stratification or mixing diagnostics, or checking their physical assumptions.
 metadata:
   origin: oceanmind
   roles:
     - ocean_process_expert
+    - statistical_inference_expert
+    - literature_reproduction_expert
 ---
 
 # Ocean Physical Methods
@@ -47,7 +49,8 @@ is a model-specific reference, not a variable-name template for other products.
 Choose the section or boundary and its normal orientation. Volume transport integrates normal
 velocity over wet area; heat/property transport also needs the tracer, density and reference
 convention. Use actual cell areas, partial layer thicknesses and staggered-grid placement.
-Read `references/methods/transport.md` for section conventions when needed.
+Before integration, use `/references/methods/transport.md` to resolve any remaining section,
+grid-placement or snapshot-versus-mean convention.
 
 For a scalar `C`, `div_h(u_h C) = u_h dot grad_h(C) + C div_h(u_h)`.
 Flux divergence and advective tendency are not interchangeable; the advective contribution
@@ -107,13 +110,20 @@ the masks, integration path and reference choice before interpreting them or smo
 Separate density stratification, temperature stratification and mixed-layer depth (MLD).
 Salinity compensation can make temperature gradients a misleading density proxy. Use the
 thermodynamic variable and pressure/depth conventions required by the chosen equation of state.
-For GSW calculations, consult `references/coding/gsw.md` and the
+Before GSW calculations, distinguish practical from absolute salinity, in-situ or potential from
+conservative temperature, and sea pressure from geometric depth. Convert the supplied quantities to
+the inputs the selected function requires; do not relabel one convention as another.
+For implementation details, consult `/references/coding/gsw.md` and the
 [GSW profile-function documentation](https://teos-10.github.io/GSW-Python/gsw_flat.html).
 
 MLD depends on the threshold, reference depth, vertical resolution and interpolation. State
 these when interpreting or comparing MLD; it is not interchangeable with a thermocline depth.
-Read `references/methods/mixed-layer-depth.md` when deriving MLD. A stable/shallow layer can be
+Read `/references/methods/mixed-layer-depth.md` when deriving MLD. A stable/shallow layer can be
 consistent with heat retention without showing that it caused the observed warming.
+
+For water-mass comparisons, preserve the salinity, temperature and equation-of-state conventions
+across datasets. A temperature-salinity curve alone does not identify a water source or pathway;
+read `/references/methods/water-mass.md` before interpreting that structure.
 
 ## Mixing and entrainment
 
@@ -189,4 +199,4 @@ The existence of additional possible checks alone is not a reason to withhold su
 <!-- /oceanx:lessons -->
 
 ## relevant_references
-`references/review/physical-consistency.md`, `references/data/common-variables-and-units.md`, `references/methods/transport.md`.
+`/references/review/physical-consistency.md`, `/references/data/common-variables-and-units.md`, `/references/methods/transport.md`.

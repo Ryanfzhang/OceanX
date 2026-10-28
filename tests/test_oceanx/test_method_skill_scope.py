@@ -53,15 +53,13 @@ def test_numeric_method_examples_remain_available_on_demand():
     assert "residual" in physical
 
 
-def test_a_paper_reproduction_points_to_where_its_methods_live():
-    """The reproduction skill, which a task with a paper names, says what to do; the method lives in
-    the skill or reference that every analysis reads for it, once."""
+def test_a_paper_reproduction_keeps_its_workflow_and_points_to_specialist_details():
+    """Reading the reproduction skill before analysis also supplies the main figure requirements."""
     from oceanx.runtime import OCEAN_EXPERT_WORKSTREAM_POLICY
     from oceanx.skills import ocean_reference_root
 
     reproduction = " ".join(load_ocean_skill("paper-reproduction")[0].split())
-    # A pointer is followed when it says what to read before which step, as a run on 2026-10-26 showed:
-    # "first read" was obeyed, "drawn as ... describes" was not.
+    # Detailed methods still have explicit entry points; essential figure decisions are inline.
     for step in ("Before computing anything, read the page image",
                  "Before writing code for a vorticity budget or a streamfunction, read /skills/ocean-physical-consistency-review/SKILL.md",
                  "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
@@ -78,12 +76,16 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
     assert "open boundaries are the real straits" in " ".join(physical.split())
     assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
-    # How every figure is drawn, a reproduced one included, lives in one skill; the code-level matplotlib
-    # details stay in the reference it names (2026-10-27: the rules were spread over six places).
+    for rule in ("same panels in the same arrangement", "raw series faintly behind the selected main curve",
+                 "secondary variables on their own axes", "Cartopy coastlines and light-grey land",
+                 "open the original and yours together", "a verified land mask"):
+        assert rule in reproduction
+    # General publication standards stay available to tasks without a paper.
     figure = " ".join(load_ocean_skill("scientific-figure-design")[0].split())
     for section in ("## Publication figures", "## Maps", "## Reproducing a paper's figure", "## Checking the figure"):
         assert section in figure
-    assert "open the original and yours together" in figure and "ax.coastlines('50m'" in figure
+    assert "/skills/paper-reproduction/SKILL.md" in figure
+    assert "ax.coastlines('50m'" in figure
     assert "the panel's main series first" in figure
     assert "label it explicitly and state which values lie outside the displayed range" in figure
     # A figure draws computed results and does not quietly redefine them; a reproduced one keeps what the
@@ -96,7 +98,7 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "Do not coarsen the series merely for plotting" in reproduction
     assert "a comparison of windows goes in a separate supplementary figure" in reproduction
     assert "save the unsmoothed series" in load_ocean_skill("ocean-analysis-design")[0]
-    assert "a series clipped where the original does not clip it" in figure
+    assert "a series clipped where the original does not clip it" in reproduction
     reference = " ".join((ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8").split())
     assert "/skills/scientific-figure-design/SKILL.md" in reference and "rasterized=True" in reference
     # Every agent that draws, in either delivery mode, is told to read that skill before its first figure.
@@ -107,20 +109,32 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
         assert "/references/coding/matplotlib.md" not in flat
 
 
-@pytest.mark.parametrize("name,owner", [
-    ("ocean-physical-consistency-review", "ocean_process_expert"),
-    ("ocean-analysis-design", "statistical_inference_expert"),
-    ("ocean-data-acquisition", "literature_reproduction_expert"),
+def test_reproduction_figure_requirements_are_self_contained_and_consistent():
+    reproduction, _ = load_ocean_skill("paper-reproduction")
+    figures = reproduction.split("## Figures\n", 1)[1].split("\n## Reporting", 1)[0]
+    figure = " ".join(load_ocean_skill("scientific-figure-design")[0].split())
+    # Either skill may be the only one opened. Keep the shared core intact in both entry points.
+    for start in ("For a reproduced figure, the original's layout",
+                  "Reproduce each of the paper's figures", "Keep the original's visual hierarchy",
+                  "When you can read images, open the original"):
+        paragraph = next(p for p in figures.split("\n\n") if p.startswith(start))
+        assert " ".join(paragraph.split()) in figure
+
+
+@pytest.mark.parametrize("name,readers", [
+    ("ocean-physical-consistency-review", ("ocean_process_expert", "statistical_inference_expert", "literature_reproduction_expert")),
+    ("ocean-analysis-design", ("ocean_process_expert", "statistical_inference_expert", "literature_reproduction_expert")),
+    ("ocean-data-acquisition", ("literature_reproduction_expert",)),
 ])
 @pytest.mark.parametrize("role", [
     "coordinator", "ocean_process_expert", "scientific_discussion_partner",
     "statistical_inference_expert", "literature_reproduction_expert",
 ])
-def test_domain_method_native_libraries_are_role_scoped(tmp_path, name, owner, role):
+def test_computing_experts_share_method_reading_but_acquisition_remains_scoped(tmp_path, name, readers, role):
     from oceanx.native_skills import prepare_skill_library
     from oceanx.skills import OceanResourceUnavailableError
 
-    available = role == owner
+    available = role in readers
     library = prepare_skill_library(tmp_path / role, role=role)
     assert (library / "skills" / name / "SKILL.md").is_file() is available
     if available:
@@ -129,6 +143,24 @@ def test_domain_method_native_libraries_are_role_scoped(tmp_path, name, owner, r
     else:
         with pytest.raises(OceanResourceUnavailableError):
             load_ocean_skill(name, role=role)
+
+
+@pytest.mark.parametrize("delivery", ["interactive", "static"])
+@pytest.mark.parametrize("role", ["ocean_process_expert", "statistical_inference_expert",
+                                  "literature_reproduction_expert", "single_agent", "helper"])
+def test_method_reading_triggers_and_skill_links_resolve_in_each_computing_library(tmp_path, monkeypatch, delivery, role):
+    import re
+
+    from oceanx.native_skills import prepare_skill_library
+    from oceanx.runtime import OCEAN_AGENT_SKILL_POLICY
+
+    monkeypatch.setenv("OCEANX_FIGURE_DELIVERY", delivery)
+    library = prepare_skill_library(tmp_path / role, role=role, capabilities=("literature.read",))
+    documents = [OCEAN_AGENT_SKILL_POLICY]
+    documents.extend(path.read_text() for path in (library / "skills").glob("*/SKILL.md"))
+    for document in documents:
+        for target in re.findall(r"/skills/[a-z0-9-]+/SKILL\.md", document):
+            assert (library / target.lstrip("/")).is_file(), (role, target)
 
 
 def test_download_provider_references_follow_the_literature_library(tmp_path):

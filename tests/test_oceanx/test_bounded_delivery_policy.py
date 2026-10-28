@@ -1,6 +1,8 @@
 """Prompt regression checks protect a small contract, not historical wording."""
 from types import SimpleNamespace
 
+import pytest
+
 from oceanx.runtime import (
     OCEAN_AGENT_SKILL_POLICY,
     OCEAN_CHILD_BASE_SYSTEM_PROMPT,
@@ -121,6 +123,28 @@ def test_experts_keep_evidence_without_workflow_checklists():
     assert "look at the figure once" in _flatten(load_ocean_skill("scientific-figure-design")[0])
     # Most failed code runs across tasks were shape/axis mistakes after dropping to bare arrays.
     assert "select and reduce by dimension name" in policy and "not as bare .npz" in policy
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delivery", ["interactive", "static"])
+@pytest.mark.parametrize("role", ["ocean_process_expert", "statistical_inference_expert", "single_agent", "helper"])
+async def test_computing_agents_receive_core_rules_without_reading_a_skill(monkeypatch, delivery, role):
+    from oceanx.runtime import build_ocean_expert_runtime, build_ocean_single_agent_runtime
+
+    monkeypatch.setenv("OCEANX_FIGURE_DELIVERY", delivery)
+    services = OceanToolServices(workspace_id="ws", provider_id="fixture", store=SimpleNamespace(),
+                                 skill_role=role)
+    if role in {"single_agent", "helper"}:
+        composition = await build_ocean_single_agent_runtime(services=services, helper=role == "helper")
+    else:
+        composition = await build_ocean_expert_runtime(services=services)
+    prompt = _flatten(composition.system_prompt)
+    for rule in ("averaging versus integration", "Check shared coordinates exactly",
+                 "Do not infer land from NaNs", "an all-missing selection stays missing",
+                 "Reopen saved results", "resampling, smoothing and normalisation belong to the analysis",
+                 "regenerate affected results, figures and claims", "open the final figure"):
+        assert rule in prompt
+    assert prompt.count("# Scientific computation") == 1
 
 
 def test_data_work_does_not_wait_for_the_literature_consultation():

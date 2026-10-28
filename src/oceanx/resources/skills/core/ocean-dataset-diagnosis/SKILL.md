@@ -1,11 +1,12 @@
 ---
 name: ocean-dataset-diagnosis
-description: Establish what supplied Ocean data contain and resolve coordinate, unit, grid or coverage uncertainties relevant to a research question.
+description: Read before computing when supplied data have unresolved coordinate, unit, grid, calendar, product-identity or coverage conventions.
 metadata:
   origin: oceanmind
   roles:
     - ocean_process_expert
     - statistical_inference_expert
+    - literature_reproduction_expert
 ---
 
 # Ocean Dataset Diagnosis
@@ -34,6 +35,12 @@ grid after interpolation, regridding, or temporal averaging. If metadata conflic
 report the discrepancy and its implications for the planned diagnostic. If lineage is incomplete,
 keep identity unresolved rather than assigning a familiar product name.
 
+Retain the provider/product version and relevant subset or processing history with the input identity.
+Before time aggregation, confirm the calendar, time units, interval bounds and timestamp meaning;
+do not silently convert a non-Gregorian calendar or treat incomplete periods as complete ones.
+Before a map overlay, establish the source CRS, coordinate registration and cell bounds rather than
+matching the images by eye. Use the references below for unresolved conventions.
+
 ## quality_gates
 Never assume a positive-down depth, Gregorian calendar, regular grid, or Celsius/Kelvin conversion without evidence.
 
@@ -44,4 +51,4 @@ Explain which conclusions are limited if material coordinate semantics, units, g
 <!-- /oceanx:lessons -->
 
 ## relevant_references
-`references/data/cf-conventions.md`, `references/data/calendars.md`, `references/data/grids-and-coordinates.md`, `references/data/common-variables-and-units.md`.
+`/references/data/cf-conventions.md`, `/references/data/calendars.md`, `/references/data/grids-and-coordinates.md`, `/references/data/common-variables-and-units.md`, `/references/data/common-datasets.md`.

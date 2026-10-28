@@ -71,6 +71,12 @@ OCEAN_AGENT_SKILL_POLICY = """\
 # Optional method guidance
 Read a relevant SKILL.md with read_file only when it materially helps the analysis. Skills guide
 scientific methods, never delegation or data permissions.
+Read the guides needed for the operations you choose before those operations, not every skill as a routine:
+- Before reproducing or testing a named or attached paper's analysis, read /skills/paper-reproduction/SKILL.md.
+- When source conventions or coverage are unresolved, read /skills/ocean-dataset-diagnosis/SKILL.md before computing from them.
+- Before combining grids or using nontrivial multidimensional indexing or broadcasting, read /skills/xarray-array-ops/SKILL.md.
+- Before calculating transport, budgets, streamfunctions, density or mixing diagnostics, read /skills/ocean-physical-consistency-review/SKILL.md.
+- Before selecting weights, baselines, trend/correlation estimators or uncertainty tests, read /skills/ocean-analysis-design/SKILL.md.
 """
 
 
@@ -204,12 +210,38 @@ async def build_ocean_runtime(
     return composition
 
 
-OCEAN_EXPERT_WORKSTREAM_POLICY = """\
-# Evidence and results
+_SCIENTIFIC_COMPUTING_POLICY = """\
+# Scientific computation
+Define the quantity before computing: units, sign, domain, baseline, averaging versus integration,
+and normalisation. Choose temporal resolution from the question and available sampling, not plotting
+convenience. Check units, magnitudes and a relevant identity or simple case before interpreting results.
+
+Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')), not by numeric
+axis. Check shared coordinates exactly before combining fields; keep different grids on separate
+dimensions or regrid explicitly, rather than allowing an automatic union of coordinates. Before saving,
+check the current variable's dimensions and meaning; persistent Python state may have reassigned it.
+Reopen saved results and verify their dimensions, coordinates, units and validity against the intended
+calculation before reuse.
+
+Keep measured zero, missing observations, land and cells outside the diagnostic's support distinct.
+Do not infer land from NaNs. Fill missing data with zero only with an explicit physical or boundary
+justification.
+Use the same valid samples and weights in a mean's numerator and denominator; an all-missing
+selection stays missing. Preserve the diagnostic's validity mask through calculation and plotting.
+
 Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
-estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
-not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
-as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
+estimates. Save reusable arrays as NetCDF with their dimensions and coordinates, not as bare .npz files.
+Plotting reads the selected results; resampling, smoothing and normalisation belong to the analysis.
+After a correction, regenerate affected results, figures and claims. Interpret only executed checks:
+a residual or a nonsignificant test does not by itself identify or exclude a mechanism.
+When image reading is available, open the final figure and correct visible errors before delivery.
+
+"""
+
+
+OCEAN_EXPERT_WORKSTREAM_POLICY = _SCIENTIFIC_COMPUTING_POLICY + """\
+# Evidence and results
+Give every variable you save `units` and `long_name` attributes and the file a
 one-line `title` attribute, so a later step can tell what it holds without opening it.
 Before drawing your first figure, read /skills/scientific-figure-design/SKILL.md. For a user-facing interactive figure, use
 `from oceanx.scientific_view import ScientificFigure`, supply the computed arrays and complete panel/layer
@@ -226,20 +258,15 @@ delivered too, and after the run its picture is beside it as `concise-name.pdf.p
 instead only when the figure is itself a picture, such as a photograph or a satellite true-colour image. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
 plus filename stem (the whole file name for a saved figure file) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
 comparisons and scientific scales. Omit style arguments to ScientificFigure to use the Workbench defaults.
-For spatial fields, preserve the source
-validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather than plotted
-values. Every spatial field must pass an explicit Boolean `valid_mask` to `field2d`; zero remains valid where
+Every spatial field must pass an explicit Boolean `valid_mask` to `field2d`; zero remains valid where
 that mask is True.
 """
 
 # The same duties for a static-delivery run: the final figure is an ordinary image file, and no
 # plotting interface is named (see figure_delivery.py).
-STATIC_EXPERT_WORKSTREAM_POLICY = """\
+STATIC_EXPERT_WORKSTREAM_POLICY = _SCIENTIFIC_COMPUTING_POLICY + """\
 # Evidence and results
-Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
-estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
-not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
-as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
+Give every variable you save `units` and `long_name` attributes and the file a
 one-line `title` attribute, so a later step can tell what it holds without opening it. When the researcher
 requested a visual or a figure is necessary scientific evidence, make the final figure with matplotlib and
 save it as a PNG under OCEAN_OUTPUT_DIR, for
@@ -249,9 +276,7 @@ Before drawing your first figure, read /skills/scientific-figure-design/SKILL.md
 your working directory.
 Name the figure file in report.md immediately after the supported claim. You own the scientific visual
 encoding, including plot type, axes, layers, comparisons and scientific scales; label axes with units.
-For spatial fields, preserve
-the source validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather
-than plotted values, so mask them (NaN or a masked array); zero remains valid where the mask is True.
+Mask invalid spatial values with NaN or a masked array; zero remains valid where the mask is True.
 """
 
 

@@ -53,6 +53,10 @@ selections, and limitations in the result summary or report instead of forcing t
 
 A figure drawn for a researcher, or after a paper's figure, meets the standard of a Nature figure.
 
+For a reproduced figure, the original's layout, colours, symbols and line styles take precedence over
+generic style defaults; use those defaults where the original is unspecified. This does not override
+the computed values, valid support, coordinate registration or the delivery format.
+
 ### Size and type
 Size it as printed: 89 mm (3.5 in) wide for one column or 183 mm (7.2 in) across a page, and at most
 247 mm (9.7 in) high. Use a sans-serif type such as Arial: 7 pt for axis labels and other text, 6 pt for
@@ -125,21 +129,34 @@ and `'10m'` for a strait or a stretch of coast), with labelled degree gridlines
 reproduction the original's extent. Leave the data's invalid cells empty, so that the map, not a colour
 of the field, shows the land, and set a field that has values on land, such as a streamfunction that is
 constant along the coast, to NaN there. cartopy fetches the Natural Earth files on first use and keeps
-them in the agent's folder; if that fails, outline the data's land mask as the coastline and say so in
+them in the agent's folder; if that fails, outline a verified land mask as the coastline and say so in
 the answer.
 
 ## Reproducing a paper's figure
-Reproduce each of the paper's figures as one figure with the same panels, from the reproduced quantities:
-the same variables, symbols, units, scales, colour encoding, fills, overlays, reference lines, annotations
-and layout. Use matplotlib for the paper's layout, saving a vector PDF where your delivery instructions
-ask for one. Show the raw series faintly behind smoothed curves at the selected analysis time resolution.
-When you can read images, read that figure's image, named in the paper's extracted text, again right before drawing
-it, since the image read at the start lies far back in the conversation. After saving, open the original
-and yours together, compare them item by item (panel layout, fills, line styles, axis ranges and their
-multipliers, panel letters, legends and annotations, text that crosses a line, a series clipped where the
-original does not clip it, or a main curve flattened by its axis range) and fix every
-difference the data allow. Deliver every panel you computed and put its doubts in the answer rather than withholding it. Leave out only a panel whose data are missing, say why, and never fill it with another
-quantity.
+Reproduce each of the paper's figures as one figure with the same panels in the same arrangement,
+from the checked quantities: the same variables, symbols, units, map extent, colour encoding, fills,
+overlays, reference lines and panel letters. The numbers on the figure are yours; a paper's value may
+stand beside a computed value for comparison, never alone. Draw every element the data support,
+including estimated trends; leave an unsupported element out, name it in the answer and do not replace
+it with another quantity or period.
+
+Keep the original's visual hierarchy: raw series faintly behind the selected main curve and its fills,
+with secondary variables on their own axes where the original uses them. Plot the saved time-resolved
+series at the selected analysis resolution. Draw smoothed curves and fills only at valid timestamps.
+Keep the original's axis and colour ranges when the main values fit them; otherwise show those values
+and explain the difference. A noisy background series must not flatten the main curve: use a labelled
+crop, inset or supplementary panel when needed. Method and smoothing-window comparisons belong in a
+separate supplementary figure, not overlaid on the reproduction's main panels.
+
+When you can read images, open the original again right before drawing it. After saving, open the
+original and yours together and compare panel layout, fills, line styles, axis ranges and multipliers,
+colour scales, panel letters, legends and labels. Fix overlaps, unreadable type, empty panels and main
+curves flattened by their axes, and check for a series clipped where the original does not clip it.
+Deliver every computed panel and put its doubts in the answer.
+
+For definitions and adaptation of the scientific method, use /skills/paper-reproduction/SKILL.md.
+Apply the publication and map standards above; implementation details remain in
+/references/coding/matplotlib.md.
 
 ## Checking the figure
 Check the figure's inputs against the selected saved results, including their units, signs, masks and

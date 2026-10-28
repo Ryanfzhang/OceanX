@@ -25,7 +25,7 @@ def test_role_library_has_support_files_without_other_role_skills(tmp_path):
     assert not (root / "skills/paper-navigator").exists()
     lit = library(tmp_path, "literature_reproduction_expert")
     assert (lit / "skills/paper-navigator/SKILL.md").is_file()
-    assert not (lit / "skills/xarray-array-ops").exists()
+    assert (lit / "skills/xarray-array-ops/SKILL.md").is_file()
     assert (root / "references/methods/transport.md").is_file()
 
 
