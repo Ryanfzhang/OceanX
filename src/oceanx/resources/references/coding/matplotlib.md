@@ -18,6 +18,15 @@ Choose colour limits from declared values and retain them in the artifact
 metadata. Do not use rendering output as the only numerical check: independently
 verify the field dimensions, units, coordinate order, and outer edges.
 
+## Vector arrows
+
+In `quiver`, larger `scale` makes arrows shorter; `scale_units` determines their length units, while
+`width` controls shaft width. Calibrate them together using the actual vectors and panel size, and
+create `quiverkey` from that same quiver object. Defaults for short arrows can replace them with
+dots: `minlength` is measured in shaft widths. If those dots obscure the field, `minlength=0` disables
+that replacement; this changes glyph rendering, not the stored vector values. Thin arrow locations
+for readability without averaging or normalising the underlying vector field during plotting.
+
 ## Editable PDF figures
 
 OceanX's style stores text as TrueType for editing in Illustrator; keep `pdf.fonttype=42`.

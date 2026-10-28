@@ -28,6 +28,12 @@ analysis timescale as a comparison target when the data support it; otherwise ex
 and what remains comparable. Do not average to a coarser scale merely to simplify a plot or reduce
 computation.
 
+Keep whole-year summaries separate from the time-resolved series: estimating an annual trend or a
+period mean does not require an annual time axis in the main evolution plot. When monthly sampling
+supports the question, retain monthly timestamps and apply smoothing to that series; use an annual
+curve when the annual quantity itself is the target. Express the smoothing window in physical time
+and convert it to samples at the selected resolution, rather than coarsening the series first.
+
 ## Baselines and anomalies
 
 Define the reference population/period, aggregation order, calendar, seasonal treatment and

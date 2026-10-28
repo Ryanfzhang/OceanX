@@ -32,6 +32,10 @@ selection and processing they describe, then read them for annotations. An annot
 plotted curve uses that curve's samples, filtering and period. If a statistic instead describes the
 raw series or another timescale, label that distinction explicitly.
 
+Select the saved time-resolved series for an evolution plot; an annual summary table does not set
+the plot's time resolution. A smoothed main curve retains the timestamps of the series smoothed,
+unless the scientific quantity being shown is explicitly defined on a coarser time interval.
+
 Draw the coastline and land as Maps says, and leave empty the cells outside the diagnostic's saved
 validity mask: a surface coastline alone does not define the support of a depth layer or derived field.
 Keep signed quantities signed; show an absolute magnitude only when
@@ -80,6 +84,14 @@ reproduced figure may keep its original's map, with zero where the original puts
 categories take the style's colour cycle; never tell two series apart by red against green alone, and
 add line styles or markers beyond four series. Every colour field has a colour bar labelled with its
 quantity and unit.
+
+### Vector arrows
+Choose arrow spacing, length scale and shaft width together for the panel's printed size and the
+range of vector magnitudes. Representative nonzero vectors should have readable arrowheads, not
+merge into a field of dots or overlap their neighbours. Include a reference arrow with units; share
+the scale across comparable panels, or give each panel its own labelled scale when they differ.
+Preserve relative magnitudes; equal-length arrows show direction only and must be labelled as such.
+Matplotlib's scale and short-arrow behaviour are explained in /references/coding/matplotlib.md.
 
 ### Words and numbers
 Text on a panel is limited to axis and tick labels, the panel letter, a legend and short labels of
