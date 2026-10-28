@@ -88,9 +88,11 @@ Poisson solve needs boundary values the data do not give, so its pattern is not 
 
 Use the layer's wet thickness and valid-data mask, not just the surface land mask. A column without
 water in that layer is outside its support; an all-missing column is unknown, not observed zero
-transport. If zeros are used internally for integration, retain these distinctions and restore the
-layer mask before interpreting or plotting the result. Do not integrate across disconnected water
-bodies without specifying their separate boundaries and reference constants.
+transport. Keep missing data, absent water and measured zero distinct in reductions and derivatives.
+Use zero-filling only with an explicit physical or boundary justification; restoring a mask after a
+derivative does not undo gradients introduced by filling. Retain the layer mask when interpreting or
+plotting the result. Do not integrate across disconnected water bodies without specifying their
+separate boundaries and reference constants.
 
 Check a reconstructed streamfunction against both transport components, with the chosen sign and
 grid metrics: `U = -dpsi/dy`, `V = dpsi/dx`. Layer transport can be divergent through exchange across
@@ -142,6 +144,10 @@ the same signal with another method or reviewer is not automatically independent
 shared assumptions and errors. A passed numerical check does not by itself establish a mechanism.
 
 Inspect the saved code, arrays and rendered figures relevant to a specific suspected discrepancy.
+Describe the method actually executed, not merely the intended formula. Before comparing supposedly
+equivalent computations, align their physical domain, valid support, boundary conditions, weights,
+time samples and normalisation. If several of these change together, the comparison does not isolate
+one cause; identify which step differs before attributing the discrepancy.
 A small known-answer example can resolve a numerical uncertainty without repeating a whole study.
 Report the evidence location, discrepancy, impact on the claim and any unexamined scope.
 
@@ -158,6 +164,8 @@ Use only checks relevant to the claim under review:
 - An unexpected sign or magnitude is a reason to check definitions and computations, not permission
   to replace the value with a physically preferred story. Assess net flux using its relevant
   components, not shortwave radiation alone; distinguish variability from estimator failure.
+  Leave an untested cause unresolved rather than attributing it to data noise. Call a result an upper
+  or lower bound only when the direction of the error has been established.
 - A statistical decomposition is not a mechanism detector. Fluctuations relative to a temporal
   mean need not isolate coherent eddies or any other named process; persistent structures can
   contribute to the mean. A small covariance or domain-mean contribution cannot exclude that
