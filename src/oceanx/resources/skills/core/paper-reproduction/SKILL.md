@@ -31,21 +31,9 @@ divided by an area.
 ## One computation per quantity
 Fix one computation of each quantity before drawing any figure, and check it: its units, the paper's
 magnitudes for the overlapping period, and any identity it must satisfy, such as the area and boundary
-forms of Stokes' theorem giving the same circulation. Use that checked computation across figures and
-compute every series you compare or correlate from aligned samples. When correcting it, check the
-replacement before adopting it, regenerate affected saved results and figures, and verify that the
-delivered figures read those results rather than an older file or variable. A corrected scratch result
-alone does not correct the deliverable. Keep superseded results separate from the selected results;
-retain deliberately compared alternatives with their methods labelled.
-Choose corrections from the equations, data conventions and numerical checks, not because they move
-the result closer to the paper. Keep justified alternative definitions labelled and compare their
-results rather than tuning parameters or choosing a preferred version solely for agreement.
-
-Sampling, averaging, smoothing and normalisation are part of a quantity's definition.
-For direct reproduction, match the paper where the supplied data support it; otherwise state the
-adapted treatment and its limits on comparison. A shortcut that changes any of them, taken for time or
-memory, is a change of method: compare it with the paper's treatment on a common part of the data and report the difference
-before using it.
+forms of Stokes' theorem giving the same circulation. From then on use only that computation: rename or
+remove the outputs of the versions it replaced, and compute every series you compare or correlate from
+the same samples.
 
 ## Deriving what the data do not store
 Before writing code for a vorticity budget or a streamfunction, read
@@ -53,10 +41,9 @@ Before writing code for a vorticity budget or a streamfunction, read
 term from the stored variables before calling it missing. A term is missing only when neither the archive
 nor the attached sources hold what it needs. Name that variable, for example the surface wind stress, and
 the conclusions it leaves untested. When several terms cannot be told apart, give their sum as the residual
-of the terms you computed, labelled with the terms it may hold and the reconstruction errors that can
-also contribute. Closure by subtraction does not validate those terms independently. A term found small
-in the paper is an assumption to test in this dataset before attributing the residual to another term.
-Do not substitute another dataset unless the researcher allows it.
+of the terms you computed, labelled with the terms it holds, rather than marking each one missing: where
+the paper finds one of them small, the residual tests the others. Do not substitute another dataset unless
+the researcher allows it.
 
 ## Matching the paper before interpreting
 For the overlapping period, or the same dataset, compare means, magnitudes, signs and trends with the
@@ -65,73 +52,28 @@ two, or of sign, comes from a definition, normalisation, unit, domain, mask or s
 shown otherwise: find it before drawing any conclusion.
 
 ## Adapting the method to the record
-Choose temporal resolution from the question and the supplied sampling: monthly values are the usual
-starting point for seasonal to interannual evolution, daily values for event onset and recovery, and
-annual values for whole-year comparisons. Use the paper's resolution when compatible with these data;
-an annual summary does not require an annual time axis in the evolution plot.
-
-A method built for a long record can fail on a short one. Evaluate the paper's smoothing window
-against the available duration, sampling and valid endpoint coverage. When it consumes much of the
-record, start with a descriptive display window no longer than roughly 20-25% of the record duration,
-unless a physical cutoff is prescribed. This is a display heuristic, not a universal scientific
-threshold or a significance test. Use /skills/ocean-analysis-design/SKILL.md for the statistical
-details. Smooth at a time resolution appropriate to the question and supported by the
-data. Use the paper's analysis resolution when compatible; otherwise explain the adaptation. Do not
-coarsen the series merely for plotting. Save the unsmoothed series and, where supported, the paper-window
-result as data; the reproduced figure draws only the selected treatment, in the original's style, and a comparison of windows goes in
-a separate supplementary figure. State both windows and the changed timescale.
-A physically defined filter is part of the scientific question: shortening it
-does not establish the paper's long-period conclusion, and insufficient support must be reported.
+A method built for a long record can fail on a short one. Scale a smoothing window with the record: keep
+the share of the record it spans as in the paper, and smooth values at the time resolution the paper
+plots, monthly ones rather than annual means. A paper that smooths 28 years with a 7-year window uses a
+quarter of its record, so on 12 years use about 3 years; the paper's own window would leave a few points.
 Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md,
 under Autocorrelation and dependence, and judge each trend and correlation by the independent values behind
-it. Name each departure from the paper's method and why. Draw a period's trend when it can be
-estimated, and label significance only from a valid statistical test. If the record cannot support an
-estimate or test, state that limitation rather than calling it not significant. Draw smoothed curves
-and fills only where the stated smoothing method produces valid values; do not pad or extrapolate
-endpoints to match the original's appearance.
+it. Name each departure from the paper's method and why.
 
 ## Figures
-For a reproduced figure, the original's layout, colours, symbols and line styles take precedence over
-generic style defaults; use those defaults where the original is unspecified. This does not override
-the computed values, valid support, coordinate registration or the delivery format.
-
-Reproduce each of the paper's figures as one figure with the same panels in the same arrangement,
-from the checked quantities: the same variables, symbols, units, map extent, colour encoding, fills,
-overlays, reference lines and panel letters. The numbers on the figure are yours; a paper's value may
-stand beside a computed value for comparison, never alone. Draw every element the data support,
-including estimated trends; leave an unsupported element out, name it in the answer and do not replace
-it with another quantity or period.
-
-Keep the original's visual hierarchy: raw series faintly behind the selected main curve and its fills,
-with secondary variables on their own axes where the original uses them. Plot the saved time-resolved
-series at the selected analysis resolution. Draw smoothed curves and fills only at valid timestamps.
-Keep the original's axis and colour ranges when the main values fit them; otherwise show those values
-and explain the difference. A noisy background series must not flatten the main curve: use a labelled
-crop, inset or supplementary panel when needed. Method and smoothing-window comparisons belong in a
-separate supplementary figure, not overlaid on the reproduction's main panels.
-
-Draw maps with Cartopy coastlines and light-grey land, keeping the original's extent and projection
-where the data cover them. Keep cells outside the diagnostic's saved validity mask empty; that mask
-does not replace the coastline. Prefer filled contours for continuous gridded patterns and use readable,
-scaled arrows with a reference key for vector fields. Reuse accessible local coastline files before
-attempting a download; a download error does not make the plotting library unavailable. If no usable
-coastline files are available, use a verified land mask and state the limitation in the answer.
-
-Before drawing the first figure, read /skills/scientific-figure-design/SKILL.md for publication sizing,
-typography, maps and export details. Use matplotlib for the paper's layout and save in the format the
-delivery instructions require. Keep explanations and caveats in the answer; figure text is limited to
-axis labels, panel letters, legends and short feature or computed-value labels, placed clear of the data.
-
-When you can read images, open the original again right before drawing it. After saving, open the
-original and yours together and compare panel layout, fills, line styles, axis ranges and multipliers,
-colour scales, panel letters, legends and labels. Fix overlaps, unreadable type, empty panels and main
-curves flattened by their axes, and check for a series clipped where the original does not clip it.
-Deliver every computed panel and put its doubts in the answer.
-
-Save the plotting code as an editable script. Revise that script for an identified defect rather than
-recreating a finished figure from a description or context summary. A local layout repair preserves
-unaffected panels, data, scales, fills, axes and supported overlays. Render a revision as a draft and
-compare it with the current figure and the original before replacing the selected deliverable.
+Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures.
+Reproduce each of the paper's figures as one figure with the same panels, from the reproduced quantities:
+the same variables, symbols, units, scales, colour encoding, fills, overlays, reference lines, annotations
+and layout. Draw every element the original has, the trend line of each period included; one the record
+is too short to support is drawn and marked not significant, never left out. Smoothed curves and their
+fills run through the whole record as the original's do, over the raw series drawn faintly behind them at
+the paper's time resolution. When you can read images, open the
+original again right before drawing it, since the image read at the start lies far back in the
+conversation. After saving, open the original and yours together, compare them item by item (panel layout,
+fills, line styles, axis ranges and their multipliers, panel letters, legends and annotations, text that
+crosses a line, lines that run off the axes) and fix every difference the data allow. Deliver every panel you
+computed, with any doubt written on it rather than withholding it. Leave out only a panel whose data are
+missing, say why, and never fill it with another quantity.
 
 ## Reporting
 For each of the paper's conclusions give the paper's value, the reproduced value, whether they agree and

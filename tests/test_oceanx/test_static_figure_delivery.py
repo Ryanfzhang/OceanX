@@ -251,7 +251,7 @@ def test_the_figure_rules_ask_for_a_vector_pdf_in_the_desktop_and_keep_png_in_st
     static = " ".join(STATIC_EXPERT_WORKSTREAM_POLICY.split())
     assert "save it as a PNG under OCEAN_OUTPUT_DIR" in static and "vector PDF" not in static
     reference = " ".join((ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8").split())
-    assert "rasterized=True" in reference and "cannot be edited as individual shapes" in reference
+    assert "## Publication figures" in reference and "## Maps" in reference
     figure = " ".join(load_ocean_skill("scientific-figure-design")[0].split())
     assert "as a vector PDF where your instructions ask for one" in figure  # static runs read both
     assert ".preview.png" not in reference and ".preview.png" not in figure
@@ -444,7 +444,7 @@ def test_a_static_skill_library_keeps_the_figure_skill_without_the_plotting_inte
     # The rules for every figure stay with a static run; nothing names the plotting interface
     # (2026-10-27: they used to leave with the interface).
     text = (kept / "SKILL.md").read_text(encoding="utf-8")
-    assert "## Publication figures" in text and "## Reproducing a paper's figure" in text
+    assert "## Publication figures" in text and "/skills/paper-reproduction/SKILL.md" in text
     assert not [name for name in INTERFACE_NAMES if name in text]
     assert "interactive.md" not in text and "<!--" not in text
     assert {path.name for path in (interactive / "skills").iterdir()} == {

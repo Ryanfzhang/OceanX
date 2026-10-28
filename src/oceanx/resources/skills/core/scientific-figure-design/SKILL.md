@@ -1,6 +1,6 @@
 ---
 name: scientific-figure-design
-description: Draw any figure for a researcher, a paper's figure being reproduced included; choose the plot, lay it out as a journal prints it, draw maps and check the saved figure once.
+description: Design original scientific figures and interactive visualizations; choose the plot, layout, maps and export. For paper reproduction, use paper-reproduction instead.
 metadata:
   origin: oceanmind
   roles:
@@ -12,13 +12,12 @@ metadata:
 # Scientific figure design
 
 ## when_to_use
-Use before drawing any figure for a researcher, including a figure of a paper being reproduced. The
-code-level details of matplotlib, such as colour maps, masks, text that stays editable and dense fields,
-are in /references/coding/matplotlib.md.
+Use when designing a scientific figure rather than reproducing a paper's figure.
+For paper reproduction, follow /skills/paper-reproduction/SKILL.md and its
+/references/coding/matplotlib.md guidance instead of this design workflow.
 <!-- interactive -->
 A user-facing interactive map or chart is a `ScientificFigure`: [interactive.md](interactive.md) describes
-it and the Figure API reference it rests on. Draw with matplotlib, as below, a figure it does not suit and
-every figure of a paper being reproduced.
+it and the Figure API reference it rests on. Draw with matplotlib, as below, a figure it does not suit.
 <!-- /interactive -->
 
 ## Results, not new analysis
@@ -132,37 +131,6 @@ constant along the coast, to NaN there. Reuse accessible local Natural Earth fil
 them; a download error does not make Cartopy unavailable. Downloads stay in the agent's folder.
 If no usable coastline files are available, outline a verified land mask as the coastline and state
 the limitation in the answer.
-
-## Reproducing a paper's figure
-Reproduce each of the paper's figures as one figure with the same panels in the same arrangement,
-from the checked quantities: the same variables, symbols, units, map extent, colour encoding, fills,
-overlays, reference lines and panel letters. The numbers on the figure are yours; a paper's value may
-stand beside a computed value for comparison, never alone. Draw every element the data support,
-including estimated trends; leave an unsupported element out, name it in the answer and do not replace
-it with another quantity or period.
-
-Keep the original's visual hierarchy: raw series faintly behind the selected main curve and its fills,
-with secondary variables on their own axes where the original uses them. Plot the saved time-resolved
-series at the selected analysis resolution. Draw smoothed curves and fills only at valid timestamps.
-Keep the original's axis and colour ranges when the main values fit them; otherwise show those values
-and explain the difference. A noisy background series must not flatten the main curve: use a labelled
-crop, inset or supplementary panel when needed. Method and smoothing-window comparisons belong in a
-separate supplementary figure, not overlaid on the reproduction's main panels.
-
-When you can read images, open the original again right before drawing it. After saving, open the
-original and yours together and compare panel layout, fills, line styles, axis ranges and multipliers,
-colour scales, panel letters, legends and labels. Fix overlaps, unreadable type, empty panels and main
-curves flattened by their axes, and check for a series clipped where the original does not clip it.
-Deliver every computed panel and put its doubts in the answer.
-
-Save the plotting code as an editable script. Revise that script for an identified defect rather than
-recreating a finished figure from a description or context summary. A local layout repair preserves
-unaffected panels, data, scales, fills, axes and supported overlays. Render a revision as a draft and
-compare it with the current figure and the original before replacing the selected deliverable.
-
-For definitions and adaptation of the scientific method, use /skills/paper-reproduction/SKILL.md.
-Apply the publication and map standards above; implementation details remain in
-/references/coding/matplotlib.md.
 
 ## Checking the figure
 Check the figure's inputs against the selected saved results, including their units, signs, masks and

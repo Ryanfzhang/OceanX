@@ -53,72 +53,57 @@ def test_numeric_method_examples_remain_available_on_demand():
     assert "residual" in physical
 
 
-def test_a_paper_reproduction_keeps_its_workflow_and_points_to_specialist_details():
-    """Reading the reproduction skill before analysis also supplies the main figure requirements."""
-    from oceanx.runtime import OCEAN_EXPERT_WORKSTREAM_POLICY
+def test_paper_reproduction_keeps_the_original_self_contained_figure_workflow():
     from oceanx.skills import ocean_reference_root
 
     reproduction = " ".join(load_ocean_skill("paper-reproduction")[0].split())
-    # Detailed methods still have explicit entry points; essential figure decisions are inline.
     for step in ("Before computing anything, read the page image",
                  "Before writing code for a vorticity budget or a streamfunction, read /skills/ocean-physical-consistency-review/SKILL.md",
                  "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
-                 "Before drawing the first figure, read /skills/scientific-figure-design/SKILL.md"):
+                 "Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures"):
         assert step in reproduction
-    assert "## One computation per quantity" in reproduction and "give their sum as the residual" in reproduction
-    # A change of sampling, averaging, smoothing or normalisation is a change of method, compared with the
-    # paper's before it is used (2026-10-27: a run thinned its data and changed its averaging untested).
-    assert "Sampling, averaging, smoothing and normalisation are part of a quantity's definition" in reproduction
-    assert "compare it with the paper's treatment on a common part of the data" in reproduction
-    assert "label significance only from a valid statistical test" in reproduction
-    assert "do not pad or extrapolate endpoints" in reproduction
-    physical, _ = load_ocean_skill("ocean-physical-consistency-review")
-    assert "bottom pressure torque" in physical and "transport streamfunction" in physical
-    assert "open boundaries are the real straits" in " ".join(physical.split())
-    assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
-    for rule in ("same panels in the same arrangement", "raw series faintly behind the selected main curve",
-                 "secondary variables on their own axes", "Cartopy coastlines and light-grey land",
-                 "open the original and yours together", "a verified land mask"):
+    for rule in ("the same variables, symbols, units, scales, colour encoding, fills",
+                 "over the raw series drawn faintly behind them",
+                 "open the original and yours together", "fix every difference the data allow"):
         assert rule in reproduction
-    # General publication standards stay available to tasks without a paper.
-    figure = " ".join(load_ocean_skill("scientific-figure-design")[0].split())
-    for section in ("## Publication figures", "## Maps", "## Reproducing a paper's figure", "## Checking the figure"):
-        assert section in figure
-    assert "/skills/paper-reproduction/SKILL.md" in figure
-    assert "ax.coastlines('50m'" in figure
-    assert "the panel's main series first" in figure
-    assert "label it explicitly and state which values lie outside the displayed range" in figure
-    # A figure draws computed results and does not quietly redefine them; a reproduced one keeps what the
-    # original clips (2026-10-27: plotting code turned monthly values into smoothed annual ones).
-    assert "## Results, not new analysis" in figure
-    assert "does not resample, average, smooth, detrend or normalise them again" in figure
-    assert "say in the answer that the method changed, and compare it with the result it replaces in a separate supplementary figure, not in the main one" in figure
-    assert "Draw the coastline and land as Maps says, and leave empty the cells outside the diagnostic's saved validity mask" in figure
-    assert "Use the paper's analysis resolution when compatible; otherwise explain the adaptation" in reproduction
-    assert "Do not coarsen the series merely for plotting" in reproduction
-    assert "a comparison of windows goes in a separate supplementary figure" in reproduction
-    assert "save the unsmoothed series" in load_ocean_skill("ocean-analysis-design")[0]
-    assert "a series clipped where the original does not clip it" in reproduction
-    reference = " ".join((ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8").split())
-    assert "/skills/scientific-figure-design/SKILL.md" in reference and "rasterized=True" in reference
-    # Every agent that draws, in either delivery mode, is told to read that skill before its first figure.
-    from oceanx.runtime import STATIC_EXPERT_WORKSTREAM_POLICY
+    assert "/skills/scientific-figure-design/SKILL.md" not in reproduction
+    reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text()
+    assert "## Publication figures" in reference and "## Maps" in reference
+    assert "ax.coastlines('50m'" in reference
+    assert "/skills/scientific-figure-design/SKILL.md" not in reference
+
+
+def test_reproduction_and_original_figure_design_have_distinct_entry_points():
+    from oceanx.runtime import OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY
+
     for policy in (OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY):
         flat = " ".join(policy.split())
-        assert "Before drawing your first figure, read /skills/scientific-figure-design/SKILL.md" in flat
-        assert "/references/coding/matplotlib.md" not in flat
+        assert "For paper reproduction, follow /skills/paper-reproduction/SKILL.md" in flat
+        assert "/references/coding/matplotlib.md guidance" in flat
+        assert "For other figures, read /skills/scientific-figure-design/SKILL.md" in flat
+        # Restoring the figure workflow must not remove always-visible scientific safeguards.
+        for rule in ("Do not infer land from NaNs", "numerator and denominator",
+                     "Check shared coordinates exactly", "Check units, magnitudes",
+                     "resampling, smoothing and normalisation belong to the analysis"):
+            assert rule in flat
+    figure, _ = load_ocean_skill("scientific-figure-design")
+    assert "instead of this design workflow" in figure
+    assert "## Reproducing a paper's figure" not in figure
+    for section in ("## Results, not new analysis", "## Publication figures", "## Maps", "## Checking the figure"):
+        assert section in figure
 
 
-def test_reproduction_figure_requirements_are_self_contained_and_consistent():
-    reproduction, _ = load_ocean_skill("paper-reproduction")
-    figures = reproduction.split("## Figures\n", 1)[1].split("\n## Reporting", 1)[0]
-    figure = " ".join(load_ocean_skill("scientific-figure-design")[0].split())
-    # Either skill may be the only one opened. Keep the shared core intact in both entry points.
-    for start in ("For a reproduced figure, the original's layout",
-                  "Reproduce each of the paper's figures", "Keep the original's visual hierarchy",
-                  "When you can read images, open the original", "Save the plotting code as an editable script"):
-        paragraph = next(p for p in figures.split("\n\n") if p.startswith(start))
-        assert " ".join(paragraph.split()) in figure
+@pytest.mark.parametrize("delivery", ["interactive", "static"])
+def test_reproduction_reference_is_available_in_the_packaged_library(tmp_path, monkeypatch, delivery):
+    from oceanx.native_skills import prepare_skill_library
+    from oceanx.skills import ocean_reference_root
+
+    monkeypatch.setenv("OCEANX_FIGURE_DELIVERY", delivery)
+    library = prepare_skill_library(tmp_path / delivery, role="single_agent", capabilities=("literature.read",))
+    reproduction = (library / "skills/paper-reproduction/SKILL.md").read_text()
+    reference = library / "references/coding/matplotlib.md"
+    assert "/references/coding/matplotlib.md" in reproduction
+    assert reference.read_bytes() == (ocean_reference_root() / "coding/matplotlib.md").read_bytes()
 
 
 @pytest.mark.parametrize("name,readers", [
