@@ -128,9 +128,10 @@ and `'10m'` for a strait or a stretch of coast), with labelled degree gridlines
 (`ax.gridlines(draw_labels=True, linewidth=0.3)`). Show the whole region the figure is about, in a
 reproduction the original's extent. Leave the data's invalid cells empty, so that the map, not a colour
 of the field, shows the land, and set a field that has values on land, such as a streamfunction that is
-constant along the coast, to NaN there. cartopy fetches the Natural Earth files on first use and keeps
-them in the agent's folder; if that fails, outline a verified land mask as the coastline and say so in
-the answer.
+constant along the coast, to NaN there. Reuse accessible local Natural Earth files before downloading
+them; a download error does not make Cartopy unavailable. Downloads stay in the agent's folder.
+If no usable coastline files are available, outline a verified land mask as the coastline and state
+the limitation in the answer.
 
 ## Reproducing a paper's figure
 Reproduce each of the paper's figures as one figure with the same panels in the same arrangement,
@@ -153,6 +154,11 @@ original and yours together and compare panel layout, fills, line styles, axis r
 colour scales, panel letters, legends and labels. Fix overlaps, unreadable type, empty panels and main
 curves flattened by their axes, and check for a series clipped where the original does not clip it.
 Deliver every computed panel and put its doubts in the answer.
+
+Save the plotting code as an editable script. Revise that script for an identified defect rather than
+recreating a finished figure from a description or context summary. A local layout repair preserves
+unaffected panels, data, scales, fills, axes and supported overlays. Render a revision as a draft and
+compare it with the current figure and the original before replacing the selected deliverable.
 
 For definitions and adaptation of the scientific method, use /skills/paper-reproduction/SKILL.md.
 Apply the publication and map standards above; implementation details remain in

@@ -116,7 +116,7 @@ def test_reproduction_figure_requirements_are_self_contained_and_consistent():
     # Either skill may be the only one opened. Keep the shared core intact in both entry points.
     for start in ("For a reproduced figure, the original's layout",
                   "Reproduce each of the paper's figures", "Keep the original's visual hierarchy",
-                  "When you can read images, open the original"):
+                  "When you can read images, open the original", "Save the plotting code as an editable script"):
         paragraph = next(p for p in figures.split("\n\n") if p.startswith(start))
         assert " ".join(paragraph.split()) in figure
 

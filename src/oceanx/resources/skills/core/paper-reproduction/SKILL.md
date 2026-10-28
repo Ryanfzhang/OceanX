@@ -113,8 +113,9 @@ separate supplementary figure, not overlaid on the reproduction's main panels.
 Draw maps with Cartopy coastlines and light-grey land, keeping the original's extent and projection
 where the data cover them. Keep cells outside the diagnostic's saved validity mask empty; that mask
 does not replace the coastline. Prefer filled contours for continuous gridded patterns and use readable,
-scaled arrows with a reference key for vector fields. If coastline files are unavailable, use a verified
-land mask and state the limitation in the answer.
+scaled arrows with a reference key for vector fields. Reuse accessible local coastline files before
+attempting a download; a download error does not make the plotting library unavailable. If no usable
+coastline files are available, use a verified land mask and state the limitation in the answer.
 
 Before drawing the first figure, read /skills/scientific-figure-design/SKILL.md for publication sizing,
 typography, maps and export details. Use matplotlib for the paper's layout and save in the format the
@@ -126,6 +127,11 @@ original and yours together and compare panel layout, fills, line styles, axis r
 colour scales, panel letters, legends and labels. Fix overlaps, unreadable type, empty panels and main
 curves flattened by their axes, and check for a series clipped where the original does not clip it.
 Deliver every computed panel and put its doubts in the answer.
+
+Save the plotting code as an editable script. Revise that script for an identified defect rather than
+recreating a finished figure from a description or context summary. A local layout repair preserves
+unaffected panels, data, scales, fills, axes and supported overlays. Render a revision as a draft and
+compare it with the current figure and the original before replacing the selected deliverable.
 
 ## Reporting
 For each of the paper's conclusions give the paper's value, the reproduced value, whether they agree and

@@ -229,10 +229,14 @@ justification.
 Use the same valid samples and weights in a mean's numerator and denominator; an all-missing
 selection stays missing. Preserve the diagnostic's validity mask through calculation and plotting.
 
-Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
-estimates. Save reusable arrays as NetCDF with their dimensions and coordinates, not as bare .npz files.
+Keep verified calculations and code, including an editable plotting script for each delivered figure.
+Derive reported values and labels from saved calculations, not copied estimates.
+Save reusable arrays as NetCDF with their dimensions and coordinates, not as bare .npz files.
 Plotting reads the selected results; resampling, smoothing and normalisation belong to the analysis.
-After a correction, regenerate affected results, figures and claims. Interpret only executed checks:
+After a correction, regenerate affected results, figures and claims. For a figure revision, edit the
+saved plotting script for the identified problem and preserve unaffected data, panels, axes and layers.
+After an interruption or context handoff, reopen that script and its preview before revising a finished
+figure; a summary is not a substitute for its code or visual specification. Interpret only executed checks:
 a residual or a nonsignificant test does not by itself identify or exclude a mechanism.
 When image reading is available, open the final figure and correct visible errors before delivery.
 

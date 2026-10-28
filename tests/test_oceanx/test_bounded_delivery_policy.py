@@ -142,7 +142,9 @@ async def test_computing_agents_receive_core_rules_without_reading_a_skill(monke
     for rule in ("averaging versus integration", "Check shared coordinates exactly",
                  "Do not infer land from NaNs", "an all-missing selection stays missing",
                  "Reopen saved results", "resampling, smoothing and normalisation belong to the analysis",
-                 "regenerate affected results, figures and claims", "open the final figure"):
+                 "regenerate affected results, figures and claims", "open the final figure",
+                 "editable plotting script", "preserve unaffected data, panels, axes and layers",
+                 "After an interruption or context handoff, reopen that script and its preview"):
         assert rule in prompt
     assert prompt.count("# Scientific computation") == 1
 
