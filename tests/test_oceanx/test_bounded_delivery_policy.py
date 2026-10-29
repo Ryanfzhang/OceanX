@@ -1,8 +1,6 @@
 """Prompt regression checks protect a small contract, not historical wording."""
 from types import SimpleNamespace
 
-import pytest
-
 from oceanx.runtime import (
     OCEAN_AGENT_SKILL_POLICY,
     OCEAN_CHILD_BASE_SYSTEM_PROMPT,
@@ -12,7 +10,6 @@ from oceanx.runtime import (
     build_ocean_runtime_composition,
 )
 from oceanx.deep_runtime import NATIVE_TASK_DESCRIPTION
-from oceanx.skills import load_ocean_skill
 from oceanx.team.models import ChildAuthority
 from oceanx.team.profiles import AGENT_PROFILES, profile_system_prompt
 from oceanx.tools import OceanToolServices
@@ -118,32 +115,9 @@ def test_experts_keep_evidence_without_workflow_checklists():
     policy = _flatten(OCEAN_EXPERT_WORKSTREAM_POLICY)
     assert "Keep verified calculations and code" in policy
     assert "Derive reported values and labels from saved calculations" in policy
-    # A figure is looked at once, as the figure skill the policy names says, not polished in rounds.
-    assert "read /skills/scientific-figure-design/SKILL.md" in policy
-    assert "look at the figure once" in _flatten(load_ocean_skill("scientific-figure-design")[0])
+    assert "Do not spend a separate round polishing" in policy
     # Most failed code runs across tasks were shape/axis mistakes after dropping to bare arrays.
     assert "select and reduce by dimension name" in policy and "not as bare .npz" in policy
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("delivery", ["interactive", "static"])
-@pytest.mark.parametrize("role", ["ocean_process_expert", "statistical_inference_expert", "single_agent", "helper"])
-async def test_computing_agents_receive_core_rules_without_reading_a_skill(monkeypatch, delivery, role):
-    from oceanx.runtime import build_ocean_expert_runtime, build_ocean_single_agent_runtime
-
-    monkeypatch.setenv("OCEANX_FIGURE_DELIVERY", delivery)
-    services = OceanToolServices(workspace_id="ws", provider_id="fixture", store=SimpleNamespace(),
-                                 skill_role=role)
-    if role in {"single_agent", "helper"}:
-        composition = await build_ocean_single_agent_runtime(services=services, helper=role == "helper")
-    else:
-        composition = await build_ocean_expert_runtime(services=services)
-    prompt = _flatten(composition.system_prompt)
-    for rule in ("Keep measured zero, missing observations, land",
-                 "Do not infer land from NaNs", "an all-missing selection stays missing",
-                 "numerator and denominator", "Preserve the diagnostic's validity mask"):
-        assert rule in prompt
-    assert prompt.count("# Missing data and masks") == 1
 
 
 def test_data_work_does_not_wait_for_the_literature_consultation():

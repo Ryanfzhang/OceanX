@@ -30,8 +30,8 @@ from oceanx.deep_runtime import build_deep_agent_graph
 from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
 from oceanx.figure_delivery import static_figures
-from oceanx.model_config import load_model_profile
 from oceanx.pdf_text import FIGURE_RULE
+from oceanx.model_config import load_model_profile
 from oceanx.research.background_experts import (
     AWAIT_TOOL, BackgroundDelegationMiddleware, RunningExperts, appended)
 from oceanx.research.metering import INSIDE_EXPERT
@@ -862,7 +862,7 @@ def _earlier_attempt(run: AgentRun) -> str:
 
 
 async def build(config, role: str, *, run: AgentRun | None = None, middleware=None,
-                subagents=None, suffix="", routing=""):
+                subagents=None, suffix=""):
     from oceanx.context import OceanContextBuilder
 
     svc = services(config, role, run)
@@ -874,7 +874,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         build_ocean_runtime(services=svc, research_mode=research) if role == "coordinator" else
         build_ocean_discussion_runtime(services=svc)
         if role == "scientific_discussion_partner" else
-        build_ocean_single_agent_runtime(services=svc, helper=role == HELPER, routing=routing) if quick else
+        build_ocean_single_agent_runtime(services=svc, helper=role == HELPER) if quick else
         build_ocean_expert_runtime(services=svc)
     )
     prompt = composition.system_prompt
@@ -909,11 +909,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    + "here, not in outputs. Scratch may be removed after the task becomes idle. "
                    "Save only final deliverables under OCEAN_OUTPUT_DIR; "
                    + ("a final figure saved there as a PNG is delivered. " if static else
-                      "For interactive exploration, ScientificFigure.save('name.nc') publishes there "
-                      "automatically. To reproduce a paper's figure and layout, use matplotlib and save a "
-                      "vector PDF there, even when the Figure API supports its plot type. Other figures "
-                      "the Figure API cannot draw are also delivered as vector PDFs unless they are "
-                      "pictures such as photographs. ")
+                      "ScientificFigure.save('name.nc') publishes there automatically, and a figure the "
+                      "Figure API cannot draw is delivered when saved there as a vector PDF. ")
                    + "Use supplied absolute data/result paths with native file tools or execute. "
                    "Source data and other agents' evidence are read-only; your working directory is writable.")
         if not static:
@@ -931,8 +928,15 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                        "to carry state within one attempt. Save only a checkpoint another node or retry needs.")
             if role in DATA_EXPERT_ROLES and learned:
                 prompt += " " + learned_skills_rule(learned)
+    if (svc.native_vision and research and not static
+            and role not in {"coordinator", "scientific_discussion_partner"}):
+        prompt += (
+            "\nA saved figure may have a sibling .preview.png. Inspect it only when the image itself "
+            "is scientific evidence needed for your reasoning, such as a spatial pattern; preview "
+            "inspection is not a separate visual-delivery review."
+        )
     if svc.native_vision and role not in {"coordinator", "scientific_discussion_partner"}:
-        prompt += "\n" + FIGURE_RULE
+        prompt += "\n" + FIGURE_RULE  # a paper's figures reach the model as images (pdf_text.py)
     if role != "coordinator" and not quick:
         prompt += "\n" + profile_system_prompt(get_agent_profile(role))
     if role not in {"coordinator", SINGLE_AGENT}:  # the single agent has the conversation itself
@@ -950,8 +954,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                 f"\nYour Agent key is {run.thread_id}. When a saved result supports a claim, write its "
                 f"complete binding right after the claim in your {'reply' if role == HELPER else 'answer'}, "
                 f"for example [{run.thread_id}/result1] for result1.nc; the result name is the .nc path below "
-                f"outputs without its extension, while a saved figure file keeps it, as in "
-                f"[{run.thread_id}/figure.pdf]."
+                f"outputs without its extension, while an image keeps it, as in [{run.thread_id}/figure.png]."
                 + (" Copy the bindings in a helper's reply unchanged." if role == SINGLE_AGENT else "") + "\n")
         if role == SINGLE_AGENT and context_builder.policy_for(
             workspace_id=c["workspace_id"], provider_id=svc.provider_id,
@@ -1017,10 +1020,6 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         skill_library=None if discussion else library,
         filesystem_backend=filesystem,
         filesystem_tools=filesystem_tools,
-        pdf_documents={path: item["text_path"]
-                       for source in context.payload.get("task_sources", [])
-                       for item in source.get("pdf_texts", []) if "text_path" in item
-                       for path in (item["text_path"], item["pdf_path"])},
         research_tree=research_tree(c["task_id"])
         if role == "coordinator" and research else None)
     from oceanx.research.metering import CallMeter
@@ -1296,7 +1295,7 @@ async def _run_helper(config, part: str) -> str:
 
 
 async def _single_agent(config, run: AgentRun):
-    """The agent works on each request first and can choose the team in auto mode."""
+    """The agent that works on a request alone; in auto mode it can hand the request to the team."""
     handoff = workflow_mode(config) == "auto"
     return await build(config, SINGLE_AGENT, run=run, middleware=[
         *([HandoffMiddleware()] if handoff else []),
@@ -1304,14 +1303,14 @@ async def _single_agent(config, run: AgentRun):
         QuickCallBudgetMiddleware(SINGLE_AGENT_CALL_LIMIT, last_call=LAST_CALL_HANDOFF if handoff else LAST_CALL,
                                   last_tools=frozenset({HANDOFF_TOOL}) if handoff else frozenset()),
         ToolCallRepairMiddleware(),
-    ], routing=HANDOFF_POLICY if handoff else "", suffix="\n" + HELPER_POLICY)
+    ], suffix="\n" + (HANDOFF_POLICY + "\n" if handoff else "") + HELPER_POLICY)
 
 
 async def coordinator(config):
     async def single_agent(state, config):
         run = _single_agent_run(config)
-        conversation = seen_by(state["messages"], SINGLE_AGENT)
         agent = await _single_agent(config, run)
+        conversation = seen_by(state["messages"], SINGLE_AGENT)
         try:
             result = await agent.ainvoke({**state, "messages": conversation}, config=config)
         finally:

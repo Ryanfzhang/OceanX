@@ -45,28 +45,22 @@ def team_config(config):
         **c.get("request_options", {}), "workflow_mode": "research"}}}
 
 
-# The single agent decides at the top of its instructions, before what tells it how to work: placed after
-# them, the rule lost to their "do the work yourself" on a request that both lists data steps and asks for a
-# mechanism (Typhoon Mangkhut, 2026-10-26: whether mixing or upwelling cooled the sea, why chlorophyll rose).
 HANDOFF_POLICY = f"""\
-# First: yours or the research team's
-Decide from the request and conversation on your first call, before any other step. Paper reproduction
-is a method requirement, not a restriction on using the research team. The first rule that fits decides.
-1. A request any part of which is an open research problem goes to the research team. A part is open when it
-   asks why something happens or what causes, drives or controls it, which mechanism or explanation holds (for
-   example, whether mixing or upwelling did it), or how much each factor contributes; when it needs competing
-   explanations weighed against the data and the literature; or when it needs an investigation whose next steps
-   depend on what the first ones find. A request for deep research or for the research team goes there too.
-   Call {HANDOFF_TOOL} at once, before any work, even when the request also lists the data to use or download
-   and the maps, sections or tables to make: the team makes those as part of its investigation.
-2. Everything else is yours, however many parts it has: looking at, extracting, computing, comparing, mapping
-   or plotting data; downloading a dataset the researcher asked for; finding, reading or summarising sources;
-   and bounded work in several steps, such as a route through a current field or the same analysis for several
-   variables. The team plans an investigation, runs several Experts and takes tens of minutes, so a request
-   for data, numbers or figures alone is never the team's.
-If your work on a request you kept shows that it is an open research problem after all, hand it over then,
-saying what you did and which saved files can be reused. After {HANDOFF_TOOL}, stop: the team answers the
-researcher. The rest of these instructions is for a request that is yours.
+# When the research team takes over
+Most requests are yours: looking at, extracting, computing, comparing, mapping or plotting data; downloading a
+dataset the researcher asked for; finding, reading or summarising sources; reproducing or testing the analysis
+of a paper, whose methods the paper already fixes, so that one agent holds every result its figures combine; and
+bounded work in several steps, such as a route through a current field or the same analysis for several
+variables. Do these yourself, however many parts they have.
+Hand the request to the research team with {HANDOFF_TOOL} when it is an open research problem: it asks why
+something happens or what causes, drives or controls it, which mechanism or explanation holds, or how much each
+factor contributes; it needs competing explanations weighed against the data and the literature; or it needs an
+investigation whose next steps depend on what the first ones find. Hand it over too when the researcher asks for
+deep research or for the research team. The team plans an investigation, runs several Experts and takes tens of
+minutes, so never hand over a request that one bounded analysis answers.
+Decide on your first call. Hand an open research problem over before doing any work on it; when unsure, do the
+work. If the work then shows that the request is an open research problem after all, hand it over, saying what
+you did and which saved files can be reused. After {HANDOFF_TOOL}, stop: the team answers the researcher.
 """
 
 HELPER_POLICY = f"""\
@@ -84,13 +78,9 @@ The requested output (a figure, number, table, route or file) is the finish line
 variables, region, depth and period the request needs; never load a whole field or water column when a slice
 answers it. Compute it with one defensible method, publish it, answer and stop. Do not add sensitivity tests,
 extra figures or statistics, investigations of individual cells or values, or re-checks of saved outputs unless a
-result is clearly wrong or the request asks for them. For paper reproductions, inspect {saved_view} of each
-saved figure against its original; for other figures, inspect once for visible plotting errors. State a
+result is clearly wrong or the request asks for them. Do not open {saved_view} of a figure you just saved. State a
 remaining limitation in one sentence instead of investigating it. Each code run stops after {seconds} s; if one
 times out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
-Apply the paper-reproduction skill when the user asks to reproduce, test or extend the analysis of an
-identified paper, using the request, attached sources and conversation to establish that intent. A paper
-provided as background or a comparison between model and observations does not by itself establish it.
 Reproducing or testing a paper's analysis is not bounded this way: it is finished only when every quantity
 and budget term of the paper that the data allow is computed as the paper defines it and compared with the paper's
 values, every figure is redrawn to look like the paper's, and a term counts as missing only after deriving it from
@@ -185,7 +175,7 @@ class HandoffInput(BaseModel):
 
 HANDOFF_DESCRIPTION = (
     "Hand this request to OceanX's research team (a Coordinator and Experts), which takes over at once and "
-    "answers the researcher. Only as 'First: yours or the research team's' says.")
+    "answers the researcher. Only for an open research problem; see 'When the research team takes over'.")
 HANDOFF_RECEIPT = "The research team takes this request over now."
 
 
@@ -303,32 +293,9 @@ def last_answer(messages) -> str:
 
 
 __all__ = [
-    "AGENT_TAG",
-    "BOUNDED_WORK_POLICY",
-    "HANDOFF_POLICY",
-    "HANDOFF_TOOL",
-    "HELPER",
-    "HELPER_CALL_LIMIT",
-    "HELPER_LAST_CALL",
-    "HELPER_POLICY",
-    "HELPER_TOOL",
-    "LAST_CALL",
-    "LAST_CALL_HANDOFF",
-    "MAX_HELPERS",
-    "SINGLE_AGENT",
-    "SINGLE_AGENT_CALL_LIMIT",
-    "TEAM",
-    "HandoffMiddleware",
-    "HelperMiddleware",
-    "QuickCallBudgetMiddleware",
-    "budget_handoff",
-    "call_budget_sentence",
-    "handed_over",
-    "handoff_note",
-    "handoff_request",
-    "last_answer",
-    "seen_by",
-    "tagged",
-    "team_config",
-    "workflow_mode",
+    "AGENT_TAG", "BOUNDED_WORK_POLICY", "HANDOFF_POLICY", "HANDOFF_TOOL", "HELPER", "HELPER_CALL_LIMIT",
+    "HELPER_LAST_CALL", "HELPER_POLICY", "HELPER_TOOL", "LAST_CALL", "LAST_CALL_HANDOFF", "MAX_HELPERS",
+    "SINGLE_AGENT", "SINGLE_AGENT_CALL_LIMIT", "TEAM", "HandoffMiddleware", "HelperMiddleware",
+    "QuickCallBudgetMiddleware", "budget_handoff", "call_budget_sentence", "handed_over", "handoff_note",
+    "handoff_request", "last_answer", "seen_by", "tagged", "team_config", "workflow_mode",
 ]

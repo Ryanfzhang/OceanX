@@ -210,10 +210,6 @@ def _local_dataset_format(path: Path) -> str:
 
 _LOGGER = logging.getLogger(__name__)
 
-# The tools that run an agent's analysis code: the Python kernel, and the shell where its scripts run.
-CODE_TOOLS = frozenset({"ocean_expert_run_code", "execute"})
-TOOL_FAILURE_ACTIVITY = "Expert adjusting its method after a tool failure"
-
 
 class CrashAfterTerminalCommit(RuntimeError):
     """Test-only crash seam for the commit-before-broadcast recovery contract."""
@@ -299,8 +295,6 @@ class OceanRequestRouter:
         # Protocol v2 payload or the router-wide default.
         self._cancelling_agent_requests: set[str] = set()
         self._pending_questions: dict[str, tuple[str, str, asyncio.Future[str]]] = {}
-        # Requests whose recorded activity is still a tool failure, so that the next success clears it.
-        self._after_tool_failure: set[str] = set()
         # "Update now" requests that run off the connection's request loop.
         self._library_updates: set[asyncio.Task[None]] = set()
         # One writer of the project's lessons and tools at a time: "Update now", the regular
@@ -904,9 +898,8 @@ class OceanRequestRouter:
             raise RequestStoreError("Task result does not belong to the current task")
         self._task_in_workspace(ref.task_id, request)
         try:
-            result = await asyncio.to_thread(self.task_results.get, ref)
-            path = await asyncio.to_thread(
-                self.task_results.file_path, ref=ref, relative_path=request.payload.file_name)
+            result = self.task_results.get(ref)
+            path = self.task_results.file_path(ref=ref, relative_path=request.payload.file_name)
         except TaskResultError as exc:
             raise RequestNotFound(ref.key) from exc
         if result.workspace_id != self._workspace_id(request):
@@ -917,8 +910,6 @@ class OceanRequestRouter:
         )
         if declared is None:
             raise RequestStoreError("Requested file is not declared by the task result")
-        if path.suffix.lower() == ".nc" or declared.mime_type in {"application/x-netcdf", "application/netcdf"}:
-            raise RequestStoreError("NetCDF files are available for preview only, not download")
         workspace_files = result.content.get("workspace_files")
         mutable_workspace_file = (
             isinstance(workspace_files, dict)
@@ -936,8 +927,7 @@ class OceanRequestRouter:
         # The manifest declares which file may be opened. Mutable supplementary
         # files use their current size/hash because the user is expected to edit
         # them; accepted scientific payloads retain the manifest checksum.
-        csv_download = declared.mime_type == "text/csv" and request.payload.purpose == "result_file"
-        if current_size > 25 * 1024 * 1024 and not csv_download:
+        if current_size > 25 * 1024 * 1024:
             raise RequestStoreError("Requested task result file exceeds the bounded resource limit")
         terminal = self._completed_event(
             client,
@@ -968,7 +958,7 @@ class OceanRequestRouter:
             raise RequestStoreError("Task result does not belong to the current task")
         self._task_in_workspace(ref.task_id, request)
         try:
-            result = await asyncio.to_thread(self.task_results.get, ref)
+            result = self.task_results.get(ref)
         except TaskResultError as exc:
             raise RequestNotFound(ref.key) from exc
         if result.workspace_id != self._workspace_id(request) or result.kind != "interactive_view":
@@ -2362,9 +2352,6 @@ class OceanRequestRouter:
         turn_count = 0
         last_assistant_text = ""
         model_error: ErrorEvent | None = None
-        stream = _coordinator_events(
-            agent_session.runtime.engine, submitted_text, request.request_id,
-        )
         # API latency is not a model-resource budget. Token/turn limits bound
         # reasoning; cancellation and tool-progress checks remain independent.
         try:
@@ -2377,6 +2364,9 @@ class OceanRequestRouter:
                 # contain exactly what the researcher submitted.
                 text=visible_text,
             )
+            stream = _coordinator_events(
+                agent_session.runtime.engine, submitted_text, request.request_id,
+            ).__aiter__()
             native_team_tools = {"task"}
             while True:
                 try:
@@ -2616,12 +2606,10 @@ class OceanRequestRouter:
                     details={"reason": str(exc)},
                 )
         finally:
-            await stream.aclose()
             self._agent_tasks.pop(request.request_id, None)
             self._agent_request_sessions.pop(request.request_id, None)
             self._agent_request_clients.pop(request.request_id, None)
             self._team_snapshot_revisions.pop(request.request_id, None)
-            self._after_tool_failure.discard(request.request_id)
             self._schedule_research_consolidation(request)
             await self._publish_request_notebook(agent_session, request.request_id)
 
@@ -2667,7 +2655,7 @@ class OceanRequestRouter:
         activity: str | None = None
         failure_fingerprint: str | None = None
         if isinstance(event, ToolExecutionStarted):
-            if event.tool_name in CODE_TOOLS:
+            if event.tool_name == "ocean_expert_run_code":
                 state, activity = "working", "Expert running code"
             elif event.tool_name == "web_search":
                 state, activity = "working", "Searching external scientific evidence"
@@ -2682,11 +2670,11 @@ class OceanRequestRouter:
         elif isinstance(event, ToolExecutionCompleted):
             if event.is_error:
                 state = "working"
-                activity = TOOL_FAILURE_ACTIVITY
+                activity = "Expert adjusting its method after a tool failure"
                 failure_fingerprint = hashlib.sha256(
                     f"{event.tool_name}\0{event.output}".encode()
                 ).hexdigest()
-            elif event.tool_name in CODE_TOOLS:
+            elif event.tool_name == "ocean_expert_run_code":
                 state, activity = "working", "Expert interpreting the code result"
             elif event.tool_name == "web_search":
                 state, activity = "working", "Reviewing external search evidence"
@@ -2696,17 +2684,9 @@ class OceanRequestRouter:
                 state, activity = "working", "Expert result returned"
             elif event.tool_name == HELPER_TOOL:
                 state, activity = "working", "Helper result returned"
-            elif request.request_id in self._after_tool_failure:
-                # Most steps (reading or writing a file, listing a folder) record no activity of their
-                # own; a success after a failure still ends the failure the activity line showed.
-                state, activity = "working", "Working on the request"
         elif isinstance(event, AssistantTurnComplete) and not event.message.tool_uses:
             state, activity = "working", "Preparing the final answer"
         if state is not None and activity is not None:
-            if activity == TOOL_FAILURE_ACTIVITY:
-                self._after_tool_failure.add(request.request_id)
-            else:
-                self._after_tool_failure.discard(request.request_id)
             self.store.transition_task_workflow(
                 request_id=request.request_id,
                 state=state,
@@ -2727,7 +2707,8 @@ class OceanRequestRouter:
         if isinstance(event, AssistantTextDelta):
             if event.turn_id is None:
                 return
-            await self.event_bus.emit_workspace(
+            await self.event_bus.emit_local(
+                client,
                 AssistantDeltaEvent(
                     **self._event_fields(
                         client,
@@ -2754,7 +2735,8 @@ class OceanRequestRouter:
                     text=event.message.text,
                     turn_id=event.turn_id,
                 )
-            await self.event_bus.emit_workspace(
+            await self.event_bus.emit_local(
+                client,
                 AssistantTurnCompletedEvent(
                     **self._event_fields(
                         client,
@@ -2776,7 +2758,8 @@ class OceanRequestRouter:
         if isinstance(event, ToolExecutionStarted):
             if event.turn_id is None or event.tool_call_id is None:
                 return
-            await self.event_bus.emit_workspace(
+            await self.event_bus.emit_local(
+                client,
                 ToolCallStartedEvent(
                     **self._event_fields(
                         client,
@@ -2802,7 +2785,8 @@ class OceanRequestRouter:
             activity_only = bool(
                 event.metadata is not None and event.metadata.get("display") == "activity"
             )
-            await self.event_bus.emit_workspace(
+            await self.event_bus.emit_local(
+                client,
                 ToolCallCompletedEvent(
                     **self._event_fields(
                         client,
@@ -2827,7 +2811,8 @@ class OceanRequestRouter:
             )
             return
         if isinstance(event, CompactProgressEvent):
-            await self.event_bus.emit_workspace(
+            await self.event_bus.emit_local(
+                client,
                 ContextCompactionProgressEvent(
                     **self._event_fields(
                         client,
@@ -3537,7 +3522,7 @@ class OceanRequestRouter:
                     for manifest in build_delivery_manifests(outputs)
                 ],
                 "task_results": (
-                    list(await asyncio.to_thread(self.task_results.list_payloads, task_id=request.payload.task_id))
+                    list(self.task_results.list_payloads(task_id=request.payload.task_id))
                     if self.task_results is not None
                     else []
                 ),
@@ -3569,7 +3554,7 @@ class OceanRequestRouter:
         # immediately after rendering ``task.open``; explicit snapshot reads
         # retain their complete payload for protocol compatibility.
         payload_data["task_results"] = (
-            list(await asyncio.to_thread(self.task_results.list_payloads, task_id=task_id))
+            list(self.task_results.list_payloads(task_id=task_id))
             if isinstance(request, TaskSnapshotGetRequest) and self.task_results is not None
             else []
         )

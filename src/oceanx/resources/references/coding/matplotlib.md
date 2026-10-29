@@ -24,12 +24,12 @@ a figure title; the caption or the answer carries it. Stacked panels share their
 years on top and bottom when the original shows them. Fit each axis to the series the panel is
 about: draw a noisier or secondary series lighter behind it and let it run off the axis rather
 than squash the main one, and set bar and colour limits that show every bar and value. Put
-legends and values such as r or a trend in empty space, never across the data. Save at 300 dpi
-with `bbox_inches='tight'`.
+legends and values such as r or a trend in empty space, never across the data. Save a vector PDF with `bbox_inches='tight'` when requested; set `pdf.fonttype=42` to keep text editable.
+Save PNG previews at 300 dpi.
 
 When your model reads images, open the saved figure once and fix what is wrong before delivering
 it: clipped or empty panels, squashed curves, overlapping text, panels of uneven size, type too
-small to read.
+small to read. For a PDF, save the same figure also as a draft PNG, whose name starts with `_`, and open that.
 
 ## Maps
 

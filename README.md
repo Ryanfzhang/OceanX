@@ -43,10 +43,6 @@ Saved interactive figures whose filenames start with `_` or `.` are drafts, incl
 output subdirectories: their files and previews remain on disk but are not listed as results.
 Before drawing, interactive Experts read one generated API reference with current signatures,
 plot-kind restrictions and runnable examples; the task reference and figure-design skill use the same text.
-Every agent that draws is told, in both delivery modes, to read the `scientific-figure-design` skill
-before its first figure: it holds the rules for every figure (choosing the plot, publication layout,
-maps, reproducing a paper's figure, checking the result), and its interactive part (`interactive.md` and
-the generated `API.md`) is left out of static runs.
 Their previews and interactive views are generated deterministically; there is no Visualization
 Expert or model-authored figure specification. Old
 JSON/column payloads and previous scientific figure schemas are not converted. The former
@@ -62,15 +58,6 @@ or PDF that the Expert saves with matplotlib anywhere under its node's `outputs/
 plots stay in `scratch/`, and a name starting with `_` or `.` is a draft. `TaskResultStore.list` then
 lists these images as `file` results with `render_status: "static"`, and each Expert receipt lists
 the node's images under `Saved figures (cite these paths):` instead of `Published results`.
-In the Desktop's default mode, a figure the Figure API cannot draw is saved as a vector PDF (a PNG only
-for a picture such as a photograph). After each run a PDF figure gets `<name>.pdf.preview.png` beside it,
-drawn from its first page, which the result list, the analysis notebook and the agent see; Download returns
-the PDF. Existing PDFs acquire the same preview when their results are first requested. Preview
-generation runs off the event loop. The run reports Type 3 fonts (`figure_delivery.pdf_problems`);
-it does not infer editability from image shapes or path counts. An interactive figure is also saved as `<name>.print.pdf`, the same
-drawing, which the Workbench offers for Illustrator. Agents' code and the interactive renderer share one
-style, `figure_style.py`; static runs take from it only how fonts are stored. Text, lines and colour
-bars are editable; rasterized fields and photographs remain images.
 
 After updating, close the running desktop and run `bash scripts/run_desktop.sh` from
 the repository root in the activated OceanX conda environment. It rebuilds an outdated
@@ -107,16 +94,12 @@ the data and search Experts' skills, answers in chat, and may give independent p
 to up to three helpers of its own (not the Experts). When a request is an open research problem
 (why something happens, which mechanism holds, how much each factor contributes), or the
 researcher asks for deep research, it calls `hand_to_research_team` and the same server run goes
-on with the Coordinator and its Experts in research mode, as below. It does so even when the request also
-lists the data to download and the figures to make, which the team then makes. A paper's reproduction
-stays with the single agent, even where the paper explains a mechanism: it then holds every result the
-paper's figures combine, and is finished only when every quantity, term and figure the data allow is
-compared with the paper's (the `paper-reproduction` skill). A request whose words ask for a reproduction
-(reproduce, replicate, 复现; `routing.reproduction_request`) is never handed over, not even when the
-agent's calls run out. `figure_comparison.py` can put a figure saved under a paper's figure number, such as `fig2_*.pdf`,
-beside that figure of the attached paper after the run; it is switched off for now (`ENABLED`). The rule comes first in the
-single agent's instructions and it decides on the call that starts the work, so a simple request pays
-nothing for the choice; if its 200 calls run out first, its last call may only answer or hand over. Headless runs (`ocean run`, `ocean batch`, the
+on with the Coordinator and its Experts in research mode, as below. A paper's reproduction stays
+with the single agent, which then holds every result the paper's figures combine, and is finished only
+when every quantity, term and figure the data allow is compared with the paper's (the `paper-reproduction`
+skill). It decides on the call that
+starts the work, so a simple request pays nothing for the choice; if its 100 calls run out first,
+its last call may only answer or hand over. Headless runs (`ocean run`, `ocean batch`, the
 benchmark) send the team at once unless `--workflow-mode auto` or `standard` (the single agent
 alone) is given. Lessons stay in the team's skills; the single agent reads the learned helper
 functions only.

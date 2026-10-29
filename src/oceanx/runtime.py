@@ -204,65 +204,54 @@ async def build_ocean_runtime(
     return composition
 
 
-_MISSING_DATA_POLICY = """\
-# Missing data and masks
-Keep measured zero, missing observations, land and cells outside the diagnostic's support distinct.
-Do not infer land from NaNs. Fill missing data with zero only with an explicit physical or boundary
-justification.
-Use the same valid samples and weights in a mean's numerator and denominator; an all-missing
-selection stays missing. Preserve the diagnostic's validity mask through calculation and plotting.
-
-"""
-
-
-OCEAN_EXPERT_WORKSTREAM_POLICY = _MISSING_DATA_POLICY + """\
+OCEAN_EXPERT_WORKSTREAM_POLICY = """\
 # Evidence and results
 Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
 estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
 not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
 as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
-one-line `title` attribute, so a later step can tell what it holds without opening it.
-For paper reproduction, follow /skills/paper-reproduction/SKILL.md and its
-/references/coding/matplotlib.md guidance. For other figures, read
-/skills/scientific-figure-design/SKILL.md before drawing your first figure. For a user-facing interactive figure, use
+one-line `title` attribute, so a later step can tell what it holds without opening it. For a user-facing interactive figure, use
 `from oceanx.scientific_view import ScientificFigure`, supply the computed arrays and complete panel/layer
 structure, then call `figure.save('concise-name.nc')` when the researcher requested a visual or the visual is
 necessary scientific evidence. That explicit save is the delivery boundary; ordinary
-NetCDF files are not figures. For a paper's figure and layout, use matplotlib and a vector PDF even when
-ScientificFigure supports its plot type. Use ScientificFigure for interactive exploration. Draw a figure it does not suit
+NetCDF files are not figures. Use ScientificFigure for the figures it suits. Draw a figure it does not suit
 yourself, as you see fit, for example with matplotlib (cartopy for maps): bars or a histogram, significance
 stippling, a polar or Taylor diagram, twin y-axes, a map projection other than the Workbench's, streamlines, a
-schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution using the applicable guide,
+schematic, or a figure of a paper being reproduced. Choose its layout, style and resolution, and draw a spatial
+field on a map with coastlines, as /references/coding/matplotlib.md describes for publication figures and maps,
 and save it as a vector PDF under OCEAN_OUTPUT_DIR, for example
 `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.pdf'), bbox_inches='tight')`; that file is
-delivered too, and after the run its picture is beside it as `concise-name.pdf.preview.png`, to look at. Save a PNG
-instead only when the figure is itself a picture, such as a photograph or a satellite true-colour image. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
+delivered too. Save a PNG instead only when the figure is itself a picture, such as a photograph or a satellite
+true-colour image. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
 plus filename stem (the whole file name for a saved figure file) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
 comparisons and scientific scales. Omit style arguments to ScientificFigure to use the Workbench defaults.
-Every spatial field must pass an explicit Boolean `valid_mask` to `field2d`; zero remains valid where
+Do not spend a separate round polishing or reviewing its rendered layout. Inspect a generated preview only when the image itself is
+scientific evidence you need to interpret, such as a spatial pattern. For spatial fields, preserve the source
+validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather than plotted
+values. Every spatial field must pass an explicit Boolean `valid_mask` to `field2d`; zero remains valid where
 that mask is True.
 """
 
 # The same duties for a static-delivery run: the final figure is an ordinary image file, and no
 # plotting interface is named (see figure_delivery.py).
-STATIC_EXPERT_WORKSTREAM_POLICY = _MISSING_DATA_POLICY + """\
+STATIC_EXPERT_WORKSTREAM_POLICY = """\
 # Evidence and results
 Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
 estimates. Keep arrays labeled: select and reduce by dimension name (xarray .sel, .mean('time')),
 not by numeric axis, and save reusable arrays as NetCDF with their dimensions and coordinates, not
 as bare .npz files. Give every variable you save `units` and `long_name` attributes and the file a
 one-line `title` attribute, so a later step can tell what it holds without opening it. When the researcher
-requested a visual or a figure is necessary scientific evidence, make the final figure with matplotlib and
+requested a visual or a figure is necessary scientific evidence, make the final figure with matplotlib, a
+spatial field on a map with coastlines as /references/coding/matplotlib.md describes under Maps, and
 save it as a PNG under OCEAN_OUTPUT_DIR, for
 example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'), dpi=150,
-bbox_inches='tight')`; that file is the delivered figure.
-For paper reproduction, follow /skills/paper-reproduction/SKILL.md and its
-/references/coding/matplotlib.md guidance. For other figures, read
-/skills/scientific-figure-design/SKILL.md before drawing your first figure. Keep exploratory plots in
-your working directory.
+bbox_inches='tight')`; that file is the delivered figure. Keep exploratory plots in your working directory.
 Name the figure file in report.md immediately after the supported claim. You own the scientific visual
-encoding, including plot type, axes, layers, comparisons and scientific scales; label axes with units.
-Mask invalid spatial values with NaN or a masked array; zero remains valid where the mask is True.
+encoding, including plot type, axes, layers, comparisons and scientific scales; label axes with units. Do not
+spend a separate round polishing or reviewing the rendered layout. Inspect a saved image only when the image
+itself is scientific evidence you need to interpret, such as a spatial pattern. For spatial fields, preserve
+the source validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather
+than plotted values, so mask them (NaN or a masked array); zero remains valid where the mask is True.
 """
 
 
@@ -323,11 +312,9 @@ asks for, the files you saved (full paths) and a limitation only when it matters
 
 
 async def build_ocean_single_agent_runtime(
-    *, services: OceanToolServices, helper: bool = False, routing: str = ""
+    *, services: OceanToolServices, helper: bool = False
 ) -> OceanRuntimeComposition:
-    """The agent that works on a request alone, or one of its helpers: Expert tools, no report file.
-    ``routing`` is the rule for handing a request to the research team; it comes before the
-    instructions on how to work, which are for the requests the agent keeps."""
+    """The agent that works on a request alone, or one of its helpers: Expert tools, no report file."""
 
     policy = STATIC_EXPERT_WORKSTREAM_POLICY if static_figures() else OCEAN_EXPERT_WORKSTREAM_POLICY
     # The Experts cite their results in report.md; these agents cite them where they answer.
@@ -342,8 +329,7 @@ async def build_ocean_single_agent_runtime(
             "ocean_skill_role": services.skill_role,
         },
     )
-    base = (OCEAN_HELPER_PROMPT,) if helper else (
-        OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT, *([routing.strip()] if routing else []), OCEAN_SINGLE_AGENT_PROMPT)
+    base = (OCEAN_HELPER_PROMPT,) if helper else (OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT, OCEAN_SINGLE_AGENT_PROMPT)
     return OceanRuntimeComposition(
         profile=profile,
         system_prompt="\n\n".join((*base, *profile.system_prompt_sections)),

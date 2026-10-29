@@ -18,7 +18,6 @@ from oceanx.scientific_view import ScientificFigure, ScientificPanel
 from tests.test_oceanx.test_saved_data_index import _backend
 
 SKILL = Path(__file__).parents[2] / "src/oceanx/resources/skills/core/scientific-figure-design/SKILL.md"
-INTERACTIVE = SKILL.with_name("interactive.md")  # the skill's part about the interactive interface
 
 
 def _signature(name, function):
@@ -70,7 +69,7 @@ def test_each_reference_example_saves_one_self_describing_figure_and_preview(tmp
 
 def test_every_skill_example_is_self_contained_and_uses_the_shared_reference(tmp_path, monkeypatch):
     monkeypatch.setenv("OCEAN_OUTPUT_DIR", str(tmp_path))
-    text = INTERACTIVE.read_text()
+    text = SKILL.read_text()
     assert "API.md" in text
     programs = re.findall(r"```python\n(.*?)\n```", text, flags=re.DOTALL)
     assert programs
@@ -109,15 +108,15 @@ async def test_interactive_expert_reads_shared_reference_not_inline_api_trials(t
                 assert f"panel.{name}" in skeleton
         library = Path(seen["skill_library"])
         skill = library / "skills/scientific-figure-design"
-        # Every Expert that draws reads the one figure skill; its interactive part leads to the API.
-        assert (skill / "API.md").read_text() == reference
-        entry = (skill / "SKILL.md").read_text()
-        assert "(interactive.md)" in entry and "<!--" not in entry
-        interactive = (skill / "interactive.md").read_text()
-        assert "API.md" in interactive and "to its end" in interactive
-        assert "reference](API.md) once" not in interactive
-        assert f"{len(reference.splitlines())} lines" in interactive
-        assert "limit=300" in interactive and "offset" in interactive
+        if role != "literature_reproduction_expert":
+            assert (skill / "API.md").read_text() == reference
+            assert "API.md" in (skill / "SKILL.md").read_text()
+            skill_text = (skill / "SKILL.md").read_text()
+            assert "to its end" in skill_text and "reference](API.md) once" not in skill_text
+            assert f"{len(reference.splitlines())} lines" in skill_text
+            assert "limit=300" in skill_text and "offset" in skill_text
+        else:
+            assert not skill.exists()  # role scoping stays unchanged
 
 
 @pytest.mark.parametrize("failure", ["mask", "extra_layer", "second_panel", "heatmap", "scatter_color", "epoch"])

@@ -5,7 +5,7 @@ import {presentTranscript, type PresentedTranscriptGroup} from '../conversation-
 import {agentDisplayName} from '../agent-display-name.js';
 import {CompactLogMarkdown, InlineMarkdown, MessageMarkdown, referencedResultKeys, type MarkdownResultLink} from '../message-markdown.js';
 import type {PendingInteraction} from '../pending-interaction.js';
-import {isAnalysisNotebook, isDataResult, isStaticFigure, resultsForRequest, taskResultRefKey, taskResultsForRequest} from '../types.js';
+import {isAnalysisNotebook, isStaticFigure, resultsForRequest, taskResultRefKey, taskResultsForRequest} from '../types.js';
 import type {DeliveryManifest, ResearchTask, TaskOutput, TaskResultRecord, TeamSnapshot, TranscriptItem} from '../types.js';
 import {useUiLanguage} from '../i18n.js';
 import {currentStep, stepLabel, type RequestActivity} from '../request-activity.js';
@@ -399,7 +399,7 @@ function ResultRow({result, thumbnail, onOpen}: {
   return <button className={`result-${result.kind}`} type="button" onClick={onOpen}>
     {thumbnail ? <img className="result-thumbnail" src={thumbnail} alt="" />
       : result.kind === 'interactive_view' ? <BarChart3 size={16} /> : figure ? <ImageIcon size={16} /> : <BookOpen size={16} />}
-    <span><strong>{result.kind === 'interactive_view' ? uiText('Interactive View', '交互视图') : figure ? uiText('Figure', '图') : result.kind === 'table' ? uiText('Table', '表格') : isDataResult(result) ? uiText('Data file', '数据文件') : uiText('Research Report', '研究报告')}</strong><small>{result.title}</small></span>
+    <span><strong>{result.kind === 'interactive_view' ? uiText('Interactive View', '交互视图') : figure ? uiText('Figure', '图') : uiText('Research Report', '研究报告')}</strong><small>{result.title}</small></span>
   </button>;
 }
 
@@ -484,7 +484,7 @@ export function ConversationTranscript({
   const groups = presentTranscript(transcript, activeRequestId);
   const hasActive = groups.some((group) => group.active);
   const taskScopedResults = taskResults
-    .filter((result) => result.kind === 'interactive_view' || result.kind === 'report' || isStaticFigure(result) || isDataResult(result));
+    .filter((result) => result.kind === 'interactive_view' || result.kind === 'report' || isStaticFigure(result));
   // Older self-describing .nc files predate request ownership metadata. Keep
   // them visible after a backend restart by attaching them only to the latest
   // completed exchange instead of silently filtering every figure out.
@@ -493,7 +493,7 @@ export function ConversationTranscript({
   const starts = groups.map((group) => ({key: group.key, start: requestTimeBounds(group).startedAt}));
   const resultOwner = (result: TaskResultRecord): string | null => {
     const saved = Date.parse(result.created_at);
-    if ((!isStaticFigure(result) && !isDataResult(result)) || Number.isNaN(saved)) return legacyResultGroupKey;
+    if (!isStaticFigure(result) || Number.isNaN(saved)) return legacyResultGroupKey;
     return [...starts].reverse().find((group) => group.start !== null && group.start <= saved)?.key ?? legacyResultGroupKey;
   };
   return <>
@@ -513,7 +513,7 @@ export function ConversationTranscript({
         ...taskResults.filter((result) => !result.origin_request_id && resultOwner(result) === group.key),
       ];
       const directResults = requestResults
-        .filter((result) => result.kind === 'interactive_view' || result.kind === 'report' || isStaticFigure(result) || isDataResult(result));
+        .filter((result) => result.kind === 'interactive_view' || result.kind === 'report' || isStaticFigure(result));
       const analysisNotebooks = requestResults.filter(isAnalysisNotebook);
       const supplementaryNotebooks = requestResults.flatMap((result) => {
         if (result.kind !== 'file' || result.content.role !== 'supplementary_figure_notebook') return [];

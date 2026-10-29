@@ -42,17 +42,14 @@ def test_core_ocean_skills_are_loaded_through_extra_skill_dirs_only():
     assert "compute_" not in content
 
 
-@pytest.mark.parametrize("role", ["ocean_process_expert", "statistical_inference_expert",
-                                  "literature_reproduction_expert"])
+@pytest.mark.parametrize("role", ["ocean_process_expert", "statistical_inference_expert"])
 def test_scientific_figure_skill_exposes_shared_palette_semantics(role):
-    _content, metadata = load_ocean_skill("scientific-figure-design", role=role)
-    # The palette names belong to the interactive interface, in the skill's interactive part.
-    interactive = (ocean_skill_dirs()[0] / "scientific-figure-design" / "interactive.md").read_text(encoding="utf-8")
+    content, metadata = load_ocean_skill("scientific-figure-design", role=role)
 
     assert role in metadata.roles
-    assert "ocean_teal" in interactive
-    assert "blue_red" in interactive
-    assert "grouped" in interactive
+    assert "ocean_teal" in content
+    assert "blue_red" in content
+    assert "grouped" in content
 
 
 def test_literature_skill_remains_hidden_until_its_capability_is_enabled():
@@ -132,7 +129,7 @@ def test_skill_prompt_is_metadata_only_and_respects_the_literature_gate():
     )
 
     assert "ocean-physical-consistency-review" in prompt
-    assert "ocean-analysis-design" in prompt
+    assert "ocean-analysis-design" not in prompt
     assert "questions_to_resolve" not in prompt
     assert "paper-evidence-review" not in prompt
     assert "paper-evidence-review" in enabled_prompt
@@ -152,7 +149,7 @@ def test_every_packaged_skill_declares_roles_and_role_gate_controls_loading():
         )
     }
     assert {"paper-navigator", "paper-evidence-review", "reproducibility-audit"} <= literature_names
-    assert "ocean-dataset-diagnosis" in literature_names
+    assert "ocean-dataset-diagnosis" not in literature_names
 
     content, _metadata = load_ocean_skill(
         "paper-evidence-review",

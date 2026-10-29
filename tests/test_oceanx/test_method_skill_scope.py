@@ -53,72 +53,53 @@ def test_numeric_method_examples_remain_available_on_demand():
     assert "residual" in physical
 
 
-def test_paper_reproduction_keeps_the_original_self_contained_figure_workflow():
+def test_a_paper_reproduction_points_to_where_its_methods_live():
+    """The reproduction skill, which a task with a paper names, says what to do; the method lives in
+    the skill or reference that every analysis reads for it, once."""
+    from oceanx.runtime import OCEAN_EXPERT_WORKSTREAM_POLICY
     from oceanx.skills import ocean_reference_root
 
     reproduction = " ".join(load_ocean_skill("paper-reproduction")[0].split())
+    # A pointer is followed when it says what to read before which step, as a run on 2026-10-26 showed:
+    # "first read" was obeyed, "drawn as ... describes" was not.
     for step in ("Before computing anything, read the page image",
                  "Before writing code for a vorticity budget or a streamfunction, read /skills/ocean-physical-consistency-review/SKILL.md",
                  "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
-                 "Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures"):
+                 "Before drawing the first figure, read /references/coding/matplotlib.md"):
         assert step in reproduction
-    for rule in ("the same variables, symbols, units, scales, colour encoding, fills",
-                 "over the raw series drawn faintly behind them",
-                 "open the original and yours together", "fix every difference the data allow"):
-        assert rule in reproduction
-    assert "/skills/scientific-figure-design/SKILL.md" not in reproduction
-    reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text()
-    assert "## Publication figures" in reference and "## Maps" in reference
-    assert "ax.coastlines('50m'" in reference
-    assert "/skills/scientific-figure-design/SKILL.md" not in reference
-
-
-def test_reproduction_and_original_figure_design_have_distinct_entry_points():
-    from oceanx.runtime import OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY
-
+    assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
+    # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
+    # drawn and marked, not dropped.
+    assert "give their sum as the residual" in reproduction and "marked not significant, never left out" in reproduction
+    physical, _ = load_ocean_skill("ocean-physical-consistency-review")
+    assert "bottom pressure torque" in physical and "transport streamfunction" in physical
+    assert "open boundaries are the real straits" in " ".join(physical.split())
+    assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
+    reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
+    assert "## Publication figures" in reference
+    assert "## Maps" in reference and "ax.coastlines('50m'" in reference
+    # A figure drawn without the Figure API is told where the craft is described, and every spatial
+    # field it draws goes on a map, in either delivery mode.
+    from oceanx.runtime import STATIC_EXPERT_WORKSTREAM_POLICY
     for policy in (OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY):
         flat = " ".join(policy.split())
-        assert "For paper reproduction, follow /skills/paper-reproduction/SKILL.md" in flat
-        assert "/references/coding/matplotlib.md guidance" in flat
-        assert "For other figures, read /skills/scientific-figure-design/SKILL.md" in flat
-        # Restoring the figure workflow must not remove always-visible scientific safeguards.
-        for rule in ("Do not infer land from NaNs", "numerator and denominator",
-                     "an all-missing selection stays missing"):
-            assert rule in flat
-    figure, _ = load_ocean_skill("scientific-figure-design")
-    assert "instead of this design workflow" in figure
-    assert "## Reproducing a paper's figure" not in figure
-    for section in ("## Results, not new analysis", "## Publication figures", "## Maps", "## Checking the figure"):
-        assert section in figure
+        assert "/references/coding/matplotlib.md" in flat and "map with coastlines" in flat
 
 
-@pytest.mark.parametrize("delivery", ["interactive", "static"])
-def test_reproduction_reference_is_available_in_the_packaged_library(tmp_path, monkeypatch, delivery):
-    from oceanx.native_skills import prepare_skill_library
-    from oceanx.skills import ocean_reference_root
-
-    monkeypatch.setenv("OCEANX_FIGURE_DELIVERY", delivery)
-    library = prepare_skill_library(tmp_path / delivery, role="single_agent", capabilities=("literature.read",))
-    reproduction = (library / "skills/paper-reproduction/SKILL.md").read_text()
-    reference = library / "references/coding/matplotlib.md"
-    assert "/references/coding/matplotlib.md" in reproduction
-    assert reference.read_bytes() == (ocean_reference_root() / "coding/matplotlib.md").read_bytes()
-
-
-@pytest.mark.parametrize("name,readers", [
-    ("ocean-physical-consistency-review", ("ocean_process_expert", "statistical_inference_expert", "literature_reproduction_expert")),
-    ("ocean-analysis-design", ("ocean_process_expert", "statistical_inference_expert", "literature_reproduction_expert")),
-    ("ocean-data-acquisition", ("literature_reproduction_expert",)),
+@pytest.mark.parametrize("name,owner", [
+    ("ocean-physical-consistency-review", "ocean_process_expert"),
+    ("ocean-analysis-design", "statistical_inference_expert"),
+    ("ocean-data-acquisition", "literature_reproduction_expert"),
 ])
 @pytest.mark.parametrize("role", [
     "coordinator", "ocean_process_expert", "scientific_discussion_partner",
     "statistical_inference_expert", "literature_reproduction_expert",
 ])
-def test_computing_experts_share_method_reading_but_acquisition_remains_scoped(tmp_path, name, readers, role):
+def test_domain_method_native_libraries_are_role_scoped(tmp_path, name, owner, role):
     from oceanx.native_skills import prepare_skill_library
     from oceanx.skills import OceanResourceUnavailableError
 
-    available = role in readers
+    available = role == owner
     library = prepare_skill_library(tmp_path / role, role=role)
     assert (library / "skills" / name / "SKILL.md").is_file() is available
     if available:
@@ -127,24 +108,6 @@ def test_computing_experts_share_method_reading_but_acquisition_remains_scoped(t
     else:
         with pytest.raises(OceanResourceUnavailableError):
             load_ocean_skill(name, role=role)
-
-
-@pytest.mark.parametrize("delivery", ["interactive", "static"])
-@pytest.mark.parametrize("role", ["ocean_process_expert", "statistical_inference_expert",
-                                  "literature_reproduction_expert", "single_agent", "helper"])
-def test_method_reading_triggers_and_skill_links_resolve_in_each_computing_library(tmp_path, monkeypatch, delivery, role):
-    import re
-
-    from oceanx.native_skills import prepare_skill_library
-    from oceanx.runtime import OCEAN_AGENT_SKILL_POLICY
-
-    monkeypatch.setenv("OCEANX_FIGURE_DELIVERY", delivery)
-    library = prepare_skill_library(tmp_path / role, role=role, capabilities=("literature.read",))
-    documents = [OCEAN_AGENT_SKILL_POLICY]
-    documents.extend(path.read_text() for path in (library / "skills").glob("*/SKILL.md"))
-    for document in documents:
-        for target in re.findall(r"/skills/[a-z0-9-]+/SKILL\.md", document):
-            assert (library / target.lstrip("/")).is_file(), (role, target)
 
 
 def test_download_provider_references_follow_the_literature_library(tmp_path):

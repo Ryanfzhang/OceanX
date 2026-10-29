@@ -47,14 +47,9 @@ describe('request activity', () => {
     const running = updateRequestActivity(null, start('a'), 'request-1');
     expect(currentStep(running, null, 'request-1', en)).toBe('Running analysis · Check the regional grid');
     expect(currentStep(running, null, 'request-1', zh)).toBe('运行分析 · Check the regional grid');
-    // Between steps the line keeps what the last step was about.
-    expect(currentStep(updateRequestActivity(running, end('a'), 'request-1'), null, 'request-1', en))
-      .toBe('Reviewing the result · Check the regional grid');
-    expect(currentStep(updateRequestActivity(running, end('a', true), 'request-1'), null, 'request-1', zh))
-      .toBe('处理工具错误 · Check the regional grid');
-    const plan = updateRequestActivity(null, {type: 'tool.call.completed', request_id: 'request-1', payload: {
-      tool_call_id: 'p', tool_name: 'write_todos', input: {}}}, 'request-1');
-    expect(currentStep(plan, null, 'request-1', en)).toBe('Reviewing the result');  // a step with nothing to name
+    expect(currentStep(updateRequestActivity(running, end('a'), 'request-1'), null, 'request-1', en)).toBe('Reviewing the result');
+    expect(currentStep(updateRequestActivity(running, end('a', true), 'request-1'), null, 'request-1', en))
+      .toBe('Adjusting after a tool error');
     const recorded = {request_id: 'request-1', state: 'working' as const, activity: 'Expert running code'};
     expect(currentStep(null, recorded, 'request-1', zh)).toBe('运行分析');
     expect(currentStep(null, {...recorded, state: 'completed'}, 'request-1', en)).toBe('Working on the request…');

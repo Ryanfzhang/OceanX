@@ -1,9 +1,7 @@
 """Desktop/benchmark stream projection of the single Coordinator server run."""
 from __future__ import annotations
 
-import asyncio
 import os
-from contextlib import aclosing
 from types import SimpleNamespace
 from uuid import NAMESPACE_URL, uuid5
 
@@ -84,20 +82,19 @@ class ServerGraphStream:
             config={"configurable": c, "recursion_limit": 9_999},
             metadata={"oceanx_request_id": c["request_id"]},
             multitask_strategy="enqueue", stream_mode=["events", "values"])
-        # The request owns this server run, including its helper subtree. Closing
-        # a Python generator alone is not an acknowledgement that the run stopped.
-        try:
-            async with aclosing(self.client.runs.join_stream(
-                self.thread_id, run["run_id"], cancel_on_disconnect=False,
-            )) as events:
-                async for part in events:
-                    if part.event == "events":
-                        yield decode(part.data)
-                    elif part.event == "error":
-                        raise RuntimeError(server_error_message(part.data))
-        except (asyncio.CancelledError, GeneratorExit):
-            await self.client.runs.cancel(self.thread_id, run["run_id"], wait=True)
-            raise
+        # Cancellation is native Agent Server behavior.  Closing this joined
+        # stream interrupts its run and therefore the active DeepAgents
+        # subtree; the desktop gateway does not enumerate runs, wait for graph
+        # teardown, or manually stop Expert resources.
+        async for part in self.client.runs.join_stream(
+            self.thread_id,
+            run["run_id"],
+            cancel_on_disconnect=True,
+        ):
+            if part.event == "events":
+                yield decode(part.data)
+            elif part.event == "error":
+                raise RuntimeError(server_error_message(part.data))
         finished = await self.client.runs.get(self.thread_id, run["run_id"])
         if finished["status"] in {"error", "timeout", "interrupted"}:
             raise RuntimeError(f"Coordinator run ended with {finished['status']}")

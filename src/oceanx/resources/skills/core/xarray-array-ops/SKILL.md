@@ -1,12 +1,11 @@
 ---
 name: xarray-array-ops
-description: Read before combining grids, multidimensional indexing, broadcasting, masking flattened arrays or changing axis order; verify NumPy/xarray operations and shape errors.
+description: Verify NumPy/xarray indexing, broadcasting, per-column take_along_axis, masks versus flattened arrays, and axis-order changes. Use when transforming multidimensional ocean data or fixing shape/index errors.
 metadata:
   origin: oceanmind
   roles:
     - ocean_process_expert
     - statistical_inference_expert
-    - literature_reproduction_expert
 ---
 
 # Array operations

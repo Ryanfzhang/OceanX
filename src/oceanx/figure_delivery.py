@@ -6,36 +6,22 @@ another projection, a schematic, a paper figure reproduced as published) the Exp
 under its own outputs folder, and that image is delivered too. ``static``: every final figure is such
 an image file, and no plotting interface is described anywhere a model reads. Benchmark runs use
 ``static`` so that every arm delivers the same kind of figure.
-
-Every delivered figure that is not itself a picture has its screen picture beside it, a file whose
-name ends in ``.preview.png``: the renderer of an interactive figure ``<name>.nc`` writes
-``<name>.preview.png`` when the figure is saved, and after each run a PDF figure ``<name>.pdf`` gets
-``<name>.pdf.preview.png`` drawn from its first page (preview_path). The agent that saved the figure
-and the desktop look at the same file. After each run a PDF figure is also checked for
-Type 3 fonts (pdf_problems), and the agent is told if it uses them.
 """
 from __future__ import annotations
 
+import io
 import os
 from collections.abc import Iterator
 from pathlib import Path
-from uuid import uuid4
-
-from oceanx.figure_preview import MAX_PREVIEW_BYTES, preview_png
-from oceanx.figure_preview import PREVIEW_EDGE as PDF_PREVIEW_EDGE
-from oceanx.figure_style import COLORS, EDITABLE, publication_style, rc_text
-from oceanx.pdf_text import PDFIUM_LOCK
 
 FIGURE_DELIVERY_ENV = "OCEANX_FIGURE_DELIVERY"
 FIGURE_DELIVERY_MODES = ("interactive", "static")
 STATIC_FIGURE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".svg", ".pdf"})
-# Files derived from a figure beside it, never figures of their own: its picture for screens and the print
-# version of an interactive figure (figure_preview.figure_pdf_path).
-DERIVED_SUFFIXES = (".preview.png", ".print.pdf")
-# What of the figure skill teaches the plotting interface: a static run leaves these files out of the skill
-# library and the skill's text between these markers (native_skills.py); the rest is for every figure.
-INTERACTIVE_FIGURE_FILES = frozenset({"scientific-figure-design/interactive.md", "scientific-figure-design/API.md"})
-INTERACTIVE_MARKERS = ("<!-- interactive -->", "<!-- /interactive -->")
+# A PDF figure is shown through a PNG drawn from its first page: the desktop and the browser show images,
+# while the vector file is what Download returns. Pixels along the longer edge, sharp on a large screen.
+PDF_PREVIEW_EDGE = 2000
+# Skills that teach the plotting interface; a static run does not put them in the skill library.
+INTERACTIVE_FIGURE_SKILLS = frozenset({"scientific-figure-design"})
 
 
 def figure_delivery() -> str:
@@ -50,26 +36,13 @@ def static_figures() -> bool:
     return figure_delivery() == "static"
 
 
-def matplotlib_settings() -> str:
-    """The matplotlibrc of this process's code runs (figure_style.py). Static runs (the benchmark) keep
-    matplotlib's look and change only how fonts are stored, which changes nothing on the page."""
-    return rc_text(EDITABLE) if static_figures() else rc_text(publication_style(), COLORS)
-
-
 def static_figure_files(task_root: Path) -> Iterator[tuple[str, Path]]:
     """Each delivered image of a task as (agent folder name, file).
 
     An image of any depth under an agent's ``outputs`` folder is delivered. A file whose name starts
-    with ``_`` or ``.`` is a draft and is skipped, as is anything reached through a symlink and a file
-    derived from a figure (DERIVED_SUFFIXES).
+    with ``_`` or ``.`` is a draft and is skipped, as is anything reached through a symlink and the
+    ``.preview.png`` an interactive figure keeps beside its NetCDF file.
     """
-    for agent, path in agent_output_files(task_root):
-        if is_delivered_figure(path):
-            yield agent, path
-
-
-def agent_output_files(task_root: Path) -> Iterator[tuple[str, Path]]:
-    """Saved outputs only; never follow symlinks or include private draft folders."""
     agents = task_root / "agents"
     if agents.is_symlink() or not agents.is_dir():
         return
@@ -78,10 +51,10 @@ def agent_output_files(task_root: Path) -> Iterator[tuple[str, Path]]:
         if agent.is_symlink() or not agent.is_dir() or outputs.is_symlink() or not outputs.is_dir():
             continue
         for directory, subfolders, names in os.walk(outputs, followlinks=False):
-            subfolders[:] = sorted(name for name in subfolders if not name.startswith(("_", ".")))
+            subfolders.sort()
             for name in sorted(names):
                 path = Path(directory) / name
-                if not name.startswith(("_", ".")) and not path.is_symlink() and path.is_file():
+                if is_delivered_figure(path):
                     yield agent.name, path
 
 
@@ -90,56 +63,24 @@ def is_delivered_figure(path: Path) -> bool:
 
     name = path.name
     return not (name.startswith(("_", ".")) or path.suffix.lower() not in STATIC_FIGURE_SUFFIXES
-                or name.lower().endswith(DERIVED_SUFFIXES) or path.is_symlink() or not path.is_file())
+                or name.lower().endswith(".preview.png") or path.is_symlink() or not path.is_file())
 
 
-def preview_path(figure: Path) -> Path:
-    """The screen picture of a PDF figure beside it, named after the whole file name so that
-    ``sst.pdf`` never shares ``sst.preview.png`` with an interactive figure ``sst.nc``."""
-    figure = Path(figure)
-    return figure.with_name(f"{figure.name}.preview.png")
-
-
-def write_pdf_preview(pdf: Path) -> Path | None:
-    """Draw the first page of a PDF figure beside it (preview_path) unless a preview at least as new is
-    there; None when the PDF cannot be drawn, and the figure is then still delivered as its file."""
-    target = preview_path(pdf)
+def pdf_preview_png(pdf: Path) -> bytes | None:
+    """The first page of a PDF figure drawn as PNG bytes (PDF_PREVIEW_EDGE); None when it cannot be drawn,
+    and the figure is then still delivered as its file."""
     try:
-        if (target.is_file() and target.stat().st_mtime_ns >= pdf.stat().st_mtime_ns
-                and target.stat().st_size <= MAX_PREVIEW_BYTES):
-            return target
         import pypdfium2 as pdfium  # also draws the pages of the PDFs a researcher attaches (pdf_text.py)
 
-        with PDFIUM_LOCK, pdfium.PdfDocument(str(pdf)) as document:
+        document = pdfium.PdfDocument(str(pdf))
+        try:
             page = document[0]
-            bitmap = page.render(scale=PDF_PREVIEW_EDGE / max(*page.get_size(), 1.0))
-            try:
-                data = preview_png(bitmap.to_pil())
-            finally:
-                bitmap.close()
-        staging = target.with_name(f".{target.name}.{uuid4().hex}.tmp.png")
-        staging.write_bytes(data)
-        os.replace(staging, target)
-        return target
+            scale = PDF_PREVIEW_EDGE / max(*page.get_size(), 1.0)
+            image = page.render(scale=scale).to_pil().convert("RGB")
+        finally:
+            document.close()
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue()
     except Exception:  # noqa: BLE001 - an unreadable or empty PDF keeps its download
         return None
-
-
-def pdf_problems(pdf: Path) -> list[str]:
-    """Report Type 3 fonts; image shapes and path counts do not establish editability."""
-    try:
-        from pypdf import PdfReader
-
-        fonts: set[str] = set()
-        for page in PdfReader(pdf).pages:
-            resources = page.get("/Resources") or {}
-            for font in (resources.get("/Font") or {}).values():
-                font = font.get_object()
-                fonts.add(str(font.get("/Subtype")))
-                fonts.update(str(item.get_object().get("/Subtype")) for item in font.get("/DescendantFonts") or [])
-    except Exception:  # noqa: BLE001 - a PDF that cannot be read is reported by its preview instead
-        return []
-    problems = []
-    if "/Type3" in fonts:
-        problems.append("its text is stored in Type 3 fonts; use pdf.fonttype=42 for TrueType text export")
-    return problems

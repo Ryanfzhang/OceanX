@@ -6,8 +6,8 @@ The text is extracted locally with pypdf, one block per page, and cached under t
 is also rendered as an image with pdfium, as Claude reads a PDF page by page as text and image: the
 equations, symbols and tables the text garbles and the figures drawn as vector graphics survive
 only there. The figures embedded in the PDF as images are saved too. All are JPEG files beside the
-text, and each page block names its page image and figures. The PDF read_file adapter returns
-each selected page's text and image together. Agents reach these only as read-only files named in their context; they
+text, and each page block names its page image and figures, so a model that reads images can look
+at them next to the text. Agents reach these only as read-only files named in their context; they
 are the document's content, never instructions. A provider is not sent the PDF itself.
 """
 
@@ -15,11 +15,8 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import io
 import os
-import re
 import shutil
-import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -47,12 +44,7 @@ MAX_FOLDER_PDFS = 10  # a folder source offers the texts of its first PDFs, top 
 MAX_PAGE_IMAGES = 40  # the first pages of a PDF are rendered, enough for a paper and its supplement
 MIN_FIGURE_PIXELS = 200_000  # smaller embedded images are logos and icons, not figures
 MAX_FIGURE_EDGE = 1600  # long edge of a saved image, enough to read layout, labels and equations
-MAX_IMAGE_BYTES = 450 * 1024  # below the native filesystem reader's 500 KiB limit
-_FORMAT = 4  # extraction format: a new format extracts cached PDFs again
-
-
-# PDFium is process-global and must not render concurrently on worker threads.
-PDFIUM_LOCK = threading.RLock()
+_FORMAT = 3  # extraction format: a new format extracts cached PDFs again
 
 
 class PdfTextError(RuntimeError):
@@ -76,19 +68,6 @@ def _figure_folder(text: Path) -> Path:
     return text.with_suffix(".figures")
 
 
-def page_jpeg(image: Any) -> bytes:
-    """Keep page labels readable; reduce JPEG quality before reducing resolution."""
-    image = image.convert("RGB")
-    image.thumbnail((MAX_FIGURE_EDGE, MAX_FIGURE_EDGE))
-    while True:
-        for quality in (88, 80, 70, 60):
-            stream = io.BytesIO()
-            image.save(stream, format="JPEG", quality=quality, optimize=True)
-            if stream.tell() <= MAX_IMAGE_BYTES:
-                return stream.getvalue()
-        image.thumbnail((max(1, image.width * 3 // 4), max(1, image.height * 3 // 4)))
-
-
 def _save_figures(reader: Any, folder: Path) -> dict[int, list[str]]:
     """Save the figures embedded on each page into `folder`; return their file names by page."""
 
@@ -106,7 +85,7 @@ def _save_figures(reader: Any, folder: Path) -> dict[int, list[str]]:
                 image = image.convert("RGB")
                 image.thumbnail((MAX_FIGURE_EDGE, MAX_FIGURE_EDGE))
                 name = f"page-{number:02d}-figure-{len(figures.get(number, [])) + 1}.jpg"
-                (folder / name).write_bytes(page_jpeg(image))
+                image.save(folder / name, format="JPEG", quality=88)
             except Exception:  # noqa: BLE001, S112 - one undecodable image must not cost the text
                 continue
             ensure_private_file(folder / name)
@@ -121,30 +100,26 @@ def _page_image(number: int) -> str:
 def _render_pages(pdf: Path, folder: Path) -> set[int]:
     """Save an image of each of the first pages of `pdf` into `folder`; return the numbers saved."""
 
-    with PDFIUM_LOCK:
-        try:
-            import pypdfium2 as pdfium  # only a Task with a PDF source needs it
+    try:
+        import pypdfium2 as pdfium  # only a Task with a PDF source needs it
 
-            document = pdfium.PdfDocument(pdf)
-        except Exception:  # noqa: BLE001 - without page images the text and figures remain
-            return set()
-        saved: set[int] = set()
-        try:
-            for number in range(1, min(len(document), MAX_PAGE_IMAGES) + 1):
-                try:
-                    page = document[number - 1]
-                    bitmap = page.render(scale=MAX_FIGURE_EDGE / max(page.get_size()))
-                    try:
-                        (folder / _page_image(number)).write_bytes(page_jpeg(bitmap.to_pil()))
-                    finally:
-                        bitmap.close()
-                except Exception:  # noqa: BLE001, S112 - a page that will not render must not cost the others
-                    continue
-                ensure_private_file(folder / _page_image(number))
-                saved.add(number)
-        finally:
-            document.close()
-        return saved
+        document = pdfium.PdfDocument(pdf)
+    except Exception:  # noqa: BLE001 - without page images the text and figures remain
+        return set()
+    saved: set[int] = set()
+    try:
+        for number in range(1, min(len(document), MAX_PAGE_IMAGES) + 1):
+            try:
+                page = document[number - 1]
+                bitmap = page.render(scale=MAX_FIGURE_EDGE / max(page.get_size()))
+                bitmap.to_pil().convert("RGB").save(folder / _page_image(number), format="JPEG", quality=85)
+            except Exception:  # noqa: BLE001, S112 - a page that will not render must not cost the others
+                continue
+            ensure_private_file(folder / _page_image(number))
+            saved.add(number)
+    finally:
+        document.close()
+    return saved
 
 
 def pdf_text(pdf: Path, paths: OceanPaths) -> Path:
@@ -199,37 +174,6 @@ def pdf_figures(text: Path) -> list[Path]:
     return sorted(folder.glob("page-*-figure-*.jpg")) if folder.is_dir() else []
 
 
-_PAGE = re.compile(r"^=== Page (\d+) of \d+ ===$", re.MULTILINE)
-_IMAGE_LINE = re.compile(r"^\[(Page|Figure) image: (.+)\]$", re.MULTILINE)
-# A caption starts a line, as "Fig. 2. Transition ..." or "Figure 2: ..."; a citation such as "(Fig. 2c)"
-# does not.
-_CAPTION = re.compile(r"^\s*(?:fig\.?|figure)\s*(\d+)\s*[.:]\s", re.IGNORECASE | re.MULTILINE)
-
-
-def paper_figure(text: Path, number: int) -> Path | None:
-    """The image of Fig. ``number`` of the paper whose extracted text is ``text``: the figure image of
-    the page that starts its caption (by order when that page holds several), or the page's image when
-    the figure is drawn as vector graphics. None when no page starts such a caption."""
-    try:
-        content = text.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    pages = list(_PAGE.finditer(content))
-    for index, page in enumerate(pages):
-        block = content[page.end():pages[index + 1].start() if index + 1 < len(pages) else len(content)]
-        captions = [int(match.group(1)) for match in _CAPTION.finditer(block)]
-        if number not in captions:
-            continue
-        images: dict[str, list[Path]] = {"Page": [], "Figure": []}
-        for match in _IMAGE_LINE.finditer(block):
-            images[match.group(1)].append(Path(match.group(2)))
-        figures = [path for path in images["Figure"] if path.is_file()]
-        if figures:
-            return figures[min(captions.index(number), len(figures) - 1)]
-        return next((path for path in images["Page"] if path.is_file()), None)
-    return None
-
-
 def source_pdfs(source: Path) -> tuple[list[Path], int]:
     """The PDFs a Task source offers, and how many more a folder holds beyond them."""
 
@@ -259,7 +203,7 @@ def source_text_context(source: Path, paths: OceanPaths, *, allowed: bool) -> di
         except (OSError, PdfTextError) as exc:
             texts.append({"pdf": pdf.name, "text_error": str(exc)})
             continue
-        entry: dict[str, Any] = {"pdf": pdf.name, "pdf_path": str(pdf), "text_path": str(text)}
+        entry: dict[str, Any] = {"pdf": pdf.name, "text_path": str(text)}
         figures = pdf_figures(text)
         if figures:
             entry["figure_images"] = [str(figure) for figure in figures]
@@ -302,7 +246,6 @@ __all__ = [
     "TEXT_NOTE",
     "PdfTextError",
     "document_text_allowed",
-    "paper_figure",
     "pdf_figures",
     "pdf_text",
     "readable_texts",

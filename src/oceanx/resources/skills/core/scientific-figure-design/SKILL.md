@@ -1,142 +1,126 @@
 ---
 name: scientific-figure-design
-description: Design original scientific figures and interactive visualizations; choose the plot, layout, maps and export. For paper reproduction, use paper-reproduction instead.
+description: Declare scientifically meaningful interactive figures from already-computed ocean-analysis arrays.
 metadata:
   origin: oceanmind
   roles:
     - ocean_process_expert
     - statistical_inference_expert
-    - literature_reproduction_expert
 ---
 
 # Scientific figure design
 
 ## when_to_use
-Use when designing a scientific figure rather than reproducing a paper's figure.
-For paper reproduction, follow /skills/paper-reproduction/SKILL.md and its
-/references/coding/matplotlib.md guidance instead of this design workflow.
-<!-- interactive -->
-A user-facing interactive map or chart is a `ScientificFigure`: [interactive.md](interactive.md) describes
-it and the Figure API reference it rests on. Draw with matplotlib, as below, a figure it does not suit.
-<!-- /interactive -->
+Use when an analysis result needs a user-facing interactive map or chart. Construct a
+`ScientificFigure` from the computed arrays, explicit axes and explicit layers, then call
+`figure.save("name.nc")`. That save declares a figure; ordinary NetCDF files remain data files.
+Do not write renderer JSON. Omit visual style arguments when the Workbench defaults are sufficient.
+Keep intermediate arrays and ordinary NetCDF caches in `OCEAN_WORK_DIR` (the default working
+directory). Save only final user-facing figures with `ScientificFigure.save(...)`, which writes
+to `OCEAN_OUTPUT_DIR`; task scratch can be cleaned after the task becomes idle.
 
-## Results, not new analysis
-A figure draws results that were computed and saved before it. The plotting code reads them and does
-not resample, average, smooth, detrend or normalise them again. When a figure needs another treatment,
-compute it as a step of the analysis, say in the answer that the method changed, and compare it with the
-result it replaces in a separate supplementary figure, not in the main one.
+## Palette semantics
 
-Fits, correlations and budget residuals are analysis results too: save them with the series, sample
-selection and processing they describe, then read them for annotations. An annotation describing a
-plotted curve uses that curve's samples, filtering and period. If a statistic instead describes the
-raw series or another timescale, label that distinction explicitly.
+Choose a palette from the meaning of the variable, not merely from its numerical range:
 
-Select the saved time-resolved series for an evolution plot; an annual summary table does not set
-the plot's time resolution. A smoothed main curve retains the timestamps of the series smoothed,
-unless the scientific quantity being shown is explicitly defined on a coarser time interval.
+- For an ordinary non-negative or otherwise one-directional continuous quantity, omit the palette
+  or use `ocean_teal`. OceanX uses Ocean teal as the sequential default.
+- For anomalies, differences, signed tendencies, correlations, or any quantity with a meaningful
+  centre, use `palette="blue_red"`. When equal positive and negative departures must be compared
+  visually, also pass a `color_domain` symmetric about the scientifically meaningful centre (zero
+  for ordinary anomalies and differences).
+- For ordered groups, bins, or stages, use `grouped`; it uses the same continuous blue-to-red
+  progression. For unordered nominal classes, use `categorical` so neighbouring classes do not
+  imply an ordering.
+- When a different scale better expresses the result, explicitly request one of `viridis`,
+  `cividis`, `magma`, `plasma`, `blues`, `depth`, `thermal`, or `chlorophyll`. An explicit supported
+  palette always overrides the defaults.
+- A custom continuous palette may be supplied as two or more six-digit hexadecimal colour stops.
+  Do not use colours to imply a centre, order, threshold, or category that the data do not have.
 
-Draw the coastline and land as Maps says, and leave empty the cells outside the diagnostic's saved
-validity mask: a surface coastline alone does not define the support of a depth layer or derived field.
-Keep signed quantities signed; show an absolute magnitude only when
-labelled as such and retain its direction separately. Interpretation labels must follow the computed
-evidence. When copying a paper's layout, distinguish its claimed pattern from what this run actually
-establishes; do not copy the conclusion as a label merely because the original figure uses it.
+## Figure construction
 
-## Choosing the figure
+Before drawing your first figure, read [the complete Figure API reference](API.md) to its end
+({{FIGURE_API_LINE_COUNT}} lines: call read_file with limit=300 and continue from the offset it
+reports until no lines remain). It is
+generated from the same implementation as the `Result API reference` file named in your system
+prompt; use its exact signatures, plot-kind restrictions and runnable examples rather than
+reading OceanX source code or testing guessed arguments. Save trial figures with `_`-prefixed
+names and final figures with plain names. Names starting with `.` are also drafts; their files
+and previews stay on disk but are not listed as results.
+
 Match the plot to the data structure: maps for spatial fields, time series for evolution, profiles
 for vertical structure, heatmaps for two-dimensional coordinates, and scatter plots for paired
-observations. Use compact axis and colourbar labels with units; put definitions, baselines,
-selections, and limitations in the result summary or report instead of forcing them into labels.
+observations. Keep titles interpretive but short. Use compact axis and colourbar labels with units;
+put definitions, baselines, selections, and limitations in the result summary or report instead of
+forcing them into labels.
 
-## Publication figures
+Choose every scientific encoding explicitly. Add each comparison as its own line or scatter layer.
+Use `color_values` only when a third variable should encode point colour and a colorbar genuinely
+adds information. Never repeat x or y as colour merely to decorate the plot.
 
-A figure drawn for a researcher, or after a paper's figure, meets the standard of a Nature figure.
+For every spatial map, preserve the scientific validity mask. Land, missing retrievals, and cells
+outside the analysis or comparison domain must be `NaN`/`None`, or excluded with
+`field2d(..., valid_mask=valid_cells)`, so the Workbench leaves them transparent over the basemap.
+Never turn those cells into a plotted sentinel such as category `0`. Categorical spatial maps
+and continuous spatial maps both require an explicit Boolean `valid_mask`; values then describe
+only cells that belong to the display domain. A genuine zero measurement remains valid when its
+mask is `True`—for example, zero satellite retrievals over valid ocean must not be conflated with
+land.
 
-For a reproduced figure, the original's layout, colours, symbols and line styles take precedence over
-generic style defaults; use those defaults where the original is unspecified. This does not override
-the computed values, valid support, coordinate registration or the delivery format.
+```python
+import numpy as np
+from oceanx.scientific_view import ScientificFigure
 
-### Size and type
-Size it as printed: 89 mm (3.5 in) wide for one column or 183 mm (7.2 in) across a page, and at most
-247 mm (9.7 in) high. Use a sans-serif type such as Arial: 7 pt for axis labels and other text, 6 pt for
-tick labels and legends, never less than 5 pt, with data lines of about 1 pt and thinner axes and ticks.
-Letter each panel a, b, c in 8 pt bold just above the top-left corner of its axes; a reproduced figure
-keeps its original's letters. Leave out a figure title, which the answer carries; a panel may carry a
-short label of what it shows, such as Upper layer. Write axis labels in sentence case with the unit in
-parentheses, such as Temperature (°C). Create the figure with `layout='constrained'`, as in
-`plt.subplots(2, 2, figsize=(7.2, 5), layout='constrained')`, so that labels and colour bars make room
-for each other. Give panels of one kind the same size and aligned axes, and let stacked panels share
-their time axis, with years on top and bottom when the original shows them.
+lag = np.arange(-3, 4)
+correlation = np.array([0.1, 0.3, 0.6, 0.9, 0.6, 0.3, 0.1])
+figure = ScientificFigure(plot_kind="scatter", title="Lag correlation")
+panel = figure.panel(x=lag, y=correlation, x_label="Lag", y_label="Correlation")
+panel.scatter()
+figure.save("lag.nc")
+```
 
-### Ranges come from the values
-Set every axis and colour range from the values drawn, the panel's main series first. Draw noisier or
-secondary series lighter behind it; use an inset or a separate panel when their range obscures the main
-variation. Keep the main series, every bar and error bar inside the axes; bars start at zero, and a
-colour field spans most of its colour scale. If a zoomed or cropped view is needed, label it explicitly
-and state which values lie outside the displayed range. A range taken from another figure, the paper's
-included, is kept only when the main values fit it; when they do not, draw yours in full and treat the
-difference as a result to explain.
+```python
+import numpy as np
+from oceanx.scientific_view import ScientificFigure
 
-### Colour
-A quantity of one sign, such as temperature, concentration, speed or depth, takes a perceptually uniform
-sequential map such as `viridis` or `cividis`. A quantity with a meaningful zero, such as an anomaly,
-trend, correlation, vorticity, streamfunction or velocity component, takes a diverging map such as
-`RdBu_r`, white at zero with symmetric limits (`vmin=-vmax`, or `norm=TwoSlopeNorm(0)`). Do not use
-`jet` or `rainbow` in a figure of your own: they show edges the data do not have and hide the zero; a
-reproduced figure may keep its original's map, with zero where the original puts it. Lines and
-categories take the style's colour cycle; never tell two series apart by red against green alone, and
-add line styles or markers beyond four series. Every colour field has a colour bar labelled with its
-quantity and unit.
+salinity = np.array([34.5, 34.8, 35.0, 35.2])
+temperature = np.array([26.0, 20.0, 14.0, 8.0])
+depth = np.array([0.0, 50.0, 200.0, 800.0])
+figure = ScientificFigure(plot_kind="ts_diagram", title="Water-mass structure")
+panel = figure.panel(x=salinity, y=temperature, x_label="Salinity", y_label="Temperature")
+panel.scatter(color_values=depth, palette="depth", colorbar_label="Depth (m)")
+figure.save("samples.nc")
+```
 
-### Vector arrows
-Choose arrow spacing, length scale and shaft width together for the panel's printed size and the
-range of vector magnitudes. Representative nonzero vectors should have readable arrowheads, not
-merge into a field of dots or overlap their neighbours. Include a reference arrow with units; share
-the scale across comparable panels, or give each panel its own labelled scale when they differ.
-Preserve relative magnitudes; equal-length arrows show direction only and must be labelled as such.
-Matplotlib's scale and short-arrow behaviour are explained in /references/coding/matplotlib.md.
+```python
+import numpy as np
+from oceanx.scientific_view import ScientificFigure
 
-### Words and numbers
-Text on a panel is limited to axis and tick labels, the panel letter, a legend and short labels of
-features or of values you computed. Every number on a figure is yours; a paper's value may stand beside
-yours for comparison, never alone. Put legends and values such as r or a trend in empty space, never
-across the data, another label or a frame. Caveats, missing data, sources and method notes go in the
-answer, not on the figure, and so does what error bars or shading show (standard deviation, standard
-error or a confidence interval) with the number of values behind them.
+longitude = np.array([120.0, 121.0, 122.0, 123.0])
+latitude = np.array([20.0, 21.0, 22.0])
+comparison_class = np.array([[1, 1, 2, 3], [1, 2, 2, 3], [1, 2, 3, 3]])
+wet_cells = np.ones(comparison_class.shape, dtype=bool)
+wet_cells[0, 0] = False
+comparison_domain = np.ones(comparison_class.shape, dtype=bool)
+comparison_domain[-1, -1] = False
+figure = ScientificFigure(plot_kind="spatial_map", title="Comparison domain")
+panel = figure.panel(x=longitude, y=latitude, x_label="Longitude", y_label="Latitude")
+panel.field2d(
+    comparison_class,
+    valid_mask=wet_cells & comparison_domain,
+    field_kind="categorical",
+    category_labels={1: "Both sources", 2: "Model only", 3: "Satellite only"},
+    variable="comparison_class",
+    units="1",
+    palette="categorical",
+)
+figure.save("comparison-domain.nc")
+```
 
-### Schematics
-A schematic, a globe or a three-dimensional stack of maps is drawn as flat panels of the data it rests
-on, in the same arrangement, with its arrows, labels and numbers taken from your results. Never draw
-boxes of text in place of a figure, and add no 3-D effects, shadows or decoration to any figure.
+For a model-chosen sequential alternative, pass `palette="viridis"` to the layer. For a centred
+anomaly, pass `palette="blue_red"` and a scientifically justified symmetric `color_domain`.
 
-### Saving
-Save with `bbox_inches='tight'`, as a vector PDF where your instructions ask for one, and as SVG too
-when the researcher asks for it.
-
-## Maps
-
-For continuous, gridded spatial patterns, prefer filled contours (`contourf`) to a scatter of grid
-points. Use scatter for genuinely discrete observations; do not interpolate sparse samples merely
-to obtain filled contours.
-
-Draw a spatial field on a map, never on bare longitude and latitude axes: cartopy axes in the paper's
-projection or PlateCarree, the data drawn with `transform=ccrs.PlateCarree()`, land filled light grey and
-coastlines drawn from Natural Earth at the scale of the region
-(`ax.add_feature(cfeature.LAND.with_scale('50m'), facecolor='0.9')`, `ax.coastlines('50m', linewidth=0.5)`,
-and `'10m'` for a strait or a stretch of coast), with labelled degree gridlines
-(`ax.gridlines(draw_labels=True, linewidth=0.3)`). Show the whole region the figure is about, in a
-reproduction the original's extent. Leave the data's invalid cells empty, so that the map, not a colour
-of the field, shows the land, and set a field that has values on land, such as a streamfunction that is
-constant along the coast, to NaN there. Reuse accessible local Natural Earth files before downloading
-them; a download error does not make Cartopy unavailable. Downloads stay in the agent's folder.
-If no usable coastline files are available, outline a verified land mask as the coastline and state
-the limitation in the answer.
-
-## Checking the figure
-Check the figure's inputs against the selected saved results, including their units, signs, masks and
-the series behind annotations. If a mismatch is in the computation, correct the analysis and regenerate
-the affected figure; changing its sign, limits or labels is not a numerical correction.
-
-When your model reads images, look at the figure once and fix what is wrong before delivering
-it: clipped or empty panels, squashed curves, overlapping text, panels of uneven size, type too
-small to read.
+Preview images are optional scientific evidence. Inspect one only when interpreting the image is
+part of the analysis, for example to identify a spatial pattern. Do not add a separate visual review
+or repair round after the figure has been saved.

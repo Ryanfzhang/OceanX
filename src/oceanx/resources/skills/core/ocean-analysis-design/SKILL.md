@@ -1,12 +1,10 @@
 ---
 name: ocean-analysis-design
-description: Read before selecting weights, baselines, trend or correlation estimators, EOF/PCA preprocessing or uncertainty tests for an ocean analysis.
+description: Select statistical methods for weighting, baselines, autocorrelation and uncertainty in ocean comparisons, trends and anomaly analyses.
 metadata:
   origin: oceanmind
   roles:
     - statistical_inference_expert
-    - ocean_process_expert
-    - literature_reproduction_expert
 ---
 
 # Ocean Statistical Methods
@@ -21,45 +19,16 @@ duration for a time-integrated mean, or sampling weights for a sampling design. 
 and duration-weighted averages answer different questions; retain a user-specified convention.
 Do not assume latitude-cosine weights fit an irregular or curvilinear grid when cell areas exist.
 
-Use monthly means as the usual starting point for seasonal to interannual background evolution.
-Use daily means for short-lived events, their onset and recovery; retain finer resolution when the
-question concerns variation within a day. Use annual means for whole-year comparisons, or annual
-totals for cumulative budgets, when within-year timing is not the target. Choose the scale from the
-research question and the supplied sampling and coverage. In a paper reproduction, use the paper's
-analysis timescale as a comparison target when the data support it; otherwise explain the adaptation
-and what remains comparable. Do not average to a coarser scale merely to simplify a plot or reduce
-computation.
-
-Keep whole-year summaries separate from the time-resolved series: estimating an annual trend or a
-period mean does not require an annual time axis in the main evolution plot. When monthly sampling
-supports the question, retain monthly timestamps and apply smoothing to that series; use an annual
-curve when the annual quantity itself is the target. Express the smoothing window in physical time
-and convert it to samples at the selected resolution, rather than coarsening the series first.
-
 ## Baselines and anomalies
 
 Define the reference population/period, aggregation order, calendar, seasonal treatment and
 missing-data convention. Spatial contrasts, deviations from one year's mean and anomalies
 relative to a multi-year climatology are different quantities. A single year cannot supply an
 independent multi-year climatology. Separate the baseline and target windows explicitly.
-Before grouping timestamps, confirm the source calendar, interval bounds and timestamp meaning.
-Preserve non-Gregorian calendars and state how incomplete periods and leap days are treated;
-ordinary date conversion must not silently change the samples or durations.
 
 Removing a trend or fitting a seasonal cycle changes the question; use it when warranted rather
 than automatically. A fitted component is not proof of a physical mechanism. For prediction or
 held-out validation, estimate preprocessing from the training data rather than leaking test data.
-
-## Smoothing for a short record
-
-Choose a smoothing window in time units for the process of interest, considering sampling gaps and
-the valid span left at the endpoints. For descriptive display without a prescribed physical cutoff,
-start with a window no longer than roughly 20-25% of the record duration. This is a display heuristic,
-not a universal scientific threshold; save the unsmoothed series and state the chosen window.
-Do not choose a window to obtain a desired sign, correlation or resemblance to a published figure.
-Apply consistent temporal treatment to series being compared, or explain why their treatments differ.
-Compute and save the smoothed series in the analysis step, before plotting. A shorter window describes
-a different timescale; it cannot recover long-period variability unsupported by the available record.
 
 ## Autocorrelation and dependence
 
@@ -75,10 +44,10 @@ sampling: for example temporal/spatial blocks or dependence-robust regression un
 Explain the block/lag scale and relevant assumptions. A longer series with dependent samples
 does not justify treating its raw length as the independent sample size.
 
-A running mean shares values between neighbouring points. Record duration divided by window duration
-is a warning about limited temporal support, not an effective sample size or a significance test.
-For trends and correlations, state whether the estimate uses the original or smoothed series and
-account for its dependence; a smoother-looking curve does not add independent evidence.
+A running mean shares values between neighbouring points: a window of w years leaves about one
+independent value per w years. Keep the window well below the record length (a 7-year window
+leaves fewer than two independent values in 12 years) and judge the trends and correlations of a
+smoothed series by that count, not by its number of points.
 
 ## Uncertainty and comparison
 
@@ -92,13 +61,6 @@ If many comparisons or a data-selected peak support the claim, account for selec
 or label the result exploratory. Apply sensitivity checks to choices that could change the answer,
 not as an automatic additional study. Report insufficient precision or unresolved assumptions
 when the data cannot support the proposed inference.
-
-## EOF and PCA
-
-Before decomposition, specify the domain, validity mask, baseline, seasonal and trend treatment,
-spatial weights and normalisation. Modes are statistical patterns, not independently identified
-mechanisms; assess sensitivity and mode separation before interpreting them. Read
-/references/methods/eof.md for the relevant method choices.
 
 ## research_objective
 Translate a scientific question into inspectable selections, transformations, comparisons, and falsifiable checks that an agent may later implement in editable code.
@@ -144,6 +106,6 @@ limitations that could change the answer rather than describing an unperformed c
 <!-- /oceanx:lessons -->
 
 ## relevant_references
-Read `/references/methods/anomaly.md` for anomaly definitions, `/references/methods/trend.md` for
-trend estimation, or `/references/coding/large-array-practices.md` for large-array execution only
+Read `references/methods/anomaly.md` for anomaly definitions, `references/methods/trend.md` for
+trend estimation, or `references/coding/large-array-practices.md` for large-array execution only
 when the analysis involves that method.

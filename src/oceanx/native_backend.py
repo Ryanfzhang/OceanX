@@ -235,8 +235,6 @@ scientific analysis or snapshotting all existing outputs on every file read.
             return await super().aexecute(command, timeout=timeout)
         result = await self.record_command(command, timeout)
         output = result.stdout + result.stderr
-        if result.figure_notes:  # what keeps a saved PDF figure from being edited in Illustrator
-            output += "\n[Figure check] " + "\n[Figure check] ".join(result.figure_notes) + "\n"
         if result.state == "timed_out":  # otherwise the model sees only "exit code -15"
             output += (f"\n[Stopped at the time limit after {result.duration_seconds:.0f} s; a larger "
                        "timeout does not extend it. Process less data per run or save partial results.]")

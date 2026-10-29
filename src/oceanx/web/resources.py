@@ -6,7 +6,6 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
 from urllib.parse import unquote, urlsplit
 
 MAX_RESOURCE_BYTES = 25 * 1024 * 1024
@@ -86,16 +85,12 @@ class ResourceGrants:
             mime = result.get("mime_type")
             if (not re.fullmatch(r"res_[A-Za-z0-9]+", token)
                     or not isinstance(uri, str) or type(size) is not int
-                    or size < 0
-                    or (size > MAX_RESOURCE_BYTES
-                        and not (mime == "text/csv" and result.get("purpose") == "result_file"))
+                    or not 0 <= size <= MAX_RESOURCE_BYTES
                     or not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest)
                     or mime not in SAFE_MIME_TYPES):
                 raise ValueError("invalid_resource")
             path = self.resolve(uri)
-            with path.open("rb") as stream:
-                actual_digest = hashlib.file_digest(stream, "sha256").hexdigest()
-            if path.stat().st_size != size or actual_digest != digest:
+            if path.stat().st_size != size or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
                 raise ValueError("resource_changed")
             now = time.monotonic()
             self.grants = {k: v for k, v in self.grants.items() if v.expires > now}
@@ -105,20 +100,16 @@ class ResourceGrants:
         except (OSError, ValueError):
             result.pop("resource_token", None)
 
-    def open(self, token: str) -> tuple[BinaryIO, GrantedResource]:
-        """Verify the file in chunks and return the same descriptor for streaming."""
+    def read(self, token: str) -> tuple[bytes, GrantedResource]:
         grant = self.grants.get(token)
         if grant is None or grant.expires <= time.monotonic():
             raise ValueError("resource_expired")
         path = self.resolve(grant.uri)
         if path != grant.path or path.stat().st_size != grant.size:
             raise ValueError("resource_changed")
-        stream = path.open("rb")
-        try:
-            if hashlib.file_digest(stream, "sha256").hexdigest() != grant.digest:
-                raise ValueError("resource_changed")
-            stream.seek(0)
-            return stream, grant
-        except BaseException:
-            stream.close()
-            raise
+        # Read one bounded descriptor; never stream an unchecked path to the browser.
+        with path.open("rb") as stream:
+            data = stream.read(MAX_RESOURCE_BYTES + 1)
+        if len(data) != grant.size or hashlib.sha256(data).hexdigest() != grant.digest:
+            raise ValueError("resource_changed")
+        return data, grant

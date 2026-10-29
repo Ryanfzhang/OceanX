@@ -116,14 +116,11 @@ def test_a_request_handed_over_continues_in_research_mode():
 
 def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     handoff, helpers = " ".join(HANDOFF_POLICY.split()), " ".join(HELPER_POLICY.split())
-    assert HANDOFF_TOOL in handoff and "asks why" in handoff and "however many parts" in handoff
-    assert "Paper reproduction is a method requirement, not a restriction" in handoff
-    assert handoff.index("1. A request") < handoff.index("2. Everything else")
-    assert "whether mixing or upwelling did it" in handoff
-    scope = " ".join(graphs.bounded_work_policy(False).split())
-    assert "identified paper" in scope and "request, attached sources and conversation" in scope
-    assert "background or a comparison between model and observations does not by itself" in scope
-    assert "when unsure" not in handoff  # it sent mixed requests to the agent
+    assert HANDOFF_TOOL in handoff and "when unsure, do the work" in handoff
+    assert "asks why" in handoff and "however many parts" in handoff
+    # A paper's reproduction stays with one agent, which holds every result its figures combine, and is
+    # not cut short as bounded work.
+    assert "reproducing or testing the analysis of a paper" in handoff
     reproduction = "Reproducing or testing a paper's analysis is not bounded this way"
     assert reproduction in " ".join(graphs.bounded_work_policy(False).split())
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
@@ -145,11 +142,6 @@ async def test_the_single_agent_and_its_helpers_answer_without_a_report(monkeypa
                                  skill_capabilities=("literature.read", "web.search", "jina.reader"))
     single = await build_ocean_single_agent_runtime(services=services)
     helper = await build_ocean_single_agent_runtime(services=services, helper=True)
-    # In auto mode the rule for handing over comes before the instructions on how to work.
-    routed = (await build_ocean_single_agent_runtime(services=services, routing=HANDOFF_POLICY)).system_prompt
-    assert routed.startswith(OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT)
-    assert routed.index("# First: yours or the research team's") < routed.index(OCEAN_SINGLE_AGENT_PROMPT)
-    assert "research team" not in single.system_prompt and "research team" not in helper.system_prompt
     assert "report.md" not in single.system_prompt and "report.md" not in helper.system_prompt
     assert "in your answer" in single.system_prompt and "in your reply" in helper.system_prompt
     assert single.system_prompt.startswith(OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT)
@@ -318,34 +310,12 @@ async def test_an_exhausted_budget_hands_the_request_over(world):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("question", [
-    "Test whether CMOMS reproduces what the satellites and floats observed.",
-    "Reproduce Fig. 3 of the attached paper.",
-    "复现这篇论文的 Fig. 2 和 Fig. 3",
-    "Continue with the remaining figures.",
-])
-@pytest.mark.parametrize("use_team", [False, True])
-async def test_request_wording_does_not_override_the_agents_team_choice(world, question, use_team):
-    world.replies["single"] = ([_call(HANDOFF_TOOL, {"reason": "Compare competing explanations",
-                                                  "progress": "Reuse the saved analysis"})]
-                                if use_team else [AIMessage(content="Analysis finished.")])
-    config = _config("auto")
-    graph = await graphs.coordinator(config)
-    messages = [HumanMessage(content="Use the attached paper as context."),
-                AIMessage(content="I have read the paper."), HumanMessage(content=question)]
-    result = await graph.ainvoke({"messages": messages}, config)
-    assert len(world.calls["team"]) == int(use_team)
-    assert result["final_answer"] == ("The team's answer." if use_team else "Analysis finished.")
-    assert world.calls["single"][0][0] == messages
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["auto", "standard"])
 async def test_the_single_agent_gets_the_handoff_only_in_auto_mode(monkeypatch, mode):
     captured = {}
 
-    async def fake_build(_config, role, *, run=None, middleware=None, suffix="", routing="", **_kwargs):
-        captured.update(role=role, run=run, middleware=middleware, suffix=suffix, routing=routing)
+    async def fake_build(_config, role, *, run=None, middleware=None, suffix="", **_kwargs):
+        captured.update(role=role, run=run, middleware=middleware, suffix=suffix)
         return "graph"
 
     monkeypatch.setattr(graphs, "build", fake_build)
@@ -357,12 +327,11 @@ async def test_the_single_agent_gets_the_handoff_only_in_auto_mode(monkeypatch, 
     assert captured["role"] == SINGLE_AGENT and captured["run"] is run
     assert HELPER_POLICY in captured["suffix"]
     assert kinds[-1] is ToolCallRepairMiddleware and HelperMiddleware in kinds
-    assert HANDOFF_POLICY not in captured["suffix"]  # the rule is not left to the end of the prompt
     if mode == "auto":
-        assert kinds[0] is HandoffMiddleware and captured["routing"] == HANDOFF_POLICY
+        assert kinds[0] is HandoffMiddleware and HANDOFF_POLICY in captured["suffix"]
         assert budget.last_call == LAST_CALL_HANDOFF and budget.last_tools == {HANDOFF_TOOL}
     else:
-        assert HandoffMiddleware not in kinds and not captured["routing"]
+        assert HandoffMiddleware not in kinds and HANDOFF_POLICY not in captured["suffix"]
         assert budget.last_call == LAST_CALL and not budget.last_tools
 
 
