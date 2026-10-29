@@ -1,10 +1,12 @@
 ---
 name: ocean-physical-consistency-review
-description: Select and check ocean-physics methods for heat budgets, transport, stratification and mixing when investigating a physical subquestion or reviewing its evidence.
+description: Read before calculating transport, budgets, streamfunctions, density, stratification or mixing diagnostics, or checking their physical assumptions.
 metadata:
   origin: oceanmind
   roles:
     - ocean_process_expert
+    - statistical_inference_expert
+    - literature_reproduction_expert
 ---
 
 # Ocean Physical Methods
@@ -47,7 +49,8 @@ is a model-specific reference, not a variable-name template for other products.
 Choose the section or boundary and its normal orientation. Volume transport integrates normal
 velocity over wet area; heat/property transport also needs the tracer, density and reference
 convention. Use actual cell areas, partial layer thicknesses and staggered-grid placement.
-Read `references/methods/transport.md` for section conventions when needed.
+Before integration, use `/references/methods/transport.md` to resolve any remaining section,
+grid-placement or snapshot-versus-mean convention.
 
 For a scalar `C`, `div_h(u_h C) = u_h dot grad_h(C) + C div_h(u_h)`.
 Flux divergence and advective tendency are not interchangeable; the advective contribution
@@ -75,22 +78,52 @@ Archives rarely store every term of a vorticity budget; derive a term before cal
 - one remaining term as the budget residual, labelled as a residual.
 A term is missing only when neither the archive nor the attached sources hold what it needs.
 
+Translate each budget term's full mathematical operator before implementing it. For a horizontal
+layer transport `V`, `div_h(f V) = f div_h(V) + V dot grad_h(f)`; using only the first term omits the
+spatial variation of `f`. Use the equation's flux sign and include all components of a grouped term,
+such as advection and tilting, or label the computed subset. Apply the same domain, layer and
+normalisation to every term. A residual also contains omitted components and reconstruction errors;
+it is not a separately measured forcing or an independent closure check.
+
 A layer's transport streamfunction integrates the layer's depth-integrated transport from a coast,
 `psi(x, y) = integral(V, x0..x)` or of `-U` along y, on the native grid. Inverting vorticity with a
 Poisson solve needs boundary values the data do not give, so its pattern is not evidence.
+
+Use the layer's wet thickness and valid-data mask, not just the surface land mask. A column without
+water in that layer is outside its support; an all-missing column is unknown, not observed zero
+transport. Keep missing data, absent water and measured zero distinct in reductions and derivatives.
+Use zero-filling only with an explicit physical or boundary justification; restoring a mask after a
+derivative does not undo gradients introduced by filling. Retain the layer mask when interpreting or
+plotting the result. Do not integrate across disconnected water bodies without specifying their
+separate boundaries and reference constants.
+
+Check a reconstructed streamfunction against both transport components, with the chosen sign and
+grid metrics: `U = -dpsi/dy`, `V = dpsi/dx`. Layer transport can be divergent through exchange across
+its top and bottom; if so, state which component or approximation the streamfunction represents.
+A single constant changes only the reference zero. Subtracting a different value for every row or
+column changes a spatial derivative and therefore the represented transport; derive and check such
+a correction as analysis, not as a cosmetic adjustment. Investigate boundary-aligned bands through
+the masks, integration path and reference choice before interpreting them or smoothing them away.
 
 ## Stratification
 
 Separate density stratification, temperature stratification and mixed-layer depth (MLD).
 Salinity compensation can make temperature gradients a misleading density proxy. Use the
 thermodynamic variable and pressure/depth conventions required by the chosen equation of state.
-For GSW calculations, consult `references/coding/gsw.md` and the
+Before GSW calculations, distinguish practical from absolute salinity, in-situ or potential from
+conservative temperature, and sea pressure from geometric depth. Convert the supplied quantities to
+the inputs the selected function requires; do not relabel one convention as another.
+For implementation details, consult `/references/coding/gsw.md` and the
 [GSW profile-function documentation](https://teos-10.github.io/GSW-Python/gsw_flat.html).
 
 MLD depends on the threshold, reference depth, vertical resolution and interpolation. State
 these when interpreting or comparing MLD; it is not interchangeable with a thermocline depth.
-Read `references/methods/mixed-layer-depth.md` when deriving MLD. A stable/shallow layer can be
+Read `/references/methods/mixed-layer-depth.md` when deriving MLD. A stable/shallow layer can be
 consistent with heat retention without showing that it caused the observed warming.
+
+For water-mass comparisons, preserve the salinity, temperature and equation-of-state conventions
+across datasets. A temperature-salinity curve alone does not identify a water source or pathway;
+read `/references/methods/water-mass.md` before interpreting that structure.
 
 ## Mixing and entrainment
 
@@ -121,6 +154,10 @@ the same signal with another method or reviewer is not automatically independent
 shared assumptions and errors. A passed numerical check does not by itself establish a mechanism.
 
 Inspect the saved code, arrays and rendered figures relevant to a specific suspected discrepancy.
+Describe the method actually executed, not merely the intended formula. Before comparing supposedly
+equivalent computations, align their physical domain, valid support, boundary conditions, weights,
+time samples and normalisation. If several of these change together, the comparison does not isolate
+one cause; identify which step differs before attributing the discrepancy.
 A small known-answer example can resolve a numerical uncertainty without repeating a whole study.
 Report the evidence location, discrepancy, impact on the claim and any unexamined scope.
 
@@ -137,6 +174,8 @@ Use only checks relevant to the claim under review:
 - An unexpected sign or magnitude is a reason to check definitions and computations, not permission
   to replace the value with a physically preferred story. Assess net flux using its relevant
   components, not shortwave radiation alone; distinguish variability from estimator failure.
+  Leave an untested cause unresolved rather than attributing it to data noise. Call a result an upper
+  or lower bound only when the direction of the error has been established.
 - A statistical decomposition is not a mechanism detector. Fluctuations relative to a temporal
   mean need not isolate coherent eddies or any other named process; persistent structures can
   contribute to the mean. A small covariance or domain-mean contribution cannot exclude that
@@ -160,4 +199,4 @@ The existence of additional possible checks alone is not a reason to withhold su
 <!-- /oceanx:lessons -->
 
 ## relevant_references
-`references/review/physical-consistency.md`, `references/data/common-variables-and-units.md`, `references/methods/transport.md`.
+`/references/review/physical-consistency.md`, `/references/data/common-variables-and-units.md`, `/references/methods/transport.md`.

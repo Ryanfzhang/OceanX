@@ -129,7 +129,7 @@ def test_skill_prompt_is_metadata_only_and_respects_the_literature_gate():
     )
 
     assert "ocean-physical-consistency-review" in prompt
-    assert "ocean-analysis-design" not in prompt
+    assert "ocean-analysis-design" in prompt
     assert "questions_to_resolve" not in prompt
     assert "paper-evidence-review" not in prompt
     assert "paper-evidence-review" in enabled_prompt

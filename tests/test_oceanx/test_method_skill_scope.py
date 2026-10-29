@@ -86,20 +86,24 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
         assert "/references/coding/matplotlib.md" in flat and "map with coastlines" in flat
 
 
-@pytest.mark.parametrize("name,owner", [
-    ("ocean-physical-consistency-review", "ocean_process_expert"),
-    ("ocean-analysis-design", "statistical_inference_expert"),
-    ("ocean-data-acquisition", "literature_reproduction_expert"),
+@pytest.mark.parametrize("name,allowed_roles", [
+    ("ocean-physical-consistency-review", {
+        "ocean_process_expert", "statistical_inference_expert", "literature_reproduction_expert",
+    }),
+    ("ocean-analysis-design", {
+        "ocean_process_expert", "statistical_inference_expert", "literature_reproduction_expert",
+    }),
+    ("ocean-data-acquisition", {"literature_reproduction_expert"}),
 ])
 @pytest.mark.parametrize("role", [
     "coordinator", "ocean_process_expert", "scientific_discussion_partner",
     "statistical_inference_expert", "literature_reproduction_expert",
 ])
-def test_domain_method_native_libraries_are_role_scoped(tmp_path, name, owner, role):
+def test_domain_method_native_libraries_are_role_scoped(tmp_path, name, allowed_roles, role):
     from oceanx.native_skills import prepare_skill_library
     from oceanx.skills import OceanResourceUnavailableError
 
-    available = role == owner
+    available = role in allowed_roles
     library = prepare_skill_library(tmp_path / role, role=role)
     assert (library / "skills" / name / "SKILL.md").is_file() is available
     if available:
