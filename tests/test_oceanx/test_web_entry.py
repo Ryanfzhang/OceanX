@@ -376,3 +376,23 @@ async def test_web_review_hooks_do_not_modify_the_desktop_router(tmp_path, monke
     finally:
         await web.close()
         await desktop.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_send_disconnect_does_not_fail_the_background_task(monkeypatch):
+    from unittest.mock import AsyncMock
+    from oceanx.backend.events import BackendClient, EventBus
+    from oceanx.backend.router import OceanRequestRouter
+    from oceanx.web.backend import WebRequestRouter
+
+    monkeypatch.setattr(OceanRequestRouter, '_handle_handshake', AsyncMock())
+    router = WebRequestRouter.__new__(WebRequestRouter)
+    router._web_protocol_client = None
+    sender = AsyncMock(side_effect=WebSocketDisconnect(code=1006))
+    client = BackendClient(transport='websocket', expected_client_kind='desktop', sender=sender)
+    await router._handle_handshake(client, None)
+    # Failure while sending progress is a transport loss, not a task failure.
+    await client.sender(None)
+    assert client.closed
+    await EventBus().emit_local(client, None)
+    sender.assert_awaited_once()

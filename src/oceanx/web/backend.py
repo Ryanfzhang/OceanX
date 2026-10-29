@@ -12,6 +12,7 @@ from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.routing import WebSocketRoute
+from starlette.websockets import WebSocketDisconnect
 
 from oceanx.backend.host import OceanBackendHost
 from oceanx.backend.router import OceanRequestRouter
@@ -104,6 +105,16 @@ class WebRequestRouter(OceanRequestRouter):
         return router
 
     async def _handle_handshake(self, client, request):
+        sender = client.sender
+
+        async def send(event):
+            try:
+                await sender(event)
+            except WebSocketDisconnect:
+                # A closed gateway transport must not fail the durable task.
+                client.closed = True
+
+        client.sender = send
         # One authenticated gateway owns this web-only backend. Preserve its
         # native session so pending questions remain answerable after reconnect.
         previous = self._web_protocol_client
