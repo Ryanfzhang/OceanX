@@ -34,6 +34,10 @@ magnitudes for the overlapping period, and any identity it must satisfy, such as
 forms of Stokes' theorem giving the same circulation. From then on use only that computation: rename or
 remove the outputs of the versions it replaced, and compute every series you compare or correlate from
 the same samples.
+For time derivatives, convert timestamp differences explicitly to the time unit of the reported quantity.
+For detrending, evaluate and subtract the fitted trend on the same time coordinate and in the same units
+used for fitting. If subsampling replaces a full-period average, compare both on a common subset before
+using the approximation, and disclose the sampling.
 
 ## Deriving what the data do not store
 Before writing code for a vorticity budget or a streamfunction, read
@@ -58,7 +62,8 @@ plots, monthly ones rather than annual means. A paper that smooths 28 years with
 quarter of its record, so on 12 years use about 3 years; the paper's own window would leave a few points.
 Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md,
 under Autocorrelation and dependence, and judge each trend and correlation by the independent values behind
-it. Name each departure from the paper's method and why.
+it. Account for serial dependence when estimating uncertainty from averaged or smoothed series;
+overlapping windows do not provide independent samples. Name each departure from the paper's method and why.
 
 ## Figures
 Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures.
