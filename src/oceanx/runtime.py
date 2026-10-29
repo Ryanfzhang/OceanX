@@ -204,6 +204,20 @@ async def build_ocean_runtime(
     return composition
 
 
+FIGURE_VERIFICATION_POLICY = """\
+# Figure verification
+Before delivering a figure, open its rendered image or preview and correct errors in labels, units,
+scales, legends, clipping and overlap. Check the plotted quantities against the saved calculations;
+visual inspection alone does not verify the calculation.
+When reproducing a paper, open the original figure before drawing. After saving, open the original and
+the generated figure, compare them panel by panel, and correct differences in quantities, units, axis
+ranges and multipliers, layout, colours, fills, curves, trend lines and annotations that the data allow.
+Preserve the paper's scientific definitions; do not silently replace a quantity with an anomaly or a
+different budget term. State any unavoidable differences. Inspect the corrected figure before delivery.
+This verification is part of completing the requested work.
+"""
+
+
 OCEAN_EXPERT_WORKSTREAM_POLICY = """\
 # Evidence and results
 Keep verified calculations and code. Derive reported values and labels from saved calculations, not copied
@@ -225,12 +239,11 @@ delivered too. Save a PNG instead only when the figure is itself a picture, such
 true-colour image. Keep exploratory plots out of OCEAN_OUTPUT_DIR. Cite the assigned Agent namespace
 plus filename stem (the whole file name for a saved figure file) in report.md immediately after the supported claim. You own the scientific visual encoding, including plot kind, axes, layers,
 comparisons and scientific scales. Omit style arguments to ScientificFigure to use the Workbench defaults.
-Do not spend a separate round polishing or reviewing its rendered layout. Inspect a generated preview only when the image itself is
-scientific evidence you need to interpret, such as a spatial pattern. For spatial fields, preserve the source
+For spatial fields, preserve the source
 validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather than plotted
 values. Every spatial field must pass an explicit Boolean `valid_mask` to `field2d`; zero remains valid where
 that mask is True.
-"""
+""" + "\n" + FIGURE_VERIFICATION_POLICY
 
 # The same duties for a static-delivery run: the final figure is an ordinary image file, and no
 # plotting interface is named (see figure_delivery.py).
@@ -247,12 +260,11 @@ save it as a PNG under OCEAN_OUTPUT_DIR, for
 example `fig.savefig(os.path.join(os.environ['OCEAN_OUTPUT_DIR'], 'concise-name.png'), dpi=150,
 bbox_inches='tight')`; that file is the delivered figure. Keep exploratory plots in your working directory.
 Name the figure file in report.md immediately after the supported claim. You own the scientific visual
-encoding, including plot type, axes, layers, comparisons and scientific scales; label axes with units. Do not
-spend a separate round polishing or reviewing the rendered layout. Inspect a saved image only when the image
-itself is scientific evidence you need to interpret, such as a spatial pattern. For spatial fields, preserve
+encoding, including plot type, axes, layers, comparisons and scientific scales; label axes with units.
+For spatial fields, preserve
 the source validity mask: land, missing retrievals, and cells outside the analysis domain are missing rather
 than plotted values, so mask them (NaN or a masked array); zero remains valid where the mask is True.
-"""
+""" + "\n" + FIGURE_VERIFICATION_POLICY
 
 
 async def build_ocean_expert_runtime(

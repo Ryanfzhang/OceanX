@@ -130,6 +130,15 @@ def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     interactive, static = graphs.bounded_work_policy(False), graphs.bounded_work_policy(True)
     assert "finish line" in interactive and f"{STANDARD_MODE_CODE_SECONDS} s" in interactive
     assert ".preview.png" in interactive and "the image" in static
+    from oceanx.runtime import (
+        FIGURE_VERIFICATION_POLICY, OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY,
+    )
+    for policy in (OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY):
+        assert FIGURE_VERIFICATION_POLICY in policy
+        assert "Do not spend a separate round" not in policy
+    for policy in (interactive, static):
+        assert "Checking and correcting the requested output is part of the task." in policy
+        assert "Do not open" not in policy
     assert HANDOFF_TOOL in LAST_CALL_HANDOFF and "no tools" in LAST_CALL
 
 
