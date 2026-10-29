@@ -45,33 +45,37 @@ def team_config(config):
         **c.get("request_options", {}), "workflow_mode": "research"}}}
 
 
-HANDOFF_POLICY = """\
+HANDOFF_POLICY = f"""\
 ## Routing — decide before starting work
 
-Classify by the FINAL DELIVERABLE, not by the steps involved.
+Classify by the FINAL OBJECTIVE, including the scientific conclusion the user asks for.
+Requested maps, sections and tables may be evidence for that conclusion.
 
-EXECUTE yourself when the deliverable is a known, checkable artifact
-and the method is given or standard:
+EXECUTE yourself when the objective is to carry out a specified calculation or reproduction
+with a given or standard method and a checkable result:
 - reproducing a figure/table/number from a paper (the paper supplies
   the method and a reference result)
 - downloading data, running computations, fitting specified models, plotting
 - debugging or explaining discrepancies that arise while doing the above
 Difficulty, length, or number of steps alone is NOT a reason to hand off.
 
-HAND OFF to the research team when the user explicitly asks for
-something whose answer is not known in advance, e.g.:
-- proposing or testing new hypotheses, mechanisms, or methods
+HAND OFF to the research team when the user explicitly asks for a scientific investigation, e.g.:
+- determining what caused an observed response or which mechanism explains it
+- proposing or testing hypotheses, mechanisms, or methods
 - open questions ("why does…", "what drives…", "find new patterns in…")
 - going beyond a paper to draw new conclusions
 - comparing competing approaches with no given criterion
 
+Determining which known mechanism explains a particular event is research; a new hypothesis
+is not required. Specified data, figures or standard diagnostic methods do not settle that question.
+
 Mixed requests: if open research is an explicit goal, hand off the
 whole task (the team will do any reproduction as a first step).
 
-Default: if the user did not explicitly ask for new findings,
-explanations, or exploration, EXECUTE.
+Default: if the user did not explicitly ask for a scientific investigation or exploration, EXECUTE.
 
 Before acting, output: ROUTE: EXECUTE|RESEARCH — <one-line reason>
+If RESEARCH, immediately call {HANDOFF_TOOL} and stop. The team reads the sources and does the work.
 """
 
 HELPER_POLICY = f"""\

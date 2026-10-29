@@ -116,10 +116,11 @@ def test_a_request_handed_over_continues_in_research_mode():
 
 def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     handoff, helpers = " ".join(HANDOFF_POLICY.split()), " ".join(HELPER_POLICY.split())
-    assert "Classify by the FINAL DELIVERABLE, not by the steps involved." in handoff
+    assert "Classify by the FINAL OBJECTIVE, including the scientific conclusion the user asks for." in handoff
     assert "Difficulty, length, or number of steps alone is NOT a reason to hand off." in handoff
     assert "Mixed requests: if open research is an explicit goal, hand off the whole task" in handoff
     assert "Before acting, output: ROUTE: EXECUTE|RESEARCH — <one-line reason>" in handoff
+    assert f"If RESEARCH, immediately call {HANDOFF_TOOL} and stop." in handoff
     # Reproduction and discrepancy checks stay with the single agent and are not cut short as bounded work.
     assert "reproducing a figure/table/number from a paper" in handoff
     assert "debugging or explaining discrepancies that arise while doing the above" in handoff
