@@ -116,11 +116,11 @@ def test_a_request_handed_over_continues_in_research_mode():
 
 def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     handoff, helpers = " ".join(HANDOFF_POLICY.split()), " ".join(HELPER_POLICY.split())
-    assert HANDOFF_TOOL in handoff and "when unsure, do the work" in handoff
-    assert "asks why" in handoff and "however many parts" in handoff
+    assert HANDOFF_TOOL in handoff and "Before starting work" in handoff
+    assert "competing explanations" in handoff and "whole request" in handoff
     # A paper's reproduction stays with one agent, which holds every result its figures combine, and is
     # not cut short as bounded work.
-    assert "reproducing or testing the analysis of a paper" in handoff
+    assert "paper reproductions with established methods" in handoff
     reproduction = "Reproducing or testing a paper's analysis is not bounded this way"
     assert reproduction in " ".join(graphs.bounded_work_policy(False).split())
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
@@ -140,12 +140,14 @@ async def test_the_single_agent_and_its_helpers_answer_without_a_report(monkeypa
     services = OceanToolServices(workspace_id="ws", provider_id="p", store=SimpleNamespace(),
                                  skill_role=SINGLE_AGENT,
                                  skill_capabilities=("literature.read", "web.search", "jina.reader"))
-    single = await build_ocean_single_agent_runtime(services=services)
+    single = await build_ocean_single_agent_runtime(services=services, routing=HANDOFF_POLICY)
     helper = await build_ocean_single_agent_runtime(services=services, helper=True)
     assert "report.md" not in single.system_prompt and "report.md" not in helper.system_prompt
     assert "in your answer" in single.system_prompt and "in your reply" in helper.system_prompt
     assert single.system_prompt.startswith(OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT)
-    assert OCEAN_SINGLE_AGENT_PROMPT in single.system_prompt
+    assert single.system_prompt.index(HANDOFF_POLICY) < single.system_prompt.index(OCEAN_SINGLE_AGENT_PROMPT)
+    assert single.system_prompt.count(HANDOFF_POLICY) == 1
+    assert HANDOFF_POLICY not in helper.system_prompt
     assert helper.system_prompt.startswith(OCEAN_HELPER_PROMPT)
     names = {tool.name for tool in single.profile.tool_registry.as_langchain_tools(
         cwd=Path("."), operation_id_factory=lambda *args: "op")}
@@ -314,8 +316,8 @@ async def test_an_exhausted_budget_hands_the_request_over(world):
 async def test_the_single_agent_gets_the_handoff_only_in_auto_mode(monkeypatch, mode):
     captured = {}
 
-    async def fake_build(_config, role, *, run=None, middleware=None, suffix="", **_kwargs):
-        captured.update(role=role, run=run, middleware=middleware, suffix=suffix)
+    async def fake_build(_config, role, *, run=None, middleware=None, suffix="", routing="", **_kwargs):
+        captured.update(role=role, run=run, middleware=middleware, suffix=suffix, routing=routing)
         return "graph"
 
     monkeypatch.setattr(graphs, "build", fake_build)
@@ -326,12 +328,13 @@ async def test_the_single_agent_gets_the_handoff_only_in_auto_mode(monkeypatch, 
     budget = next(item for item in captured["middleware"] if isinstance(item, QuickCallBudgetMiddleware))
     assert captured["role"] == SINGLE_AGENT and captured["run"] is run
     assert HELPER_POLICY in captured["suffix"]
+    assert HANDOFF_POLICY not in captured["suffix"]
     assert kinds[-1] is ToolCallRepairMiddleware and HelperMiddleware in kinds
     if mode == "auto":
-        assert kinds[0] is HandoffMiddleware and HANDOFF_POLICY in captured["suffix"]
+        assert kinds[0] is HandoffMiddleware and captured["routing"] == HANDOFF_POLICY
         assert budget.last_call == LAST_CALL_HANDOFF and budget.last_tools == {HANDOFF_TOOL}
     else:
-        assert HandoffMiddleware not in kinds and HANDOFF_POLICY not in captured["suffix"]
+        assert HandoffMiddleware not in kinds and not captured["routing"]
         assert budget.last_call == LAST_CALL and not budget.last_tools
 
 

@@ -312,7 +312,7 @@ asks for, the files you saved (full paths) and a limitation only when it matters
 
 
 async def build_ocean_single_agent_runtime(
-    *, services: OceanToolServices, helper: bool = False
+    *, services: OceanToolServices, helper: bool = False, routing: str = ""
 ) -> OceanRuntimeComposition:
     """The agent that works on a request alone, or one of its helpers: Expert tools, no report file."""
 
@@ -329,7 +329,8 @@ async def build_ocean_single_agent_runtime(
             "ocean_skill_role": services.skill_role,
         },
     )
-    base = (OCEAN_HELPER_PROMPT,) if helper else (OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT, OCEAN_SINGLE_AGENT_PROMPT)
+    base = (OCEAN_HELPER_PROMPT,) if helper else (
+        OCEAN_RESEARCH_PARTNER_SYSTEM_PROMPT, *([routing] if routing else []), OCEAN_SINGLE_AGENT_PROMPT)
     return OceanRuntimeComposition(
         profile=profile,
         system_prompt="\n\n".join((*base, *profile.system_prompt_sections)),

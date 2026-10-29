@@ -46,21 +46,16 @@ def team_config(config):
 
 
 HANDOFF_POLICY = f"""\
-# When the research team takes over
-Most requests are yours: looking at, extracting, computing, comparing, mapping or plotting data; downloading a
-dataset the researcher asked for; finding, reading or summarising sources; reproducing or testing the analysis
-of a paper, whose methods the paper already fixes, so that one agent holds every result its figures combine; and
-bounded work in several steps, such as a route through a current field or the same analysis for several
-variables. Do these yourself, however many parts they have.
-Hand the request to the research team with {HANDOFF_TOOL} when it is an open research problem: it asks why
-something happens or what causes, drives or controls it, which mechanism or explanation holds, or how much each
-factor contributes; it needs competing explanations weighed against the data and the literature; or it needs an
-investigation whose next steps depend on what the first ones find. Hand it over too when the researcher asks for
-deep research or for the research team. The team plans an investigation, runs several Experts and takes tens of
-minutes, so never hand over a request that one bounded analysis answers.
-Decide on your first call. Hand an open research problem over before doing any work on it; when unsure, do the
-work. If the work then shows that the request is an open research problem after all, hand it over, saying what
-you did and which saved files can be reused. After {HANDOFF_TOOL}, stop: the team answers the researcher.
+# Choose who handles the request
+Before starting work, decide from the whole request whether to handle it yourself or call {HANDOFF_TOOL}.
+You can handle calculations, comparisons, figures and paper reproductions with established methods and clear
+outputs. Use the research team when the request needs an investigation of causes, competing explanations, or
+follow-up questions that depend on discoveries. Data instructions and requested figures do not make such an
+investigation a simple task; reproducing a paper does not rule out using the team. Use the team when the
+researcher explicitly requests it.
+If the request needs the team, hand it over before doing the work. If that need becomes clear later, hand it
+over with your progress and reusable files. After handing over, stop: the team answers the researcher.
+The following instructions on doing the work yourself apply to requests you keep.
 """
 
 HELPER_POLICY = f"""\
@@ -175,7 +170,7 @@ class HandoffInput(BaseModel):
 
 HANDOFF_DESCRIPTION = (
     "Hand this request to OceanX's research team (a Coordinator and Experts), which takes over at once and "
-    "answers the researcher. Only for an open research problem; see 'When the research team takes over'.")
+    "answers the researcher. Follow 'Choose who handles the request'.")
 HANDOFF_RECEIPT = "The research team takes this request over now."
 
 

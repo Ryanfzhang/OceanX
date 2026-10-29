@@ -862,7 +862,7 @@ def _earlier_attempt(run: AgentRun) -> str:
 
 
 async def build(config, role: str, *, run: AgentRun | None = None, middleware=None,
-                subagents=None, suffix=""):
+                subagents=None, suffix="", routing=""):
     from oceanx.context import OceanContextBuilder
 
     svc = services(config, role, run)
@@ -874,7 +874,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         build_ocean_runtime(services=svc, research_mode=research) if role == "coordinator" else
         build_ocean_discussion_runtime(services=svc)
         if role == "scientific_discussion_partner" else
-        build_ocean_single_agent_runtime(services=svc, helper=role == HELPER) if quick else
+        build_ocean_single_agent_runtime(services=svc, helper=role == HELPER, routing=routing) if quick else
         build_ocean_expert_runtime(services=svc)
     )
     prompt = composition.system_prompt
@@ -1303,7 +1303,7 @@ async def _single_agent(config, run: AgentRun):
         QuickCallBudgetMiddleware(SINGLE_AGENT_CALL_LIMIT, last_call=LAST_CALL_HANDOFF if handoff else LAST_CALL,
                                   last_tools=frozenset({HANDOFF_TOOL}) if handoff else frozenset()),
         ToolCallRepairMiddleware(),
-    ], suffix="\n" + (HANDOFF_POLICY + "\n" if handoff else "") + HELPER_POLICY)
+    ], routing=HANDOFF_POLICY if handoff else "", suffix="\n" + HELPER_POLICY)
 
 
 async def coordinator(config):
