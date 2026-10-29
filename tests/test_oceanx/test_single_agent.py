@@ -116,11 +116,13 @@ def test_a_request_handed_over_continues_in_research_mode():
 
 def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     handoff, helpers = " ".join(HANDOFF_POLICY.split()), " ".join(HELPER_POLICY.split())
-    assert HANDOFF_TOOL in handoff and "Before starting work" in handoff
-    assert "competing explanations" in handoff and "whole request" in handoff
-    # A paper's reproduction stays with one agent, which holds every result its figures combine, and is
-    # not cut short as bounded work.
-    assert "paper reproductions with established methods" in handoff
+    assert "Classify by the FINAL DELIVERABLE, not by the steps involved." in handoff
+    assert "Difficulty, length, or number of steps alone is NOT a reason to hand off." in handoff
+    assert "Mixed requests: if open research is an explicit goal, hand off the whole task" in handoff
+    assert "Before acting, output: ROUTE: EXECUTE|RESEARCH — <one-line reason>" in handoff
+    # Reproduction and discrepancy checks stay with the single agent and are not cut short as bounded work.
+    assert "reproducing a figure/table/number from a paper" in handoff
+    assert "debugging or explaining discrepancies that arise while doing the above" in handoff
     reproduction = "Reproducing or testing a paper's analysis is not bounded this way"
     assert reproduction in " ".join(graphs.bounded_work_policy(False).split())
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers

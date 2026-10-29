@@ -45,17 +45,33 @@ def team_config(config):
         **c.get("request_options", {}), "workflow_mode": "research"}}}
 
 
-HANDOFF_POLICY = f"""\
-# Choose who handles the request
-Before starting work, decide from the whole request whether to handle it yourself or call {HANDOFF_TOOL}.
-You can handle calculations, comparisons, figures and paper reproductions with established methods and clear
-outputs. Use the research team when the request needs an investigation of causes, competing explanations, or
-follow-up questions that depend on discoveries. Data instructions and requested figures do not make such an
-investigation a simple task; reproducing a paper does not rule out using the team. Use the team when the
-researcher explicitly requests it.
-If the request needs the team, hand it over before doing the work. If that need becomes clear later, hand it
-over with your progress and reusable files. After handing over, stop: the team answers the researcher.
-The following instructions on doing the work yourself apply to requests you keep.
+HANDOFF_POLICY = """\
+## Routing — decide before starting work
+
+Classify by the FINAL DELIVERABLE, not by the steps involved.
+
+EXECUTE yourself when the deliverable is a known, checkable artifact
+and the method is given or standard:
+- reproducing a figure/table/number from a paper (the paper supplies
+  the method and a reference result)
+- downloading data, running computations, fitting specified models, plotting
+- debugging or explaining discrepancies that arise while doing the above
+Difficulty, length, or number of steps alone is NOT a reason to hand off.
+
+HAND OFF to the research team when the user explicitly asks for
+something whose answer is not known in advance, e.g.:
+- proposing or testing new hypotheses, mechanisms, or methods
+- open questions ("why does…", "what drives…", "find new patterns in…")
+- going beyond a paper to draw new conclusions
+- comparing competing approaches with no given criterion
+
+Mixed requests: if open research is an explicit goal, hand off the
+whole task (the team will do any reproduction as a first step).
+
+Default: if the user did not explicitly ask for new findings,
+explanations, or exploration, EXECUTE.
+
+Before acting, output: ROUTE: EXECUTE|RESEARCH — <one-line reason>
 """
 
 HELPER_POLICY = f"""\
@@ -170,7 +186,7 @@ class HandoffInput(BaseModel):
 
 HANDOFF_DESCRIPTION = (
     "Hand this request to OceanX's research team (a Coordinator and Experts), which takes over at once and "
-    "answers the researcher. Follow 'Choose who handles the request'.")
+    "answers the researcher. Use this tool for RESEARCH under 'Routing — decide before starting work'.")
 HANDOFF_RECEIPT = "The research team takes this request over now."
 
 
