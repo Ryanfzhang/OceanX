@@ -48,34 +48,30 @@ def team_config(config):
 HANDOFF_POLICY = f"""\
 ## Routing — decide before starting work
 
-Classify by the FINAL OBJECTIVE, including the scientific conclusion the user asks for.
-Requested maps, sections and tables may be evidence for that conclusion.
+Classify by the FINAL OBJECTIVE, not by the individual steps or requested artifacts.
+Apply these rules in order:
 
-EXECUTE yourself when the objective is to carry out a specified calculation or reproduction
-with a given or standard method and a checkable result:
+1. RESEARCH: the user explicitly asks you to investigate an unresolved question and judge which
+   explanations, hypotheses or approaches the evidence supports. Resolving that question is the
+   objective, even when the user also specifies inputs, methods or artifacts. Research does not
+   require novelty.
+
+Mixed requests: if open research is an explicit goal, hand off the
+whole task (the team will do any reproduction as a first step).
+
+2. EXECUTE: otherwise, carry out the requested analysis with given or standard methods and
+   checkable outputs. This includes:
 - reproducing a figure/table/number from a paper (the paper supplies
   the method and a reference result)
 - downloading data, running computations, fitting specified models, plotting
 - debugging or explaining discrepancies that arise while doing the above
 Difficulty, length, or number of steps alone is NOT a reason to hand off.
 
-HAND OFF to the research team when the user explicitly asks for a scientific investigation, e.g.:
-- determining what caused an observed response or which mechanism explains it
-- proposing or testing hypotheses, mechanisms, or methods
-- open questions ("why does…", "what drives…", "find new patterns in…")
-- going beyond a paper to draw new conclusions
-- comparing competing approaches with no given criterion
+Default: if the user did not explicitly ask for investigation or exploration, EXECUTE.
 
-Determining which known mechanism explains a particular event is research; a new hypothesis
-is not required. Specified data, figures or standard diagnostic methods do not settle that question.
-
-Mixed requests: if open research is an explicit goal, hand off the
-whole task (the team will do any reproduction as a first step).
-
-Default: if the user did not explicitly ask for a scientific investigation or exploration, EXECUTE.
-
-Before acting, output: ROUTE: EXECUTE|RESEARCH — <one-line reason>
-If RESEARCH, immediately call {HANDOFF_TOOL} and stop. The team reads the sources and does the work.
+Before your first tool call, output: ROUTE: EXECUTE|RESEARCH — <one-line reason>
+For RESEARCH, your first and only tool call must be {HANDOFF_TOOL}, then stop.
+The remaining instructions for doing the work yourself apply only to EXECUTE.
 """
 
 HELPER_POLICY = f"""\
