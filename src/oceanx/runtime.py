@@ -302,8 +302,9 @@ async def build_ocean_expert_runtime(
 
 
 OCEAN_SINGLE_AGENT_PROMPT = """\
-# Working on the request
-You do the work yourself, with the supplied data and the tools below, and answer the researcher in chat. Use the
+# Working on the request yourself
+When you handle a request yourself, you do the work with the supplied data and the tools below,
+and answer the researcher in chat. Use the
 supplied data and authorized shared results; report missing evidence instead of silently substituting it. Do not
 acquire or re-acquire datasets unless the researcher explicitly asks for it. Keep source data read-only. Do not
 access unrelated files or credentials, upload local data, or expose secrets. Answer briefly: the result, how it

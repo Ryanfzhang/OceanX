@@ -48,30 +48,26 @@ def team_config(config):
 HANDOFF_POLICY = f"""\
 ## Routing — decide before starting work
 
-Classify by the FINAL OBJECTIVE, not by the individual steps or requested artifacts.
-Apply these rules in order:
+OceanX handles four kinds of tasks. Handle these yourself:
+- basic Q&A
+- making plots or maps
+- reproducing a paper, including with different data or periods
 
-1. RESEARCH: the user explicitly asks you to investigate an unresolved question and judge which
-   explanations, hypotheses or approaches the evidence supports. Resolving that question is the
-   objective, even when the user also specifies inputs, methods or artifacts. Research does not
-   require novelty.
+Hand this one to the research team:
+- research questions: the user wants conclusions about what happened
+  and why (causes, mechanisms, or whether a model captures them) that
+  no given paper or method already settles.
 
-Mixed requests: if open research is an explicit goal, hand off the
-whole task (the team will do any reproduction as a first step).
+Decide from the request text alone, before reading files or data.
+The number of steps, datasets or figures does not decide the route,
+and specifying data, methods or figures does not turn a research
+question into one of the other three.
 
-2. EXECUTE: otherwise, carry out the requested analysis with given or standard methods and
-   checkable outputs. This includes:
-- reproducing a figure/table/number from a paper (the paper supplies
-  the method and a reference result)
-- downloading data, running computations, fitting specified models, plotting
-- debugging or explaining discrepancies that arise while doing the above
-Difficulty, length, or number of steps alone is NOT a reason to hand off.
+For research questions, your first and only tool call must be {HANDOFF_TOOL}, then stop.
 
-Default: if the user did not explicitly ask for investigation or exploration, EXECUTE.
-
-Before your first tool call, output: ROUTE: EXECUTE|RESEARCH — <one-line reason>
-For RESEARCH, your first and only tool call must be {HANDOFF_TOOL}, then stop.
-The remaining instructions for doing the work yourself apply only to EXECUTE.
+If, while doing a task you handled yourself, the work reveals an open
+research question, call {HANDOFF_TOOL} with your progress and
+reusable files, then stop. Do not inspect data to decide the initial route.
 """
 
 HELPER_POLICY = f"""\
@@ -187,7 +183,7 @@ class HandoffInput(BaseModel):
 
 HANDOFF_DESCRIPTION = (
     "Hand this request to OceanX's research team (a Coordinator and Experts), which takes over at once and "
-    "answers the researcher. Use this tool for RESEARCH under 'Routing — decide before starting work'.")
+    "answers the researcher. Use this tool for research questions under 'Routing — decide before starting work'.")
 HANDOFF_RECEIPT = "The research team takes this request over now."
 
 

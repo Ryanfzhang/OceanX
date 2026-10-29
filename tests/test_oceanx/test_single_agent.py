@@ -116,14 +116,16 @@ def test_a_request_handed_over_continues_in_research_mode():
 
 def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     handoff, helpers = " ".join(HANDOFF_POLICY.split()), " ".join(HELPER_POLICY.split())
-    assert "Classify by the FINAL OBJECTIVE, not by the individual steps or requested artifacts." in handoff
-    assert "Difficulty, length, or number of steps alone is NOT a reason to hand off." in handoff
-    assert "Mixed requests: if open research is an explicit goal, hand off the whole task" in handoff
-    assert "Before your first tool call, output: ROUTE: EXECUTE|RESEARCH — <one-line reason>" in handoff
-    assert f"For RESEARCH, your first and only tool call must be {HANDOFF_TOOL}, then stop." in handoff
-    # Reproduction and discrepancy checks stay with the single agent and are not cut short as bounded work.
-    assert "reproducing a figure/table/number from a paper" in handoff
-    assert "debugging or explaining discrepancies that arise while doing the above" in handoff
+    assert "OceanX handles four kinds of tasks. Handle these yourself:" in handoff
+    assert "basic Q&A" in handoff
+    assert "no given paper or method already settles" in handoff
+    assert "Decide from the request text alone, before reading files or data." in handoff
+    assert "The number of steps, datasets or figures does not decide the route" in handoff
+    assert "ROUTE:" not in handoff
+    assert f"For research questions, your first and only tool call must be {HANDOFF_TOOL}, then stop." in handoff
+    assert "Do not inspect data to decide the initial route." in handoff
+    # Reproduction with new data stays with the single agent and is not cut short as bounded work.
+    assert "reproducing a paper, including with different data or periods" in handoff
     reproduction = "Reproducing or testing a paper's analysis is not bounded this way"
     assert reproduction in " ".join(graphs.bounded_work_policy(False).split())
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
