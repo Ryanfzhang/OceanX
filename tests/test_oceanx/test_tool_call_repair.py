@@ -63,6 +63,41 @@ def test_a_message_without_invalid_calls_is_returned_as_it_is():
     assert repaired_message(message) is message
 
 
+def test_native_deep_agent_pairs_mixed_calls_without_ocean_repair():
+    from deepagents import create_deep_agent
+
+    ran = []
+
+    @tool
+    def echo(value: int) -> str:
+        """Echo an integer for the native tool protocol regression."""
+        ran.append(value)
+        return str(value)
+
+    model = _BudgetProbeModel(responses=[
+        AIMessage(content="", tool_calls=[
+            {"name": "echo", "args": {"value": 1}, "id": "valid", "type": "tool_call"},
+        ], invalid_tool_calls=[invalid('{"value":', "echo", "malformed")]),
+        AIMessage(content="Done."),
+    ])
+    graph = create_deep_agent(model=model, tools=[echo], subagents=[])
+
+    asyncio.run(graph.ainvoke({"messages": [HumanMessage(content="Call echo.")]}))
+
+    assert ran == [1]
+    assert len(model.seen_messages) == 2
+    outgoing = model.seen_messages[1]
+    call_index = next(i for i, m in enumerate(outgoing)
+                      if isinstance(m, AIMessage) and m.invalid_tool_calls)
+    results = []
+    for message in outgoing[call_index + 1:]:
+        if not isinstance(message, ToolMessage):
+            break
+        results.append(message)
+    assert {m.tool_call_id for m in results} == {"valid", "malformed"}
+    assert next(m for m in results if m.tool_call_id == "malformed").status == "error"
+
+
 def agent_with(responses, ran):
     @tool
     def update_research_tree(changes: list, view: str = "full") -> str:
