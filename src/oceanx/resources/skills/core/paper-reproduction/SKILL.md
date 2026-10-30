@@ -61,16 +61,15 @@ not proof of numerical correctness. Use a saved plotting script so the source ca
 If plotting without matplotlib, report that this export is unsupported instead of inventing metadata.
 
 Open the original and generated figure and correct visible errors. Then call
-publish_reproduction_figure(figure_id, output_file, metadata_file). A fresh visual context compares
+review_reproduction_figure(figure_id, output_file, metadata_file). A fresh visual context compares
 one figure's original pixels, generated pixels, PDF text, metadata and user-authorized adjustments.
-It reports structure errors, scientific differences, or uncertainty. Only structural mismatches or
-unresolved evidence prevent approval; a different scientific trend/value is not a reason to force
-agreement. A readable plot is not proof that its formulas or normalization are correct.
-
-There is one initial check and at most two repair checks per figure. After that, preserve drafts,
-report the specific differences and ask the user to decide; do not keep changing the method. Missing
-panels remain partial reproduction, even if data absence is explained. Do not rename/re-register an
-output to evade this limit. Report each figure as complete, adapted, or partial, with the evidence.
+It reports missing content, structural differences, scientific differences, uncertainty and concrete
+suggestions. It does not accept or reject figures and does not control whether they are displayed.
+Use the advice to correct clear errors where feasible, explain remaining gaps, and deliver the
+useful results the available data allow. A missing dataset should be documented with evidence;
+it does not require hiding the whole figure. Unverified missing-data claims remain tentative.
+Do not repeat checks to obtain approval, and do not change scientific results to resemble the paper.
+Report each figure's completed parts and limitations rather than calling it accepted or rejected.
 
 ## Definitions before code
 Before computing anything, read the page image of each page whose equations define the quantities you

@@ -31,6 +31,8 @@ def draw(root, name):
         if name == "different_values":
             values = [3, 2, 4, 1, 2]
         ax.plot(years, values, label="C")
+        if name == "full_series":
+            ax.plot(years, [2, 3, 2, 4, 3], label="D")
         ax.set(xlabel="Year", ylabel="C (kg)" if name == "wrong_units" else "C (m/s)")
     ax.legend()
     output = root / f"{name}.pdf"
@@ -39,9 +41,9 @@ def draw(root, name):
     return output, json.loads(Path(metadata).read_text())
 
 
-@pytest.mark.parametrize("case,accepted", [("correct", True), ("different_values", True),
-                                          ("scatter", False), ("wrong_units", False)])
-async def test_real_visual_checker(tmp_path, case, accepted):
+@pytest.mark.parametrize("case,expected_kind", [("correct", None), ("different_values", "value_or_trend"),
+                                             ("scatter", "plot_type"), ("wrong_units", "unit")])
+async def test_real_visual_checker(tmp_path, case, expected_kind):
     original, _ = draw(tmp_path, "original")
     generated, metadata = draw(tmp_path, case)
     contract = FigureSpec(figure_id="sample", output_file="figure.pdf", reference_image=str(original),
@@ -52,11 +54,16 @@ async def test_real_visual_checker(tmp_path, case, accepted):
     review = await check_figure(model, contract, metadata, [
         ("Original full figure", preview_bytes(original)),
         ("Generated full figure", preview_bytes(generated))])
-    (tmp_path / "verdict.json").write_text(review.model_dump_json(indent=2))
-    assert review.accepts(contract) == accepted, review.model_dump_json()
+    (tmp_path / "advice.json").write_text(review.model_dump_json(indent=2))
+    # Advice is evaluated for identifying the actual issue, not an accept/reject category.
+    if expected_kind is not None:
+        assert any(f.kind == expected_kind for f in review.findings), review.model_dump_json()
+    else:
+        assert all(f.kind in {"layout", "unreadable"} for f in review.findings), review.model_dump_json()
+    assert all(f.suggestion for f in review.findings)
 
 
-async def test_real_eight_panel_checker_does_not_reject_a_correct_figure(tmp_path):
+async def test_real_eight_panel_checker_does_not_invent_missing_content(tmp_path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -83,5 +90,27 @@ async def test_real_eight_panel_checker_does_not_reject_a_correct_figure(tmp_pat
         images.extend([(f"Original panel {panel['panel']}", raw), (f"Generated panel {panel['panel']}", raw)])
     model = create_chat_model(load_model_profile("expert"), request_timeout=240)
     review = await check_figure(model, contract, metadata, images)
-    (tmp_path / "verdict.json").write_text(review.model_dump_json(indent=2))
-    assert review.accepts(contract), review.model_dump_json()
+    (tmp_path / "advice.json").write_text(review.model_dump_json(indent=2))
+    assert sorted(p.panel for p in review.panels) == sorted(p.panel for p in contract.panels)
+    assert not review.findings, review.model_dump_json()
+
+
+async def test_real_partial_figure_gets_missing_series_advice(tmp_path):
+    original, _ = draw(tmp_path, "full_series")
+    generated, metadata = draw(tmp_path, "correct")
+    contract = FigureSpec(figure_id="partial", output_file="figure.pdf", reference_image=str(original),
+        caption="Panel a: C and D over Year.", panels=[PanelSpec(panel="a", plot_type="time series",
+            x_axis="Year", y_axes=["C (m/s)"], quantities=["C", "D"], units_scales="m/s",
+            layout_overlays="two lines, legend C and D")])
+    model = create_chat_model(load_model_profile("expert"), request_timeout=240)
+    advice = await check_figure(model, contract, metadata, [
+        ("Original full figure", preview_bytes(original)),
+        ("Generated full figure", preview_bytes(generated))],
+        user_messages={"u1": "Reproduce what these data allow and explain unavailable parts."},
+        ledger={"D": {"status": "not_computable", "checked_sources": ["synthetic_inventory.csv"],
+            "missing_inputs": ["D"], "evidence": "Synthetic inventory contains C only",
+            "derivation_checked": "D is an independent measurement, not derivable from C"}})
+    (tmp_path / "advice.json").write_text(advice.model_dump_json(indent=2))
+    missing = [f for f in advice.findings if f.kind == "missing_series"]
+    assert missing and all(f.suggestion for f in missing), advice.model_dump_json()
+    assert "accepted" not in advice.model_dump()

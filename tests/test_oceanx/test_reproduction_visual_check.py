@@ -1,4 +1,4 @@
-"""Image-backed structural checks with bounded repair and no scientific veto."""
+"""Image-backed comparison advice without a display gate."""
 import json
 from pathlib import Path
 
@@ -10,16 +10,16 @@ from oceanx.reproduction_images import render_pdf_regions, save_reproduction_fig
 from oceanx.reproduction_review import check_figure, metadata_findings
 from oceanx.reproduction_state import (
     MethodAdjustment, ReferenceSource, FigureRegion, ReproductionStore,
-    ReviewFinding, StructuralReview, VisualPanelCheck,
+    ReviewFinding, FigureAdvice, VisualPanelCheck,
 )
 from tests.test_oceanx.test_reproduction_continuity import spec, DownloadBackend
 
 
 def visual_result(category=None):
-    return StructuralReview(panels=[VisualPanelCheck(panel="b", original_labels=["Year", "C"],
+    return FigureAdvice(panels=[VisualPanelCheck(panel="b", original_labels=["Year", "C"],
         generated_labels=["Year", "C"], readable=True, observation="Both show C over years")],
         findings=[] if category is None else [ReviewFinding(category=category, kind={"structure": "missing_series", "scientific_difference": "value_or_trend", "uncertain": "unreadable"}[category], panel="b",
-            detail="Different result", evidence="Original and generated panel b")])
+            detail="Different result", evidence="Original and generated panel b", suggestion="Check the missing content or calculation against the source.")])
 
 
 class VisualModel:
@@ -30,7 +30,7 @@ class VisualModel:
         self.calls = []
 
     def with_structured_output(self, schema, **kwargs):
-        assert schema is StructuralReview
+        assert schema is FigureAdvice
         return self
 
     async def ainvoke(self, messages):
@@ -59,9 +59,8 @@ def draw(tmp_path, *, scatter=False):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("category,accepted", [(None, True), ("scientific_difference", True),
-                                               ("structure", False), ("uncertain", False)])
-async def test_fresh_pixels_scientific_differences_and_no_self_approval(tmp_path, category, accepted):
+@pytest.mark.parametrize("category", [None, "scientific_difference", "structure", "uncertain"])
+async def test_comparison_provides_advice_for_all_categories(tmp_path, category):
     output, metadata = draw(tmp_path)
     original = tmp_path / "original.png"
     from oceanx.reproduction_images import preview_bytes
@@ -70,11 +69,12 @@ async def test_fresh_pixels_scientific_differences_and_no_self_approval(tmp_path
     tools = {t.name: t for t in reproduction_tools(work_root=tmp_path, backend=DownloadBackend(), model=model)}
     contract = spec(str(original)).model_copy(update={"output_file": "figure.pdf"})
     await tools["record_reproduction_spec"].ainvoke({"spec": contract.model_dump()})
-    response = await tools["publish_reproduction_figure"].ainvoke({
+    response = await tools["review_reproduction_figure"].ainvoke({
         "figure_id": "figure-3", "output_file": "figure.pdf", "metadata_file": str(metadata)})
-    assert ("figure is published" in response) == accepted
+    assert "Comparison suggestions recorded" in response
     store = ReproductionStore(tmp_path)
-    assert store.allows(output) == accepted
+    assert "accepted" not in store.attempts("figure-3")[-1]
+    assert not hasattr(model.result, "accepts")
     assert len(model.calls) == 1
     messages = model.calls[0]
     assert [m.type for m in messages] == ["system", "human"]
@@ -82,31 +82,32 @@ async def test_fresh_pixels_scientific_differences_and_no_self_approval(tmp_path
     assert any(b.get("type") == "image_url" and b["image_url"]["detail"] == "original" for b in blocks)
     assert "Comparison findings (checker output only)" in (store.root / "repro_spec.md").read_text()
     assert "![Original]" in (store.root / "repro_spec.md").read_text()
-    if accepted:
-        repeated = await tools["publish_reproduction_figure"].ainvoke({
-            "figure_id": "figure-3", "output_file": "figure.pdf", "metadata_file": str(metadata)})
-        assert "already published" in repeated
-        assert len(model.calls) == 1
+    repeated = await tools["review_reproduction_figure"].ainvoke({
+        "figure_id": "figure-3", "output_file": "figure.pdf", "metadata_file": str(metadata)})
+    assert "Existing comparison suggestions" in repeated
+    assert len(model.calls) == 1
     output.write_bytes(b"changed")
-    assert not store.allows(output)
+    stale = await tools["review_reproduction_figure"].ainvoke({
+        "figure_id": "figure-3", "output_file": "figure.pdf", "metadata_file": str(metadata)})
+    assert "Comparison unavailable" in stale and "remains available" in stale
 
 
 @pytest.mark.asyncio
-async def test_wrong_chart_cannot_be_approved_by_visual_model_and_repair_is_bounded(tmp_path):
+async def test_wrong_chart_gets_specific_suggestion_without_repeated_reviews(tmp_path):
     output, metadata = draw(tmp_path, scatter=True)
     from oceanx.reproduction_images import preview_bytes
     original = tmp_path / "source.png"
     original.write_bytes(preview_bytes(output))
-    model = VisualModel(visual_result())  # intentionally wrong optimistic verdict
+    model = VisualModel(visual_result())  # intentionally misses the plot-type difference
     tools = {t.name: t for t in reproduction_tools(work_root=tmp_path, backend=DownloadBackend(), model=model)}
     await tools["record_reproduction_spec"].ainvoke({"spec": spec(str(original)).model_copy(
         update={"output_file": "figure.pdf"}).model_dump()})
     for _ in range(4):
-        response = await tools["publish_reproduction_figure"].ainvoke({"figure_id": "figure-3",
+        response = await tools["review_reproduction_figure"].ainvoke({"figure_id": "figure-3",
             "output_file": "figure.pdf", "metadata_file": str(metadata)})
-    assert "Repair limit reached" in response
-    assert len(model.calls) == 3
-    assert not ReproductionStore(tmp_path).allows(output)
+    assert "Existing comparison suggestions" in response
+    assert len(model.calls) == 1
+    assert "Use the requested time axis" in response
     assert "Scatter artists" in ReproductionStore(tmp_path).context()
 
 
@@ -121,7 +122,7 @@ async def test_stale_metadata_and_source_do_not_trigger_checker(tmp_path):
     await tools["record_reproduction_spec"].ainvoke({"spec": spec(str(source)).model_copy(
         update={"output_file": "figure.pdf"}).model_dump()})
     (tmp_path / "plot.py").write_text("changed code")
-    response = await tools["publish_reproduction_figure"].ainvoke({"figure_id": "figure-3",
+    response = await tools["review_reproduction_figure"].ainvoke({"figure_id": "figure-3",
         "output_file": "figure.pdf", "metadata_file": str(metadata)})
     assert "source changed" in response
     assert model.calls == []
@@ -179,7 +180,7 @@ async def test_unreadable_label_cannot_be_claimed_as_verified(tmp_path):
     contract.panels[0].verified_labels = ["Unreadable axis label"]
     metadata = {"panels": [{"panel": "b", "artist_types": ["line"]}]}
     result = await check_figure(model, contract, metadata, [])
-    assert not result.accepts(contract)
+    assert result.findings
     assert any("transcription" in f.detail for f in result.findings)
 
 
@@ -207,7 +208,7 @@ async def test_many_panels_are_checked_in_bounded_groups():
             context = json.loads(messages[1].content[0]["text"])
             image_count = sum(b["type"] == "image_url" for b in messages[1].content)
             assert image_count < 15
-            return StructuralReview(panels=[VisualPanelCheck(panel=p["panel"],
+            return FigureAdvice(panels=[VisualPanelCheck(panel=p["panel"],
                 original_labels=[], generated_labels=[], readable=True, observation="matched")
                 for p in context["specification"]["panels"]], findings=[])
     model = GroupModel(visual_result())
@@ -215,7 +216,8 @@ async def test_many_panels_are_checked_in_bounded_groups():
                                                "Original page with region boxes", "Overview")]
     images += [(f"{side} panel {i}", b"pixels") for i in range(8) for side in ("Original", "Generated")]
     review = await check_figure(model, contract, metadata, images)
-    assert review.accepts(contract)
+    assert sorted(p.panel for p in review.panels) == sorted(p.panel for p in contract.panels)
+    assert not review.findings
     assert len(model.calls) == 2
 
 
@@ -233,37 +235,33 @@ def test_export_helper_is_available_in_the_actual_execution_support(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_parser_failure_consumes_a_check_without_fabricating_a_verdict(tmp_path):
+async def test_parser_failure_reports_unavailable_advice_not_rejection(tmp_path):
     class BrokenModel(VisualModel):
         async def ainvoke(self, messages):
-            self.calls.append(messages)
             raise ValueError("invalid structured result")
     output, metadata = draw(tmp_path)
     from oceanx.reproduction_images import preview_bytes
     source = tmp_path / "source.png"
     source.write_bytes(preview_bytes(output))
-    model = BrokenModel(visual_result())
-    tools = {t.name: t for t in reproduction_tools(work_root=tmp_path, backend=DownloadBackend(), model=model)}
+    tools = {t.name: t for t in reproduction_tools(work_root=tmp_path,
+        backend=DownloadBackend(), model=BrokenModel(visual_result()))}
     await tools["record_reproduction_spec"].ainvoke({"spec": spec(str(source)).model_copy(
         update={"output_file": "figure.pdf"}).model_dump()})
-    for _ in range(4):
-        response = await tools["publish_reproduction_figure"].ainvoke({"figure_id": "figure-3",
-            "output_file": "figure.pdf", "metadata_file": str(metadata)})
-    assert "Repair limit" in response
-    assert len(model.calls) == 3
-    assert all(a["status"] == "started" for a in ReproductionStore(tmp_path).attempts("figure-3"))
-    assert not ReproductionStore(tmp_path).allows(output)
+    response = await tools["review_reproduction_figure"].ainvoke({"figure_id": "figure-3",
+        "output_file": "figure.pdf", "metadata_file": str(metadata)})
+    assert "Comparison unavailable" in response and "remains available" in response
+    assert output.is_file()
+    assert "accepted" not in ReproductionStore(tmp_path).attempts("figure-3")[-1]
 
 
 @pytest.mark.asyncio
 async def test_parameter_adjustments_cannot_be_classified_as_structural_failures():
     result = visual_result()
     result.findings.append(ReviewFinding(category="structure", kind="parameter_adjustment", panel="b",
-        detail="The period differs", evidence="The supplied record covers a different period"))
+        detail="The period differs", evidence="The supplied record covers a different period", suggestion="Explain the period adjustment."))
     model = VisualModel(result)
     contract = spec()
     reviewed = await check_figure(model, contract, {"panels": [{"panel": "b", "artist_types": ["line"]}]}, [])
-    assert reviewed.accepts(contract)
     assert reviewed.findings[0].category == "scientific_difference"
 
 

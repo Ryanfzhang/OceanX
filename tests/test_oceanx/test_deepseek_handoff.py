@@ -154,9 +154,9 @@ def test_images_follow_all_parallel_tool_results():
 
 
 def test_visual_review_json_mode_has_no_forced_tool_choice():
-    from oceanx.reproduction_state import StructuralReview
+    from oceanx.reproduction_state import FigureAdvice
     model = create_chat_model(profile(model="deepseek-flash"))
-    structured = model.with_structured_output(StructuralReview, method="json_mode")
+    structured = model.with_structured_output(FigureAdvice, method="json_mode")
     binding = structured.first
     payload = model._get_request_payload([HumanMessage(content="Return JSON")], **binding.kwargs)
     assert payload["response_format"] == {"type": "json_object"}

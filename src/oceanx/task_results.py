@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from oceanx.figure_delivery import pdf_preview_png, static_figure_files
-from oceanx.reproduction_state import ReproductionStore
 
 if TYPE_CHECKING:
     from oceanx.task_workspace import TaskWorkspaceProjector
@@ -292,8 +291,6 @@ class TaskResultStore:
         task_root = self.task_workspaces.ensure_task_root(task_id).resolve(strict=True)
         records: list[TaskResultRecord] = []
         for agent_key, path in static_figure_files(task_root):
-            if not ReproductionStore(task_root / "agents" / agent_key).allows(path):
-                continue
             try:
                 stat = path.stat()
                 key = (str(path), stat.st_mtime_ns, stat.st_size, "static")
@@ -450,8 +447,6 @@ class TaskResultStore:
 
         records: list[TaskResultRecord] = []
         for execution, event, path, output_root, preview_path in declarations.values():
-            if not ReproductionStore(output_root.parent).allows(path):
-                continue
             try:
                 stat = path.stat()
                 event_identity = json.dumps(event, sort_keys=True, ensure_ascii=True)

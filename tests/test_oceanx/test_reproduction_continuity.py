@@ -1,4 +1,4 @@
-"""Contracts survive real middleware compaction; publication requires a fresh receipt."""
+"""Contracts survive real middleware compaction; comparison notes do not gate delivery."""
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from oceanx.reproduction import ReproductionMiddleware, SUMMARY_PROMPT, reproduction_tools
 from oceanx.reproduction_state import (
-    FigureReview, FigureSpec, PanelSpec, ReproductionStore, TermEvidence, digest,
+    FigureSpec, PanelSpec, ReproductionStore, TermEvidence,
 )
 from oceanx.task_results import TaskResultStore
 from tests.test_oceanx.test_deep_agent_runtime import _BoundFakeModel
@@ -26,23 +26,6 @@ def spec(reference="/paper/page.png", terms=None):
             quantities=["C", "xi_cor"], units_scales="m/s and m/s2",
             layout_overlays="two y axes; trend lines; upper layer")],
         budget_terms=terms or [])
-
-
-def review(passed=True):
-    return FigureReview(passed=passed, panels=[{
-        "panel": "b", "observed_plot_type": "time series" if passed else "scatter",
-        "observed_x_axis": "Year" if passed else "xi_cor", "observed_y_axes": ["C", "xi_cor"],
-        "observed_quantities_units": "C m/s; xi_cor m/s2",
-        "observed_layout_overlays": "stacked panels, fills, trends", "plot_type": passed, "axes": passed, "quantities_units": True,
-        "layout_overlays": passed,
-        "evidence": "Original has a time axis; generated plot has a flux axis." if not passed
-                    else "Both have time axes and the two named quantities on separate y axes.",
-    }], issues=[] if passed else ["Scatterplot replaced the requested time series"])
-
-
-def approve(store, path):
-    store.approve("figure-3", path, review(), reference_hash="reference-hash",
-                  output_hash=digest(path), contract_hash=store.contract_digest("figure-3"))
 
 
 def test_spec_revisions_preserve_original_and_terms_require_evidence(tmp_path):
@@ -66,37 +49,25 @@ def test_spec_revisions_preserve_original_and_terms_require_evidence(tmp_path):
     assert "time (years)" in store.context()
 
 
-def test_publication_gate_handles_pending_failed_stale_and_non_reproduction(tmp_path):
+def test_figures_remain_visible_with_pending_terms_and_old_rejections(tmp_path):
+    import json
     agent = tmp_path / "agents" / "worker"
     outputs = agent / "outputs"
     outputs.mkdir(parents=True)
     output = outputs / "figure.png"
     output.write_bytes(b"first-version")
     results = TaskResultStore(task_workspaces=_Projector(tmp_path))
-    assert len(results._static_figures(task_id="task")) == 1  # ordinary tasks unchanged
     store = ReproductionStore(agent)
-    store.activate()
-    assert len(results._static_figures(task_id="task")) == 1  # no recorded requirement, no gate
     store.register(spec(terms=["pressure"]))
-    other = outputs / "unrelated.png"
-    other.write_bytes(b"ordinary figure")
-    assert store.allows(other)  # only the registered output has a gate
-    other.unlink()
-    with pytest.raises(ValueError, match="Unresolved"):
-        approve(store, output)
-    store.record_term("figure-3", TermEvidence(term="pressure", status="computed",
-                                               evidence="pressure.py and pressure.nc"))
-    with pytest.raises(ValueError, match="failed"):
-        store.approve("figure-3", output, review(False), reference_hash="r",
-                      output_hash=digest(output), contract_hash=store.contract_digest("figure-3"))
-    assert results._static_figures(task_id="task") == ()
-    approve(store, output)
+    assert store.pending("figure-3") == ["pressure"]
+    assert len(results._static_figures(task_id="task")) == 1
+    # Old approval/rejection records must not keep existing figures hidden.
+    (store.directory("figure-3") / "review.json").write_text(json.dumps({"review": {"passed": False}}))
+    store.record_check("figure-3", {"status": "completed", "accepted": False,
+        "review": {"findings": [{"category": "structure", "detail": "Missing pressure series"}]}})
     assert len(results._static_figures(task_id="task")) == 1
     output.write_bytes(b"second-version")
-    assert results._static_figures(task_id="task") == ()  # even after listing was cached
-    approve(store, output)
-    store.record_term("figure-3", TermEvidence(term="pressure", status="pending"))
-    assert results._static_figures(task_id="task") == ()
+    assert len(results._static_figures(task_id="task")) == 1
     with pytest.raises((ValueError, OSError)):
         store.output("../../unrelated.png")
 
@@ -139,7 +110,7 @@ def image(path):
 
 
 @pytest.mark.asyncio
-async def test_production_factory_registers_tools_and_skill_read_activates_gate(tmp_path, monkeypatch):
+async def test_production_factory_registers_tools_and_skill_read_activates_continuity(tmp_path, monkeypatch):
     from oceanx import deep_runtime
     from oceanx.agent_tools import ToolRegistry
     model = _BoundFakeModel(responses=[
@@ -155,33 +126,9 @@ async def test_production_factory_registers_tools_and_skill_read_activates_gate(
     result = await graph.ainvoke({"messages": [HumanMessage(content="reproduce paper")]})
     assert ReproductionStore(tmp_path).active
     assert "No specs registered" in model.seen_messages[-1][-1].text
-    assert {"record_reproduction_spec", "record_reproduction_term", "publish_reproduction_figure"} <= set(model.bound_tool_names[-1])
+    assert {"record_reproduction_spec", "record_reproduction_term", "review_reproduction_figure"} <= set(model.bound_tool_names[-1])
     assert "Durable paper reproduction" in model.seen_messages[0][0].text
     assert not any("Persistent reproduction contracts" in m.text for m in result["messages"])
-
-
-def test_reference_change_and_spec_correction_invalidate_receipt(tmp_path):
-    source = tmp_path / "source.png"
-    image(source)
-    (tmp_path / "outputs").mkdir()
-    output = tmp_path / "outputs" / "figure.png"
-    image(output)
-    store = ReproductionStore(tmp_path)
-    store.register(spec(str(source)))
-    approve(store, output)
-    assert store.allows(output)
-    source.write_bytes(b"different original")
-    assert not store.allows(output)
-    image(source)
-    approve(store, output)
-    revised = spec(str(source)).model_copy(update={"caption": "Corrected caption"})
-    store.register(revised, "Reread original caption")
-    assert not store.allows(output)
-    approve(store, output)
-    store.invalidate_review("figure-3")
-    assert not store.allows(output)
-    store.register(revised.model_copy(update={"output_file": "renamed.png"}), "Rename output")
-    assert not store.allows(output)  # a superseded filename must not become an ungated output
 
 
 @pytest.mark.asyncio
@@ -219,6 +166,6 @@ async def test_factory_without_reproduction_has_no_review_tools_or_policy(tmp_pa
         system_prompt="Research coordinator", cwd=tmp_path, operation_id_factory=lambda *args: "op",
         filesystem_backend=StateBackend())
     await graph.ainvoke({"messages": [HumanMessage(content="Investigate mechanisms")]})
-    assert "publish_reproduction_figure" not in model.bound_tool_names[-1]
+    assert "review_reproduction_figure" not in model.bound_tool_names[-1]
     assert "Durable paper reproduction" not in model.seen_messages[0][0].text
     assert not ReproductionStore(tmp_path).active

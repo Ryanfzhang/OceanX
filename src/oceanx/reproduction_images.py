@@ -104,7 +104,7 @@ def save_reproduction_figure(fig, output_file, *, panels, source_code, data_file
 
     panels maps paper panel IDs to lists of Axes (include twinx axes in the same
     panel). This records observable structure, NOT the correctness of calculations.
-    Returns the JSON metadata path to pass to publish_reproduction_figure.
+    Returns the JSON metadata path to pass to review_reproduction_figure.
     """
     from matplotlib.collections import PathCollection
     from matplotlib.transforms import Bbox

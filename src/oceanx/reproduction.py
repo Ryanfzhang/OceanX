@@ -28,7 +28,7 @@ For paper-reproduction sessions only, apply these continuity requirements:
   investigations. Never promote a tentative choice into an established fact or a to-do.
 - A term is not computable only with checked files, specific missing inputs and an
   explanation of why it cannot be derived. Otherwise retain pending status.
-- Acceptance steps must name both the original reference and the generated artifact.
+- Comparison steps must name both the original reference and the generated artifact.
   Never reduce scientific comparison to checking a generated figure's layout.
 """
 
@@ -42,20 +42,21 @@ and re-injects them on every model call, including after compaction. Do not repl
 summary. Correct a spec only by appending an evidenced correction through the same tool.
 Use record_reproduction_term to keep computed, pending and not_computable terms separate.
 Not_computable requires checked source files, named missing inputs and a derivation check;
-otherwise the term stays pending. Resolve pending terms before plotting a budget. A residual
+otherwise the term stays pending. Report pending terms explicitly when plotting a partial budget. A residual
 must be labelled as such; it cannot substitute for independently unresolved budget terms.
 For each registered figure, preserve its PDF source/page and normalized figure/panel regions with
 record_reproduction_spec. The framework renders them, extracts source text and generates an
 illustrated repro_spec.md. A Markdown image link is not pixels: open the saved reference images.
 Use oceanx.reproduction_images.save_reproduction_figure from the plotting script to save the actual
 figure and export its panel crops and plotting-object metadata. Pass that metadata file to
-publish_reproduction_figure. An independent fresh-context check compares structure, not whether
+review_reproduction_figure. An independent fresh-context check compares structure, not whether
 new scientific values/trends agree with the paper. Numerical validation remains your responsibility.
 Only parameter adjustments may be justified by the worker. Changes of quantity, variable or plot
 type require an exact user quotation and its message ID; never alter the original to match output.
-After at most two repair rounds, retain unresolved drafts and report specific differences to the
-user for a decision; do not continue revising or claim complete reproduction. Missing evidence or
-unreadable labels are uncertain. Unregistered outputs and other tasks have no added gate.
+The comparison provides observations, missing elements and suggested improvements, never an
+accept/reject decision. Figures saved in outputs are displayed regardless of comparison status.
+Use the user's scope and available data to decide what to improve; describe unresolved limitations
+alongside the figure. Do not repeat reviews to chase approval or suppress useful partial results.
 """
 
 class ReproductionSummarizationMiddleware(AgentMiddleware):
@@ -209,24 +210,23 @@ def reproduction_tools(*, work_root: Path, backend, model=None, on_change=None):
         except (OSError, ValueError) as error:
             return f"Not recorded: {error}"
 
-    async def publish(figure_id: str, output_file: str, metadata_file: str) -> str:
+    async def compare(figure_id: str, output_file: str, metadata_file: str) -> str:
         try:
             spec = store.spec(figure_id)
             output = store.output(output_file)
             if output_file != spec.output_file:
                 raise ValueError("Output does not match the registered figure")
-            receipt = store.directory(figure_id) / "review.json"
-            if receipt.is_file() and json.loads(receipt.read_text()).get("format") == 2 and store.allows(output):
-                return "Figure is already published with a current independent comparison; no repeat check needed."
-            if store.repair_exhausted(figure_id):
-                return "Repair limit reached. Retain drafts; report the recorded differences and ask the user to decide."
-            if model is None:
-                raise ValueError("No visual checker configured; comparison cannot be claimed")
-            if (getattr(model, "profile", None) or {}).get("image_inputs") is False:
-                raise ValueError("Configured model has no image input support; retain draft for user review")
-            if store.pending(figure_id):
-                raise ValueError(f"Resolve pending terms first: {store.pending(figure_id)}")
             output_hash, contract_hash = digest(output), store.contract_digest(figure_id)
+            attempts = store.attempts(figure_id)
+            if attempts:
+                last = attempts[-1]
+                if (last.get("status") == "completed" and last.get("output_sha256") == output_hash
+                        and last.get("contract_sha256") == contract_hash and last.get("advisory")):
+                    return "Existing comparison suggestions (figure remains available): " + json.dumps(last["review"])
+            if model is None:
+                raise ValueError("No visual checker configured; no comparison advice is available")
+            if (getattr(model, "profile", None) or {}).get("image_inputs") is False:
+                raise ValueError("Configured model has no image input support; figure remains available")
             metadata = json.loads(await read_bytes(metadata_file, limit=512_000))
             if metadata.get("format") != 1 or metadata["output_sha256"] != output_hash:
                 raise ValueError("Plotting metadata does not match output bytes; export from the plotting script again")
@@ -248,39 +248,30 @@ def reproduction_tools(*, work_root: Path, backend, model=None, on_change=None):
                 images.append((f"Generated panel {panel['panel']}", image_bytes(raw)))
             # Keep individual crops as well as an overview: a composite alone hides small text.
             images.append(("Overview only: original left, reproduction right", pair_image(images[0][1], images[1][1])))
-            store.invalidate_review(figure_id)
             if on_change is not None:
                 await on_change()
             check_path = store.record_check(figure_id, {"output_sha256": output_hash,
-                "contract_sha256": contract_hash, "accepted": False, "status": "started",
-                "note": "No verdict until this record is completed; interrupted checks are uncertain."})
+                "contract_sha256": contract_hash, "advisory": True, "status": "started",
+                "note": "Comparison is in progress; this record does not control figure visibility."})
             review = await check_figure(model, spec, metadata, images, source=source,
-                                       user_messages=store.user_messages())
-            accepted = review.accepts(spec)
-            if accepted:
-                store.approve_structural(figure_id, output, review, output_hash=output_hash, contract_hash=contract_hash)
+                                       user_messages=store.user_messages(), ledger=store.ledger(figure_id))
             store.finish_check(check_path, {"output_sha256": output_hash, "contract_sha256": contract_hash,
-                "metadata": metadata, "review": review.model_dump(), "accepted": accepted, "status": "completed"})
+                "metadata": metadata, "review": review.model_dump(), "advisory": True, "status": "completed"})
             if on_change is not None:
                 await on_change()
-            detail = review.model_dump_json()
-            if accepted:
-                return "Structural comparison accepted; figure is published. Scientific differences remain in the record. " + detail
-            if store.repair_exhausted(figure_id):
-                return "Repair limit reached. Retain draft and ask the user to decide. " + detail
-            return "Not published; correct structural issues or clarify uncertain evidence. Do not force scientific agreement. " + detail
+            return "Comparison suggestions recorded; the figure remains available. " + review.model_dump_json()
         except (OSError, ValueError, KeyError) as error:
-            return f"Not published: {error}"
+            return f"Comparison unavailable: {error}. The figure remains available."
 
     @tool
-    async def publish_reproduction_figure(figure_id: str, output_file: str, metadata_file: str) -> str:
+    async def review_reproduction_figure(figure_id: str, output_file: str, metadata_file: str) -> str:
         """Compare one saved reproduction with the original in a fresh visual context.
 
         metadata_file is the JSON from save_reproduction_figure, bound to the output bytes.
-        Do not supply a self-assessed pass/fail. Scientific differences are recorded, not rejected.
-        After the initial check and two repair checks, stop and present unresolved drafts to the user.
+        Returns missing content, differences, uncertainty and suggestions. It never accepts/rejects
+        figures or controls display. Explain partial results according to the user's actual request.
         """
         async with figure_locks.setdefault(figure_id, asyncio.Lock()):
-            return await publish(figure_id, output_file, metadata_file)
+            return await compare(figure_id, output_file, metadata_file)
 
-    return [record_reproduction_spec, record_reproduction_term, publish_reproduction_figure]
+    return [record_reproduction_spec, record_reproduction_term, review_reproduction_figure]
