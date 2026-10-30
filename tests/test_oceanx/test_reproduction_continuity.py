@@ -140,83 +140,47 @@ def image(path):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("passed", [False, True])
-async def test_scheme_b_uses_only_source_output_and_contract_in_fresh_context(tmp_path, passed):
+async def test_scheme_a_needs_reference_and_complete_comparison_without_model(tmp_path, passed):
     source = tmp_path / "source.png"
     image(source)
     (tmp_path / "outputs").mkdir()
     output = tmp_path / "outputs" / "figure.png"
     image(output)
-    model = _BoundFakeModel(responses=[AIMessage(content=review(passed).model_dump_json())])
-    tools = {t.name: t for t in reproduction_tools(work_root=tmp_path,
-        backend=DownloadBackend(), model=model, vision=True)}
+    tools = {t.name: t for t in reproduction_tools(work_root=tmp_path, backend=DownloadBackend())}
     response = await tools["record_reproduction_spec"].ainvoke({"spec": spec(str(source)).model_dump()})
     assert "preserved" in response
-    response = await tools["verify_reproduction_figure"].ainvoke({
-        "figure_id": "figure-3", "output_file": "figure.png"})
+    publish = tools["publish_reproduction_figure"]
+    with pytest.raises(ValidationError):
+        await publish.ainvoke({"figure_id": "figure-3", "output_file": "figure.png"})
+    response = await publish.ainvoke({"figure_id": "figure-3", "output_file": "figure.png",
+        "reference_image": str(source), "comparison": review(passed).model_dump()})
     assert ("figure is published" in response) == passed
     assert ReproductionStore(tmp_path).allows(output) == passed
-    sent = model.seen_messages[-1]
-    assert len(sent) == 2 and sent[0].type == "system" and sent[1].type == "human"
-    assert len([part for part in sent[1].content if part["type"] == "image_url"]) == 2
-    assert '"evidence_ledger"' in sent[1].content[0]["text"]
-    assert "time (years)" in sent[1].content[0]["text"]
-    assert not model.bound_tool_names
-    assert set(tools) == {"record_reproduction_spec", "record_reproduction_term", "verify_reproduction_figure"}
+    assert set(tools) == {"record_reproduction_spec", "record_reproduction_term", "publish_reproduction_figure"}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure", ["unregistered", "pending", "vision", "malformed", "omitted",
-                                     "provider", "changed_output", "changed_spec"])
-async def test_scheme_b_cannot_publish_unverified_or_changed_figures(tmp_path, failure):
+async def test_wrong_reference_and_incomplete_panels_cannot_publish(tmp_path):
+    from PIL import Image
     source = tmp_path / "source.png"
     image(source)
-    (tmp_path / "outputs").mkdir()
-    output = tmp_path / "outputs" / "figure.png"
-    image(output)
-    store = ReproductionStore(tmp_path)
-    if failure != "unregistered":
-        store.register(spec(str(source), terms=["pressure"] if failure == "pending" else []))
-    class Reviewer:
-        calls = 0
-        async def ainvoke(self, messages, config):
-            self.calls += 1
-            if failure == "provider":
-                raise RuntimeError("Provider unavailable")
-            if failure == "changed_output":
-                output.write_bytes(b"replaced while reviewing")
-            if failure == "changed_spec":
-                store.register(spec(str(source)).model_copy(update={"caption": "Changed"}), "Source correction")
-            verdict = review()
-            if failure == "omitted":
-                verdict.panels[0].panel = "a"
-            return AIMessage(content="not JSON" if failure == "malformed" else verdict.model_dump_json())
-    model = Reviewer()
-    verify = reproduction_tools(work_root=tmp_path, backend=DownloadBackend(), model=model,
-                                vision=failure != "vision")[-1]
-    response = await verify.ainvoke({"figure_id": "figure-3", "output_file": "figure.png"})
-    assert response.startswith("Not published")
-    assert not (store.directory("figure-3") / "review.json").exists()
-    if failure != "unregistered":
-        assert not store.allows(output)
-    assert model.calls == (0 if failure in {"unregistered", "pending", "vision"} else 1)
-
-
-@pytest.mark.asyncio
-async def test_failed_recheck_revokes_previous_publication(tmp_path):
-    source = tmp_path / "source.png"
-    image(source)
+    wrong = tmp_path / "wrong.png"
+    Image.new("RGB", (24, 24), "black").save(wrong)
     (tmp_path / "outputs").mkdir()
     output = tmp_path / "outputs" / "figure.png"
     image(output)
     store = ReproductionStore(tmp_path)
     store.register(spec(str(source)))
-    model = _BoundFakeModel(responses=[AIMessage(content=review().model_dump_json()),
-                                      AIMessage(content=review(False).model_dump_json())])
-    verify = reproduction_tools(work_root=tmp_path, backend=DownloadBackend(), model=model, vision=True)[-1]
-    args = {"figure_id": "figure-3", "output_file": "figure.png"}
-    await verify.ainvoke(args)
-    assert store.allows(output)
-    await verify.ainvoke(args)
+    publish = reproduction_tools(work_root=tmp_path, backend=DownloadBackend())[-1]
+    response = await publish.ainvoke({"figure_id": "figure-3", "output_file": "figure.png",
+        "reference_image": str(wrong), "comparison": review().model_dump()})
+    assert "Reference does not match" in response
+    assert not store.allows(output)
+    omitted = review().model_dump()
+    omitted["panels"][0]["panel"] = "a"
+    response = await publish.ainvoke({"figure_id": "figure-3", "output_file": "figure.png",
+        "reference_image": str(source), "comparison": omitted})
+    assert response.startswith("Not published")
     assert not store.allows(output)
 
 
@@ -237,7 +201,7 @@ async def test_production_factory_registers_tools_and_skill_read_activates_gate(
     result = await graph.ainvoke({"messages": [HumanMessage(content="reproduce paper")]})
     assert ReproductionStore(tmp_path).active
     assert "No specs registered" in model.seen_messages[-1][-1].text
-    assert {"record_reproduction_spec", "record_reproduction_term", "verify_reproduction_figure"} <= set(model.bound_tool_names[-1])
+    assert {"record_reproduction_spec", "record_reproduction_term", "publish_reproduction_figure"} <= set(model.bound_tool_names[-1])
     assert "Durable paper reproduction" in model.seen_messages[0][0].text
     assert not any("Persistent reproduction contracts" in m.text for m in result["messages"])
 
@@ -301,6 +265,6 @@ async def test_factory_without_reproduction_has_no_review_tools_or_policy(tmp_pa
         system_prompt="Research coordinator", cwd=tmp_path, operation_id_factory=lambda *args: "op",
         filesystem_backend=StateBackend())
     await graph.ainvoke({"messages": [HumanMessage(content="Investigate mechanisms")]})
-    assert "verify_reproduction_figure" not in model.bound_tool_names[-1]
+    assert "publish_reproduction_figure" not in model.bound_tool_names[-1]
     assert "Durable paper reproduction" not in model.seen_messages[0][0].text
     assert not ReproductionStore(tmp_path).active

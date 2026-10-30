@@ -31,13 +31,11 @@ Keep working hypotheses separate from verified findings. A residual cannot resol
 
 Before drawing, reopen the original. After saving, open the original and generated figure yourself,
 compare every panel's plot type, x/y axes, variables, units/scales, layout and overlays, and fix the
-differences the data allow. Call verify_reproduction_figure for each registered figure. A separate
-call to the configured model sees only the original image, saved generated figure, specification
-and evidence ledger; it does not inherit your conversation or compressed summary. Fix the reported
-mismatches and verify again. Failed or incomplete checks and pending budget terms prevent publication
-of that registered figure. Changing the figure, spec or ledger requires a new check. This reviewer
-only checks visual fidelity; perform the numerical checks below as well. It is specific to paper
-reproduction and does not review ordinary plots or research-team conclusions.
+differences the data allow. Call publish_reproduction_figure with the reference and your explicit
+observations and comparison for every panel. Missing fields, failed comparisons and pending budget
+terms prevent publication of that registered figure. Changing the figure, spec or ledger requires
+a new comparison. No separate reviewer is called; you are responsible for truthful checks. This
+record does not validate the calculations; perform the numerical checks below as well.
 
 ## Definitions before code
 Before computing anything, read the page image of each page whose equations define the quantities you
