@@ -1012,6 +1012,18 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         if role == "coordinator"
         else "all"
     )
+    async def reproduction_changed():
+        from datetime import UTC, datetime
+        from oceanx.protocol.v2.models import (
+            TaskResultsChangedEvent, TaskResultsChangedPayload, new_event_id,
+        )
+        await host().event_bus.emit_workspace(TaskResultsChangedEvent(
+            protocol_version=2, event_id=new_event_id(), session_id=None,
+            workspace_id=c["workspace_id"], task_id=c["task_id"], request_id=c["request_id"],
+            sequence=0, timestamp=datetime.now(UTC), type="task.results.changed",
+            payload=TaskResultsChangedPayload(result_ids=()),
+        ))
+
     graph = await build_deep_agent_graph(
         profile=load_model_profile("coordinator" if role == "coordinator" else "expert"),
         tools=tool_registry, system_prompt=prompt,
@@ -1020,6 +1032,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         skill_library=None if discussion else library,
         filesystem_backend=filesystem,
         filesystem_tools=filesystem_tools,
+        reproduction_root=work_root if role != "coordinator" and not discussion else None,
+        reproduction_changed=reproduction_changed,
         research_tree=research_tree(c["task_id"])
         if role == "coordinator" and research else None)
     from oceanx.research.metering import CallMeter

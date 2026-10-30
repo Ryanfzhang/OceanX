@@ -349,7 +349,7 @@ class DeepAgentEngine:
 async def build_deep_agent_graph(*, profile, tools, system_prompt, cwd, operation_id_factory,
                                  subagents=None, middleware=None, checkpointer=None, skill_library=None,
                                  filesystem_backend=None, filesystem_tools="all",
-                                 research_tree=None):
+                                 research_tree=None, reproduction_root=None, reproduction_changed=None):
     """Build only a graph. Agent Server supplies persistence and executes it."""
     model = create_chat_model(profile)
     from deepagents._models import get_model_provider
@@ -364,11 +364,28 @@ async def build_deep_agent_graph(*, profile, tools, system_prompt, cwd, operatio
     if research_tree is not None:
         from oceanx.research.tree_tools import research_tree_tool
         domain_tools.append(research_tree_tool(research_tree))
+    from oceanx.reproduction import (
+        REPRODUCTION_POLICY, ReproductionMiddleware, ReproductionSummarizationMiddleware,
+        reproduction_tools,
+    )
+    # Same-name replacement keeps the framework's thresholds, offload and overflow
+    # recovery while changing its summary instructions. The contract middleware
+    # comes inside it, reloading original specs after compaction and on retries.
+    continuity = []
+    contracts = []
+    if reproduction_root is not None:
+        from oceanx.model_config import profile_supports_vision
+        continuity.append(ReproductionSummarizationMiddleware(model, backend, reproduction_root))
+        system_prompt += "\n" + REPRODUCTION_POLICY
+        domain_tools.extend(reproduction_tools(work_root=reproduction_root, backend=backend,
+                                               model=model, vision=profile_supports_vision(profile),
+                                               on_change=reproduction_changed))
+        contracts.append(ReproductionMiddleware(reproduction_root))
     return create_deep_agent(model=model, tools=domain_tools,
         system_prompt=system_prompt, subagents=subagents or [], backend=backend,
         skills=["/skills/"] if skill_library is not None else None, permissions=permissions,
         checkpointer=checkpointer, name="oceanx", middleware=[
-            *(middleware or []), provider_retry_middleware(),
+            *continuity, *(middleware or []), *contracts, provider_retry_middleware(),
             FilesystemMiddleware(backend=backend, tools=filesystem_tools, _permissions=permissions,
                                  tool_token_limit_before_evict=4_000)])
 

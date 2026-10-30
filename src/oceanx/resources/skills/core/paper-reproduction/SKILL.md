@@ -18,6 +18,27 @@ Use when a request asks to reproduce, test or extend the analysis of a paper the
 named. A reproduction computes the paper's quantities as the paper defines them and compares them with
 the paper's own values; a similar-looking analysis of the same data is not a reproduction.
 
+## Preserve specifications and compare before publishing
+After first reading each original figure, use record_reproduction_spec to save its reference page
+image, caption, intended output filename, panels, plot types, x/y axes, quantities, units/scales,
+layout, overlays and explicitly justified adaptations. The original specifications live outside
+scratch and are automatically re-injected after context compaction. Summaries reference those files
+instead of rewriting them. Corrections append a version with the source and reason.
+
+Use record_reproduction_term to keep each budget term pending, computed (with code/data paths), or
+not_computable (with checked source files, specific missing inputs and why derivation is impossible).
+Keep working hypotheses separate from verified findings. A residual cannot resolve a pending term.
+
+Before drawing, reopen the original. After saving, open the original and generated figure yourself,
+compare every panel's plot type, x/y axes, variables, units/scales, layout and overlays, and fix the
+differences the data allow. Call verify_reproduction_figure for each registered figure. A separate
+call to the configured model sees only the original image, saved generated figure, specification
+and evidence ledger; it does not inherit your conversation or compressed summary. Fix the reported
+mismatches and verify again. Failed or incomplete checks and pending budget terms prevent publication
+of that registered figure. Changing the figure, spec or ledger requires a new check. This reviewer
+only checks visual fidelity; perform the numerical checks below as well. It is specific to paper
+reproduction and does not review ordinary plots or research-team conclusions.
+
 ## Definitions before code
 Before computing anything, read the page image of each page whose equations define the quantities you
 will compute: the extracted text names that image above the page and garbles its equations, symbols and
