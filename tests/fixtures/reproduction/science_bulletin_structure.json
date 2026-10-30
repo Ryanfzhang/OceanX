@@ -1,0 +1,29 @@
+{
+  "source_run": "task_5d71a5c59f394b7b86597834d95141c5",
+  "purpose": "Human-labelled structural omissions in historical output, not production routing or acceptance rules.",
+  "figures": {
+    "fig1": [
+      "Missing SST content in the globe panel",
+      "Layered three-dimensional diagram replaced with separate two-dimensional maps",
+      "Western Pacific feature/flow content omitted"
+    ],
+    "fig2": [
+      "Missing wind stress curl series",
+      "Missing EN4 density series",
+      "Missing ocean bottom pressure series"
+    ],
+    "fig3": [
+      "Only one of six budget categories is drawn as data; the others are missing markers",
+      "Missing upper-layer wind stress curl curve",
+      "Missing middle-layer pressure torque curve"
+    ],
+    "fig4": [
+      "SLA and wind content missing from the two globe panels",
+      "Luzon Strait transport trends replaced with mean transport labels"
+    ]
+  },
+  "nonblocking": [
+    "Reasoned parameter adjustments consistent with user requirements",
+    "Scientific numerical and trend differences, subject to separate numerical investigation"
+  ]
+}

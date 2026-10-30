@@ -139,52 +139,6 @@ def image(path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("passed", [False, True])
-async def test_scheme_a_needs_reference_and_complete_comparison_without_model(tmp_path, passed):
-    source = tmp_path / "source.png"
-    image(source)
-    (tmp_path / "outputs").mkdir()
-    output = tmp_path / "outputs" / "figure.png"
-    image(output)
-    tools = {t.name: t for t in reproduction_tools(work_root=tmp_path, backend=DownloadBackend())}
-    response = await tools["record_reproduction_spec"].ainvoke({"spec": spec(str(source)).model_dump()})
-    assert "preserved" in response
-    publish = tools["publish_reproduction_figure"]
-    with pytest.raises(ValidationError):
-        await publish.ainvoke({"figure_id": "figure-3", "output_file": "figure.png"})
-    response = await publish.ainvoke({"figure_id": "figure-3", "output_file": "figure.png",
-        "reference_image": str(source), "comparison": review(passed).model_dump()})
-    assert ("figure is published" in response) == passed
-    assert ReproductionStore(tmp_path).allows(output) == passed
-    assert set(tools) == {"record_reproduction_spec", "record_reproduction_term", "publish_reproduction_figure"}
-
-
-@pytest.mark.asyncio
-async def test_wrong_reference_and_incomplete_panels_cannot_publish(tmp_path):
-    from PIL import Image
-    source = tmp_path / "source.png"
-    image(source)
-    wrong = tmp_path / "wrong.png"
-    Image.new("RGB", (24, 24), "black").save(wrong)
-    (tmp_path / "outputs").mkdir()
-    output = tmp_path / "outputs" / "figure.png"
-    image(output)
-    store = ReproductionStore(tmp_path)
-    store.register(spec(str(source)))
-    publish = reproduction_tools(work_root=tmp_path, backend=DownloadBackend())[-1]
-    response = await publish.ainvoke({"figure_id": "figure-3", "output_file": "figure.png",
-        "reference_image": str(wrong), "comparison": review().model_dump()})
-    assert "Reference does not match" in response
-    assert not store.allows(output)
-    omitted = review().model_dump()
-    omitted["panels"][0]["panel"] = "a"
-    response = await publish.ainvoke({"figure_id": "figure-3", "output_file": "figure.png",
-        "reference_image": str(source), "comparison": omitted})
-    assert response.startswith("Not published")
-    assert not store.allows(output)
-
-
-@pytest.mark.asyncio
 async def test_production_factory_registers_tools_and_skill_read_activates_gate(tmp_path, monkeypatch):
     from oceanx import deep_runtime
     from oceanx.agent_tools import ToolRegistry

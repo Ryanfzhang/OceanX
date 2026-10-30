@@ -19,23 +19,58 @@ named. A reproduction computes the paper's quantities as the paper defines them 
 the paper's own values; a similar-looking analysis of the same data is not a reproduction.
 
 ## Preserve specifications and compare before publishing
-After first reading each original figure, use record_reproduction_spec to save its reference page
-image, caption, intended output filename, panels, plot types, x/y axes, quantities, units/scales,
-layout, overlays and explicitly justified adaptations. The original specifications live outside
-scratch and are automatically re-injected after context compaction. Summaries reference those files
-instead of rewriting them. Corrections append a version with the source and reason.
+After first reading each original figure, call record_reproduction_spec before analysis. Supply
+source.pdf, one-based page, normalized figure_box and panel boxes [left, top, right, bottom] with
+coordinates between 0 and 1 on the rendered page. The framework saves the whole page, a region-box
+audit, original figure and individual panels, and extracts each region's PDF text. Inspect the
+saved crops: confirm the figure label/caption and that labels and panels are not cut off. If the
+region is uncertain, include the whole page and mark the extraction as uncertain. For an image-only
+source, supply reference_image instead. Caption is source text; panel descriptions are extractions,
+not new requirements. Only put literal labels in verified_labels after checking them against the image.
 
-Use record_reproduction_term to keep each budget term pending, computed (with code/data paths), or
-not_computable (with checked source files, specific missing inputs and why derivation is impossible).
-Keep working hypotheses separate from verified findings. A residual cannot resolve a pending term.
+The framework generates .runtime/reproduction/repro_spec.md from the versioned records, with
+embedded source images and extracted specifications. Do not edit this derived file or write your
+own comparison verdict into it. A Markdown image link is only a path; open its image to see pixels.
+Source specifications survive compaction. Summaries reference them instead of paraphrasing them.
+Correct an extraction with a source-backed revision, never rewrite the original to fit your output.
 
-Before drawing, reopen the original. After saving, open the original and generated figure yourself,
-compare every panel's plot type, x/y axes, variables, units/scales, layout and overlays, and fix the
-differences the data allow. Call publish_reproduction_figure with the reference and your explicit
-observations and comparison for every panel. Missing fields, failed comparisons and pending budget
-terms prevent publication of that registered figure. Changing the figure, spec or ledger requires
-a new comparison. No separate reviewer is called; you are responsible for truthful checks. This
-record does not validate the calculations; perform the numerical checks below as well.
+Record adjustments separately. Parameter changes (smoothing window, period, resolution) need a
+reason and must respect explicit user constraints. Changes to physical quantities, variables or
+plot types require a specific user authorization: supply its exact quotation and message ID in
+adjustments. Your own permitted_adaptations prose cannot authorize them. In particular, mean
+transport cannot replace transport trend without the user's agreement.
+
+Use record_reproduction_term for pending, computed (code/data evidence), and not_computable terms
+(checked files, missing inputs and why derivation is impossible). A residual cannot resolve a
+pending term. Do not claim that metadata or an image check validates a physical calculation.
+
+Before drawing, reopen the original. Save from the actual matplotlib figure using:
+
+```python
+from oceanx.reproduction_images import save_reproduction_figure
+metadata_file = save_reproduction_figure(
+    fig, "outputs/figure.pdf",
+    panels={"a": [ax_a], "b": [ax_b, ax_b_twin]},
+    source_code=__file__, data_files=["scratch/computed-results.nc"],
+)
+```
+
+Include every panel; group its twin axes together. This saves the actual figure, panel previews,
+artist types, axis labels, legends and source/output hashes. The data paths are provenance pointers,
+not proof of numerical correctness. Use a saved plotting script so the source can be checked.
+If plotting without matplotlib, report that this export is unsupported instead of inventing metadata.
+
+Open the original and generated figure and correct visible errors. Then call
+publish_reproduction_figure(figure_id, output_file, metadata_file). A fresh visual context compares
+one figure's original pixels, generated pixels, PDF text, metadata and user-authorized adjustments.
+It reports structure errors, scientific differences, or uncertainty. Only structural mismatches or
+unresolved evidence prevent approval; a different scientific trend/value is not a reason to force
+agreement. A readable plot is not proof that its formulas or normalization are correct.
+
+There is one initial check and at most two repair checks per figure. After that, preserve drafts,
+report the specific differences and ask the user to decide; do not keep changing the method. Missing
+panels remain partial reproduction, even if data absence is explained. Do not rename/re-register an
+output to evade this limit. Report each figure as complete, adapted, or partial, with the evidence.
 
 ## Definitions before code
 Before computing anything, read the page image of each page whose equations define the quantities you
@@ -75,10 +110,10 @@ two, or of sign, comes from a definition, normalisation, unit, domain, mask or s
 shown otherwise: find it before drawing any conclusion.
 
 ## Adapting the method to the record
-A method built for a long record can fail on a short one. Scale a smoothing window with the record: keep
-the share of the record it spans as in the paper, and smooth values at the time resolution the paper
-plots, monthly ones rather than annual means. A paper that smooths 28 years with a 7-year window uses a
-quarter of its record, so on 12 years use about 3 years; the paper's own window would leave a few points.
+A method built for a long record can fail on a short one. Justify any change to smoothing or filtering
+using the available record, the timescale being studied and the samples retained. Respect explicit user
+requirements, preserve the quantity being estimated, and record the change from the paper's method.
+Do not assume that scaling a window in proportion to record length is always appropriate.
 Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md,
 under Autocorrelation and dependence, and judge each trend and correlation by the independent values behind
 it. Account for serial dependence when estimating uncertainty from averaged or smoothed series;

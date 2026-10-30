@@ -377,7 +377,7 @@ async def build_deep_agent_graph(*, profile, tools, system_prompt, cwd, operatio
         continuity.append(ReproductionSummarizationMiddleware(model, backend, reproduction_root))
         system_prompt += "\n" + REPRODUCTION_POLICY
         domain_tools.extend(reproduction_tools(work_root=reproduction_root, backend=backend,
-                                               on_change=reproduction_changed))
+                                               model=model, on_change=reproduction_changed))
         contracts.append(ReproductionMiddleware(reproduction_root))
     return create_deep_agent(model=model, tools=domain_tools,
         system_prompt=system_prompt, subagents=subagents or [], backend=backend,

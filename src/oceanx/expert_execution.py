@@ -108,7 +108,8 @@ def _install_result_runtime(code_root: Path, helper_module: str | None = None) -
     without it the packaged functions are installed as they are."""
     package_root = code_root / "oceanx"
     package_root.mkdir(parents=True, exist_ok=True)
-    for support_name in ("scientific_view.py", "figure_preview.py", "figure_reproduction.py", "palettes.py"):
+    for support_name in ("scientific_view.py", "figure_preview.py", "figure_reproduction.py",
+                         "reproduction_images.py", "palettes.py"):
         shutil.copy2(_result_support_source(support_name), package_root / support_name)
     if helper_module is None:
         shutil.copy2(Path(__file__).resolve().parent / "resources" / "skills" / "core" /

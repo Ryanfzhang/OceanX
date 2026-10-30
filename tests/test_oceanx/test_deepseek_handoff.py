@@ -134,3 +134,31 @@ def test_a_figure_read_by_a_tool_reaches_deepseek_as_an_image():
         [HumanMessage(content="q"), call.model_copy(update={"tool_calls": [
             {"id": "r2", "name": "execute", "args": {}}]}), text])
     assert isinstance(plain["messages"][-1]["content"], str)
+
+
+def test_images_follow_all_parallel_tool_results():
+    model = create_chat_model(profile(model="deepseek-flash"))
+    calls = AIMessage(content="", tool_calls=[
+        {"id": "original", "name": "read_file", "args": {"file_path": "/original.png"}},
+        {"id": "generated", "name": "read_file", "args": {"file_path": "/generated.png"}},
+        {"id": "metadata", "name": "read_file", "args": {"file_path": "/metadata.json"}},
+    ])
+    image = {"type": "image", "base64": "aGVsbG8=", "mime_type": "image/png"}
+    results = [ToolMessage(content_blocks=[image], tool_call_id="original"),
+               ToolMessage(content_blocks=[image], tool_call_id="generated"),
+               ToolMessage(content="labels", tool_call_id="metadata")]
+    sent = model._get_request_payload([HumanMessage(content="Compare"), calls, *results], tools=[TOOL])
+    assert [m["role"] for m in sent["messages"]] == ["user", "assistant", "tool", "tool", "tool", "user"]
+    assert [m["tool_call_id"] for m in sent["messages"][2:5]] == ["original", "generated", "metadata"]
+    assert len([b for b in sent["messages"][-1]["content"] if b.get("type") == "image_url"]) == 2
+
+
+def test_visual_review_json_mode_has_no_forced_tool_choice():
+    from oceanx.reproduction_state import StructuralReview
+    model = create_chat_model(profile(model="deepseek-flash"))
+    structured = model.with_structured_output(StructuralReview, method="json_mode")
+    binding = structured.first
+    payload = model._get_request_payload([HumanMessage(content="Return JSON")], **binding.kwargs)
+    assert payload["response_format"] == {"type": "json_object"}
+    assert "tool_choice" not in payload
+    assert "tools" not in payload
