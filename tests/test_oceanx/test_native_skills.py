@@ -29,6 +29,37 @@ def test_role_library_has_support_files_without_other_role_skills(tmp_path):
     assert (root / "references/methods/transport.md").is_file()
 
 
+
+def test_a_section_a_skill_points_to_is_quoted_where_it_points(tmp_path):
+    """Readers skipped the sections a skill sent them to (2026-10-26; 2026-10-31, a vorticity budget written
+    without the physics section), so a library quotes each one after the paragraph pointing to it."""
+    for role in ("single_agent", "coordinator"):
+        root = library(tmp_path, role)
+        text = (root / "skills/paper-reproduction/SKILL.md").read_text(encoding="utf-8")
+        for path, heading, line in (
+            ("/skills/ocean-physical-consistency-review/SKILL.md", "Vorticity budgets and streamfunctions",
+             "> Poisson solve needs boundary values the data do not give"),
+            ("/skills/ocean-analysis-design/SKILL.md", "Autocorrelation and dependence",
+             "> Timestamps or neighboring grid cells are not automatically independent replicates."),
+            ("/references/coding/matplotlib.md", "Publication figures", "> a figure title;"),
+        ):
+            quote = f"> Quoted from {path}, under {heading}:"
+            assert text.count(quote) == 1 and line in text
+            assert text.index(path) < text.index(quote)  # after the paragraph that points to it
+    # The coordinator may not open the physics skill, yet reads the section it is sent to.
+    assert not (root / "skills/ocean-physical-consistency-review").exists()
+
+
+def test_every_pointer_in_a_skill_names_a_section_that_exists(tmp_path):
+    """A pointer to a missing document or heading would leave the reader nothing to quote."""
+    from oceanx.native_skills import POINTER
+    for role in ("single_agent", "coordinator", "literature_reproduction_expert"):
+        for skill in sorted((library(tmp_path, role) / "skills").glob("*/SKILL.md")):
+            lines = skill.read_text(encoding="utf-8").splitlines()
+            own = "\n".join(line for line in lines if not line.startswith(">"))
+            quotes = [line for line in lines if line.startswith("> Quoted from ")]
+            assert len(POINTER.findall(own)) == len(quotes), skill
+
 def test_current_bundle_replaces_stale_discovery_without_deleting_old_snapshots(tmp_path, monkeypatch):
     from oceanx import native_skills
     bundle = tmp_path / "bundle"

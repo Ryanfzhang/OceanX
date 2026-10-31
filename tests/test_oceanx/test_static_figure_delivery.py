@@ -167,7 +167,9 @@ def test_a_pdf_figure_is_shown_through_the_preview_beside_it(tmp_path):
     drawn from its first page after the run that saved it, and Download still returns the PDF."""
     from PIL import Image
 
-    from oceanx.figure_delivery import PDF_PREVIEW_EDGE, preview_path, write_pdf_preview
+    from oceanx.figure_delivery import (
+        DISPLAY_EDGE, PDF_PREVIEW_EDGE, display_path, is_delivered_figure, preview_path, write_pdf_preview,
+    )
     key = "single-agent-x"
     outputs = tmp_path / "agents" / key / "outputs"
     outputs.mkdir(parents=True)
@@ -183,10 +185,17 @@ def test_a_pdf_figure_is_shown_through_the_preview_beside_it(tmp_path):
     with Image.open(preview_path(figure)) as image:
         assert image.format == "PNG" and max(image.size) == PDF_PREVIEW_EDGE
     assert [(item.path, item.mime_type) for item in record.files] == [
-        ("sst_response.pdf", "application/pdf"), ("preview.png", "image/png")]
-    assert (record.content["figure_file"], record.content["preview_file"]) == ("sst_response.pdf", "preview.png")
+        ("sst_response.pdf", "application/pdf"), ("preview.png", "image/png"), ("display.png", "image/png")]
+    assert (record.content["figure_file"], record.content["preview_file"], record.content["display_file"]) == (
+        "sst_response.pdf", "preview.png", "display.png")
     assert store.file_path(ref=record.ref, relative_path="sst_response.pdf") == figure.resolve()
     assert store.file_path(ref=record.ref, relative_path="preview.png") == preview_path(figure).resolve()
+    assert store.file_path(ref=record.ref, relative_path="display.png") == display_path(figure).resolve()
+    # The desktop shows a picture larger than the preview, which stays small enough for an agent to open
+    # (a dense figure's preview shrinks and blurs); neither picture is a figure of its own.
+    with Image.open(display_path(figure)) as image:
+        assert max(image.size) == DISPLAY_EDGE > PDF_PREVIEW_EDGE
+    assert not is_delivered_figure(display_path(figure)) and not is_delivered_figure(preview_path(figure))
     # A preview at least as new as its PDF is kept, and the preview is no figure of its own.
     drawn = preview_path(figure).stat().st_mtime_ns
     assert write_pdf_preview(figure) and preview_path(figure).stat().st_mtime_ns == drawn
@@ -200,6 +209,19 @@ def test_a_pdf_figure_is_shown_through_the_preview_beside_it(tmp_path):
     assert write_pdf_preview(outputs / "broken.pdf") is None
     broken = next(item for item in store.list(task_id="task") if item.content["figure_file"] == "broken.pdf")
     assert [item.path for item in broken.files] == ["broken.pdf"] and broken.content["preview_file"] == "broken.pdf"
+
+
+def test_a_static_run_draws_no_desktop_picture_of_a_pdf(tmp_path, monkeypatch):
+    """A static (benchmark) run has no desktop: a PDF figure keeps only the preview an agent opens."""
+    from oceanx.figure_delivery import FIGURE_DELIVERY_ENV, display_path
+    monkeypatch.setenv(FIGURE_DELIVERY_ENV, "static")
+    outputs = tmp_path / "agents" / "single-agent-x" / "outputs"
+    outputs.mkdir(parents=True)
+    figure = outputs / "sst_response.pdf"
+    _vector_pdf(figure)
+    (record,) = TaskResultStore(task_workspaces=_Projector(tmp_path)).list(task_id="task")
+    assert record.content["preview_file"] == "preview.png"
+    assert "display_file" not in record.content and not display_path(figure).exists()
 
 
 @pytest.mark.parametrize("delivery", ["pdf", "interactive"])
@@ -238,6 +260,12 @@ def test_a_figures_preview_stays_small_enough_for_a_model_to_open(tmp_path, monk
     assert preview.stat().st_size <= MAX_PREVIEW_BYTES
     with Image.open(preview) as image:
         image.verify()
+    # Fewer colours before fewer pixels: an agent checks labels and lines in a PDF's preview, and a dense
+    # figure kept in full colour shrank to 819-1024 px (2026-10-31).
+    if delivery == "pdf":
+        from oceanx.figure_preview import PREVIEW_EDGE
+        with Image.open(preview) as image:
+            assert max(image.size) == PREVIEW_EDGE
 
 
 def test_the_figure_rules_ask_for_a_vector_pdf_in_the_desktop_and_keep_png_in_static_runs():
@@ -251,7 +279,9 @@ def test_the_figure_rules_ask_for_a_vector_pdf_in_the_desktop_and_keep_png_in_st
     assert "save it as a PNG under OCEAN_OUTPUT_DIR" in static and "vector PDF" not in static
     reference = " ".join((ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8").split())
     assert "Save a vector PDF" in reference and "pdf.fonttype=42" in reference
-    assert "save the same figure also as a draft PNG, whose name starts with `_`" in reference
+    # A PDF is checked through the preview drawn after the run (within read_file's limit), not a PNG of its own.
+    assert "For a PDF, open the preview image drawn beside it after the run." in reference
+    assert "draft PNG" not in reference
 
 
 @pytest.mark.asyncio

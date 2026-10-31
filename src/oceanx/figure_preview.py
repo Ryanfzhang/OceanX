@@ -19,22 +19,34 @@ from oceanx.figure_reproduction import _FIXED_RENDERER_SOURCE
 PREVIEW_EDGE = 2000
 # read_file accepts at most 500 KiB, including for previews from dense fields.
 MAX_PREVIEW_BYTES = 480_000
+# The picture the desktop shows of a PDF figure. No agent reads it, so its size is not bounded and a
+# dense figure stays sharp where its preview has to shrink.
+DISPLAY_EDGE = 2400
 
 
 def preview_png(image) -> bytes:
-    """Encode a PDF or interactive preview within read_file's limit, preserving RGB colours."""
+    """Encode a PDF or interactive preview within read_file's limit: in full colour when that fits, else in
+    256 colours, and smaller only when neither fits. An agent checks its labels and lines in this picture,
+    and a dense figure in full colour had to shrink to about 1000 px (819 px for one of 2026-10-31)."""
     from PIL import Image
 
     image = image.convert("RGB")
     image.thumbnail((PREVIEW_EDGE, PREVIEW_EDGE), Image.Resampling.LANCZOS)
     while True:
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG", optimize=True)
-        data = buffer.getvalue()
-        if len(data) <= MAX_PREVIEW_BYTES:
-            return data
+        for encoded in (image, image.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)):
+            buffer = io.BytesIO()
+            encoded.save(buffer, format="PNG", optimize=True)
+            if buffer.tell() <= MAX_PREVIEW_BYTES:
+                return buffer.getvalue()
         image = image.resize(tuple(max(1, int(size * 0.8)) for size in image.size),
                              Image.Resampling.LANCZOS)
+
+
+def display_png(image) -> bytes:
+    """Encode the picture the desktop shows of a PDF figure, at its full size."""
+    buffer = io.BytesIO()
+    image.convert("RGB").save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 @lru_cache(maxsize=1)

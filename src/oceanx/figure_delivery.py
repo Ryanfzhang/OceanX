@@ -10,9 +10,10 @@ an image file, and no plotting interface is described anywhere a model reads. Be
 Every delivered figure that is not itself a picture has its screen picture beside it, a file whose
 name ends in ``.preview.png``: the renderer of an interactive figure ``<name>.nc`` writes
 ``<name>.preview.png`` when the figure is saved, and after each run a PDF figure ``<name>.pdf`` gets
-``<name>.pdf.preview.png`` drawn from its first page (preview_path). The agent that saved the figure
-and the desktop look at the same file. After each run a PDF figure is also checked for
-Type 3 fonts (pdf_problems), and the agent is told if it uses them.
+``<name>.pdf.preview.png`` drawn from its first page (preview_path), small enough for the agent that
+saved the figure to open. The desktop shows a sharper picture, ``<name>.pdf.display.png``
+(display_path), drawn when an interactive run's results are listed. After each run a PDF figure is also
+checked for Type 3 fonts (pdf_problems), and the agent is told if it uses them.
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from uuid import uuid4
 
-from oceanx.figure_preview import MAX_PREVIEW_BYTES, preview_png
+from oceanx.figure_preview import DISPLAY_EDGE, MAX_PREVIEW_BYTES, display_png, preview_png
 from oceanx.figure_preview import PREVIEW_EDGE as PDF_PREVIEW_EDGE
 from oceanx.figure_style import COLORS, EDITABLE, publication_style, rc_text
 from oceanx.pdf_text import PDFIUM_LOCK
@@ -29,9 +30,9 @@ from oceanx.pdf_text import PDFIUM_LOCK
 FIGURE_DELIVERY_ENV = "OCEANX_FIGURE_DELIVERY"
 FIGURE_DELIVERY_MODES = ("interactive", "static")
 STATIC_FIGURE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".svg", ".pdf"})
-# Files derived from a figure beside it, never figures of their own: its picture for screens and the print
-# version of an interactive figure (figure_preview.figure_pdf_path).
-DERIVED_SUFFIXES = (".preview.png", ".print.pdf")
+# Files derived from a figure beside it, never figures of their own: its pictures for agents and for the
+# desktop, and the print version of an interactive figure (figure_preview.figure_pdf_path).
+DERIVED_SUFFIXES = (".preview.png", ".display.png", ".print.pdf")
 # Skills that teach the plotting interface; a static run does not put them in the skill library.
 INTERACTIVE_FIGURE_SKILLS = frozenset({"scientific-figure-design"})
 
@@ -98,21 +99,36 @@ def preview_path(figure: Path) -> Path:
     return figure.with_name(f"{figure.name}.preview.png")
 
 
+def display_path(figure: Path) -> Path:
+    """The picture of a PDF figure the desktop shows, beside it (write_pdf_display)."""
+    figure = Path(figure)
+    return figure.with_name(f"{figure.name}.display.png")
+
+
 def write_pdf_preview(pdf: Path) -> Path | None:
     """Draw the first page of a PDF figure beside it (preview_path) unless a preview at least as new is
     there; None when the PDF cannot be drawn, and the figure is then still delivered as its file."""
-    target = preview_path(pdf)
+    return _draw_first_page(pdf, preview_path(pdf), PDF_PREVIEW_EDGE, preview_png, MAX_PREVIEW_BYTES)
+
+
+def write_pdf_display(pdf: Path) -> Path | None:
+    """Draw the first page of a PDF figure as large as the desktop shows it (display_path), unless a
+    picture at least as new is there; None when the PDF cannot be drawn."""
+    return _draw_first_page(pdf, display_path(pdf), DISPLAY_EDGE, display_png, None)
+
+
+def _draw_first_page(pdf: Path, target: Path, edge: int, encode, max_bytes: int | None) -> Path | None:
     try:
         if (target.is_file() and target.stat().st_mtime_ns >= pdf.stat().st_mtime_ns
-                and target.stat().st_size <= MAX_PREVIEW_BYTES):
+                and (max_bytes is None or target.stat().st_size <= max_bytes)):
             return target
         import pypdfium2 as pdfium  # also draws the pages of the PDFs a researcher attaches (pdf_text.py)
 
         with PDFIUM_LOCK, pdfium.PdfDocument(str(pdf)) as document:
             page = document[0]
-            bitmap = page.render(scale=PDF_PREVIEW_EDGE / max(*page.get_size(), 1.0))
+            bitmap = page.render(scale=edge / max(*page.get_size(), 1.0))
             try:
-                data = preview_png(bitmap.to_pil())
+                data = encode(bitmap.to_pil())
             finally:
                 bitmap.close()
         staging = target.with_name(f".{target.name}.{uuid4().hex}.tmp.png")

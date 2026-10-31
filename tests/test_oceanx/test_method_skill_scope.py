@@ -72,6 +72,8 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
                  "Before answering, read repro_spec.md again and review your results against it"):
         assert step in reproduction
     assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
+    # Each paper value is written down with its data and period, so a run on the paper's own data sees the overlap.
+    assert "each with the dataset and period it comes from" in reproduction
     # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
     # drawn and marked, not dropped.
     assert "give their sum as the residual" in reproduction and "marked not significant, never left out" in reproduction

@@ -228,6 +228,14 @@ export function isStaticFigure(result: TaskResultRecord): boolean {
   return result.kind === 'file' && result.content?.render_status === 'static';
 }
 
+/** The image a static figure is shown as: the figure itself when it is a picture; for a PDF, the large
+ * picture the backend draws of its first page, or the smaller preview an agent reads where there is none. */
+export function staticFigureImage(result: TaskResultRecord): TaskResultFile | undefined {
+  const image = (file: TaskResultFile | undefined): file is TaskResultFile => Boolean(file?.mime_type.startsWith('image/'));
+  const declared = (field: string) => result.files.find((file) => file.path === result.content?.[field]);
+  return [result.files[0], declared('display_file'), declared('preview_file'), result.files.find(image)].find(image);
+}
+
 export function isNetCDFFile(file: TaskResultFile): boolean {
   return file.path.toLowerCase().endsWith('.nc') || ['application/x-netcdf', 'application/netcdf'].includes(file.mime_type);
 }

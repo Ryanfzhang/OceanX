@@ -910,7 +910,9 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                    "Save only final deliverables under OCEAN_OUTPUT_DIR; "
                    + ("a final figure saved there as a PNG is delivered. " if static else
                       "ScientificFigure.save('name.nc') publishes there automatically, and a figure the "
-                      "Figure API cannot draw is delivered when saved there as a vector PDF. ")
+                      "Figure API cannot draw is delivered when saved there as a vector PDF. To reproduce a "
+                      "paper's figure and layout, use matplotlib and save a vector PDF there, even when "
+                      "the Figure API supports its plot type. ")
                    + "Use supplied absolute data/result paths with native file tools or execute. "
                    "Source data and other agents' evidence are read-only; your working directory is writable.")
         if not static:
@@ -928,13 +930,6 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                        "to carry state within one attempt. Save only a checkpoint another node or retry needs.")
             if role in DATA_EXPERT_ROLES and learned:
                 prompt += " " + learned_skills_rule(learned)
-    if (svc.native_vision and research and not static
-            and role not in {"coordinator", "scientific_discussion_partner"}):
-        prompt += (
-            "\nA saved figure may have a sibling .preview.png. Inspect it only when the image itself "
-            "is scientific evidence needed for your reasoning, such as a spatial pattern; preview "
-            "inspection is not a separate visual-delivery review."
-        )
     if svc.native_vision and role not in {"coordinator", "scientific_discussion_partner"}:
         prompt += "\n" + FIGURE_RULE  # a paper's figures reach the model as images (pdf_text.py)
     if role != "coordinator" and not quick:

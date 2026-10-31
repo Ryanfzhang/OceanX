@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 from oceanx.backend.store import RequestStore, ResearchTaskRecord
-from oceanx.figure_delivery import preview_path, static_figure_files
+from oceanx.figure_delivery import display_path, preview_path, static_figure_files
 from oceanx.task_results import TaskResultRecord
 from oceanx.task_workspace import TaskWorkspaceProjector
 
@@ -152,7 +152,7 @@ class TaskCacheCleaner:
                     add(task_root, name)
         # The images under outputs are delivered figures in either delivery mode.
         for _, path in static_figure_files(task_root):
-            protected.update((path.resolve(), preview_path(path).resolve()))
+            protected.update((path.resolve(), preview_path(path).resolve(), display_path(path).resolve()))
         return frozenset(protected)
 
     @staticmethod

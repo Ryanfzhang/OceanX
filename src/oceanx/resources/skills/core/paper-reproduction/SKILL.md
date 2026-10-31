@@ -33,9 +33,9 @@ Before computing anything, write repro_spec.md in your working directory. For ea
 reproduce, give the path of the image that shows it, named in the paper's extracted text, and what the
 image and its caption show: panels, variables, units, axis ranges and their multipliers, colour encoding,
 fills, overlays, reference lines, annotations and layout. For each quantity, give its definition as read
-above and the paper's values you will compare with. Write only what the paper shows or states, mark what
-you could not read, and correct the file from the paper, never to fit your results. Read it again whenever
-earlier messages have been replaced by a summary.
+above and the paper's values you will compare with, each with the dataset and period it comes from. Write
+only what the paper shows or states, mark what you could not read, and correct the file from the paper,
+never to fit your results. Read it again whenever earlier messages have been replaced by a summary.
 
 ## One computation per quantity
 Fix one computation of each quantity before drawing any figure, and check it: its units, the paper's

@@ -84,7 +84,7 @@ BOUNDED_WORK_POLICY = """\
 The requested output (a figure, number, table, route or file) is the finish line. First cut the data to the
 variables, region, depth and period the request needs; never load a whole field or water column when a slice
 answers it. Compute it with one defensible method, verify the requested output, publish it, answer and stop.
-Open {saved_view} of a figure you saved and correct errors before delivery; for a PDF, render a preview.
+Open {saved_view} of a figure you saved and correct errors before delivery.
 Do not add unrequested sensitivity tests, extra figures or statistics, or investigations beyond the requested
 objective. Checking and correcting the requested output is part of the task. State a
 remaining limitation in one sentence instead of investigating it. Each code run stops after {seconds} s; if one

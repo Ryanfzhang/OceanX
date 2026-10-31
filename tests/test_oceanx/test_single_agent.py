@@ -140,7 +140,14 @@ def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
         assert "Do not spend a separate round" not in policy
     for policy in (interactive, static):
         assert "Checking and correcting the requested output is part of the task." in policy
-        assert "Do not open" not in policy
+        assert "Do not open" not in policy and "render a preview" not in policy
+    # A paper's figure is a vector PDF; its preview is drawn after the run, so the agent opens it, not makes it.
+    expert = " ".join(OCEAN_EXPERT_WORKSTREAM_POLICY.split())
+    assert "use matplotlib and a vector PDF even when ScientificFigure supports its plot type" in expert
+    assert "its picture is beside it as `concise-name.pdf.preview.png`" in expert
+    # Looking at a saved figure has one rule (FIGURE_VERIFICATION_POLICY); the figure skill does not contradict it.
+    from oceanx.skills import load_ocean_skill
+    assert "repair round" not in load_ocean_skill("scientific-figure-design")[0]
     assert HANDOFF_TOOL in LAST_CALL_HANDOFF and "no tools" in LAST_CALL
 
 

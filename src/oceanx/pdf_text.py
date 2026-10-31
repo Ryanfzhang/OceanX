@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import io
 import os
 import shutil
 import threading
@@ -45,7 +46,10 @@ MAX_FOLDER_PDFS = 10  # a folder source offers the texts of its first PDFs, top 
 MAX_PAGE_IMAGES = 40  # the first pages of a PDF are rendered, enough for a paper and its supplement
 MIN_FIGURE_PIXELS = 200_000  # smaller embedded images are logos and icons, not figures
 MAX_FIGURE_EDGE = 1600  # long edge of a saved image, enough to read layout, labels and equations
-_FORMAT = 3  # extraction format: a new format extracts cached PDFs again
+# read_file opens an image only up to 500 KiB, and a page dense with equations is larger as a JPEG of
+# quality 85 (Zheng et al. 2026, page 3: 589 KiB), so the agent could not open the page it most needed.
+MAX_IMAGE_BYTES = 480_000
+_FORMAT = 4  # extraction format: a new format extracts cached PDFs again
 
 
 class PdfTextError(RuntimeError):
@@ -69,6 +73,25 @@ def _figure_folder(text: Path) -> Path:
     return text.with_suffix(".figures")
 
 
+def _save_jpeg(image: Any, path: Path, quality: int) -> None:
+    """Save an image as a JPEG that read_file can open: lower its quality to 70, then its size, until it
+    fits MAX_IMAGE_BYTES. Small symbols survive a lower quality better than a smaller image."""
+
+    from PIL import Image
+
+    while True:
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=quality)
+        if buffer.tell() <= MAX_IMAGE_BYTES:
+            break
+        if quality > 70:
+            quality = max(70, quality - 8)
+        else:
+            image = image.resize((max(1, round(image.width * 0.85)), max(1, round(image.height * 0.85))),
+                                 Image.Resampling.LANCZOS)
+    path.write_bytes(buffer.getvalue())
+
+
 def _save_figures(reader: Any, folder: Path) -> dict[int, list[str]]:
     """Save the figures embedded on each page into `folder`; return their file names by page."""
 
@@ -86,7 +109,7 @@ def _save_figures(reader: Any, folder: Path) -> dict[int, list[str]]:
                 image = image.convert("RGB")
                 image.thumbnail((MAX_FIGURE_EDGE, MAX_FIGURE_EDGE))
                 name = f"page-{number:02d}-figure-{len(figures.get(number, [])) + 1}.jpg"
-                image.save(folder / name, format="JPEG", quality=88)
+                _save_jpeg(image, folder / name, quality=88)
             except Exception:  # noqa: BLE001, S112 - one undecodable image must not cost the text
                 continue
             ensure_private_file(folder / name)
@@ -122,7 +145,7 @@ def _render_pages_unlocked(pdf: Path, folder: Path) -> set[int]:
             try:
                 page = document[number - 1]
                 bitmap = page.render(scale=MAX_FIGURE_EDGE / max(page.get_size()))
-                bitmap.to_pil().convert("RGB").save(folder / _page_image(number), format="JPEG", quality=85)
+                _save_jpeg(bitmap.to_pil().convert("RGB"), folder / _page_image(number), quality=85)
             except Exception:  # noqa: BLE001, S112 - a page that will not render must not cost the others
                 continue
             ensure_private_file(folder / _page_image(number))
@@ -253,6 +276,7 @@ def document_text_allowed(store: RequestStore, workspace_id: str) -> bool:
 __all__ = [
     "FIGURE_RULE",
     "MAX_FOLDER_PDFS",
+    "MAX_IMAGE_BYTES",
     "TEXT_NOTE",
     "PdfTextError",
     "document_text_allowed",

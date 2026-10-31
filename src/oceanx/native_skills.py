@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import os
 import hashlib
+import re
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 from deepagents.backends import CompositeBackend, FilesystemBackend, StateBackend
@@ -25,6 +27,45 @@ from oceanx.skills import (
 # The agent that works on a request alone, and its helpers, read what the data and search Experts read.
 _EXPERT_READERS = ("ocean_process_expert", "statistical_inference_expert", "literature_reproduction_expert")
 SKILL_READERS = {"single_agent": _EXPERT_READERS, "helper": _EXPERT_READERS}
+
+# A skill sends its reader to a section of another document: "read /skills/<name>/SKILL.md, under <heading>".
+# Readers skipped those sections (2026-10-26; 2026-10-31, a vorticity budget written without the physics
+# section it was sent to), so a library quotes each section after the paragraph that points to it. The text
+# itself lives only in the document it belongs to.
+POINTER = re.compile(r"read\s+(/(?:skills|references)/\S+?\.md),\s+under\s+")
+
+
+def quote_pointed_sections(text: str, document: Callable[[str], str | None]) -> str:
+    """Quote, after each paragraph of ``text`` that points to a section of another document, that section
+    as ``document(path)`` gives it. A pointer whose document or heading is not found is left as it is."""
+
+    quoted: list[str] = []
+    for paragraph in text.split("\n\n"):
+        quoted.append(paragraph)
+        for match in POINTER.finditer(paragraph):
+            target = document(match.group(1))
+            sections = _sections(target) if target is not None else {}
+            named = " ".join(paragraph[match.end():].split())
+            heading = max((name for name in sections if named.startswith(name)), key=len, default=None)
+            if heading is not None:
+                lines = [f"Quoted from {match.group(1)}, under {heading}:", "", *sections[heading].splitlines()]
+                quoted.append("\n".join(f"> {line}" if line else ">" for line in lines))
+    return "\n\n".join(quoted)
+
+
+def _sections(text: str) -> dict[str, str]:
+    """A Markdown document's second-level sections by heading, without the heading line."""
+
+    sections: dict[str, str] = {}
+    heading, lines = None, []
+    for line in [*text.splitlines(), "## "]:
+        if line.startswith("## "):
+            if heading:
+                sections[heading] = "\n".join(lines).strip()
+            heading, lines = line[3:].strip(), []
+        elif heading:
+            lines.append(line)
+    return sections
 
 
 def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=None) -> Path:
@@ -50,6 +91,8 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
                 files.extend((p, Path("skills") / directory.name / p.relative_to(directory))
                              for p in sorted(directory.rglob("*"))
                              if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc")
+    bundled = {directory.name: directory for source in ocean_skill_dirs(capabilities=capabilities)
+               for directory in sorted(source.iterdir()) if directory.is_dir()}
     references = ocean_reference_root()
     files.extend((p, Path("references") / p.relative_to(references))
                  for p in sorted(references.rglob("*"))
@@ -63,6 +106,17 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
         figure_lines = len(reference.splitlines())
         generated[Path("skills/scientific-figure-design/API.md")] = reference.encode("utf-8")
 
+    def pointed_document(path: str) -> str | None:
+        """The document a pointer names, as its own readers get it (whether or not this role may open it)."""
+        parts = Path(path).parts[1:]
+        if parts[:1] == ("references",):
+            target = (references / Path(*parts[1:])).resolve()
+            return target.read_text(encoding="utf-8") if references.resolve() in target.parents and target.is_file() else None
+        if parts[:1] == ("skills",) and parts[2:] == ("SKILL.md",) and parts[1] in bundled:
+            source = bundled[parts[1]] / "SKILL.md"
+            return revisions.get(parts[1]) or packaged_skill(source.parent, source.read_text(encoding="utf-8"))
+        return None
+
     def content(source: Path, relative: Path) -> bytes:
         if relative.parts[0] != "skills":
             return source.read_bytes()
@@ -73,6 +127,8 @@ def prepare_skill_library(root: Path, *, role: str, capabilities=(), revisions=N
             revised = packaged_skill(source.parent, source.read_text(encoding="utf-8"))
         if document and relative.parts[1] == "scientific-figure-design" and figure_lines is not None:
             revised = revised.replace("{{FIGURE_API_LINE_COUNT}}", str(figure_lines))
+        if document:
+            revised = quote_pointed_sections(revised, pointed_document)
         return source.read_bytes() if revised is None else revised.encode("utf-8")
 
     digest = hashlib.sha256()

@@ -25,7 +25,13 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from oceanx.figure_delivery import agent_output_files, static_figure_files, write_pdf_preview
+from oceanx.figure_delivery import (
+    agent_output_files,
+    static_figure_files,
+    static_figures,
+    write_pdf_display,
+    write_pdf_preview,
+)
 
 if TYPE_CHECKING:
     from oceanx.task_workspace import TaskWorkspaceProjector
@@ -370,8 +376,12 @@ class TaskResultStore:
         for agent_key, path in static_figure_files(task_root):
             try:
                 stat = path.stat()
-                preview = write_pdf_preview(path) if path.suffix.lower() == ".pdf" else None
-                drawn = preview.stat().st_mtime_ns if preview is not None else None
+                pdf = path.suffix.lower() == ".pdf"
+                preview = write_pdf_preview(path) if pdf else None
+                # The desktop shows a sharper picture than the preview an agent can open; a static
+                # (benchmark) run has no desktop.
+                display = write_pdf_display(path) if pdf and not static_figures() else None
+                drawn = tuple(item.stat().st_mtime_ns if item is not None else None for item in (preview, display))
                 key = (str(path), stat.st_mtime_ns, stat.st_size, "static", drawn)
                 record = self._view_cache.get(key)
                 if record is None:
@@ -382,6 +392,7 @@ class TaskResultStore:
                         agent_key=agent_key,
                         path=path,
                         preview=preview,
+                        display=display,
                         modified=stat.st_mtime,
                     )
                     self._view_cache[key] = record
@@ -400,6 +411,7 @@ class TaskResultStore:
         path: Path,
         preview: Path | None,
         modified: float,
+        display: Path | None = None,
     ) -> TaskResultRecord:
         relative = path.relative_to(task_root).as_posix()
         output_relative = path.relative_to(task_root / "agents" / agent_key / "outputs")
@@ -436,6 +448,12 @@ class TaskResultStore:
                                         sha256=hashlib.sha256(data).hexdigest()))
             content["workspace_files"]["preview.png"] = preview.relative_to(task_root).as_posix()
             content["preview_file"] = "preview.png"
+        if display is not None:  # what the desktop shows; the preview stays its thumbnail
+            data = display.read_bytes()
+            files.append(TaskResultFile(path="display.png", mime_type="image/png", size=len(data),
+                                        sha256=hashlib.sha256(data).hexdigest()))
+            content["workspace_files"]["display.png"] = display.relative_to(task_root).as_posix()
+            content["display_file"] = "display.png"
         return TaskResultRecord(
             ref=TaskResultRef(task_id=task_id, result_id=f"figure_{identity}"),
             workspace_id=workspace_id,

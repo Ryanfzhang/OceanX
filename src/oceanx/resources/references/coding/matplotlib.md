@@ -29,7 +29,7 @@ Save PNG previews at 300 dpi.
 
 When your model reads images, open the saved figure once and fix what is wrong before delivering
 it: clipped or empty panels, squashed curves, overlapping text, panels of uneven size, type too
-small to read. For a PDF, save the same figure also as a draft PNG, whose name starts with `_`, and open that.
+small to read. For a PDF, open the preview image drawn beside it after the run.
 
 ## Maps
 

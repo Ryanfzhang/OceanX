@@ -25,7 +25,7 @@ import {forgetProject, mergeRememberedProjects, parseProjectCatalog, rememberPro
 import {revisionFromRequestFailure} from './request-recovery.js';
 import {requestId} from './request-id.js';
 import {updateRequestActivity, type RequestActivity} from './request-activity.js';
-import {isAnalysisNotebook, isDataResult, isNetCDFFile, isStaticFigure, taskResultRefKey} from './types.js';
+import {isAnalysisNotebook, isDataResult, isNetCDFFile, isStaticFigure, staticFigureImage, taskResultRefKey} from './types.js';
 import type {AppearanceTheme, ArtifactSummary, ArtifactVersion, DeliveryManifest, DisplayDensity, EventPayload, OceanEvent, RequestContext, ResearchTask, ResolvedAppearanceTheme, ResultDocument, TaskOutput, TaskResultFile, TaskResultRecord, TeamSnapshot, TranscriptItem, Workspace} from './types.js';
 
 type SourceSelection = {kind: 'file' | 'folder'; relativePath?: string; localPath?: string};
@@ -1001,13 +1001,11 @@ export function App(): React.JSX.Element {
     readPage(0, '');
   };
   // A saved image opens as the figure itself; its file is also what Download returns. A PDF figure is
-  // shown through the PNG the backend draws from its first page, and Download returns the PDF.
+  // shown through a picture the backend draws from its first page, and Download returns the PDF.
   const openStaticFigure = (result: TaskResultRecord) => {
     const resultKey = taskResultRefKey(result.result_ref);
     const file = result.files[0];
-    const image = (item: TaskResultFile | undefined): item is TaskResultFile => Boolean(item?.mime_type.startsWith('image/'));
-    const declared = declaredResultFile(result, 'preview_file', image);
-    const preview = image(file) ? file : image(declared) ? declared : undefined;
+    const preview = staticFigureImage(result);
     openResultKey.current = resultKey;
     setResultSurface({kind: 'interactive_view', document: directResultDocument(result)});
     setResultLoading(Boolean(file)); setResultError(file ? null : 'Figure file is missing.');

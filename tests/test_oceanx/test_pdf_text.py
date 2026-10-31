@@ -15,6 +15,7 @@ from oceanx.local_sources import resolve_local_source
 from oceanx.model_config import OceanChatDeepSeek
 from oceanx.pdf_text import (
     MAX_FOLDER_PDFS,
+    MAX_IMAGE_BYTES,
     TEXT_NOTE,
     PdfTextError,
     document_text_allowed,
@@ -279,3 +280,23 @@ def test_each_page_is_rendered_for_a_model_that_reads_images(tmp_path, monkeypat
     plain = pdf_text(_write_pdf(tmp_path / "plain.pdf", ["Text only"]), paths)
     assert "[Page image:" not in plain.read_text(encoding="utf-8")
     assert not plain.with_suffix(".figures").exists()
+
+
+def test_page_and_figure_images_stay_small_enough_for_read_file(tmp_path):
+    """read_file opens an image only up to 500 KiB. The equation page of Zheng et al. (2026) was 589 KiB as a
+    JPEG of quality 85, and an agent opened it only after two failures and shrinking it itself."""
+
+    import numpy as np
+    from PIL import Image
+
+    from oceanx.pdf_text import _save_jpeg
+
+    dense = Image.fromarray(np.random.default_rng(0).integers(0, 255, (1200, 1600, 3), dtype=np.uint8))
+    _save_jpeg(dense, tmp_path / "dense.jpg", quality=85)
+    assert (tmp_path / "dense.jpg").stat().st_size <= MAX_IMAGE_BYTES
+    with Image.open(tmp_path / "dense.jpg") as saved:
+        assert saved.width / saved.height == pytest.approx(1600 / 1200, rel=0.01)
+    plain = Image.new("RGB", (1600, 1200), (20, 90, 160))
+    _save_jpeg(plain, tmp_path / "plain.jpg", quality=85)
+    with Image.open(tmp_path / "plain.jpg") as saved:
+        assert saved.size == (1600, 1200)  # an image that fits keeps its size
