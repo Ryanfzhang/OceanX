@@ -17,6 +17,7 @@ import functools
 import hashlib
 import os
 import shutil
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -97,9 +98,18 @@ def _page_image(number: int) -> str:
     return f"page-{number:02d}.jpg"
 
 
+# PDFium is process-global and must not render concurrently on worker threads.
+PDFIUM_LOCK = threading.RLock()
+
+
 def _render_pages(pdf: Path, folder: Path) -> set[int]:
     """Save an image of each of the first pages of `pdf` into `folder`; return the numbers saved."""
 
+    with PDFIUM_LOCK:
+        return _render_pages_unlocked(pdf, folder)
+
+
+def _render_pages_unlocked(pdf: Path, folder: Path) -> set[int]:
     try:
         import pypdfium2 as pdfium  # only a Task with a PDF source needs it
 

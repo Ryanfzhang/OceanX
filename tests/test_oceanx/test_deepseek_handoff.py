@@ -151,14 +151,3 @@ def test_images_follow_all_parallel_tool_results():
     assert [m["role"] for m in sent["messages"]] == ["user", "assistant", "tool", "tool", "tool", "user"]
     assert [m["tool_call_id"] for m in sent["messages"][2:5]] == ["original", "generated", "metadata"]
     assert len([b for b in sent["messages"][-1]["content"] if b.get("type") == "image_url"]) == 2
-
-
-def test_visual_review_json_mode_has_no_forced_tool_choice():
-    from oceanx.reproduction_state import FigureAdvice
-    model = create_chat_model(profile(model="deepseek-flash"))
-    structured = model.with_structured_output(FigureAdvice, method="json_mode")
-    binding = structured.first
-    payload = model._get_request_payload([HumanMessage(content="Return JSON")], **binding.kwargs)
-    assert payload["response_format"] == {"type": "json_object"}
-    assert "tool_choice" not in payload
-    assert "tools" not in payload

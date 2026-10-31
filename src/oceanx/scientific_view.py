@@ -19,7 +19,7 @@ from numbers import Real
 from pathlib import Path
 from typing import Any, Literal
 
-from oceanx.figure_preview import write_figure_preview
+from oceanx.figure_preview import figure_pdf_path, write_figure_preview
 from oceanx.palettes import (
     DEFAULT_GROUPED_PALETTE,
     DEFAULT_SEQUENTIAL_PALETTE,
@@ -1274,7 +1274,7 @@ class ScientificFigure:
         finally:
             if temporary.exists():
                 temporary.unlink()
-        preview = write_figure_preview(path)
+        preview = write_figure_preview(path, pdf=True)
         self._register_saved_result(path, preview)
         return path
 
@@ -1405,7 +1405,7 @@ class ScientificFigure:
         finally:
             if temporary.exists():
                 temporary.unlink()
-        preview = write_figure_preview(path)
+        preview = write_figure_preview(path, pdf=True)
         event: dict[str, Any] = {
             "kind": "interactive_view",
             "view_kind": "spatial_map",
@@ -1421,6 +1421,9 @@ class ScientificFigure:
             "view_type": "map.field2d",
             "preview_output": _result_relative_path(preview),
         }
+        pdf = figure_pdf_path(path)  # the same drawing, for editing in Illustrator
+        if pdf.is_file():
+            event["pdf_output"] = _result_relative_path(pdf)
         if self.conclusions:
             event["conclusions"] = list(self.conclusions)
         if self.source_handle:
@@ -1468,6 +1471,9 @@ class ScientificFigure:
             "view_type": self._view_type(),
             "preview_output": _result_relative_path(preview),
         }
+        pdf = figure_pdf_path(path)  # the same drawing, for editing in Illustrator
+        if pdf.is_file():
+            event["pdf_output"] = _result_relative_path(pdf)
         if self.conclusions:
             event["conclusions"] = list(self.conclusions)
         if self.source_handle:

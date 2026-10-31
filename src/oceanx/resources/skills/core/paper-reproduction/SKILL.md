@@ -18,59 +18,6 @@ Use when a request asks to reproduce, test or extend the analysis of a paper the
 named. A reproduction computes the paper's quantities as the paper defines them and compares them with
 the paper's own values; a similar-looking analysis of the same data is not a reproduction.
 
-## Preserve specifications and compare before publishing
-After first reading each original figure, call record_reproduction_spec before analysis. Supply
-source.pdf, one-based page, normalized figure_box and panel boxes [left, top, right, bottom] with
-coordinates between 0 and 1 on the rendered page. The framework saves the whole page, a region-box
-audit, original figure and individual panels, and extracts each region's PDF text. Inspect the
-saved crops: confirm the figure label/caption and that labels and panels are not cut off. If the
-region is uncertain, include the whole page and mark the extraction as uncertain. For an image-only
-source, supply reference_image instead. Caption is source text; panel descriptions are extractions,
-not new requirements. Only put literal labels in verified_labels after checking them against the image.
-
-The framework generates .runtime/reproduction/repro_spec.md from the versioned records, with
-embedded source images and extracted specifications. Do not edit this derived file or write your
-own comparison verdict into it. A Markdown image link is only a path; open its image to see pixels.
-Source specifications survive compaction. Summaries reference them instead of paraphrasing them.
-Correct an extraction with a source-backed revision, never rewrite the original to fit your output.
-
-Record adjustments separately. Parameter changes (smoothing window, period, resolution) need a
-reason and must respect explicit user constraints. Changes to physical quantities, variables or
-plot types require a specific user authorization: supply its exact quotation and message ID in
-adjustments. Your own permitted_adaptations prose cannot authorize them. In particular, mean
-transport cannot replace transport trend without the user's agreement.
-
-Use record_reproduction_term for pending, computed (code/data evidence), and not_computable terms
-(checked files, missing inputs and why derivation is impossible). A residual cannot resolve a
-pending term. Do not claim that metadata or an image check validates a physical calculation.
-
-Before drawing, reopen the original. Save from the actual matplotlib figure using:
-
-```python
-from oceanx.reproduction_images import save_reproduction_figure
-metadata_file = save_reproduction_figure(
-    fig, "outputs/figure.pdf",
-    panels={"a": [ax_a], "b": [ax_b, ax_b_twin]},
-    source_code=__file__, data_files=["scratch/computed-results.nc"],
-)
-```
-
-Include every panel; group its twin axes together. This saves the actual figure, panel previews,
-artist types, axis labels, legends and source/output hashes. The data paths are provenance pointers,
-not proof of numerical correctness. Use a saved plotting script so the source can be checked.
-If plotting without matplotlib, report that this export is unsupported instead of inventing metadata.
-
-Open the original and generated figure and correct visible errors. Then call
-review_reproduction_figure(figure_id, output_file, metadata_file). A fresh visual context compares
-one figure's original pixels, generated pixels, PDF text, metadata and user-authorized adjustments.
-It reports missing content, structural differences, scientific differences, uncertainty and concrete
-suggestions. It does not accept or reject figures and does not control whether they are displayed.
-Use the advice to correct clear errors where feasible, explain remaining gaps, and deliver the
-useful results the available data allow. A missing dataset should be documented with evidence;
-it does not require hiding the whole figure. Unverified missing-data claims remain tentative.
-Do not repeat checks to obtain approval, and do not change scientific results to resemble the paper.
-Report each figure's completed parts and limitations rather than calling it accepted or rejected.
-
 ## Definitions before code
 Before computing anything, read the page image of each page whose equations define the quantities you
 will compute: the extracted text names that image above the page and garbles its equations, symbols and
@@ -80,6 +27,15 @@ area, volume or thickness), units, sign convention, grid placement, masking, smo
 the periods compared. Check each definition by its units against the paper's stated values and figure
 axes: a circulation integrated along a boundary over a layer is in m3 s-1, so a figure in m s-1 shows it
 divided by an area.
+
+## Writing down what the paper requires
+Before computing anything, write repro_spec.md in your working directory. For each figure you will
+reproduce, give the path of the image that shows it, named in the paper's extracted text, and what the
+image and its caption show: panels, variables, units, axis ranges and their multipliers, colour encoding,
+fills, overlays, reference lines, annotations and layout. For each quantity, give its definition as read
+above and the paper's values you will compare with. Write only what the paper shows or states, mark what
+you could not read, and correct the file from the paper, never to fit your results. Read it again whenever
+earlier messages have been replaced by a summary.
 
 ## One computation per quantity
 Fix one computation of each quantity before drawing any figure, and check it: its units, the paper's
@@ -125,13 +81,19 @@ the same variables, symbols, units, scales, colour encoding, fills, overlays, re
 and layout. Draw every element the original has, the trend line of each period included; one the record
 is too short to support is drawn and marked not significant, never left out. Smoothed curves and their
 fills run through the whole record as the original's do, over the raw series drawn faintly behind them at
-the paper's time resolution. When you can read images, open the
-original again right before drawing it, since the image read at the start lies far back in the
+the paper's time resolution. Before drawing each figure, read repro_spec.md again and, when you can
+read images, open the original again, since what you read at the start lies far back in the
 conversation. After saving, open the original and yours together, compare them item by item (panel layout,
 fills, line styles, axis ranges and their multipliers, panel letters, legends and annotations, text that
 crosses a line, lines that run off the axes) and fix every difference the data allow. Deliver every panel you
 computed, with any doubt written on it rather than withholding it. Leave out only a panel whose data are
 missing, say why, and never fill it with another quantity.
+
+## Reviewing the results
+Before answering, read repro_spec.md again and review your results against it: each saved figure beside
+the image of its original, item by item as under Figures, and each reproduced value beside the paper's.
+Check that every figure and number you report comes from the saved output of the one computation of its
+quantity. Fix what the data allow, and report what remains with its reason.
 
 ## Reporting
 For each of the paper's conclusions give the paper's value, the reproduced value, whether they agree and

@@ -898,8 +898,9 @@ class OceanRequestRouter:
             raise RequestStoreError("Task result does not belong to the current task")
         self._task_in_workspace(ref.task_id, request)
         try:
-            result = self.task_results.get(ref)
-            path = self.task_results.file_path(ref=ref, relative_path=request.payload.file_name)
+            result = await asyncio.to_thread(self.task_results.get, ref)
+            path = await asyncio.to_thread(
+                self.task_results.file_path, ref=ref, relative_path=request.payload.file_name)
         except TaskResultError as exc:
             raise RequestNotFound(ref.key) from exc
         if result.workspace_id != self._workspace_id(request):
@@ -910,6 +911,8 @@ class OceanRequestRouter:
         )
         if declared is None:
             raise RequestStoreError("Requested file is not declared by the task result")
+        if path.suffix.lower() == ".nc" or declared.mime_type in {"application/x-netcdf", "application/netcdf"}:
+            raise RequestStoreError("NetCDF files are available for preview only, not download")
         workspace_files = result.content.get("workspace_files")
         mutable_workspace_file = (
             isinstance(workspace_files, dict)
@@ -927,7 +930,8 @@ class OceanRequestRouter:
         # The manifest declares which file may be opened. Mutable supplementary
         # files use their current size/hash because the user is expected to edit
         # them; accepted scientific payloads retain the manifest checksum.
-        if current_size > 25 * 1024 * 1024:
+        csv_download = declared.mime_type == "text/csv" and request.payload.purpose == "result_file"
+        if current_size > 25 * 1024 * 1024 and not csv_download:
             raise RequestStoreError("Requested task result file exceeds the bounded resource limit")
         terminal = self._completed_event(
             client,
@@ -958,7 +962,7 @@ class OceanRequestRouter:
             raise RequestStoreError("Task result does not belong to the current task")
         self._task_in_workspace(ref.task_id, request)
         try:
-            result = self.task_results.get(ref)
+            result = await asyncio.to_thread(self.task_results.get, ref)
         except TaskResultError as exc:
             raise RequestNotFound(ref.key) from exc
         if result.workspace_id != self._workspace_id(request) or result.kind != "interactive_view":
@@ -2352,6 +2356,9 @@ class OceanRequestRouter:
         turn_count = 0
         last_assistant_text = ""
         model_error: ErrorEvent | None = None
+        stream = _coordinator_events(
+            agent_session.runtime.engine, submitted_text, request.request_id,
+        )
         # API latency is not a model-resource budget. Token/turn limits bound
         # reasoning; cancellation and tool-progress checks remain independent.
         try:
@@ -2364,9 +2371,6 @@ class OceanRequestRouter:
                 # contain exactly what the researcher submitted.
                 text=visible_text,
             )
-            stream = _coordinator_events(
-                agent_session.runtime.engine, submitted_text, request.request_id,
-            ).__aiter__()
             native_team_tools = {"task"}
             while True:
                 try:
@@ -2606,6 +2610,7 @@ class OceanRequestRouter:
                     details={"reason": str(exc)},
                 )
         finally:
+            await stream.aclose()
             self._agent_tasks.pop(request.request_id, None)
             self._agent_request_sessions.pop(request.request_id, None)
             self._agent_request_clients.pop(request.request_id, None)
@@ -2707,8 +2712,7 @@ class OceanRequestRouter:
         if isinstance(event, AssistantTextDelta):
             if event.turn_id is None:
                 return
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 AssistantDeltaEvent(
                     **self._event_fields(
                         client,
@@ -2735,8 +2739,7 @@ class OceanRequestRouter:
                     text=event.message.text,
                     turn_id=event.turn_id,
                 )
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 AssistantTurnCompletedEvent(
                     **self._event_fields(
                         client,
@@ -2758,8 +2761,7 @@ class OceanRequestRouter:
         if isinstance(event, ToolExecutionStarted):
             if event.turn_id is None or event.tool_call_id is None:
                 return
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 ToolCallStartedEvent(
                     **self._event_fields(
                         client,
@@ -2785,8 +2787,7 @@ class OceanRequestRouter:
             activity_only = bool(
                 event.metadata is not None and event.metadata.get("display") == "activity"
             )
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 ToolCallCompletedEvent(
                     **self._event_fields(
                         client,
@@ -2811,8 +2812,7 @@ class OceanRequestRouter:
             )
             return
         if isinstance(event, CompactProgressEvent):
-            await self.event_bus.emit_local(
-                client,
+            await self.event_bus.emit_workspace(
                 ContextCompactionProgressEvent(
                     **self._event_fields(
                         client,
@@ -3522,7 +3522,7 @@ class OceanRequestRouter:
                     for manifest in build_delivery_manifests(outputs)
                 ],
                 "task_results": (
-                    list(self.task_results.list_payloads(task_id=request.payload.task_id))
+                    list(await asyncio.to_thread(self.task_results.list_payloads, task_id=request.payload.task_id))
                     if self.task_results is not None
                     else []
                 ),
@@ -3554,7 +3554,7 @@ class OceanRequestRouter:
         # immediately after rendering ``task.open``; explicit snapshot reads
         # retain their complete payload for protocol compatibility.
         payload_data["task_results"] = (
-            list(self.task_results.list_payloads(task_id=task_id))
+            list(await asyncio.to_thread(self.task_results.list_payloads, task_id=task_id))
             if isinstance(request, TaskSnapshotGetRequest) and self.task_results is not None
             else []
         )

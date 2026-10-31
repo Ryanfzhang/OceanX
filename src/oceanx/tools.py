@@ -417,6 +417,8 @@ class OceanExpertRunCodeTool(_OceanTool):
             ]
             if result.invalid_candidate_results:
                 payload["file_errors"] = list(result.invalid_candidate_results)
+            if result.figure_notes:  # what keeps a saved PDF figure from being edited in Illustrator
+                payload["figure_notes"] = list(result.figure_notes)
             if result.discovered_results and self.services.domain_event_emitter is not None:
                 result_ids = tuple(
                     str(item.get("data_output") or item.get("title") or "result")

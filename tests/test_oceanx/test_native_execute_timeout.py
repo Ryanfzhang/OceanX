@@ -9,7 +9,7 @@ def _sandbox(tmp_path, state):
     async def record_command(command, timeout):
         del command, timeout
         return SimpleNamespace(stdout="partial\n", stderr="", returncode=-15, state=state,
-                               duration_seconds=300.4)
+                               duration_seconds=300.4, figure_notes=())
     return ResearchSandbox(service=SimpleNamespace(), work_root=tmp_path, read_roots=lambda: (),
                            record_command=record_command)
 

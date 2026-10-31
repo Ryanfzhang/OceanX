@@ -15,9 +15,9 @@ authors = [
 
 dependencies = [
     "deepagents==0.7.9",
-    # Native feedback for malformed tool calls (including mixed valid/invalid calls).
-    "langchain==1.4.3",
-    "langchain-core==1.6.3",
+    # Native feedback for malformed tool calls (including mixed valid/invalid calls) needs at least these.
+    "langchain>=1.4.3",
+    "langchain-core>=1.6.3",
     "langgraph-cli[inmem]>=0.4.31,<0.5",
     "langgraph-api==0.13.3",
     "langgraph-runtime-inmem==0.33.4",

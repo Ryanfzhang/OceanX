@@ -25,8 +25,9 @@ from uuid import uuid4
 import anyio
 import httpx
 from starlette.applications import Starlette
+from starlette.background import BackgroundTask
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 from websockets.asyncio.client import connect
@@ -404,15 +405,18 @@ def create_app(settings: WebSettings, *, backend_factory=ProtocolBackend) -> Sta
         if not local_request(request):
             return Response(status_code=403)
         try:
-            data, grant = await asyncio.to_thread(grants.read, request.path_params["token"])
+            stream, grant = await asyncio.to_thread(grants.open, request.path_params["token"])
         except (OSError, ValueError):
             return Response("Resource unavailable or changed", status_code=404)
         headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
                    "Content-Security-Policy": "default-src 'none'; sandbox"}
-        if request.query_params.get("download") == "1":
+        if request.query_params.get("download") == "1" or grant.mime == "text/csv":
             from urllib.parse import quote
             headers["Content-Disposition"] = "attachment; filename*=UTF-8''" + quote(grant.path.name)
-        return Response(data, media_type=grant.mime, headers=headers)
+        headers["Content-Length"] = str(grant.size)
+        return StreamingResponse(iter(lambda: stream.read(1024 * 1024), b""),
+                                 media_type=grant.mime, headers=headers,
+                                 background=BackgroundTask(stream.close))
 
     async def upload_paper(request: Request):
         if not local_request(request) or request.headers.get("origin") is None:

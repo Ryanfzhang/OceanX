@@ -115,7 +115,8 @@ def test_experts_keep_evidence_without_workflow_checklists():
     policy = _flatten(OCEAN_EXPERT_WORKSTREAM_POLICY)
     assert "Keep verified calculations and code" in policy
     assert "Derive reported values and labels from saved calculations" in policy
-    assert "Do not spend a separate round polishing" in policy
+    # Checking a delivered figure is part of the work, not a separate polishing round.
+    assert "This verification is part of completing the requested work" in policy
     # Most failed code runs across tasks were shape/axis mistakes after dropping to bare arrays.
     assert "select and reduce by dimension name" in policy and "not as bare .npz" in policy
 

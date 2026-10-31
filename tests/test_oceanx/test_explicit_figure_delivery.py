@@ -89,11 +89,11 @@ def test_only_explicit_scientific_figure_event_is_exposed(tmp_path: Path) -> Non
     assert all("orphan-preview.png" not in name for name in view.execution_output_names)
     assert view.content["render_status"] == "interactive"
     # A plain image under outputs is an image result of its own; the view's .preview.png is not.
-    (image,) = [record for record in records if record.kind == "file"]
+    (image,) = [record for record in records if record.content.get("render_status") == "static"]
     assert image.content["render_status"] == "static" and image.files[0].path == "orphan-preview.png"
 
 
-def test_self_describing_file_without_save_event_is_not_exposed(tmp_path: Path) -> None:
+def test_self_describing_file_without_save_event_is_metadata_only(tmp_path: Path) -> None:
     task_root = tmp_path / "task"
     agent_key = "statistics-test"
     work_root = task_root / "agents" / agent_key
@@ -116,7 +116,9 @@ def test_self_describing_file_without_save_event_is_not_exposed(tmp_path: Path) 
         task_workspaces=_Projector(task_root, execution)
     ).list(task_id="task")
 
-    assert records == ()
+    assert len(records) == 1
+    assert records[0].kind == "file"
+    assert records[0].content["role"] == "output_data"
 
 
 @pytest.mark.parametrize("draft_name", ["_draft.nc", ".draft.nc", "panels/_draft.nc", "panels/.draft.nc"])

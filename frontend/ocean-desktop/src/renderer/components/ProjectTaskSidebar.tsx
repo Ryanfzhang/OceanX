@@ -114,9 +114,7 @@ export function ProjectTaskSidebar({
         </div>
         <div className="project-tasks">
           {project.tasks.length ? project.tasks.map((task) => {
-            const running = Boolean(task.active_request_id)
-              || task.workflow?.state === 'planning'
-              || task.workflow?.state === 'working';
+            const running = Boolean(task.active_request_id);
             const active = task.task_id === activeTaskId && project.path === activeProjectPath;
             const unread = !active && !running
               && task.task_revision > (seenRevisions[taskSeenKey(project.path, task.task_id)] ?? 0);

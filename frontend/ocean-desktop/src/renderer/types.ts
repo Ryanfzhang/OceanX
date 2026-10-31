@@ -228,6 +228,15 @@ export function isStaticFigure(result: TaskResultRecord): boolean {
   return result.kind === 'file' && result.content?.render_status === 'static';
 }
 
+export function isNetCDFFile(file: TaskResultFile): boolean {
+  return file.path.toLowerCase().endsWith('.nc') || ['application/x-netcdf', 'application/netcdf'].includes(file.mime_type);
+}
+
+/** Saved data outputs open as tables or metadata, without inventing a scientific plot. */
+export function isDataResult(result: TaskResultRecord): boolean {
+  return result.kind === 'table' || result.content?.role === 'output_data';
+}
+
 /** The code every agent ran for one request, joined when the request ended (request_notebook.py). */
 export function isAnalysisNotebook(result: TaskResultRecord): boolean {
   return result.kind === 'file' && result.content?.role === 'analysis_notebook';

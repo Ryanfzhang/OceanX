@@ -58,6 +58,15 @@ or PDF that the Expert saves with matplotlib anywhere under its node's `outputs/
 plots stay in `scratch/`, and a name starting with `_` or `.` is a draft. `TaskResultStore.list` then
 lists these images as `file` results with `render_status: "static"`, and each Expert receipt lists
 the node's images under `Saved figures (cite these paths):` instead of `Published results`.
+In the Desktop's default mode, a figure the Figure API cannot draw is saved as a vector PDF (a PNG only
+for a picture such as a photograph). After each run a PDF figure gets `<name>.pdf.preview.png` beside it,
+drawn from its first page, which the result list, the analysis notebook and the agent see; Download returns
+the PDF. Existing PDFs acquire the same preview when their results are first requested. Preview
+generation runs off the event loop. The run reports Type 3 fonts (`figure_delivery.pdf_problems`);
+it does not infer editability from image shapes or path counts. An interactive figure is also saved as `<name>.print.pdf`, the same
+drawing, which the Workbench offers for Illustrator. Agents' code and the interactive renderer share one
+style, `figure_style.py`; static runs take from it only how fonts are stored. Text, lines and colour
+bars are editable; rasterized fields and photographs remain images.
 
 After updating, close the running desktop and run `bash scripts/run_desktop.sh` from
 the repository root in the activated OceanX conda environment. It rebuilds an outdated
@@ -98,7 +107,7 @@ on with the Coordinator and its Experts in research mode, as below. A paper's re
 with the single agent, which then holds every result the paper's figures combine, and is finished only
 when every quantity, term and figure the data allow is compared with the paper's (the `paper-reproduction`
 skill). It decides on the call that
-starts the work, so a simple request pays nothing for the choice; if its 100 calls run out first,
+starts the work, so a simple request pays nothing for the choice; if its 200 calls run out first,
 its last call may only answer or hand over. Headless runs (`ocean run`, `ocean batch`, the
 benchmark) send the team at once unless `--workflow-mode auto` or `standard` (the single agent
 alone) is given. Lessons stay in the team's skills; the single agent reads the learned helper

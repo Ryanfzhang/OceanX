@@ -599,3 +599,34 @@ def test_cancellation_commits_target_and_control_request_once(tmp_path: Path):
     assert commit.target.state == "cancelled"
     assert commit.target_terminal_event is not None
     assert store.get_request(cancel.request_id).state == "completed"
+
+
+def test_cancelled_task_workflow_stays_terminal_after_late_progress(tmp_path):
+    store = RequestStore(tmp_path / "state.sqlite3")
+    task = store.create_research_task(workspace_id="ws_store", title="Paper", task_id="task_cancel")
+    target = parse_request({"protocol_version": 2, "request_id": "req_task_cancel", "type": "session.submit",
+                            "payload": {"text": "Reproduce"}, "expected_workspace_revision": 0,
+                            "context": {"session_id": "ses_store", "client_id": "client_desktop_store",
+                                        "workspace_id": "ws_store", "task_id": task.task_id}})
+    cancel = _request("req_stop", request_type="request.cancel", payload={"target_request_id": target.request_id})
+    for request in (target, cancel):
+        store.reserve(request, principal="user:local:desktop")
+        store.mark_in_progress(request.request_id)
+    store.begin_task_request(task_id=task.task_id, request_id=target.request_id, expected_task_revision=0)
+    store.start_task_workflow(request_id=target.request_id, task_id=task.task_id, workspace_id="ws_store")
+    store.transition_task_workflow(request_id=target.request_id, state="working", activity="Running code")
+    store.commit_cancellation(cancel_request_id=cancel.request_id, target_request_id=target.request_id,
+                              target_event=_cancelled_event(target), terminal_event=_completed_event(cancel, {}))
+    assert store.get_research_task(task.task_id).active_request_id is None
+    workflow = store.get_task_workflow(target.request_id)
+    assert workflow.state == "cancelled"
+    assert workflow.activity == "Cancelled by user"
+    assert store.transition_task_workflow(request_id=target.request_id, state="working",
+                                          activity="Helper returned") == workflow
+    # Simulate a database saved by the old cancellation path, then restart recovery.
+    store._connection.execute("UPDATE task_workflows SET state = 'working' WHERE request_id = ?",
+                              (target.request_id,))
+    store._connection.commit()
+    store.recover_incomplete(lambda request: pytest.fail("No request should need interruption"))
+    assert store.get_task_workflow(target.request_id).state == "cancelled"
+    store.close()

@@ -997,6 +997,9 @@ class RequestStore:
             if row is None:
                 return None
             prior = self._task_workflow_from_row(row)
+            request = self._request_from_row(self._require_request_row(connection, request_id))
+            if request.terminal:
+                return prior
             repeat_count = prior.repeated_failures
             if failure_fingerprint is not None:
                 repeat_count = (
@@ -2773,6 +2776,13 @@ class RequestStore:
                 raise RequestStoreError("Cancellation target event has the wrong request ID")
             if target_event is not None:
                 self._commit_terminal_in_transaction(connection, target_request_id, target_event)
+                now = _utc_now()
+                connection.execute(
+                    "UPDATE task_workflows SET state = 'cancelled', activity = 'Cancelled by user', "
+                    "heartbeat_at = ?, failure_fingerprint = NULL, repeated_failures = 0, updated_at = ? "
+                    "WHERE request_id = ?",
+                    (now, now, target_request_id),
+                )
                 self._interrupt_interactions_for_request_in_connection(
                     connection, target_request_id
                 )
@@ -2853,6 +2863,14 @@ class RequestStore:
 
         recovered: list[EventEnvelope] = []
         with self._transaction() as connection:
+            # Older cancellations cleared the request but left its workflow busy.
+            # Recover that projection from the already committed terminal record.
+            connection.execute(
+                "UPDATE task_workflows SET state = 'cancelled', activity = 'Cancelled by user', "
+                "failure_fingerprint = NULL, repeated_failures = 0 "
+                "WHERE state IN ('planning', 'working') AND request_id IN "
+                "(SELECT request_id FROM request_records WHERE state = 'cancelled')"
+            )
             rows = connection.execute(
                 "SELECT * FROM request_records WHERE state IN ('accepted', 'in_progress')"
             ).fetchall()

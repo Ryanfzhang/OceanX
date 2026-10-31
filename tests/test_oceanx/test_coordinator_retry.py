@@ -74,7 +74,7 @@ async def test_gateway_does_not_replay_graph_on_provider_failure(retryable):
 
 
 @pytest.mark.asyncio
-async def test_server_stream_cancellation_uses_native_cancel_on_disconnect():
+async def test_server_stream_cancellation_waits_for_native_run_to_stop():
     class Threads:
         async def create(self, **_kwargs):
             return None
@@ -83,9 +83,13 @@ async def test_server_stream_cancellation_uses_native_cancel_on_disconnect():
         def __init__(self):
             self.joined = asyncio.Event()
             self.join_options = None
+            self.cancel_options = None
 
         async def create(self, *_args, **_kwargs):
             return {"run_id": "run-native"}
+
+        async def cancel(self, thread_id, run_id, **options):
+            self.cancel_options = (thread_id, run_id, options)
 
         def join_stream(self, thread_id, run_id, **options):
             self.join_options = (thread_id, run_id, options)
@@ -118,5 +122,49 @@ async def test_server_stream_cancellation_uses_native_cancel_on_disconnect():
     assert runs.join_options == (
         stream.thread_id,
         "run-native",
-        {"cancel_on_disconnect": True},
+        {"cancel_on_disconnect": False},
     )
+
+    assert runs.cancel_options == (stream.thread_id, "run-native", {"wait": True})
+
+
+@pytest.mark.asyncio
+async def test_closing_after_yield_closes_server_stream_and_stops_helpers():
+    from oceanx.deep_runtime import DeepAgentEngine
+
+    helper_stopped = asyncio.Event()
+    stream_closed = asyncio.Event()
+
+    class Runs:
+        async def create(self, *_args, **_kwargs):
+            return {"run_id": "run-owned"}
+
+        async def join_stream(self, *_args, **_kwargs):
+            try:
+                yield SimpleNamespace(event="events", data={
+                    "event": "on_tool_start", "name": "assign_helper", "run_id": "helper-call",
+                    "data": {"input": {"task": "Compute the budget"}},
+                })
+                await asyncio.Event().wait()
+            finally:
+                stream_closed.set()
+
+        async def cancel(self, _thread, run_id, *, wait):
+            assert run_id == "run-owned" and wait
+            await asyncio.sleep(0)
+            helper_stopped.set()
+
+    class Threads:
+        async def create(self, **_kwargs):
+            pass
+
+    graph = ServerGraphStream(client=SimpleNamespace(runs=Runs(), threads=Threads()),
+                              binding={"task_id": "task"})
+    engine = DeepAgentEngine(graph=graph, thread_id="thread", operation_id_factory=lambda *args: "op")
+    events = _coordinator_events(engine, "Question", "req")
+    await anext(events)
+    # Cancellation may happen while the router is delivering an event, not
+    # while it awaits the next SSE frame.
+    await events.aclose()
+    assert stream_closed.is_set()
+    assert helper_stopped.is_set()

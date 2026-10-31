@@ -65,7 +65,11 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     for step in ("Before computing anything, read the page image",
                  "Before writing code for a vorticity budget or a streamfunction, read /skills/ocean-physical-consistency-review/SKILL.md",
                  "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
-                 "Before drawing the first figure, read /references/coding/matplotlib.md"):
+                 "Before drawing the first figure, read /references/coding/matplotlib.md",
+                 # The paper's requirements are written down once and read again at the steps that use them.
+                 "Before computing anything, write repro_spec.md in your working directory",
+                 "Before drawing each figure, read repro_spec.md again",
+                 "Before answering, read repro_spec.md again and review your results against it"):
         assert step in reproduction
     assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
     # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is

@@ -1,8 +1,10 @@
 """Saved image files are delivered figures; a static-delivery run also describes no plotting interface."""
 
 import json
+import asyncio
 import re
 import sys
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -121,7 +123,7 @@ def test_images_are_listed_as_file_results_in_either_delivery_mode(monkeypatch, 
     figure = outputs / "maps" / "mld_anomaly.png"
     figure.write_bytes(PNG)
     (outputs / "_probe.png").write_bytes(PNG)
-    (outputs / "data.nc").write_bytes(b"not a figure")
+    (outputs / "_data.nc").write_bytes(b"not a figure")
     (outputs / "data.preview.png").write_bytes(PNG)  # owned by an interactive figure, never its own result
     store = TaskResultStore(task_workspaces=_Projector(tmp_path))
 
@@ -160,36 +162,82 @@ def _vector_pdf(path: Path) -> None:
     plt.close(figure)
 
 
-def test_a_pdf_figure_is_shown_through_a_drawing_of_its_first_page(tmp_path):
-    """The desktop and the browser show images: a vector PDF is shown as a PNG of its first page,
-    and Download still returns the PDF."""
+def test_a_pdf_figure_is_shown_through_the_preview_beside_it(tmp_path):
+    """The desktop and the browser show images: a vector PDF shows through <name>.pdf.preview.png,
+    drawn from its first page after the run that saved it, and Download still returns the PDF."""
     from PIL import Image
 
-    from oceanx.figure_delivery import PDF_PREVIEW_EDGE
+    from oceanx.figure_delivery import PDF_PREVIEW_EDGE, preview_path, write_pdf_preview
     key = "single-agent-x"
     outputs = tmp_path / "agents" / key / "outputs"
     outputs.mkdir(parents=True)
     figure = outputs / "sst_response.pdf"
     _vector_pdf(figure)
+    (outputs / "sst_response.preview.png").write_bytes(PNG)  # an interactive figure of the same name keeps its own
+    # Historical PDFs have no sidecar. Listing them uses the same preview writer as a new execution.
+    assert not preview_path(figure).exists()
     store = TaskResultStore(task_workspaces=_Projector(tmp_path))
     (record,) = store.list(task_id="task")
+    assert preview_path(figure) == outputs / "sst_response.pdf.preview.png"
+    assert (outputs / "sst_response.preview.png").read_bytes() == PNG
+    with Image.open(preview_path(figure)) as image:
+        assert image.format == "PNG" and max(image.size) == PDF_PREVIEW_EDGE
     assert [(item.path, item.mime_type) for item in record.files] == [
         ("sst_response.pdf", "application/pdf"), ("preview.png", "image/png")]
     assert (record.content["figure_file"], record.content["preview_file"]) == ("sst_response.pdf", "preview.png")
     assert store.file_path(ref=record.ref, relative_path="sst_response.pdf") == figure.resolve()
-    preview = store.file_path(ref=record.ref, relative_path="preview.png")
-    assert preview.parent == (tmp_path / ".runtime" / "figure-previews").resolve()
-    with Image.open(preview) as image:
-        assert image.format == "PNG" and max(image.size) == PDF_PREVIEW_EDGE
-    # The preview is not a figure of its own, and one that was cleaned up is drawn again.
-    assert len(store.list(task_id="task")) == 1
-    preview.unlink()
-    (again,) = store.list(task_id="task")
-    assert store.file_path(ref=again.ref, relative_path="preview.png").is_file()
+    assert store.file_path(ref=record.ref, relative_path="preview.png") == preview_path(figure).resolve()
+    # A preview at least as new as its PDF is kept, and the preview is no figure of its own.
+    drawn = preview_path(figure).stat().st_mtime_ns
+    assert write_pdf_preview(figure) and preview_path(figure).stat().st_mtime_ns == drawn
+    assert store.list(task_id="task") == (record,)
+    assert preview_path(figure).stat().st_mtime_ns == drawn
+    preview_path(figure).unlink()
+    (restored,) = store.list(task_id="task")
+    assert restored.ref == record.ref and preview_path(figure).is_file()
     # A PDF that cannot be drawn is still delivered, as its file alone.
     (outputs / "broken.pdf").write_bytes(b"%PDF-1.7 not really")
+    assert write_pdf_preview(outputs / "broken.pdf") is None
     broken = next(item for item in store.list(task_id="task") if item.content["figure_file"] == "broken.pdf")
     assert [item.path for item in broken.files] == ["broken.pdf"] and broken.content["preview_file"] == "broken.pdf"
+
+
+@pytest.mark.parametrize("delivery", ["pdf", "interactive"])
+def test_a_figures_preview_stays_small_enough_for_a_model_to_open(tmp_path, monkeypatch, delivery):
+    """read_file opens an image only up to 500 KiB: a dense field's preview is drawn smaller until it fits
+    (2026-10-27: an agent shrank each of its previews itself before it could look at them)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    from oceanx.figure_delivery import MAX_PREVIEW_BYTES, preview_path, write_pdf_preview
+    y, x = np.mgrid[0:6:400j, 0:8:500j]
+    field = np.sin(x * 3) * np.cos(y * 2) + 0.4 * np.random.default_rng(1).standard_normal(x.shape)
+    if delivery == "pdf":
+        figure, axes = plt.subplots(figsize=(7.2, 5))
+        axes.pcolormesh(x, y, field, cmap="viridis")
+        pdf = tmp_path / "dense.pdf"
+        figure.savefig(pdf)
+        plt.close(figure)
+        # An old oversized preview must not bypass the new size limit through the cache.
+        preview_path(pdf).write_bytes(b"old-preview" * MAX_PREVIEW_BYTES)
+        assert write_pdf_preview(pdf) == preview_path(pdf)
+        preview = preview_path(pdf)
+    else:
+        from oceanx.scientific_view import ScientificFigure
+
+        monkeypatch.setenv("OCEAN_OUTPUT_DIR", str(tmp_path))
+        figure = ScientificFigure(plot_kind="section", title="Dense field")
+        figure.panel(x=x[0], y=y[:, 0]).field2d(field, units="1", render="cells")
+        figure.save("dense.nc")
+        preview = tmp_path / "dense.preview.png"
+        assert (tmp_path / "dense.print.pdf").is_file()
+    from PIL import Image
+
+    assert preview.stat().st_size <= MAX_PREVIEW_BYTES
+    with Image.open(preview) as image:
+        image.verify()
 
 
 def test_the_figure_rules_ask_for_a_vector_pdf_in_the_desktop_and_keep_png_in_static_runs():
@@ -204,6 +252,42 @@ def test_the_figure_rules_ask_for_a_vector_pdf_in_the_desktop_and_keep_png_in_st
     reference = " ".join((ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8").split())
     assert "Save a vector PDF" in reference and "pdf.fonttype=42" in reference
     assert "save the same figure also as a draft PNG, whose name starts with `_`" in reference
+
+
+@pytest.mark.asyncio
+async def test_listing_old_pdf_results_keeps_the_event_loop_responsive(tmp_path, monkeypatch):
+    from oceanx import task_results
+    from oceanx.figure_delivery import preview_path
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    host = OceanBackendHost(tmp_path / "state", write_frame=lambda _: None)
+    try:
+        client, recorder, context = await _open_workspace(host, workspace)
+        task = host.store.create_research_task(workspace_id=context["workspace_id"], title="Old PDF")
+        root = host.task_workspace_projector.ensure_task_root(task.task_id)
+        outputs = root / "agents" / "single-agent-x" / "outputs"
+        outputs.mkdir(parents=True)
+        pdf = outputs / "legacy.pdf"
+        _vector_pdf(pdf)
+        render = task_results.write_pdf_preview
+        loop = asyncio.get_running_loop()
+
+        def responsive_render(path):
+            pulse = threading.Event()
+            loop.call_soon_threadsafe(pulse.set)
+            assert pulse.wait(2), "Listing a PDF blocked the event loop"
+            return render(path)
+
+        monkeypatch.setattr(task_results, "write_pdf_preview", responsive_render)
+        await host.router.handle_payload(client, {
+            "protocol_version": 2, "request_id": "req_old_figures", "type": "task.output.list",
+            "payload": {"task_id": task.task_id}, "context": {**context, "task_id": task.task_id}})
+        result = recorder.latest("request.completed").payload.result
+        assert preview_path(pdf).is_file()
+        assert any(item["content"].get("preview_file") == "preview.png" for item in result["task_results"])
+    finally:
+        await host.close()
 
 
 def test_a_static_receipt_names_saved_figures_and_no_published_results():
