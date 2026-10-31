@@ -125,8 +125,8 @@ def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     assert f"For research questions, your first and only tool call must be {HANDOFF_TOOL}, then stop." in handoff
     assert "Do not inspect data to decide the initial route." in handoff
     # Reproduction with new data stays with the single agent and is not cut short as bounded work.
-    assert "reproducing a paper, including with different data or periods" in handoff
-    reproduction = "Reproducing or testing a paper's analysis is not bounded this way"
+    assert "reproducing a paper or applying its method, including to different data or periods" in handoff
+    reproduction = "Reproducing, testing or applying a paper's analysis is not bounded this way"
     assert reproduction in " ".join(graphs.bounded_work_policy(False).split())
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
     interactive, static = graphs.bounded_work_policy(False), graphs.bounded_work_policy(True)

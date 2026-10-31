@@ -74,6 +74,13 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
     # Each paper value is written down with its data and period, so a run on the paper's own data sees the overlap.
     assert "each with the dataset and period it comes from" in reproduction
+    # The skill applies a paper's method to other data too (2026-11-01): it finds the analyses the data support,
+    # copies each equation before coding it, and checks other data by the method, not by the paper's numbers.
+    for step in ("First list the paper's analyses and figures",
+                 "copy the paper's equation as printed, in its order of operations",
+                 "With other data the paper's values are context, not a target",
+                 "never fill it with another quantity, a table or another kind of figure"):
+        assert step in reproduction
     # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
     # drawn and marked, not dropped.
     assert "give their sum as the residual" in reproduction and "marked not significant, never left out" in reproduction

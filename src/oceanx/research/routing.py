@@ -51,7 +51,7 @@ HANDOFF_POLICY = f"""\
 OceanX handles four kinds of tasks. Handle these yourself:
 - basic Q&A
 - making plots or maps
-- reproducing a paper, including with different data or periods
+- reproducing a paper or applying its method, including to different data or periods
 
 Hand this one to the research team:
 - research questions: the user wants conclusions about what happened
@@ -89,9 +89,9 @@ Do not add unrequested sensitivity tests, extra figures or statistics, or invest
 objective. Checking and correcting the requested output is part of the task. State a
 remaining limitation in one sentence instead of investigating it. Each code run stops after {seconds} s; if one
 times out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
-Reproducing or testing a paper's analysis is not bounded this way: it is finished only when every quantity
-and budget term of the paper that the data allow is computed as the paper defines it and compared with the paper's
-values, every figure is redrawn to look like the paper's, and a term counts as missing only after deriving it from
+Reproducing, testing or applying a paper's analysis is not bounded this way: it is finished only when every
+quantity and budget term of the paper that the data allow is computed as the paper defines it and checked, every
+figure the data allow is redrawn to look like the paper's, and a term counts as missing only after deriving it from
 the stored variables has failed; /skills/paper-reproduction/SKILL.md describes how.
 """
 
