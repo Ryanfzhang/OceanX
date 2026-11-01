@@ -31,9 +31,9 @@ divided by an area.
 
 ## Writing down what the paper requires
 Before computing anything, write repro_spec.md in your working directory. First list the paper's analyses
-and figures and, for each, the variables, depths, region and period it needs and whether the supplied data
-hold them (look in the files, not at their names); do every analysis whose inputs exist and name the others
-with what they need. For each figure you will draw, give the path of the image that shows it, named in the
+and figures and, for each, the variables, depths, region, period and time sampling it needs and whether
+the supplied data hold them (look in the files, not at their names); do every analysis whose inputs exist
+and name the others with what they need. For each figure you will draw, give the path of the image that shows it, named in the
 paper's extracted text, and what the image and its caption show: panels, variables, units, axis ranges and
 their multipliers, colour encoding, fills, overlays, reference lines, annotations and layout. For each
 quantity, copy the paper's equation as printed, in its order of operations, write below it the discrete
@@ -91,9 +91,12 @@ the paper's time resolution. Before drawing each figure, read repro_spec.md agai
 read images, open the original again, since what you read at the start lies far back in the
 conversation. After saving, open the original and yours together, compare them item by item (panel layout,
 fills, line styles, axis ranges and their multipliers, panel letters, legends and annotations, text that
-crosses a line, lines that run off the axes) and fix every difference the data allow. Deliver every panel you
-computed, with any doubt written on it rather than withholding it. Leave out only a figure or panel whose
-data are missing and say what it needs; never fill it with another quantity, a table or another kind of figure.
+crosses a line, lines that run off the axes) and fix every difference the data allow. Decide what to draw
+panel by panel, curve by curve and term by term, never for a figure as a whole: draw each one the data
+allow, with any doubt written on it, and mark each missing one as not available, with what it needs. Draw
+a partial budget as partial and not closed rather than withholding it; never draw a missing term as zero,
+or a mechanism these data did not test as established. Leave out a figure only when none of it can be
+computed, and never fill a gap with another quantity, a table or another kind of figure.
 
 ## Reviewing the results
 Before answering, read repro_spec.md again and review your results against it: each saved figure beside

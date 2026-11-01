@@ -131,7 +131,11 @@ def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     bounded = " ".join(graphs.bounded_work_policy(False).split())
     reproduction = "Reproducing, testing or applying a paper's analysis is not bounded work"
     assert bounded.index(reproduction) < bounded.index("finish line")
-    assert "nothing the data allow is left as an offer for later" in bounded
+    assert "nothing the data allow is withheld or left as an offer for later" in bounded
+    # Reading only what the work needs holds for a paper's analysis too, and thinning a record is not a free way
+    # around the run limit: a run of 2026-11-01 read whole fields and kept every 12th day of daily data.
+    assert "For every request, read only the variables" in bounded
+    assert "Reading every n-th time step changes the result" in bounded and "coarser stride" not in bounded
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
     interactive, static = graphs.bounded_work_policy(False), graphs.bounded_work_policy(True)
     assert "finish line" in interactive and f"{STANDARD_MODE_CODE_SECONDS} s" in interactive

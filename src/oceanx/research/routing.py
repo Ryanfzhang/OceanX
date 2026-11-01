@@ -83,18 +83,21 @@ BOUNDED_WORK_POLICY = """\
 # Bounded work
 Reproducing, testing or applying a paper's analysis is not bounded work: it is finished only when every analysis
 of the paper that the data allow is done, each quantity and budget term computed as the paper defines it and
-checked, and each figure redrawn to look like the paper's. A term counts as missing only after deriving it from the
-stored variables has failed, and nothing the data allow is left as an offer for later;
-/skills/paper-reproduction/SKILL.md describes how.
-For any other request, the requested output (a figure, number, table, route or file) is the finish line. First
-cut the data to the variables, region, depth and period the request needs; never load a whole field or water column
-when a slice answers it. Compute it with one defensible method, verify the requested output, publish it, answer
-and stop. Open {saved_view} of a figure you saved and correct errors before delivery.
+checked, and each figure redrawn to look like the paper's, with every panel, curve and term the data allow. A term
+counts as missing only after deriving it from the stored variables has failed, and nothing the data allow is
+withheld or left as an offer for later; /skills/paper-reproduction/SKILL.md describes how.
+For any other request, the requested output (a figure, number, table, route or file) is the finish line. Compute it
+with one defensible method, verify the requested output, publish it, answer and stop. Open {saved_view} of a figure
+you saved and correct errors before delivery.
 Do not add unrequested sensitivity tests, extra figures or statistics, or investigations beyond the requested
 objective. Checking and correcting the requested output is part of the task. State a
 remaining limitation in one sentence instead of investigating it.
-Each code run stops after {seconds} s; if one times out, read less data (a smaller region or period, or a coarser
-stride) instead of repeating the same read.
+For every request, read only the variables, region, depth and period the work needs, sliced in the read itself;
+never load a whole field or water column when a slice answers it. Each code run stops after {seconds} s; if one
+times out, split the work into parts that each finish in time, such as one year per run, and save each part's
+result to a file instead of repeating the same read. Reading every n-th time step changes the result: say so, and
+where the request or the paper's method uses every step, compare the two on a common part, such as one year,
+before relying on it.
 """
 
 LAST_CALL = ("# Last model call\nThis is the last model call of your budget, and no tools are available on it. "

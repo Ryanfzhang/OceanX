@@ -78,7 +78,9 @@ does not justify treating its raw length as the independent sample size.
 A running mean shares values between neighbouring points. Record duration divided by window duration
 is a warning about limited temporal support, not an effective sample size or a significance test.
 For trends and correlations, state whether the estimate uses the original or smoothed series and
-account for its dependence; a smoother-looking curve does not add independent evidence.
+account for its dependence; a smoother-looking curve does not add independent evidence. Take a
+trend's interval and p-value from the t distribution with the degrees of freedom of its independent
+values, and say what each ± is: one standard error or a 95% interval.
 
 ## Uncertainty and comparison
 

@@ -79,15 +79,27 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     for step in ("First list the paper's analyses and figures",
                  "copy the paper's equation as printed, in its order of operations",
                  "With other data the paper's values are context, not a target",
-                 "never fill it with another quantity, a table or another kind of figure"):
+                 "never fill a gap with another quantity, a table or another kind of figure"):
         assert step in reproduction
+    # A run of 2026-11-01 dropped a whole budget figure as "possibly misleading" although one panel was fully
+    # computable and two partly, and sampled daily data every 12th day: what to draw is decided per panel,
+    # curve and term, and the spec records the time sampling each analysis needs.
+    assert "never for a figure as a whole" in reproduction
+    assert "Draw a partial budget as partial and not closed rather than withholding it" in reproduction
+    assert "period and time sampling it needs" in reproduction
     # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
     # drawn and marked, not dropped.
     assert "give their sum as the residual" in reproduction and "marked not significant, never left out" in reproduction
     physical, _ = load_ocean_skill("ocean-physical-consistency-review")
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
-    assert "open boundaries are the real straits" in " ".join(physical.split())
-    assert "running mean" in load_ocean_skill("ocean-analysis-design")[0]
+    flat = " ".join(physical.split())
+    assert "open boundaries are the real straits" in flat
+    # The same run gave a 0-750 m layer 775 m of level thickness and took a boundary flux from the cell outside
+    # some faces; the layer sum and the two forms of a flux are the checks that catch both.
+    assert "the layer's level thicknesses add up to the layer's own thickness" in flat
+    assert "So must the two forms of a flux term" in flat
+    design = " ".join(load_ocean_skill("ocean-analysis-design")[0].split())
+    assert "running mean" in design and "say what each ± is" in design
     reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
     assert "## Publication figures" in reference
     assert "## Maps" in reference and "ax.coastlines('50m'" in reference

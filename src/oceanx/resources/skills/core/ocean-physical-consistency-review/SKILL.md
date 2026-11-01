@@ -62,10 +62,12 @@ volume transport is unbalanced; examine the complete accounting, not a preferred
 
 A layer's circulation is the area integral of its vertically integrated relative vorticity or, by
 Stokes' theorem, the line integral of its integrated velocity along the domain boundary, open
-straits included; the two must agree. When they differ, the boundary does not follow the area that
-was integrated (coastal cells removed, staggered C-grid points, a strait left open): fix that rather
-than keep the form that looks right. Divide by an area only when the quantity is defined as a
-domain average, and say which area.
+straits included; the two must agree. So must the two forms of a flux term, such as the area
+integral of `div_h(f V)` and the sum of `f V` normal to the boundary. When they differ, the boundary
+does not follow the area that was integrated (coastal cells removed, staggered C-grid points, a
+strait left open, a face given the velocity of the wrong cell): fix that rather than keep the form
+that looks right. Divide by an area only when the quantity is defined as a domain average, and say
+which area.
 
 Archives rarely store every term of a vorticity budget; derive a term before calling it missing:
 - pressure from temperature, salinity and sea surface height, through the equation of state and
@@ -89,8 +91,10 @@ A layer's transport streamfunction integrates the layer's depth-integrated trans
 `psi(x, y) = integral(V, x0..x)` or of `-U` along y, on the native grid. Inverting vorticity with a
 Poisson solve needs boundary values the data do not give, so its pattern is not evidence.
 
-Use the layer's wet thickness and valid-data mask, not just the surface land mask. A column without
-water in that layer is outside its support; an all-missing column is unknown, not observed zero
+Use the layer's wet thickness and valid-data mask, not just the surface land mask. On depth levels,
+a level enters a layer with only the part of its cell between the layer's top and bottom, so where
+the sea floor lies deeper the layer's level thicknesses add up to the layer's own thickness; check
+that sum before integrating. A column without water in that layer is outside its support; an all-missing column is unknown, not observed zero
 transport. Keep missing data, absent water and measured zero distinct in reductions and derivatives.
 Use zero-filling only with an explicit physical or boundary justification; restoring a mask after a
 derivative does not undo gradients introduced by filling. Retain the layer mask when interpreting or
