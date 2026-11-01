@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRequest
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
@@ -39,14 +40,17 @@ from oceanx.research.routing import (
     HELPER_TOOL,
     LAST_CALL,
     LAST_CALL_HANDOFF,
+    PAPER_SKILL,
     PLAIN_TEXT_RETRY,
     SINGLE_AGENT,
     SINGLE_AGENT_CALL_LIMIT,
     TEAM,
     HandoffMiddleware,
     HelperMiddleware,
+    PaperSkillMiddleware,
     QuickCallBudgetMiddleware,
     handoff_request,
+    paper_rule,
     seen_by,
     tagged,
     team_config,
@@ -194,6 +198,39 @@ def test_the_single_agent_reads_the_skills_of_the_data_and_search_experts(tmp_pa
     helper = prepare_skill_library(tmp_path / "helper", role=HELPER,
                                    capabilities=("literature.read", "web.search", "jina.reader"))
     assert {path.name for path in (helper / "skills").iterdir()} == names
+
+
+def test_a_paper_skill_is_kept_only_for_a_request_whose_agent_opened_it(tmp_path):
+    # The attached paper names the skill to read when the request applies its analysis; named only
+    # in the paper's text note, it was not opened in a run of 2026-11-01, and read_file shows its
+    # first 100 lines. Once opened, all of it ends the instructions of that request, past a summary.
+    from oceanx.native_skills import prepare_skill_library
+    assert paper_rule([]) == ""
+    rule = paper_rule(["/cache/pdf-text/zheng.v4.txt"])
+    assert "/cache/pdf-text/zheng.v4.txt" in rule
+    assert f"read {PAPER_SKILL} before any other tool call" in rule
+    library = prepare_skill_library(tmp_path / "skills", role=SINGLE_AGENT)
+    kept = PaperSkillMiddleware(library / PAPER_SKILL.removeprefix("/"))
+
+    def system(state, messages=None):
+        request = ModelRequest(model=SimpleNamespace(), messages=messages or state, tools=[],
+                               state={"messages": state},
+                               system_message=SystemMessage(content="base"))
+        return kept._prepare(request).system_message.text
+
+    asked = HumanMessage(content="Apply the paper's method to my data")
+    read = {"name": "read_file", "args": {"file_path": PAPER_SKILL}, "id": "r1", "type": "tool_call"}
+    opened = [AIMessage(content="", tool_calls=[read]),
+              ToolMessage(content="first 100 lines", tool_call_id="r1")]
+    assert system([asked]) == "base"
+    text = system([asked, *opened], messages=[HumanMessage(content="Summary of the earlier work")])
+    assert text.startswith("base\n\n# Paper skill") and "name: paper-reproduction" not in text
+    for part in ("Before computing anything, write repro_spec.md", "## Figures", "## Reporting",
+                 "Quoted from /skills/ocean-physical-consistency-review/SKILL.md"):
+        assert part in text
+    # The next request is decided again.
+    later = [asked, *opened, AIMessage(content="Done."), HumanMessage(content="What is its DOI?")]
+    assert system(later) == "base"
 
 
 def _run_code_tool(limit):

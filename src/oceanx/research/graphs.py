@@ -45,17 +45,20 @@ from oceanx.research.routing import (
     HELPER_POLICY,
     LAST_CALL,
     LAST_CALL_HANDOFF,
+    PAPER_SKILL,
     SINGLE_AGENT,
     SINGLE_AGENT_CALL_LIMIT,
     TEAM,
     HandoffMiddleware,
     HelperMiddleware,
+    PaperSkillMiddleware,
     QuickCallBudgetMiddleware,
     budget_handoff,
     call_budget_sentence,
     handoff_note,
     handoff_request,
     last_answer,
+    paper_rule,
     seen_by,
     tagged,
     team_config,
@@ -893,6 +896,11 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         revisions=project.skills(research=research))
     # The skills this role is told to open, because they now hold something the project learned.
     learned = project.learned_in(role, research=research, capabilities=svc.skill_capabilities)
+    # The paper skill stays in the single agent's instructions once opened; this middleware comes
+    # first, so that the notice of the last call still ends them.
+    paper_skill = library / PAPER_SKILL.removeprefix("/")
+    if role == SINGLE_AGENT and paper_skill.is_file():
+        middleware = [PaperSkillMiddleware(paper_skill), *(middleware or [])]
     from oceanx.native_backend import task_backend
     filesystem, working_directory = task_backend(host(), config, run=run, library=library)
     discussion = role == "scientific_discussion_partner"
@@ -921,6 +929,11 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         if quick:
             prompt += ("\nocean_expert_run_code keeps Python variables for this request, so prefer it for "
                        "array analysis; use execute for shell work.\n" + bounded_work_policy(static))
+            if role == SINGLE_AGENT:
+                from oceanx.pdf_text import task_pdf_texts
+                papers = task_pdf_texts(host().store, host().paths,
+                                        workspace_id=c["workspace_id"], task_id=c["task_id"])
+                prompt += paper_rule(papers)
         else:
             limit = int(svc.expert_code_execution.limits.wall_time_seconds or 300)
             prompt += (f"\nEach execute or ocean_expert_run_code run is stopped after {limit} s; a larger "

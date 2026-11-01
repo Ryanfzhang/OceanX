@@ -23,6 +23,7 @@ from oceanx.pdf_text import (
     pdf_text,
     readable_texts,
     source_text_context,
+    task_pdf_texts,
 )
 from oceanx.storage import OceanPaths
 
@@ -169,6 +170,9 @@ async def test_an_imported_pdf_source_is_listed_with_its_text_unless_the_policy_
         assert "Deep layer strengthens after 2009" in text.read_text(encoding="utf-8")
         assert document_text_allowed(host.store, WORKSPACE)
         assert readable_texts(source, host.paths) == [text, text.with_suffix(".figures")]
+        # The single agent is given the paper skill with these paths, whatever room the context has left.
+        papers = task_pdf_texts(host.store, host.paths, workspace_id=WORKSPACE, task_id=task.task_id)
+        assert papers == [str(text)]
 
         builder.set_policy(workspace_id=WORKSPACE, policy=ModelDataDisclosurePolicy(
             provider_id="deepseek", policy_version=2, document_text="deny"))
@@ -177,6 +181,65 @@ async def test_an_imported_pdf_source_is_listed_with_its_text_unless_the_policy_
         assert withheld["document_text"] == "withheld by the workspace disclosure policy"
         assert "pdf_texts" not in withheld
         assert not document_text_allowed(host.store, WORKSPACE)
+        assert task_pdf_texts(host.store, host.paths, workspace_id=WORKSPACE, task_id=task.task_id) == []
+    finally:
+        await host.close()
+
+
+@pytest.mark.asyncio
+async def test_the_single_agent_keeps_the_paper_skill_from_the_call_after_it_opened_it(
+        tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    from langchain_core.callbacks import BaseCallbackHandler
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    from oceanx.research import graphs
+    from oceanx.research.routing import PAPER_SKILL, SINGLE_AGENT
+    from tests.test_oceanx.test_deep_agent_runtime import _BoundFakeModel
+
+    monkeypatch.setenv("OCEAN_SANDBOX_PYTHON", sys.executable)
+    workspace = tmp_path / "workspace"
+    _write_pdf(workspace / "papers" / "zheng2026.pdf", ["Three-layer circulation regime shift"])
+    host = OceanBackendHost(tmp_path / "state", write_frame=lambda _frame: None)
+    try:
+        recorder = _Recorder()
+        client = BackendClient(transport="stdio", expected_client_kind="desktop",
+                               sender=recorder.send)
+        await host.event_bus.register(client)
+        await _send(host, client, "system.handshake", {
+            "client_kind": "desktop", "client_version": "test", "supported_protocol_versions": [2]})
+        context = {"client_id": str(client.client_id), "session_id": str(client.session_id),
+                   "workspace_id": WORKSPACE}
+        await _send(host, client, "workspace.open", {"path": str(workspace)}, context=context,
+                    expected_workspace_revision=0)
+        task = host.store.create_research_task(workspace_id=WORKSPACE, title="Apply a paper")
+        await _send(host, client, "source.import",
+                    {"relative_path": "papers/zheng2026.pdf", "title": "Zheng et al. 2026"},
+                    context={**context, "task_id": task.task_id}, expected_workspace_revision=1)
+        [text] = task_pdf_texts(host.store, host.paths, workspace_id=WORKSPACE,
+                                task_id=task.task_id)
+        config = {"configurable": {"workspace_id": WORKSPACE, "workspace_path": str(workspace),
+                                   "task_id": task.task_id, "thread_id": "paper",
+                                   "request_id": "req_paper"}}
+        monkeypatch.setattr(graphs, "host", lambda: host)
+        monkeypatch.setattr(graphs, "load_model_profile",
+                            lambda _: SimpleNamespace(provider="openai"))
+        monkeypatch.setattr("oceanx.research.metering.CallMeter",
+                            lambda *args, **kwargs: BaseCallbackHandler())
+        read = {"name": "read_file", "args": {"file_path": PAPER_SKILL}, "id": "skill"}
+        model = _BoundFakeModel(responses=[AIMessage(content="", tool_calls=[read]),
+                                           AIMessage(content="Done.")])
+        monkeypatch.setattr("oceanx.deep_runtime.create_chat_model", lambda _: model)
+
+        graph = await graphs.build(config, SINGLE_AGENT)
+        await graph.ainvoke({"messages": [HumanMessage(content="Apply its method to my data")]})
+
+        first, second = (messages[0].text for messages in model.seen_messages)
+        assert "# Attached paper" in first and text in first and "# Paper skill" not in first
+        assert "# Paper skill" in second
+        assert "Before computing anything, write repro_spec.md" in second
     finally:
         await host.close()
 

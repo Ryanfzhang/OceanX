@@ -247,6 +247,27 @@ def source_text_context(source: Path, paths: OceanPaths, *, allowed: bool) -> di
     return context
 
 
+def task_pdf_texts(store: RequestStore, paths: OceanPaths, *, workspace_id: str, task_id: str) -> list[str]:
+    """The extracted texts of the PDFs among a Task's sources, when the workspace lets a model read
+    them; empty otherwise."""
+
+    from oceanx.local_sources import LocalSourceError, resolve_local_source
+
+    if not document_text_allowed(store, workspace_id):
+        return []
+    texts: list[str] = []
+    for record in store.list_task_artifacts(task_id=task_id):
+        if "source" not in record.relations:
+            continue
+        try:
+            source = resolve_local_source(store=store, workspace_id=workspace_id, ref=record.artifact.ref)
+        except LocalSourceError:
+            continue
+        found = source_text_context(source.path, paths, allowed=True).get("pdf_texts", [])
+        texts.extend(entry["text_path"] for entry in found if "text_path" in entry)
+    return texts
+
+
 def readable_texts(source: Path, paths: OceanPaths) -> list[Path]:
     """The extracted texts of a source's PDFs that exist, and the folders of their page and figure
     images, for the sandbox's read-only roots."""
@@ -285,4 +306,5 @@ __all__ = [
     "readable_texts",
     "source_pdfs",
     "source_text_context",
+    "task_pdf_texts",
 ]

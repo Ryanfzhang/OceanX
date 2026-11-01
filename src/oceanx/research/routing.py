@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddleware, hook_config
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -285,6 +286,66 @@ class HelperMiddleware(AgentMiddleware):
             args_schema=HelperInput)]
 
 
+PAPER_SKILL = "/skills/paper-reproduction/SKILL.md"
+# Named only in the text note of an attached paper, the skill was not opened in a run of
+# 2026-11-01; opened, read_file shows the first 100 of its about 200 lines, and a summary later
+# replaces what was read. So the agent decides on the call that starts the work, and the skill it
+# opens stays in its instructions for the rest of the request (PaperSkillMiddleware).
+PAPER_RULE = (
+    "\n# Attached paper\nThe researcher attached a paper; the extracted text of each PDF, which "
+    "names its page and figure images, is at {texts}. Decide from the request, and the "
+    "conversation it continues, whether it asks to reproduce, test or apply the paper's analysis, "
+    f"with the paper's data or other data. If it does, read {PAPER_SKILL} before any other tool "
+    "call: from your next call on, that skill, with the sections it points to, is part of these "
+    "instructions in full, also after a summary replaces earlier messages.\n")
+
+
+def paper_rule(texts: list[str]) -> str:
+    """PAPER_RULE for a task with attached papers, given the paths of their extracted texts."""
+    return PAPER_RULE.format(texts=", ".join(texts)) if texts else ""
+
+
+def opened_in_request(messages, path: str) -> bool:
+    """Whether the agent read ``path`` with read_file since the researcher's latest message."""
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            return False
+        if isinstance(message, AIMessage) and any(
+                call.get("name") == "read_file"
+                and str((call.get("args") or {}).get("file_path", "")).endswith(path)
+                for call in message.tool_calls):
+            return True
+    return False
+
+
+class PaperSkillMiddleware(AgentMiddleware):
+    """From the call after the single agent opened the paper skill, the skill as its library holds
+    it, with the sections it points to, ends its instructions on every call of that request. It is
+    looked for in the saved messages, which a summary leaves in place."""
+
+    def __init__(self, skill: Path) -> None:
+        super().__init__()
+        text = skill.read_text(encoding="utf-8")
+        body = text.split("\n---\n", 1)[-1].strip()  # without its header
+        self.block = (f"# Paper skill\nYou opened {PAPER_SKILL} for this request; here it is in "
+                      "full, with the sections it points to, for the rest of the request.\n\n"
+                      + body)
+
+    def _prepare(self, request):
+        if not opened_in_request(request.state.get("messages") or (), PAPER_SKILL):
+            return request
+        content = request.system_message.content if request.system_message else ""
+        content = ([*content, {"type": "text", "text": self.block}] if isinstance(content, list)
+                   else f"{content}\n\n{self.block}".strip())
+        return request.override(system_message=SystemMessage(content=content))
+
+    def wrap_model_call(self, request, handler):
+        return handler(self._prepare(request))
+
+    async def awrap_model_call(self, request, handler):
+        return await handler(self._prepare(request))
+
+
 def tagged(messages, agent: str) -> list:
     """``messages`` marked as written by ``agent``."""
     return [message.model_copy(update={"additional_kwargs": {
@@ -308,7 +369,9 @@ def last_answer(messages) -> str:
 __all__ = [
     "AGENT_TAG", "BOUNDED_WORK_POLICY", "HANDOFF_POLICY", "HANDOFF_TOOL", "HELPER", "HELPER_CALL_LIMIT",
     "HELPER_LAST_CALL", "HELPER_POLICY", "HELPER_TOOL", "LAST_CALL", "LAST_CALL_HANDOFF", "MAX_HELPERS",
-    "SINGLE_AGENT", "SINGLE_AGENT_CALL_LIMIT", "TEAM", "HandoffMiddleware", "HelperMiddleware",
-    "QuickCallBudgetMiddleware", "budget_handoff", "call_budget_sentence", "handed_over", "handoff_note",
-    "handoff_request", "last_answer", "seen_by", "tagged", "team_config", "workflow_mode",
+    "PAPER_RULE", "PAPER_SKILL", "SINGLE_AGENT", "SINGLE_AGENT_CALL_LIMIT", "TEAM",
+    "HandoffMiddleware", "HelperMiddleware", "PaperSkillMiddleware", "QuickCallBudgetMiddleware",
+    "budget_handoff", "call_budget_sentence", "handed_over", "handoff_note", "handoff_request",
+    "last_answer", "opened_in_request", "paper_rule", "seen_by", "tagged", "team_config",
+    "workflow_mode",
 ]
