@@ -81,18 +81,20 @@ nothing, so make each part complete: what to do, the data and files to use (full
 
 BOUNDED_WORK_POLICY = """\
 # Bounded work
-The requested output (a figure, number, table, route or file) is the finish line. First cut the data to the
-variables, region, depth and period the request needs; never load a whole field or water column when a slice
-answers it. Compute it with one defensible method, verify the requested output, publish it, answer and stop.
-Open {saved_view} of a figure you saved and correct errors before delivery.
+Reproducing, testing or applying a paper's analysis is not bounded work: it is finished only when every analysis
+of the paper that the data allow is done, each quantity and budget term computed as the paper defines it and
+checked, and each figure redrawn to look like the paper's. A term counts as missing only after deriving it from the
+stored variables has failed, and nothing the data allow is left as an offer for later;
+/skills/paper-reproduction/SKILL.md describes how.
+For any other request, the requested output (a figure, number, table, route or file) is the finish line. First
+cut the data to the variables, region, depth and period the request needs; never load a whole field or water column
+when a slice answers it. Compute it with one defensible method, verify the requested output, publish it, answer
+and stop. Open {saved_view} of a figure you saved and correct errors before delivery.
 Do not add unrequested sensitivity tests, extra figures or statistics, or investigations beyond the requested
 objective. Checking and correcting the requested output is part of the task. State a
-remaining limitation in one sentence instead of investigating it. Each code run stops after {seconds} s; if one
-times out, read less data (a smaller region or period, or a coarser stride) instead of repeating the same read.
-Reproducing, testing or applying a paper's analysis is not bounded this way: it is finished only when every
-quantity and budget term of the paper that the data allow is computed as the paper defines it and checked, every
-figure the data allow is redrawn to look like the paper's, and a term counts as missing only after deriving it from
-the stored variables has failed; /skills/paper-reproduction/SKILL.md describes how.
+remaining limitation in one sentence instead of investigating it.
+Each code run stops after {seconds} s; if one times out, read less data (a smaller region or period, or a coarser
+stride) instead of repeating the same read.
 """
 
 LAST_CALL = ("# Last model call\nThis is the last model call of your budget, and no tools are available on it. "
