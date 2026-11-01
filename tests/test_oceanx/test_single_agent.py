@@ -22,12 +22,10 @@ from oceanx.agent_contract import (
     ToolExecutionStarted,
     UsageSnapshot,
 )
-from oceanx.agent_tools import ToolExecutionContext
 from oceanx.backend.events import BackendClient, EventBus
 from oceanx.backend.router import OceanRequestRouter
 from oceanx.backend.store import RequestStore
 from oceanx.batch import QueryCase
-from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
 from oceanx.protocol.v2.models import parse_request
 from oceanx.research import graphs
 from oceanx.research.metering import INSIDE_EXPERT, CallMeter
@@ -58,7 +56,7 @@ from oceanx.research.routing import (
 )
 from oceanx.research.services import AgentRun
 from oceanx.research.tool_calls import ToolCallRepairMiddleware
-from oceanx.tools import OceanExpertRunCodeInput, OceanExpertRunCodeTool, OceanToolServices
+from oceanx.tools import OceanToolServices
 
 
 def _config(mode=None, **options):
@@ -137,12 +135,12 @@ def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     assert bounded.index(reproduction) < bounded.index("finish line")
     assert "nothing the data allow is withheld or left as an offer for later" in bounded
     # Reading only what the work needs holds for a paper's analysis too, and thinning a record is not a free way
-    # around the run limit: a run of 2026-11-01 read whole fields and kept every 12th day of daily data.
+    # to save time: a run of 2026-11-01 read whole fields and kept every 12th day of daily data.
     assert "For every request, read only the variables" in bounded
     assert "Reading every n-th time step changes the result" in bounded and "coarser stride" not in bounded
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
     interactive, static = graphs.bounded_work_policy(False), graphs.bounded_work_policy(True)
-    assert "finish line" in interactive and f"{STANDARD_MODE_CODE_SECONDS} s" in interactive
+    assert "finish line" in interactive and "Code runs until it ends, with no time limit" in interactive
     assert ".preview.png" in interactive and "the image" in static
     from oceanx.runtime import (
         FIGURE_VERIFICATION_POLICY, OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY,
@@ -231,31 +229,6 @@ def test_a_paper_skill_is_kept_only_for_a_request_whose_agent_opened_it(tmp_path
     # The next request is decided again.
     later = [asked, *opened, AIMessage(content="Done."), HumanMessage(content="What is its DOI?")]
     assert system(later) == "base"
-
-
-def _run_code_tool(limit):
-    seen = {}
-
-    class Service:
-        async def run_python(self, **kwargs):
-            seen.update(kwargs)
-            raise RuntimeError("stop after capturing the call")
-
-    code_tool = OceanExpertRunCodeTool(OceanToolServices(
-        workspace_id="ws", provider_id="p", store=SimpleNamespace(), task_id="t",
-        agent_thread_id="a", server_run_id="r", expert_code_execution=Service(),
-        code_time_limit_seconds=limit))
-    try:
-        asyncio.run(code_tool.execute(OceanExpertRunCodeInput(purpose="p", code="1"),
-                                      ToolExecutionContext(cwd=Path("."))))
-    except RuntimeError:
-        pass
-    return seen
-
-
-def test_code_runs_of_the_single_agent_stop_sooner_than_the_teams():
-    assert _run_code_tool(STANDARD_MODE_CODE_SECONDS)["_timeout"] == STANDARD_MODE_CODE_SECONDS
-    assert _run_code_tool(None)["_timeout"] is None  # research: the service default (300 s)
 
 
 # --- the conversation each agent sees --------------------------------------------------------------

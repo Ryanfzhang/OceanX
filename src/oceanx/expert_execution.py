@@ -8,7 +8,7 @@ import hashlib
 import json
 import os
 import shutil
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -42,8 +42,9 @@ from oceanx.task_workspace import TaskWorkspaceProjector
 
 FIGURE_IMPORT = "from oceanx.scientific_view import ScientificFigure"
 
-# Per-run wall-time cap for bounded (standard-mode) requests; research keeps the default 300 s.
-STANDARD_MODE_CODE_SECONDS = 120
+# A probe that inspects a source or a run's outputs is the backend's own step, not an agent's code, and
+# keeps its bound although an agent's code runs without one.
+PROBE_SECONDS = 120.0
 
 SAVED_DATA_INDEX_SCHEMA = "ocean-saved-data-index/v1"
 
@@ -295,7 +296,10 @@ class ExpertCodeExecutionService:
         self.paths = paths
         self.task_workspaces = task_workspaces
         self.limits = limits or ResourceLimits(
-            wall_time_seconds=300,
+            # An agent's code runs until it ends, however long; only the researcher's stop ends it
+            # sooner. A limit of 120 s made a run of 2026-11-01 sample every tenth day of a daily
+            # record, where a year takes 4 to 8 minutes to read.
+            wall_time_seconds=0,
             cpu_time_seconds=0,
             memory_bytes=0,
             disk_bytes=0,
@@ -565,7 +569,7 @@ class ExpertCodeExecutionService:
                             output_root=probe_root,
                             temporary_root=temporary_root,
                             limits=ResourceLimits(
-                                wall_time_seconds=min(120.0, self.limits.wall_time_seconds),
+                                wall_time_seconds=PROBE_SECONDS,
                                 cpu_time_seconds=min(90, self.limits.cpu_time_seconds),
                                 memory_bytes=self.limits.memory_bytes,
                                 disk_bytes=min(67_108_864, self.limits.disk_bytes),
@@ -771,7 +775,7 @@ class ExpertCodeExecutionService:
                     output_root=probe_root,
                     temporary_root=temporary_root,
                     limits=ResourceLimits(
-                        wall_time_seconds=min(120.0, self.limits.wall_time_seconds),
+                        wall_time_seconds=PROBE_SECONDS,
                         cpu_time_seconds=min(90, self.limits.cpu_time_seconds),
                         memory_bytes=self.limits.memory_bytes,
                         disk_bytes=min(67_108_864, self.limits.disk_bytes),
@@ -820,7 +824,6 @@ class ExpertCodeExecutionService:
         purpose: str,
         code: str,
         _shell_command: str | None = None,
-        _timeout: int | None = None,
     ) -> ExpertCodeExecutionResult:
         if not code.strip():
             raise ExpertCodeExecutionError("Expert code cannot be empty")
@@ -1004,7 +1007,6 @@ class ExpertCodeExecutionService:
                 attempt_number=attempt_number,
                 attempt_limit=attempt_limit,
                 shell_command=_shell_command,
-                timeout=_timeout,
             )
         except BaseException as exc:
             terminal_state = "cancelled" if isinstance(exc, asyncio.CancelledError) else "failed"
@@ -1019,7 +1021,7 @@ class ExpertCodeExecutionService:
             raise
 
     async def run_shell(self, *, workspace_id, task_id, agent_thread_id, server_run_id,
-                        command, timeout=None, origin_request_id=None):
+                        command, origin_request_id=None):
         """Native execute uses the same evidence/save path as persistent Python."""
         code = ("import subprocess\n"
                 f"_command_result = subprocess.run([{POSIX_SHELL!r}, '-c', {command!r}], check=False)\n"
@@ -1027,7 +1029,7 @@ class ExpertCodeExecutionService:
         return await self.run_python(workspace_id=workspace_id, task_id=task_id,
             agent_thread_id=agent_thread_id, server_run_id=server_run_id,
             origin_request_id=origin_request_id, purpose="Shell command", code=code,
-            _shell_command=command, _timeout=timeout)
+            _shell_command=command)
 
     async def _run_started_python(
         self,
@@ -1052,7 +1054,6 @@ class ExpertCodeExecutionService:
         attempt_number: int,
         attempt_limit: int,
         shell_command: str | None = None,
-        timeout: int | None = None,
     ) -> ExpertCodeExecutionResult:
         """Run and persist one already-started execution as one terminal transaction."""
 
@@ -1095,8 +1096,7 @@ class ExpertCodeExecutionService:
                 writable_roots=(work_root,),
                 output_root=output_root,
                 temporary_root=temporary_root,
-                limits=replace(self.limits, wall_time_seconds=min(timeout or self.limits.wall_time_seconds,
-                    self.limits.wall_time_seconds) if self.limits.wall_time_seconds else (timeout or 300)),
+                limits=self.limits,
                 allow_child_processes=shell_command is not None,
                 allow_network=True,
             )

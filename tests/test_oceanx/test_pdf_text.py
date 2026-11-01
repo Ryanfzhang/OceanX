@@ -30,8 +30,9 @@ from oceanx.storage import OceanPaths
 WORKSPACE = "ws_pdf_source"
 
 
-def _write_pdf(path: Path, pages: list[str]) -> Path:
-    """A minimal PDF with one line of Helvetica per page; an empty string gives a blank page."""
+def _write_pdf(path: Path, pages: list[str], *, raw: bool = False) -> Path:
+    """A minimal PDF with one line of Helvetica per page, or each page's own content stream when `raw`;
+    an empty string gives a blank page."""
 
     font = 3 + 2 * len(pages)
     kids = " ".join(f"{3 + 2 * i} 0 R" for i in range(len(pages)))
@@ -40,7 +41,7 @@ def _write_pdf(path: Path, pages: list[str]) -> Path:
         f"<< /Type /Pages /Kids [{kids}] /Count {len(pages)} >>",
     ]
     for i, text in enumerate(pages):
-        content = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET" if text else ""
+        content = text if raw or not text else f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET"
         objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {4 + 2 * i} 0 R "
                        f"/Resources << /Font << /F1 {font} 0 R >> >> >>")
         objects.append(f"<< /Length {len(content)} >>\nstream\n{content}\nendstream")
@@ -62,6 +63,14 @@ def _paths(tmp_path: Path) -> OceanPaths:
     return OceanPaths.for_state_root(tmp_path / "state").ensure()
 
 
+def _parts(folder: Path, page: int, columns: tuple[str, ...] = ("left-", "right-")) -> str:
+    """The enlarged parts of a page as its text block names them; a page whose text keeps off the middle
+    of the page counts as two columns."""
+
+    return ", ".join(str(folder / f"page-{page:02d}-{column}{row}.jpg")
+                     for column in columns for row in ("top", "middle", "bottom"))
+
+
 def test_text_is_extracted_page_by_page_once_and_follows_the_file(tmp_path, monkeypatch):
     paths = _paths(tmp_path)
     pdf = _write_pdf(tmp_path / "paper.pdf", ["Upper layer cyclonic", "Middle layer anticyclonic"])
@@ -71,8 +80,10 @@ def test_text_is_extracted_page_by_page_once_and_follows_the_file(tmp_path, monk
     assert text.parent == paths.cache / "pdf-text"
     content = text.read_text(encoding="utf-8")
     images = text.with_suffix(".figures")
-    assert f"=== Page 1 of 2 ===\n[Page image: {images / 'page-01.jpg'}]\nUpper layer cyclonic" in content
-    assert f"=== Page 2 of 2 ===\n[Page image: {images / 'page-02.jpg'}]\nMiddle layer anticyclonic" in content
+    assert (f"=== Page 1 of 2 ===\n[Page image: {images / 'page-01.jpg'}]\n"
+            f"[Enlarged parts: {_parts(images, 1)}]\nUpper layer cyclonic") in content
+    assert (f"=== Page 2 of 2 ===\n[Page image: {images / 'page-02.jpg'}]\n"
+            f"[Enlarged parts: {_parts(images, 2)}]\nMiddle layer anticyclonic") in content
     if os.name == "posix":
         assert stat.S_IMODE(text.stat().st_mode) == 0o600
     import pypdf
@@ -301,8 +312,8 @@ def test_embedded_figures_are_saved_beside_the_text_and_named_under_their_page(t
     (figure,) = pdf_figures(text)  # the small logo-sized image is not a figure
     assert figure.name == "page-01-figure-1.jpg" and figure.parent.name == text.name.replace(".txt", ".figures")
     page = figure.parent / "page-01.jpg"
-    assert (f"=== Page 1 of 1 ===\n[Page image: {page}]\n[Figure image: {figure}]\nFig. 2 Layer vorticity"
-            in text.read_text(encoding="utf-8"))
+    assert (f"=== Page 1 of 1 ===\n[Page image: {page}]\n[Enlarged parts: {_parts(figure.parent, 1)}]\n"
+            f"[Figure image: {figure}]\nFig. 2 Layer vorticity") in text.read_text(encoding="utf-8")
     from PIL import Image
 
     with Image.open(figure) as saved:
@@ -343,6 +354,42 @@ def test_each_page_is_rendered_for_a_model_that_reads_images(tmp_path, monkeypat
     plain = pdf_text(_write_pdf(tmp_path / "plain.pdf", ["Text only"]), paths)
     assert "[Page image:" not in plain.read_text(encoding="utf-8")
     assert not plain.with_suffix(".figures").exists()
+
+
+def test_each_page_is_also_saved_enlarged_in_parts_that_hold_an_equation_whole(tmp_path, monkeypatch):
+    """On the page image of Zheng et al. (2026), page 3, deepseek-flash read f × V as f V three times in
+    three; at twice the scale it kept the cross three times in three (2026-11-01)."""
+
+    from PIL import Image
+
+    import oceanx.pdf_text as pdf_module
+
+    paths = _paths(tmp_path)
+    lines = range(40)
+    two_columns = " ".join(f"BT /F1 10 Tf {x} {700 - 14 * i} Td ({side} column line {i}) Tj ET"
+                           for x, side in ((72, "Left"), (330, "Right")) for i in lines)
+    across = "One column running across the page " * 2
+    one_column = " ".join(f"BT /F1 10 Tf 72 {700 - 14 * i} Td ({across}) Tj ET" for i in lines)
+    text = pdf_text(_write_pdf(tmp_path / "paper.pdf", [two_columns, one_column], raw=True), paths)
+
+    folder = text.with_suffix(".figures")
+    content = text.read_text(encoding="utf-8")
+    assert f"[Page image: {folder / 'page-01.jpg'}]\n[Enlarged parts: {_parts(folder, 1)}]\n" in content
+    assert f"[Page image: {folder / 'page-02.jpg'}]\n[Enlarged parts: {_parts(folder, 2, ('',))}]\n" in content
+    with Image.open(folder / "page-01.jpg") as page:
+        width, height = page.size
+    with Image.open(folder / "page-01-left-middle.jpg") as part:
+        # at twice the scale, half a page is as tall as the whole page image
+        assert part.height == height and part.width == pytest.approx(0.52 * 2 * width, abs=2)
+    with Image.open(folder / "page-02-bottom.jpg") as part:
+        assert part.size == (pytest.approx(2 * width, abs=2), height)
+    if os.name == "posix":
+        assert stat.S_IMODE((folder / "page-02-bottom.jpg").stat().st_mode) == 0o600
+    assert pdf_figures(text) == []  # nor are the parts embedded figures
+    # Only the first pages are enlarged.
+    monkeypatch.setattr(pdf_module, "MAX_ENLARGED_PAGES", 1)
+    later = pdf_text(_write_pdf(tmp_path / "long.pdf", ["One", "Two"]), paths).read_text(encoding="utf-8")
+    assert later.count("[Enlarged parts:") == 1 and "[Page image:" in later.split("=== Page 2")[1]
 
 
 def test_page_and_figure_images_stay_small_enough_for_read_file(tmp_path):

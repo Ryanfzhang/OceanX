@@ -94,12 +94,13 @@ Do not add unrequested sensitivity tests, extra figures or statistics, or invest
 objective. Checking and correcting the requested output is part of the task. State a
 remaining limitation in one sentence instead of investigating it.
 For every request, read only the variables, region, depth and period the work needs, sliced in the read itself;
-never load a whole field or water column when a slice answers it. Each code run stops after {seconds} s; if one
-times out, split the work into parts that each finish in time, such as one year per run, and save each part's
-result to a file instead of repeating the same read. Reading every n-th time step changes the result: say so, and
-where the request or the paper's method uses every step, compare the two on a common part, such as one year,
-before relying on it.
+never load a whole field or water column when a slice answers it. {long_runs} Reading every n-th time step
+changes the result: say so, and where the request or the paper's method uses every step, compare the two on a
+common part, such as one year, before relying on it.
 """
+# What the single agent, its helpers and the Experts are told about long runs (expert_execution.py).
+LONG_RUNS = ("Code runs until it ends, with no time limit. For long work, have a script print its progress, "
+             "such as each year done, and save each part's result to a file instead of repeating the same read.")
 
 LAST_CALL = ("# Last model call\nThis is the last model call of your budget, and no tools are available on it. "
              "Answer the researcher now from what you have, and say plainly what is unfinished.")
@@ -368,8 +369,8 @@ def last_answer(messages) -> str:
 
 __all__ = [
     "AGENT_TAG", "BOUNDED_WORK_POLICY", "HANDOFF_POLICY", "HANDOFF_TOOL", "HELPER", "HELPER_CALL_LIMIT",
-    "HELPER_LAST_CALL", "HELPER_POLICY", "HELPER_TOOL", "LAST_CALL", "LAST_CALL_HANDOFF", "MAX_HELPERS",
-    "PAPER_RULE", "PAPER_SKILL", "SINGLE_AGENT", "SINGLE_AGENT_CALL_LIMIT", "TEAM",
+    "HELPER_LAST_CALL", "HELPER_POLICY", "HELPER_TOOL", "LAST_CALL", "LAST_CALL_HANDOFF", "LONG_RUNS",
+    "MAX_HELPERS", "PAPER_RULE", "PAPER_SKILL", "SINGLE_AGENT", "SINGLE_AGENT_CALL_LIMIT", "TEAM",
     "HandoffMiddleware", "HelperMiddleware", "PaperSkillMiddleware", "QuickCallBudgetMiddleware",
     "budget_handoff", "call_budget_sentence", "handed_over", "handoff_note", "handoff_request",
     "last_answer", "opened_in_request", "paper_rule", "seen_by", "tagged", "team_config",

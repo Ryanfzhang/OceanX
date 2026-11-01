@@ -62,7 +62,8 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     reproduction = " ".join(load_ocean_skill("paper-reproduction")[0].split())
     # A pointer is followed when it says what to read before which step, as a run on 2026-10-26 showed:
     # "first read" was obeyed, "drawn as ... describes" was not.
-    for step in ("Before computing anything, read the page image",
+    for step in (("Before computing anything, read each equation that defines a quantity you will compute on the "
+                  "enlarged part of its page that shows it whole"),
                  "Before writing code for a vorticity budget or a streamfunction, read /skills/ocean-physical-consistency-review/SKILL.md",
                  "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
                  "Before drawing the first figure, read /references/coding/matplotlib.md",

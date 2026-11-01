@@ -27,7 +27,6 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.graph import END, START, StateGraph
 
 from oceanx.deep_runtime import build_deep_agent_graph
-from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
 from oceanx.figure_delivery import static_figures
 from oceanx.pdf_text import FIGURE_RULE
@@ -45,6 +44,7 @@ from oceanx.research.routing import (
     HELPER_POLICY,
     LAST_CALL,
     LAST_CALL_HANDOFF,
+    LONG_RUNS,
     PAPER_SKILL,
     SINGLE_AGENT,
     SINGLE_AGENT_CALL_LIMIT,
@@ -599,7 +599,7 @@ def research_mode(config) -> bool:
 def bounded_work_policy(static: bool) -> str:
     # A static run has no preview file beside a figure: the saved image is the figure.
     return BOUNDED_WORK_POLICY.format(saved_view="the image" if static else "the .preview.png",
-                                      seconds=STANDARD_MODE_CODE_SECONDS)
+                                      long_runs=LONG_RUNS)
 
 
 def coordinator_report_path(config) -> Path:
@@ -688,7 +688,6 @@ def services(config, role: str, run: AgentRun | None = None) -> OceanToolService
         agent_thread_id=run.thread_id if run else c["thread_id"],
         coordinator_enabled=role == "coordinator",
         native_vision=profile_supports_vision(model_profile),
-        code_time_limit_seconds=None if research_mode(config) else STANDARD_MODE_CODE_SECONDS,
         # A helper works out of the researcher's sight, so only the agent answering them asks them.
         paper_selection_sink=(lambda payload, context: h.router._request_paper_selection(
             workspace_id=c["workspace_id"], task_id=c["task_id"], payload=payload, context=context))
@@ -935,9 +934,7 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                                         workspace_id=c["workspace_id"], task_id=c["task_id"])
                 prompt += paper_rule(papers)
         else:
-            limit = int(svc.expert_code_execution.limits.wall_time_seconds or 300)
-            prompt += (f"\nEach execute or ocean_expert_run_code run is stopped after {limit} s; a larger "
-                       "timeout does not extend it. Split long work. ocean_expert_run_code keeps Python "
+            prompt += ("\n" + LONG_RUNS + " ocean_expert_run_code keeps Python "
                        "variables for this attempt, so prefer it for iterative array analysis; use execute "
                        "for reproducible scripts or shell work. Do not save full source-field copies merely "
                        "to carry state within one attempt. Save only a checkpoint another node or retry needs.")

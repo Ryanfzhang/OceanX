@@ -76,7 +76,6 @@ class OceanToolServices:
     agent_thread_id: str | None = None
     exploration_belief_sampler: Callable[[str, str], Awaitable[dict]] | None = None
     native_vision: bool = False
-    code_time_limit_seconds: int | None = None  # None: the execution service default
 
 
 @dataclass(frozen=True)
@@ -401,7 +400,6 @@ class OceanExpertRunCodeTool(_OceanTool):
                 origin_request_id=self.services.expert_result_origin_request_id,
                 purpose=arguments.purpose,
                 code=arguments.code,
-                _timeout=self.services.code_time_limit_seconds,
             )
             raw = result.as_payload()
             payload = {

@@ -20,9 +20,10 @@ the paper. Both compute the paper's quantities as the paper defines them, from t
 similar-looking analysis is neither a reproduction nor the paper's method.
 
 ## Definitions before code
-Before computing anything, read the page image of each page whose equations define the quantities you
-will compute: the extracted text names that image above the page and garbles its equations, symbols and
-subscripts. Take every quantity from the methods, not from the abstract or the captions: its formula,
+Before computing anything, read each equation that defines a quantity you will compute on the enlarged
+part of its page that shows it whole, named above the page in the extracted text: the text garbles
+equations, symbols and subscripts, and on the whole page image a cross, a minus or a subscript is easily
+missed. Take every quantity from the methods, not from the abstract or the captions: its formula,
 integration domain and boundary, vertical limits, whether it is integrated or averaged (divided by an
 area, volume or thickness), units, sign convention, grid placement, masking, smoothing or filtering, and
 the periods compared. Check each definition by its units against the paper's stated values and figure

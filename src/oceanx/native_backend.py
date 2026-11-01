@@ -12,7 +12,6 @@ import json
 import os
 import shlex
 import tempfile
-from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -70,14 +69,13 @@ class OceanSandbox(BaseSandbox):
         return str(self.work_root)
 
     async def aexecute(self, command, *, timeout=None):
+        del timeout  # a command runs until it ends, as an agent's code does (expert_execution.py)
         runtime = await asyncio.to_thread(self.service.require_runtime)
         roots = self.read_roots()  # refresh shared evidence after other Experts finish
         policy = SandboxExecutionPolicy(
             read_only_roots=tuple(roots), runtime_read_roots=shell_runtime_roots(runtime.read_roots),
             writable_roots=(self.work_root,), output_root=self.outputs, temporary_root=self.temporary,
-            limits=replace(self.service.limits, wall_time_seconds=min(timeout or 300,
-                self.service.limits.wall_time_seconds or 300)),
-            allow_child_processes=True, allow_network=True)
+            limits=self.service.limits, allow_child_processes=True, allow_network=True)
         # Commands never inherit the server's credentials or ambient Python.
         env = {"PATH": os.pathsep.join((str(runtime.executable.parent), "/usr/bin", "/bin")),
                "CONDA_PREFIX": str(runtime.prefix), "CONDA_DEFAULT_ENV": runtime.environment_name,
@@ -233,13 +231,10 @@ scientific analysis or snapshotting all existing outputs on every file read.
     async def aexecute(self, command, *, timeout=None):
         if self.record_command is None:
             return await super().aexecute(command, timeout=timeout)
-        result = await self.record_command(command, timeout)
+        result = await self.record_command(command)  # runs until it ends, whatever timeout was asked
         output = result.stdout + result.stderr
         if result.figure_notes:  # what keeps a saved PDF figure from being edited in Illustrator
             output += "\n[Figure check] " + "\n[Figure check] ".join(result.figure_notes) + "\n"
-        if result.state == "timed_out":  # otherwise the model sees only "exit code -15"
-            output += (f"\n[Stopped at the time limit after {result.duration_seconds:.0f} s; a larger "
-                       "timeout does not extend it. Process less data per run or save partial results.]")
         return ExecuteResponse(output=output, exit_code=result.returncode)
 
     async def als(self, path):
@@ -341,16 +336,10 @@ def task_backend(host, config, *, run, library):
             else:
                 roots.extend(host.paths.resolve_uri(f.uri) for f in artifact.files)
         return tuple(path for path in roots if path.exists())
-    from oceanx.expert_execution import STANDARD_MODE_CODE_SECONDS
-    from oceanx.research.graphs import research_mode
-    research = research_mode(config)
-
-    async def record_command(command, timeout):
-        if not research:
-            timeout = min(timeout or STANDARD_MODE_CODE_SECONDS, STANDARD_MODE_CODE_SECONDS)
+    async def record_command(command):
         return await service.run_shell(workspace_id=c["workspace_id"], task_id=c["task_id"],
             agent_thread_id=run.thread_id, server_run_id=run.server_run_id,
-            origin_request_id=c.get("request_id"), command=command, timeout=timeout)
+            origin_request_id=c.get("request_id"), command=command)
     sandbox = ResearchSandbox(service=service, work_root=work_root, read_roots=read_roots,
                               record_command=record_command if run else None)
     return skill_backend(
