@@ -1,21 +1,27 @@
-"""An agent's commands and code run until they end: no time limit stops them (2026-11-02)."""
+"""An agent's commands and code run until they end: no time limit stops them (2026-11-02), unless a
+benchmark's research time budget is nearly used, when an agent's code stops so that the run ends with a
+report."""
 import asyncio
+import json
 import sys
+import time
 from types import SimpleNamespace
 
 import pytest
 
+from oceanx.expert_execution import BUDGET_STOP_NOTE, ExpertCodeExecutionResult
 from oceanx.native_backend import ResearchSandbox
+from oceanx.research.budget import RESEARCH_BUDGET_ENV
 
 
 def test_a_failed_command_keeps_its_output_unchanged(tmp_path):
     async def record_command(command):
         del command
         return SimpleNamespace(stdout="partial\n", stderr="", returncode=1, state="failed",
-                               duration_seconds=3.0, figure_notes=())
+                               duration_seconds=3.0, figure_notes=(), limit_trigger=None)
 
-    sandbox = ResearchSandbox(service=SimpleNamespace(), work_root=tmp_path, read_roots=lambda: (),
-                              record_command=record_command)
+    sandbox = ResearchSandbox(service=SimpleNamespace(budget_note=lambda trigger: None), work_root=tmp_path,
+                              read_roots=lambda: (), record_command=record_command)
     response = asyncio.run(sandbox.aexecute("false", timeout=60))
     assert response.output == "partial\n" and response.exit_code == 1
 
@@ -32,6 +38,7 @@ async def test_no_time_limit_stops_an_agents_command_or_code(tmp_path, monkeypat
     from tests.test_oceanx.test_research_library_router import _open_project
 
     monkeypatch.setenv("OCEAN_SANDBOX_PYTHON", sys.executable)
+    monkeypatch.delenv(RESEARCH_BUDGET_ENV, raising=False)
     limits = []
 
     async def stopped(*_args, policy, **_kwargs):
@@ -65,3 +72,48 @@ async def test_no_time_limit_stops_an_agents_command_or_code(tmp_path, monkeypat
     finally:
         await host.close()
     assert limits == [0] * 7  # 0: no wall-time limit
+
+
+@pytest.mark.asyncio
+async def test_a_research_budget_stops_an_agents_code_in_time_for_the_report(tmp_path, monkeypatch):
+    """A benchmark run sets a research time budget. With code unlimited, an Expert that began a long
+    computation late would hold the run until it was cut off without a report, so an agent's code stops
+    at 85% of the budget and the agent is told to report. The file helpers that read reports keep no
+    limit."""
+    from oceanx.backend.host import OceanBackendHost
+    from oceanx.tools import OceanExpertRunCodeInput, OceanExpertRunCodeTool, OceanToolServices
+
+    monkeypatch.setenv(RESEARCH_BUDGET_ENV, "180")
+    host = OceanBackendHost(tmp_path / "state", write_frame=lambda _frame: None)
+    try:
+        service = host.expert_code_execution
+        assert 0 < service.run_limits().wall_time_seconds <= 0.85 * 180 * 60
+        service.code_deadline = time.monotonic() - 1  # 85% of the budget has passed
+        assert service.run_limits().wall_time_seconds == 1.0  # a run that starts now stops at once
+        assert service.limits.wall_time_seconds == 0  # the file helpers' commands
+        assert service.budget_note("wall_time") == BUDGET_STOP_NOTE and service.budget_note(None) is None
+
+        async def record_command(command):
+            del command
+            return SimpleNamespace(stdout="2011 done\n", stderr="", returncode=None, figure_notes=(),
+                                   limit_trigger="wall_time")
+
+        sandbox = ResearchSandbox(service=service, work_root=tmp_path / "agent", read_roots=lambda: (),
+                                  record_command=record_command)
+        assert (await sandbox.aexecute("python every_day.py")).output == f"2011 done\n\n[{BUDGET_STOP_NOTE}]\n"
+
+        async def run_python(**_kwargs):
+            return ExpertCodeExecutionResult(
+                execution_id="e", state="timed_out", returncode=None, stdout="2011 done\n", stderr="",
+                duration_seconds=1.0, output_files=(), outputs=(), output_bytes=0, limit_trigger="wall_time",
+                code_path="analysis.py", work_root=str(tmp_path / "agent"), result_bundle_path="result.json",
+                result_fingerprint="f", attempt_number=1, attempt_limit=1)
+
+        tool = OceanExpertRunCodeTool(OceanToolServices(
+            workspace_id="ws", provider_id="p", store=SimpleNamespace(), task_id="t", agent_thread_id="a",
+            server_run_id="r",
+            expert_code_execution=SimpleNamespace(run_python=run_python, budget_note=service.budget_note)))
+        result = await tool.execute(OceanExpertRunCodeInput(purpose="Read every day", code="read()"), None)
+        assert json.loads(result.output)["stopped"] == BUDGET_STOP_NOTE
+    finally:
+        await host.close()

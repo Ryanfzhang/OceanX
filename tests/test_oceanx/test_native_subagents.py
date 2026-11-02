@@ -1339,6 +1339,7 @@ async def test_research_coordinator_checks_the_budget_before_binding_a_node(monk
     assert isinstance(repair, ToolCallRepairMiddleware)  # last, so it sees the model's reply first
     assert binding.original_question == config["configurable"]["original_question"]
     assert "Research time budget: 180 minutes. After 135 minutes" in captured["suffix"]
+    assert "after 153 no code runs" in captured["suffix"]  # expert_execution.py stops an Expert's code then
     suffix = captured["suffix"]
     # The Owner's rule: results arrive one by one, and the Coordinator decides whether to wait.
     assert "A task call returns as soon as the next running Expert finishes" in suffix

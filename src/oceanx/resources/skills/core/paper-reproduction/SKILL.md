@@ -34,7 +34,7 @@ divided by an area.
 Before computing anything, write repro_spec.md in your working directory. First list the paper's analyses
 and figures and, for each, the variables, depths, region, period and time sampling it needs and whether
 the supplied data hold them (look in the files, not at their names); do every analysis whose inputs exist
-and name the others with what they need. For each figure you will draw, give the path of the image that shows it, named in the
+and name the others with what they need. For each figure, a schematic included, give the path of the image that shows it, named in the
 paper's extracted text, and what the image and its caption show: panels, variables, units, axis ranges and
 their multipliers, colour encoding, fills, overlays, reference lines, annotations and layout. For each
 quantity, copy the paper's equation as printed, in its order of operations, write below it the discrete

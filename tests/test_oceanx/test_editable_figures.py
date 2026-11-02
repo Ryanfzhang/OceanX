@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from oceanx.backend.host import OceanBackendHost
-from oceanx.figure_delivery import FIGURE_DELIVERY_ENV, matplotlib_settings
-from oceanx.figure_style import EDITABLE, publication_style
+from oceanx.figure_delivery import FIGURE_DELIVERY_ENV
+from oceanx.figure_style import matplotlibrc, publication_style
 from oceanx.sandbox import get_sandbox_execution_capabilities
 from tests.test_oceanx.test_research_library_router import _open_project
 
@@ -64,23 +64,21 @@ def pdf_contents(path: Path) -> tuple[set[str], int]:
     return fonts, images
 
 
-def test_one_style_serves_the_figures_agents_draw_and_the_drawing_of_interactive_figures(monkeypatch):
-    """The settings agents' code reads and the renderer of interactive figures come from figure_style.py."""
+def test_one_style_serves_the_figures_agents_draw_and_the_drawing_of_interactive_figures():
+    """The settings agents' code reads and the renderer of interactive figures come from figure_style.py.
+    A benchmark run, whose figures are all images, reads the same settings since 2026-11-02, so that its
+    figures look as the desktop's do (expert_execution.py writes them whatever the delivery)."""
     import matplotlib as mpl
 
     from oceanx.figure_reproduction import _FIXED_RENDERER_SOURCE
-    monkeypatch.setenv(FIGURE_DELIVERY_ENV, "interactive")
-    lines = matplotlib_settings().splitlines()
+    lines = matplotlibrc().splitlines()
     assert "pdf.fonttype: 42" in lines and "font.sans-serif: Arial, Helvetica, Liberation Sans, DejaVu Sans" in lines
-    assert "font.size: 9" in lines and "axes.prop_cycle: cycler('color', ['147D78'" in matplotlib_settings()
+    assert "font.size: 9" in lines and "axes.prop_cycle: cycler('color', ['147D78'" in matplotlibrc()
     with mpl.rc_context():
         renderer = compile(_FIXED_RENDERER_SOURCE, "<oceanx-fixed-renderer>", "exec")
         exec(renderer, {})  # noqa: S102 - the bundled renderer
         drawn = {key: mpl.rcParams[key] for key in publication_style()}
     assert drawn == {**publication_style(), "font.family": ["sans-serif"]}  # matplotlib keeps families as a list
-    # A benchmark run keeps matplotlib's look: only how fonts are stored changes.
-    monkeypatch.setenv(FIGURE_DELIVERY_ENV, "static")
-    assert matplotlib_settings() == "pdf.fonttype: 42\nps.fonttype: 42\nsvg.fonttype: none\n" and EDITABLE
 
 
 @pytest.mark.asyncio

@@ -8,7 +8,8 @@ import hashlib
 import json
 import os
 import shutil
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -23,11 +24,12 @@ from oceanx.execution_manifest import (
 )
 from oceanx.figure_delivery import (
     is_delivered_figure,
-    matplotlib_settings,
     pdf_problems,
     preview_path,
     write_pdf_preview,
 )
+from oceanx.figure_style import matplotlibrc
+from oceanx.research.budget import CODE_BUDGET_STOP, research_budget_minutes
 from oceanx.sandbox import (
     ResourceLimits,
     SandboxExecutionPolicy,
@@ -45,6 +47,9 @@ FIGURE_IMPORT = "from oceanx.scientific_view import ScientificFigure"
 # A probe that inspects a source or a run's outputs is the backend's own step, not an agent's code, and
 # keeps its bound although an agent's code runs without one.
 PROBE_SECONDS = 120.0
+# What an agent reads when its code is stopped by the research time budget (research/budget.py).
+BUDGET_STOP_NOTE = ("Stopped: the research time budget is used up. Run no more code; report from the "
+                    "results you have.")
 
 SAVED_DATA_INDEX_SCHEMA = "ocean-saved-data-index/v1"
 
@@ -310,6 +315,10 @@ class ExpertCodeExecutionService:
             output_file_count=0,
             output_total_bytes=0,
         )
+        # With a research time budget (a benchmark run) no code runs after CODE_BUDGET_STOP of it, counted
+        # from the start of this backend, so that the run still ends with a report.
+        budget = research_budget_minutes()
+        self.code_deadline = None if budget is None else time.monotonic() + CODE_BUDGET_STOP * budget * 60
         self._runtime: ExpertPythonRuntime | None = None
         from oceanx.kernels import KernelPool
         self.kernels = KernelPool()
@@ -326,6 +335,19 @@ class ExpertCodeExecutionService:
         """Return the last code-time inspection error, not a startup verdict."""
 
         return self._runtime_error
+
+    def run_limits(self) -> ResourceLimits:
+        """The limits of an agent's code run that starts now: with a research time budget, its wall time
+        ends at the code deadline, and a run after it stops within a second."""
+        if self.code_deadline is None:
+            return self.limits
+        left = max(1.0, self.code_deadline - time.monotonic())
+        wall = self.limits.wall_time_seconds
+        return replace(self.limits, wall_time_seconds=min(wall, left) if wall else left)
+
+    def budget_note(self, limit_trigger: str | None) -> str | None:
+        """What the agent is told when the research time budget stopped its run."""
+        return BUDGET_STOP_NOTE if limit_trigger == "wall_time" and self.code_deadline is not None else None
 
     def task_results_root(self, task_id: str) -> Path:
         return self.task_workspaces.ensure_task_root(task_id).resolve() / "agents"
@@ -1058,9 +1080,10 @@ class ExpertCodeExecutionService:
         """Run and persist one already-started execution as one terminal transaction."""
 
         runtime_root = work_root / ".runtime"
-        # Every figure the code saves stores its text as editable text (figure_delivery.py).
+        # Every figure the code saves is drawn in the publication style, its text stored as editable
+        # text (figure_style.py), however the run delivers its figures.
         matplotlib_rc = runtime_root / "matplotlibrc"
-        settings = matplotlib_settings()
+        settings = matplotlibrc()
         if not matplotlib_rc.is_file() or matplotlib_rc.read_text(encoding="utf-8") != settings:
             matplotlib_rc.parent.mkdir(parents=True, exist_ok=True)
             matplotlib_rc.write_text(settings, encoding="utf-8")
@@ -1096,7 +1119,7 @@ class ExpertCodeExecutionService:
                 writable_roots=(work_root,),
                 output_root=output_root,
                 temporary_root=temporary_root,
-                limits=self.limits,
+                limits=self.run_limits(),
                 allow_child_processes=shell_command is not None,
                 allow_network=True,
             )

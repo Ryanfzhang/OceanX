@@ -33,6 +33,12 @@ from oceanx.pdf_text import FIGURE_RULE
 from oceanx.model_config import load_model_profile
 from oceanx.research.background_experts import (
     AWAIT_TOOL, BackgroundDelegationMiddleware, RunningExperts, appended)
+from oceanx.research.budget import (  # the benchmark and tests read RESEARCH_BUDGET_ENV from here too
+    CODE_BUDGET_STOP,
+    RESEARCH_BUDGET_ENV,  # noqa: F401
+    RESEARCH_BUDGET_STOP,
+    research_budget_minutes,
+)
 from oceanx.research.metering import INSIDE_EXPERT
 from oceanx.research.routing import (
     BOUNDED_WORK_POLICY,
@@ -389,19 +395,8 @@ def _plain_text_request(request):
     return request.override(messages=[*request.messages, HumanMessage(content=PLAIN_TEXT_RETRY)])
 
 
-RESEARCH_BUDGET_ENV = "OCEANX_RESEARCH_BUDGET_MINUTES"
-RESEARCH_BUDGET_STOP = 0.75  # share of the budget after which no new Expert assignment starts
 BUDGET_REFUSAL = ("Not started: most of the research time budget is used. Start no new Expert "
                   "assignment; write the final report from the results you have.")
-
-
-def research_budget_minutes() -> float | None:
-    """An optional limit on research time; the benchmark sets it from its own time limit."""
-    try:
-        minutes = float(os.environ.get(RESEARCH_BUDGET_ENV) or 0)
-    except ValueError:
-        return None
-    return minutes if minutes > 0 else None
 
 
 class ResearchBudgetMiddleware(AgentMiddleware):
@@ -1240,8 +1235,9 @@ async def _coordinator_agent(config, experts: RunningExperts | None = None, *, h
                        suffix=(
         (f"\n{guidance}\n" if guidance else "")
         + (f"\nResearch time budget: {budget:.0f} minutes. After {RESEARCH_BUDGET_STOP * budget:.0f} "
-           "minutes no new Expert assignment starts, so answer the main question before then; each "
-           "receipt shows the time used.\n" if budget else "")
+           f"minutes no new Expert assignment starts, and after {CODE_BUDGET_STOP * budget:.0f} no code "
+           "runs, so answer the main question before then; each receipt shows the time used.\n"
+           if budget else "")
         + "\n" + BACKGROUND_EXPERTS_RULE
         + f"\nBackend-assigned final report file: {report}\n"
         "Native task receipts contain Result, Evidence and limitations, Further analysis, and Report. "

@@ -7,7 +7,7 @@ Type 3, so that a PDF opens in Illustrator with text that can be edited, and an 
 """
 from __future__ import annotations
 
-# How fonts are stored; nothing on the page changes. Benchmark runs use only these (figure_delivery.py).
+# How fonts are stored; nothing on the page changes.
 EDITABLE: dict[str, object] = {"pdf.fonttype": 42, "ps.fonttype": 42, "svg.fonttype": "none"}
 
 FONT_SIZE = 9  # points, readable at two-column publication width
@@ -53,4 +53,11 @@ def rc_text(settings: dict[str, object], colors: list[str] | None = None) -> str
     return "\n".join(lines) + "\n"
 
 
-__all__ = ["COLORS", "EDITABLE", "FONT_SIZE", "FONT_SIZES", "STYLE", "publication_style", "rc_text"]
+def matplotlibrc() -> str:
+    """The matplotlibrc of every code run, whether its figures are delivered as images or interactive
+    (figure_delivery.py)."""
+    return rc_text(publication_style(), COLORS)
+
+
+__all__ = ["COLORS", "EDITABLE", "FONT_SIZE", "FONT_SIZES", "STYLE", "matplotlibrc", "publication_style",
+           "rc_text"]

@@ -88,6 +88,10 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "never for a figure as a whole" in reproduction
     assert "Draw a partial budget as partial and not closed rather than withholding it" in reproduction
     assert "period and time sampling it needs" in reproduction
+    # A run of 2026-11-02 left out a figure whose caption begins "Schematic" as "not an analysis" while writing
+    # the spec, without opening its image, which shows each layer's trend and the strait's flux: the spec records
+    # the image of every figure, so what to draw is decided per panel under Figures.
+    assert "For each figure, a schematic included, give the path of the image that shows it" in reproduction
     # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
     # drawn and marked, not dropped.
     assert "give their sum as the residual" in reproduction and "marked not significant, never left out" in reproduction

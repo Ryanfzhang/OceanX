@@ -69,7 +69,9 @@ class OceanSandbox(BaseSandbox):
         return str(self.work_root)
 
     async def aexecute(self, command, *, timeout=None):
-        del timeout  # a command runs until it ends, as an agent's code does (expert_execution.py)
+        # A command runs until it ends. The research budget stops only an agent's code runs
+        # (ResearchSandbox, expert_execution.py), so the file helpers still read reports after it.
+        del timeout
         runtime = await asyncio.to_thread(self.service.require_runtime)
         roots = self.read_roots()  # refresh shared evidence after other Experts finish
         policy = SandboxExecutionPolicy(
@@ -231,10 +233,12 @@ scientific analysis or snapshotting all existing outputs on every file read.
     async def aexecute(self, command, *, timeout=None):
         if self.record_command is None:
             return await super().aexecute(command, timeout=timeout)
-        result = await self.record_command(command)  # runs until it ends, whatever timeout was asked
+        result = await self.record_command(command)  # whatever timeout was asked (OceanSandbox.aexecute)
         output = result.stdout + result.stderr
         if result.figure_notes:  # what keeps a saved PDF figure from being edited in Illustrator
             output += "\n[Figure check] " + "\n[Figure check] ".join(result.figure_notes) + "\n"
+        if note := self.service.budget_note(result.limit_trigger):
+            output += f"\n[{note}]\n"
         return ExecuteResponse(output=output, exit_code=result.returncode)
 
     async def als(self, path):

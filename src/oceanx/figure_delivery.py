@@ -5,7 +5,8 @@ Figure API and the desktop opens it; a figure the API cannot draw (bars, stippli
 another projection, a schematic, a paper figure reproduced as published) the Expert saves as an image
 under its own outputs folder, and that image is delivered too. ``static``: every final figure is such
 an image file, and no plotting interface is described anywhere a model reads. Benchmark runs use
-``static`` so that every arm delivers the same kind of figure.
+``static`` so that every arm delivers the same kind of figure. Either way an image is drawn in the one
+publication style (figure_style.matplotlibrc).
 
 Every delivered figure that is not itself a picture has its screen picture beside it, a file whose
 name ends in ``.preview.png``: the renderer of an interactive figure ``<name>.nc`` writes
@@ -24,7 +25,6 @@ from uuid import uuid4
 
 from oceanx.figure_preview import DISPLAY_EDGE, MAX_PREVIEW_BYTES, display_png, preview_png
 from oceanx.figure_preview import PREVIEW_EDGE as PDF_PREVIEW_EDGE
-from oceanx.figure_style import COLORS, EDITABLE, publication_style, rc_text
 from oceanx.pdf_text import PDFIUM_LOCK
 
 FIGURE_DELIVERY_ENV = "OCEANX_FIGURE_DELIVERY"
@@ -47,12 +47,6 @@ def figure_delivery() -> str:
 
 def static_figures() -> bool:
     return figure_delivery() == "static"
-
-
-def matplotlib_settings() -> str:
-    """The matplotlibrc of this process's code runs (figure_style.py). Static runs (the benchmark) keep
-    matplotlib's look and change only how fonts are stored, which changes nothing on the page."""
-    return rc_text(EDITABLE) if static_figures() else rc_text(publication_style(), COLORS)
 
 
 def static_figure_files(task_root: Path) -> Iterator[tuple[str, Path]]:
