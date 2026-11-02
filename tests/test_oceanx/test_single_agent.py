@@ -31,6 +31,7 @@ from oceanx.research import graphs
 from oceanx.research.metering import INSIDE_EXPERT, CallMeter
 from oceanx.research.routing import (
     AGENT_TAG,
+    FIGURE_MINUTES,
     HANDOFF_POLICY,
     HANDOFF_TOOL,
     HELPER,
@@ -42,6 +43,7 @@ from oceanx.research.routing import (
     PLAIN_TEXT_RETRY,
     SINGLE_AGENT,
     SINGLE_AGENT_CALL_LIMIT,
+    SINGLE_AGENT_MINUTES,
     TEAM,
     HandoffMiddleware,
     HelperMiddleware,
@@ -52,6 +54,7 @@ from oceanx.research.routing import (
     seen_by,
     tagged,
     team_config,
+    time_budget_sentence,
     workflow_mode,
 )
 from oceanx.research.services import AgentRun
@@ -374,6 +377,7 @@ async def test_the_single_agent_gets_the_handoff_only_in_auto_mode(monkeypatch, 
     kinds = [type(item) for item in captured["middleware"]]
     budget = next(item for item in captured["middleware"] if isinstance(item, QuickCallBudgetMiddleware))
     assert captured["role"] == SINGLE_AGENT and captured["run"] is run
+    assert budget.minutes == SINGLE_AGENT_MINUTES and budget.figures == FIGURE_MINUTES
     assert HELPER_POLICY in captured["suffix"]
     assert HANDOFF_POLICY not in captured["suffix"]
     assert kinds[-1] is ToolCallRepairMiddleware and HelperMiddleware in kinds
@@ -434,6 +438,44 @@ def test_markup_on_the_tool_free_last_call_is_asked_again_for_text():
     result = asyncio.run(agent.ainvoke({"messages": [HumanMessage(content="Plot it")]}))
     assert result["messages"][-1].text == "Plain answer."
     assert model.seen_messages[1][-1].text == PLAIN_TEXT_RETRY
+
+
+def test_the_requests_time_brings_the_figures_forward_and_ends_it_with_an_answer():
+    # A paper request of 2026-11-02 computed for 2 h 27 min without drawing a figure and was cancelled with
+    # nothing delivered. Each tool result now shows the minutes used, from 45 on with the figures first; code
+    # started before 120 runs to its end, and the call after it may only answer, without handing over.
+    runs = []
+
+    @tool
+    def execute(value: int) -> str:
+        """Run one probe step."""
+        runs.append(value)
+        return str(value)
+
+    minutes = iter([0, 10, 50, 119, 125])
+    model = _ProbeModel(responses=[*(_call("execute", {"value": n}, f"e{n}") for n in (1, 2, 3, 4)),
+                                   AIMessage(content="Final answer.")])
+    budget = QuickCallBudgetMiddleware(SINGLE_AGENT_CALL_LIMIT, last_call=LAST_CALL_HANDOFF,
+                                       last_tools=frozenset({HANDOFF_TOOL}), minutes=SINGLE_AGENT_MINUTES,
+                                       figures=FIGURE_MINUTES, clock=lambda: 60 * next(minutes))
+    agent = create_agent(model=model, tools=[execute], system_prompt="base",
+                         middleware=[HandoffMiddleware(), budget])
+    result = asyncio.run(agent.ainvoke({"messages": [HumanMessage(content="Apply the paper to my data")]}))
+    assert result["messages"][-1].text == "Final answer." and runs == [1, 2, 3, 4]
+    assert model.seen_messages[1][-1].text.endswith("[Time: 10 of 120 minutes used.]")
+    figures_first = ("; past 45, deliver each figure your saved results allow, if not done yet, before more "
+                     "long computation.]")
+    assert model.seen_messages[2][-1].text.endswith("[Time: 50 of 120 minutes used" + figures_first)
+    assert model.seen_messages[3][-1].text.endswith("[Time: 119 of 120 minutes used" + figures_first)
+    # The call after 120 minutes binds no tool, not even the handoff, and its instructions end with LAST_CALL.
+    assert len(model.bound_tool_names) == 4
+    last_system = next(m.text for m in model.seen_messages[4] if isinstance(m, SystemMessage))
+    assert last_system.endswith(LAST_CALL)
+    # The notes go with each call only; the saved conversation keeps the tool results as they were.
+    assert [m.text for m in result["messages"] if isinstance(m, ToolMessage)] == ["1", "2", "3", "4"]
+    for part in ("a request has 120 minutes", "After 45 minutes, before you start more long computation",
+                 "under OCEAN_OUTPUT_DIR under its final name", "code still running then is not stopped"):
+        assert part in time_budget_sentence()
 
 
 # --- helpers ----------------------------------------------------------------------------------------

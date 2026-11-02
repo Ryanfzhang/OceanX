@@ -9,6 +9,7 @@ costs nothing extra: the agent makes it on the call that starts the work.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
@@ -28,6 +29,12 @@ SINGLE_AGENT_CALL_LIMIT = 200
 HELPER_CALL_LIMIT = 20
 MAX_HELPERS = 3  # helpers of one request that work at once
 BUDGET_NOTE_CALLS = 5  # the last calls of a budget end their tool result with the calls left
+# The single agent's time for one request (QuickCallBudgetMiddleware). A paper request of 2026-11-02 computed
+# for 2 h 27 min without drawing a figure and was cancelled with nothing delivered: from FIGURE_MINUTES on, the
+# figures the saved results allow come before more long computation, and a call after SINGLE_AGENT_MINUTES
+# may only answer. Running code is never stopped.
+SINGLE_AGENT_MINUTES = 120
+FIGURE_MINUTES = 45
 
 WORKFLOW_MODES = ("auto", "standard", "research")
 
@@ -124,6 +131,15 @@ def call_budget_sentence(limit: int) -> str:
             f"tools. The last {BUDGET_NOTE_CALLS} tool results show how many remain.\n")
 
 
+def time_budget_sentence(minutes: int = SINGLE_AGENT_MINUTES, figures: int = FIGURE_MINUTES) -> str:
+    return (f"Time: a request has {minutes} minutes, and each tool result shows the minutes used. After {figures} "
+            "minutes, before you start more long computation, draw each figure of the request that your saved "
+            "results allow and deliver it under OCEAN_OUTPUT_DIR under its final name, marking on it what is not "
+            "computed yet; then go on, and redraw it when its results are complete. After "
+            f"{minutes} minutes your next call can only answer, with no tools; code still running then is not "
+            "stopped, so start no computation that cannot finish and be drawn before then.\n")
+
+
 def _tool_name(tool) -> str | None:
     return tool.get("name") if isinstance(tool, dict) else getattr(tool, "name", None)
 
@@ -138,20 +154,43 @@ def _markup_only(request, response) -> bool:
 
 class QuickCallBudgetMiddleware(ModelCallLimitMiddleware):
     """A fixed number of model calls: the last ones say how many remain, and the very last one may only
-    answer (or, for the single agent in auto mode, hand the request over)."""
+    answer (or, for the single agent in auto mode, hand the request over). With ``minutes`` it also keeps
+    the request's time, from its first call: each tool result shows the minutes used, from ``figures``
+    minutes on with the figures first, and a call after ``minutes`` may only answer. Code running then is
+    not stopped; the limit acts on the model call after it."""
 
-    def __init__(self, limit: int, *, last_call: str, last_tools: frozenset[str] = frozenset()) -> None:
+    def __init__(self, limit: int, *, last_call: str, last_tools: frozenset[str] = frozenset(),
+                 minutes: int | None = None, figures: int | None = None,
+                 clock: Callable[[], float] = time.monotonic) -> None:
         super().__init__(run_limit=limit, exit_behavior="end")
         self.last_call, self.last_tools = last_call, last_tools
+        self.minutes, self.figures, self.clock = minutes, figures, clock
+        self.started: float | None = None
+
+    def _minutes_used(self) -> float | None:
+        if self.minutes is None:
+            return None
+        now = self.clock()
+        self.started = now if self.started is None else self.started
+        return (now - self.started) / 60
 
     def _prepare(self, request):
         left = self.run_limit - int(request.state.get("run_model_call_count", 0))  # with this call
-        if left > 1:
-            return _with_calls_left(request, left) if left <= BUDGET_NOTE_CALLS else request
-        base = request.system_message.text if request.system_message else ""
-        return request.override(
-            tools=[tool for tool in request.tools if _tool_name(tool) in self.last_tools],
-            system_message=SystemMessage(content=f"{base}\n\n{self.last_call}".strip()))
+        used = self._minutes_used()
+        if used is not None and used >= self.minutes:
+            return _last_call(request, LAST_CALL)  # no handoff either: the team would start the work anew
+        if left <= 1:
+            return _last_call(request, self.last_call, self.last_tools)
+        if left <= BUDGET_NOTE_CALLS:
+            request = _with_note(request, f"[Budget: {left} model calls left, this one included; "
+                                          "the last has no tools.]")
+        if used is None:
+            return request
+        note = f"[Time: {int(used)} of {self.minutes} minutes used"
+        if self.figures is not None and used >= self.figures:
+            note += (f"; past {self.figures}, deliver each figure your saved results allow, if not done yet, "
+                     "before more long computation")
+        return _with_note(request, note + ".]")
 
     def wrap_model_call(self, request, handler):
         request = self._prepare(request)
@@ -170,12 +209,19 @@ class QuickCallBudgetMiddleware(ModelCallLimitMiddleware):
         return response
 
 
-def _with_calls_left(request, left: int):
-    """End the last tool result of this request, never the saved conversation, with the calls left."""
+def _last_call(request, notice: str, tools: frozenset[str] = frozenset()):
+    """The request of a last model call: only ``tools`` stay, and the instructions end with ``notice``."""
+    base = request.system_message.text if request.system_message else ""
+    return request.override(
+        tools=[tool for tool in request.tools if _tool_name(tool) in tools],
+        system_message=SystemMessage(content=f"{base}\n\n{notice}".strip()))
+
+
+def _with_note(request, note: str):
+    """End the last tool result of this request, never the saved conversation, with ``note``."""
     messages = list(request.messages)
     if not messages or not isinstance(messages[-1], ToolMessage):
         return request
-    note = f"[Budget: {left} model calls left, this one included; the last has no tools.]"
     last = messages[-1]
     content = ([*last.content, {"type": "text", "text": note}] if isinstance(last.content, list)
                else f"{last.content}\n\n{note}")
@@ -372,11 +418,12 @@ def last_answer(messages) -> str:
 
 
 __all__ = [
-    "AGENT_TAG", "BOUNDED_WORK_POLICY", "HANDOFF_POLICY", "HANDOFF_TOOL", "HELPER", "HELPER_CALL_LIMIT",
-    "HELPER_LAST_CALL", "HELPER_POLICY", "HELPER_TOOL", "LAST_CALL", "LAST_CALL_HANDOFF", "LONG_RUNS",
-    "MAX_HELPERS", "PAPER_RULE", "PAPER_SKILL", "SINGLE_AGENT", "SINGLE_AGENT_CALL_LIMIT", "TEAM",
+    "AGENT_TAG", "BOUNDED_WORK_POLICY", "FIGURE_MINUTES", "HANDOFF_POLICY", "HANDOFF_TOOL", "HELPER",
+    "HELPER_CALL_LIMIT", "HELPER_LAST_CALL", "HELPER_POLICY", "HELPER_TOOL", "LAST_CALL", "LAST_CALL_HANDOFF",
+    "LONG_RUNS", "MAX_HELPERS", "PAPER_RULE", "PAPER_SKILL", "SINGLE_AGENT", "SINGLE_AGENT_CALL_LIMIT",
+    "SINGLE_AGENT_MINUTES", "TEAM",
     "HandoffMiddleware", "HelperMiddleware", "PaperSkillMiddleware", "QuickCallBudgetMiddleware",
     "budget_handoff", "call_budget_sentence", "handed_over", "handoff_note", "handoff_request",
     "last_answer", "opened_in_request", "paper_rule", "seen_by", "tagged", "team_config",
-    "workflow_mode",
+    "time_budget_sentence", "workflow_mode",
 ]

@@ -85,12 +85,15 @@ class FixtureModel(FakeMessagesListChatModel):
         # The rule for handing over comes before the instructions on how to work.
         assert system.index("## Routing — decide before starting work") < system.index(
             "# Working on the request yourself")
+        assert "Time: a request has 120 minutes" in system
         last_human = max(i for i, m in enumerate(messages) if isinstance(m, HumanMessage))
         done = [m for m in messages[last_human + 1:] if isinstance(m, ToolMessage)]
         if not done:
             return call("ocean_expert_run_code", {"purpose": "Compute the quick answer",
                                                   "code": "print('SINGLE', 1 + 1)\n"})
-        payload = json.loads(re.sub(r"\n\n\[Budget: [^\]]*\]$", "", done[-1].text))
+        # The last tool result ends with the minutes used (and, near the end of the budget, the calls left).
+        assert re.search(r"\n\n\[Time: \d+ of 120 minutes used\.\]$", done[-1].text), done[-1].text
+        payload = json.loads(re.sub(r"(\n\n\[(?:Budget|Time): [^\]]*\])+$", "", done[-1].text))
         assert payload.get("state") == "succeeded", payload
         return AIMessage(content="Fixture single answer: 2.")
 

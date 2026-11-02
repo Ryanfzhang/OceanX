@@ -42,6 +42,7 @@ from oceanx.research.budget import (  # the benchmark and tests read RESEARCH_BU
 from oceanx.research.metering import INSIDE_EXPERT
 from oceanx.research.routing import (
     BOUNDED_WORK_POLICY,
+    FIGURE_MINUTES,
     HANDOFF_POLICY,
     HANDOFF_TOOL,
     HELPER,
@@ -54,6 +55,7 @@ from oceanx.research.routing import (
     PAPER_SKILL,
     SINGLE_AGENT,
     SINGLE_AGENT_CALL_LIMIT,
+    SINGLE_AGENT_MINUTES,
     TEAM,
     HandoffMiddleware,
     HelperMiddleware,
@@ -68,6 +70,7 @@ from oceanx.research.routing import (
     seen_by,
     tagged,
     team_config,
+    time_budget_sentence,
     workflow_mode,
 )
 from oceanx.research.services import (
@@ -963,6 +966,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         ).decision_for("metadata") == "allow":
             prompt += await _saved_data_prompt(run, own=True)  # what earlier requests left in its folder
         prompt += call_budget_sentence(HELPER_CALL_LIMIT if role == HELPER else SINGLE_AGENT_CALL_LIMIT)
+        if role == SINGLE_AGENT:
+            prompt += time_budget_sentence()
     elif run:
         assigned = host().research.report_path(run)
         prompt += f"\nBackend-assigned report file: {assigned}\n"
@@ -1304,7 +1309,8 @@ async def _single_agent(config, run: AgentRun):
         *([HandoffMiddleware()] if handoff else []),
         HelperMiddleware(lambda part: _run_helper(config, part)),
         QuickCallBudgetMiddleware(SINGLE_AGENT_CALL_LIMIT, last_call=LAST_CALL_HANDOFF if handoff else LAST_CALL,
-                                  last_tools=frozenset({HANDOFF_TOOL}) if handoff else frozenset()),
+                                  last_tools=frozenset({HANDOFF_TOOL}) if handoff else frozenset(),
+                                  minutes=SINGLE_AGENT_MINUTES, figures=FIGURE_MINUTES),
         ToolCallRepairMiddleware(),
     ], routing=HANDOFF_POLICY if handoff else "", suffix="\n" + HELPER_POLICY)
 
