@@ -776,6 +776,44 @@ async def test_cancelling_sandboxed_command_terminates_its_process_group(
 
 
 @pytest.mark.asyncio
+async def test_a_background_process_does_not_outlive_its_command(tmp_path: Path):
+    """What research/routing.py LONG_RUNS tells agents: work started in the background and left running when
+    the command returns, as with `nohup python run_year.py ... > log &`, is stopped with the command."""
+    capabilities = get_sandbox_execution_capabilities()
+    if not capabilities.available:
+        pytest.skip(capabilities.reason or "sandbox backend is unavailable")
+
+    policy, work = _policy(tmp_path, limits=_resource_limits(process_count=0))
+    policy = replace(policy, allow_child_processes=True)  # as for an execute command (expert_execution.py)
+    script = work / "start_in_background.py"
+    script.write_text(
+        "import subprocess\n"
+        "import sys\n"
+        "import time\n"
+        "from pathlib import Path\n"
+        "out = Path(sys.argv[1])\n"
+        "child = ('import sys, time; from pathlib import Path; out = Path(sys.argv[1]); '\n"
+        "         \"(out / 'started.txt').write_text('started'); time.sleep(1); \"\n"
+        "         \"(out / 'survived.txt').write_text('alive')\")\n"
+        "subprocess.Popen([sys.executable, '-c', child, str(out)],\n"
+        "                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+        "for _ in range(250):\n"
+        "    if (out / 'started.txt').exists():\n"
+        "        break\n"
+        "    time.sleep(0.02)\n",
+        encoding="utf-8",
+    )
+
+    result = await run_sandboxed_command(
+        _python_command(script, str(policy.output_root)), policy=policy, cwd=work)
+
+    assert result.returncode == 0
+    assert (policy.output_root / "started.txt").exists()  # the background process did run
+    await asyncio.sleep(2)
+    assert not (policy.output_root / "survived.txt").exists()
+
+
+@pytest.mark.asyncio
 async def test_sandboxed_command_stops_at_memory_ceiling(tmp_path: Path):
     capabilities = get_sandbox_execution_capabilities()
     if not capabilities.available:

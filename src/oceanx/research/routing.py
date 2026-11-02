@@ -84,7 +84,7 @@ BOUNDED_WORK_POLICY = """\
 # Bounded work
 Reproducing, testing or applying a paper's analysis is not bounded work: it is finished only when every analysis
 of the paper that the data allow is done, each quantity and budget term computed as the paper defines it and
-checked, and each figure redrawn to look like the paper's, with every panel, curve and term the data allow. A term
+checked, and each of the paper's figures redrawn with every panel, curve and term the data allow. A term
 counts as missing only after deriving it from the stored variables has failed, and nothing the data allow is
 withheld or left as an offer for later; /skills/paper-reproduction/SKILL.md describes how.
 For any other request, the requested output (a figure, number, table, route or file) is the finish line. Compute it
@@ -99,8 +99,12 @@ changes the result: say so, and where the request or the paper's method uses eve
 common part, such as one year, before relying on it.
 """
 # What the single agent, its helpers and the Experts are told about long runs (expert_execution.py).
-LONG_RUNS = ("Code runs until it ends, with no time limit. For long work, have a script print its progress, "
-             "such as each year done, and save each part's result to a file instead of repeating the same read.")
+LONG_RUNS = ("Code runs until it ends, with no time limit. Split work over many files, years or regions into "
+             "independent parts and run them in parallel: run one part first to check its result, its time and "
+             "its memory, then start the parts as separate processes in one execute command, as many at once as "
+             "the cores and free memory allow, and wait for all of them there; a process left running in the "
+             "background is stopped when its command returns, and ocean_expert_run_code cannot start processes. "
+             "Have each part print its progress and save its result to a file instead of repeating the same read.")
 
 LAST_CALL = ("# Last model call\nThis is the last model call of your budget, and no tools are available on it. "
              "Answer the researcher now from what you have, and say plainly what is unfinished.")

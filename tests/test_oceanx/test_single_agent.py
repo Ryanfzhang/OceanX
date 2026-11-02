@@ -141,6 +141,14 @@ def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
     interactive, static = graphs.bounded_work_policy(False), graphs.bounded_work_policy(True)
     assert "finish line" in interactive and "Code runs until it ends, with no time limit" in interactive
+    # A run of 2026-11-02 started three batches of years with nohup and returned; each batch was stopped with its
+    # command, the agent waited 7 minutes for nothing and then ran the missing years one after another. Benchmark
+    # runs the same day looped over a large array on one core inside the Python tool, which cannot start
+    # processes. Work over many files is split into parts, one part is measured, and the parts run in parallel.
+    assert "independent parts and run them in parallel" in interactive
+    assert "run one part first to check its result, its time and its memory" in interactive
+    assert "as many at once as the cores and free memory allow, and wait for all of them there" in interactive
+    assert "background is stopped when its command returns, and ocean_expert_run_code cannot start" in interactive
     assert ".preview.png" in interactive and "the image" in static
     from oceanx.runtime import (
         FIGURE_VERIFICATION_POLICY, OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY,

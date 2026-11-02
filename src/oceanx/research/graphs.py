@@ -922,7 +922,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                        + " " + DRAFT_RULE + "\n" + figure_call_skeleton())
         if quick:
             prompt += ("\nocean_expert_run_code keeps Python variables for this request, so prefer it for "
-                       "array analysis; use execute for shell work.\n" + bounded_work_policy(static))
+                       "array analysis of saved results or small data; use execute for shell work and for "
+                       "parallel passes over many files.\n" + bounded_work_policy(static))
             if role == SINGLE_AGENT:
                 from oceanx.pdf_text import task_pdf_texts
                 papers = task_pdf_texts(host().store, host().paths,
@@ -930,8 +931,9 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                 prompt += paper_rule(papers)
         else:
             prompt += ("\n" + LONG_RUNS + " ocean_expert_run_code keeps Python "
-                       "variables for this attempt, so prefer it for iterative array analysis; use execute "
-                       "for reproducible scripts or shell work. Do not save full source-field copies merely "
+                       "variables for this attempt, so prefer it for iterative array analysis of saved results "
+                       "or small data; use execute for reproducible scripts, parallel passes over many files "
+                       "and shell work. Do not save full source-field copies merely "
                        "to carry state within one attempt. Save only a checkpoint another node or retry needs.")
             if role in DATA_EXPERT_ROLES and learned:
                 prompt += " " + learned_skills_rule(learned)

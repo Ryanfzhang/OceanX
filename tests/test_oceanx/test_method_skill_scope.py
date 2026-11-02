@@ -77,7 +77,7 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "each with the dataset and period it comes from" in reproduction
     # The skill applies a paper's method to other data too (2026-11-01): it finds the analyses the data support,
     # copies each equation before coding it, and checks other data by the method, not by the paper's numbers.
-    for step in ("First list the paper's analyses and figures",
+    for step in ("First list every figure of the paper, one for each figure image its extracted text names",
                  "copy the paper's equation as printed, in its order of operations",
                  "With other data the paper's values are context, not a target",
                  "never fill a gap with another quantity, a table or another kind of figure"):
@@ -88,10 +88,20 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "never for a figure as a whole" in reproduction
     assert "Draw a partial budget as partial and not closed rather than withholding it" in reproduction
     assert "period and time sampling it needs" in reproduction
-    # A run of 2026-11-02 left out a figure whose caption begins "Schematic" as "not an analysis" while writing
-    # the spec, without opening its image, which shows each layer's trend and the strait's flux: the spec records
-    # the image of every figure, so what to draw is decided per panel under Figures.
-    assert "For each figure, a schematic included, give the path of the image that shows it" in reproduction
+    # Runs of 2026-11-02 wrote the spec as a table of analyses with figures hung on them, so a map of the mean
+    # state and a schematic carrying computed trends dropped out with reasons a doubt on the panel would answer,
+    # and the review compared only the figures drawn. The spec lists every figure and panel first, the decision
+    # is made per panel there, and the review goes over every listed figure.
+    assert "whether it shows results, a mean state or a schematic, with its panels" in reproduction
+    assert "a figure is left out only when none of its panels can be computed" in reproduction
+    assert "is written on the panel, not a reason to leave it out" in reproduction
+    assert "every figure it lists, drawn or not, beside the image of its original" in reproduction
+    # The first full pass of a run of 2026-11-02 was redone after its check found a sign error.
+    assert "on a part of the record such as one year, before computing the whole record" in reproduction
+    # Applying a paper to other data, the original gives a figure's form; its smoothing and ranges must show
+    # these data (a 7-year window on 12 years left a flat five-year curve kept "for comparability").
+    assert "With other data the original gives the form, not the look" in reproduction
+    assert "shows these data over their whole record" in reproduction
     # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
     # drawn and marked, not dropped.
     assert "give their sum as the residual" in reproduction and "marked not significant, never left out" in reproduction

@@ -31,21 +31,26 @@ axes: a circulation integrated along a boundary over a layer is in m3 s-1, so a 
 divided by an area.
 
 ## Writing down what the paper requires
-Before computing anything, write repro_spec.md in your working directory. First list the paper's analyses
-and figures and, for each, the variables, depths, region, period and time sampling it needs and whether
-the supplied data hold them (look in the files, not at their names); do every analysis whose inputs exist
-and name the others with what they need. For each figure, a schematic included, give the path of the image that shows it, named in the
-paper's extracted text, and what the image and its caption show: panels, variables, units, axis ranges and
-their multipliers, colour encoding, fills, overlays, reference lines, annotations and layout. For each
-quantity, copy the paper's equation as printed, in its order of operations, write below it the discrete
-form you will compute, and give the paper's values, each with the dataset and period it comes from. Write
-only what the paper shows or states, mark what you could not read, and correct the file from the paper,
-never to fit your results. Read it again whenever earlier messages have been replaced by a summary.
+Before computing anything, write repro_spec.md in your working directory. First list every figure of the
+paper, one for each figure image its extracted text names, whether it shows results, a mean state or a
+schematic, with its panels; then list the paper's analyses. For each panel and analysis give the variables,
+depths, region, period and time sampling it needs and whether the supplied data hold them (look in the
+files, not at their names). Do every analysis and draw every panel whose inputs exist, and name the others
+with what they need. Decide panel by panel, curve by curve and term by term, never for a figure as a whole:
+a figure is left out only when none of its panels can be computed, and a doubt, such as a definition the
+paper leaves open or an original drawn by hand, is written on the panel, not a reason to leave it out. For
+each figure give the path of its image and what the image and its caption show: panels, variables, units,
+axis ranges and their multipliers, colour encoding, fills, overlays, reference lines, annotations and
+layout. For each quantity, copy the paper's equation as printed, in its order of operations, write below it
+the discrete form you will compute, and give the paper's values, each with the dataset and period it comes
+from. Write only what the paper shows or states, mark what you could not read, and correct the file from the
+paper, never to fit your results. Read it again whenever earlier messages have been replaced by a summary.
 
 ## One computation per quantity
-Fix one computation of each quantity before drawing any figure, and check it as under Checking the
-computation. From then on use only that computation: rename or remove the outputs of the versions it
-replaced, and compute every series you compare or correlate from the same samples.
+Fix one computation of each quantity and check it, as under Checking the computation, on a part of the
+record such as one year, before computing the whole record or drawing any figure. From then on use only
+that computation: rename or remove the outputs of the versions it replaced, and compute every series you
+compare or correlate from the same samples.
 For time derivatives, convert timestamp differences explicitly to the time unit of the reported quantity.
 For detrending, evaluate and subtract the fitted trend on the same time coordinate and in the same units
 used for fitting. If subsampling replaces a full-period average, compare both on a common subset before
@@ -83,27 +88,30 @@ overlapping windows do not provide independent samples. Name each departure from
 
 ## Figures
 Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures.
-Redraw each figure of the analyses you do as one figure with the paper's panels, from your quantities:
-the same variables, symbols, units, scales, colour encoding, fills, overlays, reference lines, annotations
-and layout. Draw every element the original has, the trend line of each period included; one the record
-is too short to support is drawn and marked not significant, never left out. Smoothed curves and their
-fills run through the whole record as the original's do, over the raw series drawn faintly behind them at
-the paper's time resolution. Before drawing each figure, read repro_spec.md again and, when you can
-read images, open the original again, since what you read at the start lies far back in the
-conversation. After saving, open the original and yours together, compare them item by item (panel layout,
-fills, line styles, axis ranges and their multipliers, panel letters, legends and annotations, text that
-crosses a line, lines that run off the axes) and fix every difference the data allow. Decide what to draw
-panel by panel, curve by curve and term by term, never for a figure as a whole: draw each one the data
-allow, with any doubt written on it, and mark each missing one as not available, with what it needs. Draw
-a partial budget as partial and not closed rather than withholding it; never draw a missing term as zero,
-or a mechanism these data did not test as established. Leave out a figure only when none of it can be
-computed, and never fill a gap with another quantity, a table or another kind of figure.
+Redraw each figure listed in repro_spec.md as one figure with the paper's panels, from your quantities:
+the same variables, symbols, units, colour encoding, fills, overlays, reference lines, annotations and
+layout. Draw every element the original has, the trend line of each period included; one the record is
+too short to support is drawn and marked not significant, never left out. With the paper's own data, keep
+its scales and smoothing too, so that yours looks like the original. With other data the original gives
+the form, not the look: choose smoothing windows and axis ranges so that every curve, smoothed ones
+included, shows these data over their whole record, over the raw series drawn faintly behind at the data's
+time resolution, and name each change from the original. Before drawing each figure, read repro_spec.md
+again and, when you can read images, open the original again, since what you read at the start lies far
+back in the conversation. After saving, open the original and yours together, compare them item by item
+(panel layout, fills, line styles, axis ranges and their multipliers, panel letters, legends and
+annotations, text that crosses a line, lines that run off the axes) and fix every difference the data
+allow other than the changes you named. Draw each panel, curve and term the data allow, with any doubt
+written on it, and mark each missing one as not available, with what it needs. Draw a partial budget as
+partial and not closed rather than withholding it; never draw a missing term as zero, or a mechanism these
+data did not test as established, and never fill a gap with another quantity, a table or another kind of
+figure.
 
 ## Reviewing the results
-Before answering, read repro_spec.md again and review your results against it: each saved figure beside
-the image of its original, item by item as under Figures, and each quantity by its checks under Checking
-the computation. Check that every figure and number you report comes from the saved output of the one
-computation of its quantity. Fix what the data allow, and report what remains with its reason.
+Before answering, read repro_spec.md again and review your results against it: every figure it lists,
+drawn or not, beside the image of its original, item by item as under Figures, drawing any panel left out
+that the data allow, and each quantity by its checks under Checking the computation. Check that every
+figure and number you report comes from the saved output of the one computation of its quantity. Fix what
+the data allow, and report what remains with its reason.
 
 ## Reporting
 For each of the paper's conclusions give the paper's value, your value from the supplied data, whether the

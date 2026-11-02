@@ -209,9 +209,10 @@ FIGURE_VERIFICATION_POLICY = """\
 Before delivering a figure, open its rendered image or preview and correct errors in labels, units,
 scales, legends, clipping and overlap. Check the plotted quantities against the saved calculations;
 visual inspection alone does not verify the calculation.
-When reproducing a paper, open the original figure before drawing. After saving, open the original and
-the generated figure, compare them panel by panel, and correct differences in quantities, units, axis
-ranges and multipliers, layout, colours, fills, curves, trend lines and annotations that the data allow.
+When reproducing or applying a paper, open the original figure before drawing. After saving, open the
+original and the generated figure, compare them panel by panel, and correct differences in quantities,
+units and multipliers, layout, colours, fills, curves, trend lines and annotations that the data allow;
+with data other than the paper's, choose axis ranges and smoothing that show these data over their record.
 Preserve the paper's scientific definitions; do not silently replace a quantity with an anomaly or a
 different budget term. State any unavoidable differences. Inspect the corrected figure before delivery.
 This verification is part of completing the requested work.
