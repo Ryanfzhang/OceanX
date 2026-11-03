@@ -196,6 +196,23 @@ async def test_the_single_agent_and_its_helpers_answer_without_a_report(monkeypa
     assert {"web_search", "jina_reader"} <= names
 
 
+@pytest.mark.asyncio
+async def test_only_the_single_agent_and_its_helpers_get_a_long_command_back_as_a_job(tmp_path, monkeypatch):
+    """execute waits at most ten minutes for them (command_jobs.py); the team waits until a command ends."""
+    from oceanx.command_jobs import JOB_WAIT_SECONDS
+    from tests.test_oceanx.test_saved_data_index import _backend
+
+    async with _backend(tmp_path, monkeypatch) as (_host, _task, config, seen):
+        waits, tools = {}, {}
+        for role in (SINGLE_AGENT, HELPER, "ocean_process_expert"):
+            await graphs.build(config, role, run=AgentRun.from_config(config, role, question="B1: SST"))
+            waits[role] = seen["filesystem_backend"].default.wait_seconds
+            tools[role] = {tool.name for tool in seen["tools"].list_tools()}
+    assert waits == {SINGLE_AGENT: JOB_WAIT_SECONDS, HELPER: JOB_WAIT_SECONDS, "ocean_process_expert": None}
+    assert {"check_job", "stop_job"} <= tools[SINGLE_AGENT] and {"check_job", "stop_job"} <= tools[HELPER]
+    assert not {"check_job", "stop_job"} & tools["ocean_process_expert"]
+
+
 def test_the_single_agent_reads_the_skills_of_the_data_and_search_experts(tmp_path):
     from oceanx.native_skills import prepare_skill_library
     library = prepare_skill_library(tmp_path / "skills", role=SINGLE_AGENT,
@@ -308,6 +325,39 @@ async def test_a_simple_request_is_answered_by_the_single_agent_alone(world):
     mode, key = world.calls["single_built"]
     assert mode == "auto" and key.startswith("single-agent-")
     assert world.calls["closed"] == [key]  # its kernel lives for one request
+
+
+@pytest.mark.asyncio
+async def test_the_researchers_stop_also_stops_the_tasks_jobs_and_an_ended_request_leaves_them(world, monkeypatch):
+    """A job still running when a request ends goes on, for a later "continue"; the stop button ends it."""
+    stopped = []
+
+    async def stop_jobs(task_id):
+        stopped.append(task_id)
+
+    monkeypatch.setattr(graphs, "_stop_jobs", stop_jobs)
+    config = _config("auto")
+    graph = await graphs.coordinator(config)
+    await graph.ainvoke({"messages": [HumanMessage(content="画出 8 月 15 日的海表温度")]}, config)
+    assert stopped == []
+    started = asyncio.Event()
+
+    class Working:
+        async def ainvoke(self, state, config=None):
+            started.set()
+            await asyncio.Event().wait()
+
+    async def single_agent(config, run):
+        return Working()
+
+    monkeypatch.setattr(graphs, "_single_agent", single_agent)
+    graph = await graphs.coordinator(config)
+    request = asyncio.create_task(graph.ainvoke({"messages": [HumanMessage(content="复现论文的图 3")]}, config))
+    await started.wait()
+    request.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await request
+    assert stopped == ["task"] and len(world.calls["closed"]) == 2
 
 
 @pytest.mark.asyncio

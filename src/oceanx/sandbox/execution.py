@@ -653,12 +653,15 @@ async def run_sandboxed_command(
     policy: SandboxExecutionPolicy,
     cwd: Path | str,
     environment: Mapping[str, str] | None = None,
+    on_output: Callable[[str, bytes], None] | None = None,
 ) -> SandboxExecutionResult:
     """Run an argv list inside the selected fail-closed sandbox.
 
     Commands must use an absolute executable path.  This keeps executable
     provenance explicit and prevents an ambient ``PATH`` from selecting a
     different binary than the one whose runtime roots were mounted.
+    ``on_output`` receives each piece of output as it arrives, with its stream
+    name ("stdout" or "stderr"); the result still holds all of it.
     """
     capabilities = require_sandbox_execution_capabilities()
     resolved_cwd = _normalize_existing_directory(cwd)
@@ -718,8 +721,12 @@ async def run_sandboxed_command(
 
     assert process.stdout is not None
     assert process.stderr is not None
-    stdout_task = asyncio.create_task(_capture_stream(process.stdout, policy.limits.stdout_bytes))
-    stderr_task = asyncio.create_task(_capture_stream(process.stderr, policy.limits.stderr_bytes))
+    stdout_task = asyncio.create_task(_capture_stream(
+        process.stdout, policy.limits.stdout_bytes,
+        None if on_output is None else lambda chunk: on_output("stdout", chunk)))
+    stderr_task = asyncio.create_task(_capture_stream(
+        process.stderr, policy.limits.stderr_bytes,
+        None if on_output is None else lambda chunk: on_output("stderr", chunk)))
     process_task = asyncio.create_task(process.wait())
     orphan_processes_terminated = False
 
@@ -958,12 +965,16 @@ async def _wait_for_completion(
     return None, stdout or stdout_task.result(), stderr or stderr_task.result()
 
 
-async def _capture_stream(stream: asyncio.StreamReader, limit: int) -> _CapturedStream:
+async def _capture_stream(
+    stream: asyncio.StreamReader, limit: int, on_chunk: Callable[[bytes], None] | None = None,
+) -> _CapturedStream:
     captured = bytearray()
     while True:
         chunk = await stream.read(65_536)
         if not chunk:
             return _CapturedStream(data=bytes(captured), exceeded=False)
+        if on_chunk is not None:
+            on_chunk(chunk)
         if not limit:
             captured.extend(chunk)
             continue

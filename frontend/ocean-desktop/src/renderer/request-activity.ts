@@ -70,6 +70,7 @@ export function stepTarget(toolName: string, input: Record<string, unknown>, tex
   if (toolName === 'jina_reader') return shortened(input.url, 72);
   if (toolName === 'task') return shortened(input.description, 72);
   if (toolName === 'assign_helper') return shortened(input.task, 72);
+  if (toolName === 'check_job' || toolName === 'stop_job') return shortened(input.job_id, 16);
   return '';
 }
 
@@ -78,6 +79,9 @@ const INSPECTING: Label = ['Inspecting files', '查看文件'];
 const STEP_LABELS: Record<string, Label> = {
   ocean_expert_run_code: ['Running analysis', '运行分析'],
   execute: ['Running a command', '运行命令'],
+  // A command still running after 10 minutes goes on as a job (src/oceanx/command_jobs.py).
+  check_job: ['Checking a running command', '查看运行中的命令'],
+  stop_job: ['Stopping a running command', '停止运行中的命令'],
   web_search: ['Searching the literature', '检索文献'],
   jina_reader: ['Reading a source', '阅读资料'],
   read_file: ['Reading a file', '读取文件'],

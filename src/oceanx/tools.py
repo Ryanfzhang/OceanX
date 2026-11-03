@@ -28,6 +28,7 @@ from oceanx.agent_tools import (
 from oceanx.artifacts.models import ArtifactRef
 from oceanx.artifacts.service import ArtifactService
 from oceanx.backend.store import RequestStore, RequestStoreError
+from oceanx.command_jobs import JOB_WAIT_SECONDS
 from oceanx.expert_execution import (
     ExpertCodeExecutionError,
     ExpertCodeExecutionService,
@@ -446,6 +447,58 @@ class OceanExpertRunCodeTool(_OceanTool):
             return self._json(payload)
         except (ExpertCodeExecutionError, RequestStoreError, RuntimeError, ValueError) as exc:
             return self._error(str(exc))
+
+
+class OceanCheckJobInput(OceanToolInput):
+    job_id: str = Field(default="", max_length=64, description="The job's id; empty lists this task's jobs.")
+    wait_minutes: float = Field(default=JOB_WAIT_SECONDS / 60, ge=0, le=JOB_WAIT_SECONDS / 60, description=(
+        "How long to wait for the job to end before replying; 0 looks without waiting."))
+
+
+class OceanCheckJobTool(_OceanTool):
+    """For the single agent and its helpers, whose execute hands a long command back as a job."""
+
+    name = "check_job"
+    description = (
+        "Wait for a command that went on as a job to end, up to wait_minutes, then show what it printed "
+        "since you last looked and whether it has ended. Waiting never stops it. Without job_id, list this "
+        "task's jobs.")
+    input_model = OceanCheckJobInput
+
+    async def execute(self, arguments: OceanCheckJobInput, context: ToolExecutionContext) -> ToolResult:
+        del context
+        service, task_id = self.services.expert_code_execution, self.services.task_id
+        if service is None or task_id is None:
+            return self._error("Jobs are unavailable in this session")
+        if not arguments.job_id.strip():
+            return ToolResult(output=service.jobs.listing(task_id), metadata={"display": "activity"})
+        job = service.jobs.get(task_id, arguments.job_id)
+        if job is None:
+            return self._error(f"This task has no job {arguments.job_id}; check_job without job_id lists them.")
+        await service.jobs.wait(job, arguments.wait_minutes * 60)
+        return ToolResult(output=service.jobs.report(job, service.budget_note), metadata={"display": "activity"})
+
+
+class OceanStopJobInput(OceanToolInput):
+    job_id: str = Field(min_length=1, max_length=64)
+
+
+class OceanStopJobTool(_OceanTool):
+    name = "stop_job"
+    description = ("Stop a command that went on as a job, with every process it started, and show what it "
+                   "printed since you last looked.")
+    input_model = OceanStopJobInput
+
+    async def execute(self, arguments: OceanStopJobInput, context: ToolExecutionContext) -> ToolResult:
+        del context
+        service, task_id = self.services.expert_code_execution, self.services.task_id
+        if service is None or task_id is None:
+            return self._error("Jobs are unavailable in this session")
+        job = service.jobs.get(task_id, arguments.job_id)
+        if job is None:
+            return self._error(f"This task has no job {arguments.job_id}; check_job without job_id lists them.")
+        await service.jobs.stop(job)
+        return ToolResult(output=service.jobs.report(job, service.budget_note), metadata={"display": "activity"})
 
 
 class OceanPaperCandidateInput(OceanToolInput):

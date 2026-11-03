@@ -205,6 +205,7 @@ class OceanBackendHost:
         await self.router.shutdown_active_analysis()
         if not self.router.shutdown_requested:
             self.router.interrupt_active_requests()
+        await self.expert_code_execution.jobs.stop_all()  # commands that went on as jobs (command_jobs.py)
         await self.expert_code_execution.kernels.close()
         self.store.close()
 

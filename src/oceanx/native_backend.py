@@ -32,6 +32,7 @@ from deepagents.backends.sandbox import (
 )
 
 from oceanx import native_text
+from oceanx.command_jobs import CommandJob, command_notes, job_started
 from oceanx.sandbox import SandboxExecutionPolicy, run_sandboxed_command
 from oceanx.sandbox.execution import POSIX_SHELL, shell_runtime_roots
 
@@ -226,19 +227,25 @@ class ResearchSandbox(OceanSandbox):
 Native filesystem helpers use an identical sandbox without treating ls/read as
 scientific analysis or snapshotting all existing outputs on every file read.
 """
-    def __init__(self, **kwargs):
+    def __init__(self, *, task_id=None, wait_seconds=None, **kwargs):
         super().__init__(**kwargs)
         self.files = OceanSandbox(**{**kwargs, "record_command": None})
+        # With wait_seconds (the single agent and its helpers), a command still running then goes on as a
+        # job of the task (command_jobs.py); without, as for the team, execute waits until it ends.
+        self.task_id, self.wait_seconds = task_id, wait_seconds
 
     async def aexecute(self, command, *, timeout=None):
         if self.record_command is None:
             return await super().aexecute(command, timeout=timeout)
-        result = await self.record_command(command)  # whatever timeout was asked (OceanSandbox.aexecute)
-        output = result.stdout + result.stderr
-        if result.figure_notes:  # what keeps a saved PDF figure from being edited in Illustrator
-            output += "\n[Figure check] " + "\n[Figure check] ".join(result.figure_notes) + "\n"
-        if note := self.service.budget_note(result.limit_trigger):
-            output += f"\n[{note}]\n"
+        if self.wait_seconds is None:
+            result = await self.record_command(command)  # whatever timeout was asked (OceanSandbox.aexecute)
+        else:
+            job = CommandJob(task_id=self.task_id, command=command)
+            result = await self.service.jobs.run(
+                job, self.record_command(command, on_output=job.add_output), self.wait_seconds)
+            if result is None:
+                return ExecuteResponse(output=job.take_output() + job_started(job))
+        output = result.stdout + result.stderr + command_notes(result, self.service.budget_note)
         return ExecuteResponse(output=output, exit_code=result.returncode)
 
     async def als(self, path):
@@ -290,8 +297,9 @@ scientific analysis or snapshotting all existing outputs on every file read.
         return self.files.delete(file_path)
 
 
-def task_backend(host, config, *, run, library):
-    """Same filesystem capabilities for every role, no startup Python inspection."""
+def task_backend(host, config, *, run, library, wait_seconds=None):
+    """Same filesystem capabilities for every role, no startup Python inspection. With ``wait_seconds``
+    an agent's command still running then goes on as a job (command_jobs.py)."""
     from oceanx.datasets import resolve_dataset_source
     from oceanx.native_skills import skill_backend
 
@@ -340,12 +348,13 @@ def task_backend(host, config, *, run, library):
             else:
                 roots.extend(host.paths.resolve_uri(f.uri) for f in artifact.files)
         return tuple(path for path in roots if path.exists())
-    async def record_command(command):
+    async def record_command(command, on_output=None):
         return await service.run_shell(workspace_id=c["workspace_id"], task_id=c["task_id"],
             agent_thread_id=run.thread_id, server_run_id=run.server_run_id,
-            origin_request_id=c.get("request_id"), command=command)
+            origin_request_id=c.get("request_id"), command=command, on_output=on_output)
     sandbox = ResearchSandbox(service=service, work_root=work_root, read_roots=read_roots,
-                              record_command=record_command if run else None)
+                              record_command=record_command if run else None,
+                              task_id=c["task_id"], wait_seconds=wait_seconds)
     return skill_backend(
         library,
         default=sandbox,

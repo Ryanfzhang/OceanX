@@ -8,6 +8,8 @@ from typing import Any
 from oceanx.agent_tools import ToolRegistry
 from oceanx.figure_delivery import static_figures
 from oceanx.tools import (
+    OceanCheckJobTool,
+    OceanStopJobTool,
     OceanToolServices,
     create_ocean_discussion_tool_registry,
     create_ocean_expert_tool_registry,
@@ -334,8 +336,12 @@ async def build_ocean_single_agent_runtime(
     policy = STATIC_EXPERT_WORKSTREAM_POLICY if static_figures() else OCEAN_EXPERT_WORKSTREAM_POLICY
     # The Experts cite their results in report.md; these agents cite them where they answer.
     policy = policy.replace("in report.md", "in your reply" if helper else "in your answer")
+    registry = create_ocean_expert_tool_registry(services)
+    if services.expert_code_execution is not None:  # execute hands a long command back as a job
+        registry.register(OceanCheckJobTool(services))
+        registry.register(OceanStopJobTool(services))
     profile = OceanRuntimeProfile(
-        tool_registry=create_ocean_expert_tool_registry(services),
+        tool_registry=registry,
         system_prompt_sections=(policy, OCEAN_AGENT_SKILL_POLICY),
         tool_metadata={
             "ocean_workspace_id": services.workspace_id,

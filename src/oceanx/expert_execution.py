@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,7 @@ from uuid import uuid4
 
 from oceanx.artifacts.models import ArtifactRef
 from oceanx.backend.store import CodeExecutionRecord, RequestStore
+from oceanx.command_jobs import CommandJobs
 from oceanx.datasets import resolve_dataset_source
 from oceanx.execution_manifest import (
     execution_result_fingerprint,
@@ -322,6 +324,7 @@ class ExpertCodeExecutionService:
         self._runtime: ExpertPythonRuntime | None = None
         from oceanx.kernels import KernelPool
         self.kernels = KernelPool()
+        self.jobs = CommandJobs()  # commands that went on after their agent stopped waiting
         self._runtime_error: str | None = None
         runtime_capabilities()
         self._analysis_context_locks: dict[str, asyncio.Lock] = {}
@@ -846,6 +849,7 @@ class ExpertCodeExecutionService:
         purpose: str,
         code: str,
         _shell_command: str | None = None,
+        _on_output: Callable[[str, bytes], None] | None = None,
     ) -> ExpertCodeExecutionResult:
         if not code.strip():
             raise ExpertCodeExecutionError("Expert code cannot be empty")
@@ -1029,6 +1033,7 @@ class ExpertCodeExecutionService:
                 attempt_number=attempt_number,
                 attempt_limit=attempt_limit,
                 shell_command=_shell_command,
+                on_output=_on_output,
             )
         except BaseException as exc:
             terminal_state = "cancelled" if isinstance(exc, asyncio.CancelledError) else "failed"
@@ -1043,15 +1048,16 @@ class ExpertCodeExecutionService:
             raise
 
     async def run_shell(self, *, workspace_id, task_id, agent_thread_id, server_run_id,
-                        command, origin_request_id=None):
-        """Native execute uses the same evidence/save path as persistent Python."""
+                        command, origin_request_id=None, on_output=None):
+        """Native execute uses the same evidence/save path as persistent Python. ``on_output`` sees
+        the command's output as it arrives (command_jobs.py)."""
         code = ("import subprocess\n"
                 f"_command_result = subprocess.run([{POSIX_SHELL!r}, '-c', {command!r}], check=False)\n"
                 "raise SystemExit(_command_result.returncode)\n")
         return await self.run_python(workspace_id=workspace_id, task_id=task_id,
             agent_thread_id=agent_thread_id, server_run_id=server_run_id,
             origin_request_id=origin_request_id, purpose="Shell command", code=code,
-            _shell_command=command)
+            _shell_command=command, _on_output=on_output)
 
     async def _run_started_python(
         self,
@@ -1076,6 +1082,7 @@ class ExpertCodeExecutionService:
         attempt_number: int,
         attempt_limit: int,
         shell_command: str | None = None,
+        on_output: Callable[[str, bytes], None] | None = None,
     ) -> ExpertCodeExecutionResult:
         """Run and persist one already-started execution as one terminal transaction."""
 
@@ -1128,9 +1135,11 @@ class ExpertCodeExecutionService:
             runtime_environment.update({
                 "PYTHONPATH": str(code_root),
             })
+            if on_output is not None:  # a script's prints reach the agent while it runs, not at its end
+                runtime_environment["PYTHONUNBUFFERED"] = "1"
             (code_root / "command.sh").write_text(shell_command, encoding="utf-8")
             result = await run_sandboxed_command((POSIX_SHELL, "-c", shell_command),
-                policy=policy, cwd=working_root, environment=runtime_environment)
+                policy=policy, cwd=working_root, environment=runtime_environment, on_output=on_output)
         else:
             result = await self.kernels.execute(
                 key=str(work_root), executable=runtime.executable, authority=authority,

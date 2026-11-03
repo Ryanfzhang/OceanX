@@ -26,6 +26,7 @@ from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddlewar
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 
+from oceanx.command_jobs import JOB_WAIT_SECONDS
 from oceanx.deep_runtime import build_deep_agent_graph
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
 from oceanx.figure_delivery import static_figures
@@ -899,7 +900,9 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
     if role == SINGLE_AGENT and paper_skill.is_file():
         middleware = [PaperSkillMiddleware(paper_skill), *(middleware or [])]
     from oceanx.native_backend import task_backend
-    filesystem, working_directory = task_backend(host(), config, run=run, library=library)
+    # The single agent and its helpers get a long command back as a job; the team waits until it ends.
+    filesystem, working_directory = task_backend(host(), config, run=run, library=library,
+                                                 wait_seconds=JOB_WAIT_SECONDS if quick else None)
     discussion = role == "scientific_discussion_partner"
     static = static_figures()  # a static run describes no plotting interface (figure_delivery.py)
     if discussion:
@@ -1074,6 +1077,16 @@ async def _close_kernel(run: AgentRun) -> None:
             await execution.kernels.close(str(root))
         except Exception:  # cleanup must not turn a finished attempt into a failed one
             _LOGGER.warning("Could not close the kernel of %s", run.thread_id, exc_info=True)
+
+
+async def _stop_jobs(task_id: str) -> None:
+    """The researcher's stop also stops the task's commands that went on as jobs (command_jobs.py)."""
+    execution = getattr(host(), "expert_code_execution", None)
+    if execution is not None:
+        try:
+            await execution.jobs.stop_task(task_id)
+        except Exception:  # a failed cleanup must not hide the stop
+            _LOGGER.warning("Could not stop the jobs of task %s", task_id, exc_info=True)
 
 
 async def expert(config, role: str):
@@ -1322,6 +1335,9 @@ async def coordinator(config):
         conversation = seen_by(state["messages"], SINGLE_AGENT)
         try:
             result = await agent.ainvoke({**state, "messages": conversation}, config=config)
+        except asyncio.CancelledError:
+            await asyncio.shield(_stop_jobs(run.task_id))
+            raise
         finally:
             await asyncio.shield(_close_kernel(run))
         known = {message.id for message in conversation}
@@ -1355,6 +1371,9 @@ async def coordinator(config):
         conversation = seen_by(state["messages"], TEAM)
         try:
             result = await agent.ainvoke({**state, "messages": conversation}, config=config)
+        except asyncio.CancelledError:  # jobs the single agent left before handing the request over
+            await asyncio.shield(_stop_jobs(config["configurable"]["task_id"]))
+            raise
         finally:
             # None is left when the run ended normally; a failed or cancelled run stops its Experts.
             await experts.close()

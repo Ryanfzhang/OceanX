@@ -54,6 +54,8 @@ describe('request activity', () => {
     expect(currentStep(null, recorded, 'request-1', zh)).toBe('运行分析');
     expect(currentStep(null, {...recorded, state: 'completed'}, 'request-1', en)).toBe('Working on the request…');
     expect(stepLabel('an_unlisted_tool', en)).toBe('Using an unlisted tool');
+    expect(stepLabel('check_job', zh)).toBe('查看运行中的命令');
+    expect(stepLabel('stop_job', en)).toBe('Stopping a running command');
   });
 
   it('names what each step acts on without code, file content or full paths', () => {
@@ -68,6 +70,7 @@ describe('request activity', () => {
     expect(stepTarget('execute', {command: "python - <<'EOF'\nPRIVATE CODE\nEOF"}, zh)).toBe('一段 Python');
     expect(stepTarget('execute', {command: 'ncdump -h u_2011.nc'}, en)).toBe('ncdump -h u_2011.nc');
     expect(stepTarget('glob', {pattern: '**/*.nc'}, en)).toBe('**/*.nc');
+    expect(stepTarget('check_job', {job_id: '3f9a2c', wait_minutes: 10}, en)).toBe('3f9a2c');
     expect(stepTarget('web_search', {query: 'South China Sea three-layer circulation PDO'}, en)).toBe('South China Sea three-layer circulation PDO');
     const read = updateRequestActivity(null, {type: 'tool.call.started', request_id: 'request-1', payload: {
       tool_call_id: 'r', tool_name: 'read_file', input: {file_path: `${paper}.txt`}}}, 'request-1', en);
