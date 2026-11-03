@@ -113,8 +113,14 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     # "Add nothing" was dropped the same day: a paper's budget figure has no residual bar, so it contradicted the
     # labelled residual the skill asks for, and the next run drew neither the residual nor a partial advection term.
     assert "add nothing" not in reproduction
-    # Copying the original's axis range cut off budget bars larger than the paper's (a run of 2026-11-03).
-    assert "each axis range holds all your values and bars" in reproduction
+    # Copying the original's axis range cut off budget bars larger than the paper's (a run of 2026-11-03), so
+    # with other data the ranges come from the values, by the one rule of the quoted matplotlib section; a
+    # sentence of the skill's own that the axes hold all values flattened the smoothed curves under their raw
+    # series and put the budget bars on a symlog axis in the next run. Smoothed curves span the record, as in
+    # the version of e6bf82e: without it the next run kept a 7-year window on 10 years as a 3.5-year piece.
+    assert "axis ranges are set from your values as the quoted matplotlib section says" in reproduction
+    assert "holds all your values" not in reproduction
+    assert "Smoothed curves and their fills run through the whole record, as the original's do" in reproduction
     assert "twin axes included, colour encoding, line styles, markers, fills, overlays, arrows" in reproduction
     assert "name each doubt and each missing one in the answer" in reproduction
     for conflict in ("choose smoothing windows", "lines that run off the axes", "written on it"):
