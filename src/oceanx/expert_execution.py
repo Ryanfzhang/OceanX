@@ -52,6 +52,12 @@ PROBE_SECONDS = 120.0
 # What an agent reads when its code is stopped by the research time budget (research/budget.py).
 BUDGET_STOP_NOTE = ("Stopped: the research time budget is used up. Run no more code; report from the "
                     "results you have.")
+# Each code run of the research team, its Experts and the Coordinator, stops after this, as before 2026-11-02:
+# without it the benchmark's questions took about twice as long and several ran into the case limit
+# (2026-11-03). The single agent and its helpers have none; their long commands go on as jobs.
+RESEARCH_CODE_SECONDS = 300
+RUN_LIMIT_NOTE = (f"Stopped at the time limit of {RESEARCH_CODE_SECONDS} s per run; a larger timeout does not "
+                  "extend it. Process less data per run or save partial results.")
 
 SAVED_DATA_INDEX_SCHEMA = "ocean-saved-data-index/v1"
 
@@ -303,9 +309,10 @@ class ExpertCodeExecutionService:
         self.paths = paths
         self.task_workspaces = task_workspaces
         self.limits = limits or ResourceLimits(
-            # An agent's code runs until it ends, however long; only the researcher's stop ends it
-            # sooner. A limit of 120 s made a run of 2026-11-01 sample every tenth day of a daily
-            # record, where a year takes 4 to 8 minutes to read.
+            # The single agent's code runs until it ends, however long; only the researcher's stop ends
+            # it sooner. A limit of 120 s made a run of 2026-11-01 sample every tenth day of a daily
+            # record, where a year takes 4 to 8 minutes to read. The research team's runs pass
+            # RESEARCH_CODE_SECONDS.
             wall_time_seconds=0,
             cpu_time_seconds=0,
             memory_bytes=0,
@@ -339,18 +346,24 @@ class ExpertCodeExecutionService:
 
         return self._runtime_error
 
-    def run_limits(self) -> ResourceLimits:
-        """The limits of an agent's code run that starts now: with a research time budget, its wall time
-        ends at the code deadline, and a run after it stops within a second."""
-        if self.code_deadline is None:
-            return self.limits
-        left = max(1.0, self.code_deadline - time.monotonic())
-        wall = self.limits.wall_time_seconds
-        return replace(self.limits, wall_time_seconds=min(wall, left) if wall else left)
+    def run_limits(self, seconds: float | None = None) -> ResourceLimits:
+        """The limits of an agent's code run that starts now: ``seconds`` at most when given, and with a
+        research time budget its wall time ends at the code deadline, a run after it stopping within a
+        second."""
+        wall = seconds or self.limits.wall_time_seconds
+        if self.code_deadline is not None:
+            left = max(1.0, self.code_deadline - time.monotonic())
+            wall = min(wall, left) if wall else left
+        return replace(self.limits, wall_time_seconds=wall)
 
     def budget_note(self, limit_trigger: str | None) -> str | None:
-        """What the agent is told when the research time budget stopped its run."""
-        return BUDGET_STOP_NOTE if limit_trigger == "wall_time" and self.code_deadline is not None else None
+        """What the agent is told when a time limit stopped its run: the research time budget's, or the
+        run's own (RESEARCH_CODE_SECONDS)."""
+        if limit_trigger != "wall_time":
+            return None
+        if self.code_deadline is not None and time.monotonic() >= self.code_deadline - 1:
+            return BUDGET_STOP_NOTE
+        return RUN_LIMIT_NOTE
 
     def task_results_root(self, task_id: str) -> Path:
         return self.task_workspaces.ensure_task_root(task_id).resolve() / "agents"
@@ -850,6 +863,7 @@ class ExpertCodeExecutionService:
         code: str,
         _shell_command: str | None = None,
         _on_output: Callable[[str, bytes], None] | None = None,
+        _seconds: float | None = None,
     ) -> ExpertCodeExecutionResult:
         if not code.strip():
             raise ExpertCodeExecutionError("Expert code cannot be empty")
@@ -1034,6 +1048,7 @@ class ExpertCodeExecutionService:
                 attempt_limit=attempt_limit,
                 shell_command=_shell_command,
                 on_output=_on_output,
+                seconds=_seconds,
             )
         except BaseException as exc:
             terminal_state = "cancelled" if isinstance(exc, asyncio.CancelledError) else "failed"
@@ -1048,16 +1063,16 @@ class ExpertCodeExecutionService:
             raise
 
     async def run_shell(self, *, workspace_id, task_id, agent_thread_id, server_run_id,
-                        command, origin_request_id=None, on_output=None):
+                        command, origin_request_id=None, on_output=None, seconds=None):
         """Native execute uses the same evidence/save path as persistent Python. ``on_output`` sees
-        the command's output as it arrives (command_jobs.py)."""
+        the command's output as it arrives (command_jobs.py); ``seconds`` limits its run."""
         code = ("import subprocess\n"
                 f"_command_result = subprocess.run([{POSIX_SHELL!r}, '-c', {command!r}], check=False)\n"
                 "raise SystemExit(_command_result.returncode)\n")
         return await self.run_python(workspace_id=workspace_id, task_id=task_id,
             agent_thread_id=agent_thread_id, server_run_id=server_run_id,
             origin_request_id=origin_request_id, purpose="Shell command", code=code,
-            _shell_command=command, _on_output=on_output)
+            _shell_command=command, _on_output=on_output, _seconds=seconds)
 
     async def _run_started_python(
         self,
@@ -1083,6 +1098,7 @@ class ExpertCodeExecutionService:
         attempt_limit: int,
         shell_command: str | None = None,
         on_output: Callable[[str, bytes], None] | None = None,
+        seconds: float | None = None,
     ) -> ExpertCodeExecutionResult:
         """Run and persist one already-started execution as one terminal transaction."""
 
@@ -1126,7 +1142,7 @@ class ExpertCodeExecutionService:
                 writable_roots=(work_root,),
                 output_root=output_root,
                 temporary_root=temporary_root,
-                limits=self.run_limits(),
+                limits=self.run_limits(seconds),
                 allow_child_processes=shell_command is not None,
                 allow_network=True,
             )

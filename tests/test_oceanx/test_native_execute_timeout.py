@@ -1,6 +1,6 @@
-"""An agent's commands and code run until they end: no time limit stops them (2026-11-02), unless a
-benchmark's research time budget is nearly used, when an agent's code stops so that the run ends with a
-report."""
+"""The single agent's commands and code run until they end (2026-11-02); the research team's stop after
+300 s per run again (2026-11-03). When a benchmark's research time budget is nearly used, an agent's code
+stops so that the run ends with a report."""
 import asyncio
 import json
 import sys
@@ -9,7 +9,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from oceanx.expert_execution import BUDGET_STOP_NOTE, ExpertCodeExecutionResult
+from oceanx.expert_execution import (
+    BUDGET_STOP_NOTE,
+    RESEARCH_CODE_SECONDS,
+    RUN_LIMIT_NOTE,
+    ExpertCodeExecutionResult,
+)
 from oceanx.native_backend import ResearchSandbox
 from oceanx.research.budget import RESEARCH_BUDGET_ENV
 
@@ -27,10 +32,11 @@ def test_a_failed_command_keeps_its_output_unchanged(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_no_time_limit_stops_an_agents_command_or_code(tmp_path, monkeypatch):
-    """At 120 s a run of 2026-11-01 read every tenth day of a daily record. The single agent's, an Expert's
-    and the Coordinator's commands, also when they ask for a timeout, and an agent's Python run until they
-    end; the researcher's stop ends them sooner."""
+async def test_the_teams_code_stops_after_300_s_and_the_single_agents_runs_until_it_ends(tmp_path, monkeypatch):
+    """At 120 s a run of 2026-11-01 read every tenth day of a daily record, so the single agent's commands
+    and Python run until they end, also when they ask for a timeout; the researcher's stop ends them
+    sooner. Without a limit the benchmark's questions took about twice as long and several ran into the
+    case limit (2026-11-03), so an Expert's and the Coordinator's code stops after 300 s per run again."""
 
     from oceanx import expert_execution, native_backend
     from oceanx.backend.host import OceanBackendHost
@@ -58,28 +64,29 @@ async def test_no_time_limit_stops_an_agents_command_or_code(tmp_path, monkeypat
             "payload": {"title": "limits"}, "context": context})
         task_id = recorder.result("req_task")["task"]["task_id"]
         agent = SimpleNamespace(thread_id="single-agent-x", server_run_id="run")
-        for mode, run in (("standard", agent), ("research", agent), ("research", None)):  # None: the Coordinator
-            config = {"configurable": {"workspace_id": "ws_limits", "task_id": task_id, "request_id": "r",
-                                       "request_options": {"workflow_mode": mode}}}
-            backend, _ = task_backend(host, config, run=run, library=tmp_path / "library")
+        config = {"configurable": {"workspace_id": "ws_limits", "task_id": task_id, "request_id": "r"}}
+        # The single agent, an Expert, and the Coordinator (no run), as graphs.build passes them.
+        for run, seconds in ((agent, None), (agent, RESEARCH_CODE_SECONDS), (None, RESEARCH_CODE_SECONDS)):
+            backend, _ = task_backend(host, config, run=run, library=tmp_path / "library", code_seconds=seconds)
             for asked in (None, 60):
                 with pytest.raises(RuntimeError, match="stopped before running"):
                     await backend.aexecute("python long.py", timeout=asked)
-        with pytest.raises(RuntimeError, match="stopped before running"):
-            await host.expert_code_execution.run_python(
-                workspace_id="ws_limits", task_id=task_id, agent_thread_id="single-agent-x",
-                server_run_id="run", purpose="Read every day", code="print(1)")
+        for seconds in (None, RESEARCH_CODE_SECONDS):  # the single agent's Python, then an Expert's
+            with pytest.raises(RuntimeError, match="stopped before running"):
+                await host.expert_code_execution.run_python(
+                    workspace_id="ws_limits", task_id=task_id, agent_thread_id="single-agent-x",
+                    server_run_id="run", purpose="Read every day", code="print(1)", _seconds=seconds)
     finally:
         await host.close()
-    assert limits == [0] * 7  # 0: no wall-time limit
+    assert limits == [0, 0, 300, 300, 300, 300, 0, 300]  # 0: no wall-time limit
 
 
 @pytest.mark.asyncio
 async def test_a_research_budget_stops_an_agents_code_in_time_for_the_report(tmp_path, monkeypatch):
     """A benchmark run sets a research time budget. With code unlimited, an Expert that began a long
     computation late would hold the run until it was cut off without a report, so an agent's code stops
-    at 85% of the budget and the agent is told to report. The file helpers that read reports keep no
-    limit."""
+    at 85% of the budget and the agent is told to report; a team's run stopped at its own 300 s before
+    then is told that instead. The file helpers that read reports are not stopped by the budget."""
     from oceanx.backend.host import OceanBackendHost
     from oceanx.tools import OceanExpertRunCodeInput, OceanExpertRunCodeTool, OceanToolServices
 
@@ -88,9 +95,11 @@ async def test_a_research_budget_stops_an_agents_code_in_time_for_the_report(tmp
     try:
         service = host.expert_code_execution
         assert 0 < service.run_limits().wall_time_seconds <= 0.85 * 180 * 60
+        assert service.run_limits(RESEARCH_CODE_SECONDS).wall_time_seconds == RESEARCH_CODE_SECONDS
+        assert service.budget_note("wall_time") == RUN_LIMIT_NOTE  # the budget has time left
         service.code_deadline = time.monotonic() - 1  # 85% of the budget has passed
         assert service.run_limits().wall_time_seconds == 1.0  # a run that starts now stops at once
-        assert service.limits.wall_time_seconds == 0  # the file helpers' commands
+        assert service.limits.wall_time_seconds == 0  # the default: no limit of its own
         assert service.budget_note("wall_time") == BUDGET_STOP_NOTE and service.budget_note(None) is None
 
         async def record_command(command):

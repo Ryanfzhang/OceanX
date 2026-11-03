@@ -12,6 +12,7 @@ import json
 import os
 import shlex
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -33,6 +34,7 @@ from deepagents.backends.sandbox import (
 
 from oceanx import native_text
 from oceanx.command_jobs import CommandJob, command_notes, job_started
+from oceanx.expert_execution import RESEARCH_CODE_SECONDS
 from oceanx.sandbox import SandboxExecutionPolicy, run_sandboxed_command
 from oceanx.sandbox.execution import POSIX_SHELL, shell_runtime_roots
 
@@ -70,15 +72,17 @@ class OceanSandbox(BaseSandbox):
         return str(self.work_root)
 
     async def aexecute(self, command, *, timeout=None):
-        # A command runs until it ends. The research budget stops only an agent's code runs
-        # (ResearchSandbox, expert_execution.py), so the file helpers still read reports after it.
+        # The Coordinator's own commands and every agent's file helpers: RESEARCH_CODE_SECONDS each, as
+        # before 2026-11-02. The research budget stops only an agent's code runs (ResearchSandbox,
+        # expert_execution.py), so the file helpers still read reports after it.
         del timeout
         runtime = await asyncio.to_thread(self.service.require_runtime)
         roots = self.read_roots()  # refresh shared evidence after other Experts finish
         policy = SandboxExecutionPolicy(
             read_only_roots=tuple(roots), runtime_read_roots=shell_runtime_roots(runtime.read_roots),
             writable_roots=(self.work_root,), output_root=self.outputs, temporary_root=self.temporary,
-            limits=self.service.limits, allow_child_processes=True, allow_network=True)
+            limits=replace(self.service.limits, wall_time_seconds=RESEARCH_CODE_SECONDS),
+            allow_child_processes=True, allow_network=True)
         # Commands never inherit the server's credentials or ambient Python.
         env = {"PATH": os.pathsep.join((str(runtime.executable.parent), "/usr/bin", "/bin")),
                "CONDA_PREFIX": str(runtime.prefix), "CONDA_DEFAULT_ENV": runtime.environment_name,
@@ -297,9 +301,10 @@ scientific analysis or snapshotting all existing outputs on every file read.
         return self.files.delete(file_path)
 
 
-def task_backend(host, config, *, run, library, wait_seconds=None):
+def task_backend(host, config, *, run, library, wait_seconds=None, code_seconds=None):
     """Same filesystem capabilities for every role, no startup Python inspection. With ``wait_seconds``
-    an agent's command still running then goes on as a job (command_jobs.py)."""
+    an agent's command still running then goes on as a job (command_jobs.py); with ``code_seconds``
+    each command stops after that (the research team, expert_execution.RESEARCH_CODE_SECONDS)."""
     from oceanx.datasets import resolve_dataset_source
     from oceanx.native_skills import skill_backend
 
@@ -351,7 +356,8 @@ def task_backend(host, config, *, run, library, wait_seconds=None):
     async def record_command(command, on_output=None):
         return await service.run_shell(workspace_id=c["workspace_id"], task_id=c["task_id"],
             agent_thread_id=run.thread_id, server_run_id=run.server_run_id,
-            origin_request_id=c.get("request_id"), command=command, on_output=on_output)
+            origin_request_id=c.get("request_id"), command=command, on_output=on_output,
+            seconds=code_seconds)
     sandbox = ResearchSandbox(service=service, work_root=work_root, read_roots=read_roots,
                               record_command=record_command if run else None,
                               task_id=c["task_id"], wait_seconds=wait_seconds)

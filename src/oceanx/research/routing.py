@@ -105,7 +105,8 @@ never load a whole field or water column when a slice answers it. {long_runs} Re
 changes the result: say so, and where the request or the paper's method uses every step, compare the two on a
 common part, such as one year, before relying on it.
 """
-# What the single agent, its helpers and the Experts are told about long runs (expert_execution.py).
+# What the single agent and its helpers are told about long runs; the research team's runs stop after
+# expert_execution.RESEARCH_CODE_SECONDS.
 LONG_RUNS = ("Code runs until it ends, with no time limit. Split work over many files, years or regions into "
              "independent parts and run them in parallel: run one part first to check its result, its time and "
              "its memory, then start the parts as separate processes in one execute command, as many at once as "

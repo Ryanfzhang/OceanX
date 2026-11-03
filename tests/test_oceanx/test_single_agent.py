@@ -200,17 +200,31 @@ async def test_the_single_agent_and_its_helpers_answer_without_a_report(monkeypa
 
 @pytest.mark.asyncio
 async def test_only_the_single_agent_and_its_helpers_get_a_long_command_back_as_a_job(tmp_path, monkeypatch):
-    """execute waits at most ten minutes for them (command_jobs.py); the team waits until a command ends."""
+    """execute waits at most ten minutes for them (command_jobs.py) and their code has no time limit; the
+    team waits until a command ends, and its commands and Python stop after 300 s per run."""
     from oceanx.command_jobs import JOB_WAIT_SECONDS
+    from oceanx.expert_execution import RESEARCH_CODE_SECONDS
     from tests.test_oceanx.test_saved_data_index import _backend
 
-    async with _backend(tmp_path, monkeypatch) as (_host, _task, config, seen):
-        waits, tools = {}, {}
+    async with _backend(tmp_path, monkeypatch) as (host, _task, config, seen):
+        commands = []
+
+        async def run_shell(**kwargs):
+            commands.append(kwargs["seconds"])
+            return SimpleNamespace(stdout="", stderr="", returncode=0, figure_notes=(), limit_trigger=None)
+
+        monkeypatch.setattr(host.expert_code_execution, "run_shell", run_shell)
+        waits, tools, kernel = {}, {}, {}
         for role in (SINGLE_AGENT, HELPER, "ocean_process_expert"):
             await graphs.build(config, role, run=AgentRun.from_config(config, role, question="B1: SST"))
             waits[role] = seen["filesystem_backend"].default.wait_seconds
             tools[role] = {tool.name for tool in seen["tools"].list_tools()}
+            kernel[role] = next(tool.services.code_seconds for tool in seen["tools"].list_tools()
+                                if tool.name == "ocean_expert_run_code")
+            await seen["filesystem_backend"].default.aexecute("python years.py")
     assert waits == {SINGLE_AGENT: JOB_WAIT_SECONDS, HELPER: JOB_WAIT_SECONDS, "ocean_process_expert": None}
+    assert commands == [None, None, RESEARCH_CODE_SECONDS]
+    assert kernel == {SINGLE_AGENT: None, HELPER: None, "ocean_process_expert": RESEARCH_CODE_SECONDS}
     assert {"check_job", "stop_job"} <= tools[SINGLE_AGENT] and {"check_job", "stop_job"} <= tools[HELPER]
     assert not {"check_job", "stop_job"} & tools["ocean_process_expert"]
 

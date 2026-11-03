@@ -28,6 +28,7 @@ from langgraph.graph import END, START, StateGraph
 
 from oceanx.command_jobs import JOB_WAIT_SECONDS
 from oceanx.deep_runtime import build_deep_agent_graph
+from oceanx.expert_execution import RESEARCH_CODE_SECONDS
 from oceanx.figure_reference import DRAFT_RULE, figure_call_skeleton, figure_reading_rule
 from oceanx.figure_delivery import static_figures
 from oceanx.pdf_text import FIGURE_RULE
@@ -688,6 +689,7 @@ def services(config, role: str, run: AgentRun | None = None) -> OceanToolService
         agent_thread_id=run.thread_id if run else c["thread_id"],
         coordinator_enabled=role == "coordinator",
         native_vision=profile_supports_vision(model_profile),
+        code_seconds=None if role in QUICK_ROLES else RESEARCH_CODE_SECONDS,
         # A helper works out of the researcher's sight, so only the agent answering them asks them.
         paper_selection_sink=(lambda payload, context: h.router._request_paper_selection(
             workspace_id=c["workspace_id"], task_id=c["task_id"], payload=payload, context=context))
@@ -898,7 +900,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
     from oceanx.native_backend import task_backend
     # The single agent and its helpers get a long command back as a job; the team waits until it ends.
     filesystem, working_directory = task_backend(host(), config, run=run, library=library,
-                                                 wait_seconds=JOB_WAIT_SECONDS if quick else None)
+                                                 wait_seconds=JOB_WAIT_SECONDS if quick else None,
+                                                 code_seconds=None if quick else RESEARCH_CODE_SECONDS)
     # The paper skill stays in the single agent's instructions once opened, with the repro_spec.md it
     # has the agent write in its working directory; this middleware comes first, so that the notice
     # of the last call still ends them.
@@ -939,7 +942,8 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                                         workspace_id=c["workspace_id"], task_id=c["task_id"])
                 prompt += paper_rule(papers)
         else:
-            prompt += ("\n" + LONG_RUNS + " ocean_expert_run_code keeps Python "
+            prompt += (f"\nEach execute or ocean_expert_run_code run is stopped after {RESEARCH_CODE_SECONDS} s; "
+                       "a larger timeout does not extend it. Split long work. ocean_expert_run_code keeps Python "
                        "variables for this attempt, so prefer it for iterative array analysis of saved results "
                        "or small data; use execute for reproducible scripts, parallel passes over many files "
                        "and shell work. Do not save full source-field copies merely "

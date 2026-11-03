@@ -75,6 +75,8 @@ class OceanToolServices:
     # Stable LangGraph identity. Focused follow-ups reuse it; independent todos
     # receive different threads even when they use the same professional role.
     agent_thread_id: str | None = None
+    # Each of the agent's code runs stops after this (the research team); None: it runs until it ends.
+    code_seconds: float | None = None
     exploration_belief_sampler: Callable[[str, str], Awaitable[dict]] | None = None
     native_vision: bool = False
 
@@ -401,6 +403,7 @@ class OceanExpertRunCodeTool(_OceanTool):
                 origin_request_id=self.services.expert_result_origin_request_id,
                 purpose=arguments.purpose,
                 code=arguments.code,
+                _seconds=self.services.code_seconds,
             )
             raw = result.as_payload()
             payload = {
