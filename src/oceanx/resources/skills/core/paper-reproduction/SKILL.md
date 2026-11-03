@@ -78,14 +78,16 @@ values are context, not a target, and a difference may be real: explain it by th
 checks above pass. Find the cause of a failed check before drawing or interpreting that quantity.
 
 ## Adapting the method to the record
-A method built for a long record can fail on a short one. Justify any change to smoothing or filtering
-using the available record, the timescale being studied and the samples retained. Respect explicit user
-requirements, preserve the quantity being estimated, and record the change from the paper's method.
-Do not assume that scaling a window in proportion to record length is always appropriate.
-Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md,
-under Autocorrelation and dependence, and judge each trend and correlation by the independent values behind
-it. Account for serial dependence when estimating uncertainty from averaged or smoothed series;
-overlapping windows do not provide independent samples. Name each departure from the paper's method and why.
+A method built for a long record can fail on a short one. Keep the paper's smoothing window when it is at
+most about a quarter of your record. When it is longer, use a window of about a quarter of your record, and
+say that the curve then shows a shorter timescale than the paper's. Where the paper's smoothed curves reach
+the ends of its record, compute yours to the ends of yours, shortening the window near them. Justify any
+other change to smoothing or filtering by the available record, the timescale studied and the samples
+retained, respect explicit user requirements, and record each change from the paper's method. Before
+reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md, under
+Autocorrelation and dependence, and judge each trend and correlation by the independent values behind it.
+Account for serial dependence when estimating uncertainty from averaged or smoothed series; overlapping
+windows do not provide independent samples. Name each departure from the paper's method and why.
 
 ## Figures
 Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures, and
@@ -94,8 +96,8 @@ repro_spec.md from your quantities as the original draws it, with the paper's da
 panels and arrangement, axes with any twin axes, variables, symbols, units, colour encoding, line styles,
 markers, fills, overlays, arrows, reference lines, legends and annotations. Simplify nothing: draw every
 element the original has, the trend line of each period included; one the record is too short to support is
-drawn and marked not significant, never left out. Smoothed curves and their fills run through the whole
-record, as the original's do. With other data the axis ranges are set from your values as the quoted
+drawn and marked not significant, never left out. Smoothed curves and their fills cover your record as the
+original's cover its record. With other data the axis ranges are set from your values as the quoted
 matplotlib section says; with the paper's own data its scales are kept too. Every figure that shows a
 smoothed series draws the one the computation saved, with the window chosen under Adapting the method to the
 record. Before drawing each figure, read repro_spec.md again and, when you can read images, open the

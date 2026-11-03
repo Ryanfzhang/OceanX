@@ -120,7 +120,14 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     # the version of e6bf82e: without it the next run kept a 7-year window on 10 years as a 3.5-year piece.
     assert "axis ranges are set from your values as the quoted matplotlib section says" in reproduction
     assert "holds all your values" not in reproduction
-    assert "Smoothed curves and their fills run through the whole record, as the original's do" in reproduction
+    assert "Smoothed curves and their fills cover your record as the original's cover its record" in reproduction
+    # Asked how to smooth ten years after a paper's 7-year window on 28, the model kept the window and cut the
+    # curve to its middle years, citing "do not assume that scaling a window ... is appropriate" (2026-11-03).
+    # One rule for any paper and record now: the paper's window up to about a quarter of the record (the start
+    # the analysis-design skill gives), else about a quarter, and curves to the ends where the paper's reach them.
+    assert "Keep the paper's smoothing window when it is at most about a quarter of your record" in reproduction
+    assert "compute yours to the ends of yours, shortening the window near them" in reproduction
+    assert "scaling a window in proportion" not in reproduction
     assert "twin axes included, colour encoding, line styles, markers, fills, overlays, arrows" in reproduction
     assert "name each doubt and each missing one in the answer" in reproduction
     for conflict in ("choose smoothing windows", "lines that run off the axes", "written on it"):
