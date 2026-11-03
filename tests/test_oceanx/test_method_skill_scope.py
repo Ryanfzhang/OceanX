@@ -67,6 +67,7 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
                  "Before writing code for a vorticity budget or a streamfunction, read /skills/ocean-physical-consistency-review/SKILL.md",
                  "Before reporting a trend or correlation of a smoothed series, read /skills/ocean-analysis-design/SKILL.md",
                  "Before drawing the first figure, read /references/coding/matplotlib.md",
+                 "before drawing a map, read /references/coding/matplotlib.md, under Maps",
                  # The paper's requirements are written down once and read again at the steps that use them.
                  "Before computing anything, write repro_spec.md in your working directory",
                  "Before drawing each figure, read repro_spec.md again",
@@ -94,14 +95,25 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     # is made per panel there, and the review goes over every listed figure.
     assert "whether it shows results, a mean state or a schematic, with its panels" in reproduction
     assert "a figure is left out only when none of its panels can be computed" in reproduction
-    assert "is written on the panel, not a reason to leave it out" in reproduction
+    assert "is said in the answer, not a reason to leave it out" in reproduction
     assert "every figure it lists, drawn or not, beside the image of its original" in reproduction
     # The first full pass of a run of 2026-11-02 was redone after its check found a sign error.
     assert "on a part of the record such as one year, before computing the whole record" in reproduction
-    # Applying a paper to other data, the original gives a figure's form; its smoothing and ranges must show
-    # these data (a 7-year window on 12 years left a flat five-year curve kept "for comparability").
-    assert "With other data the original gives the form, not the look" in reproduction
-    assert "shows these data over their whole record" in reproduction
+    # Two runs of 2026-11-03 on the same code drew one smoothed series differently in two figures: each figure
+    # chose its own window and axis range, since the skill said so for other data while the matplotlib
+    # reference it quotes says to fit the axis to the main series, and notes demanded on the panels came out
+    # at 5.6 pt. Each topic now has one statement: the window is chosen once and every figure draws the saved
+    # series, the axis follows the quoted reference, and doubts and missing terms are named in the answer.
+    assert "Every figure that shows a smoothed series draws the one the computation saved" in reproduction
+    # With other data too, a figure is drawn as the original draws it, nothing simplified or added, and the spec
+    # records each element that drawing needs (the researcher, 2026-11-03: the paper's way of drawing is core
+    # to the paper agent; runs had dropped a twin axis and map arrows and added annual-mean markers).
+    assert "as the original draws it, with the paper's data or other data" in reproduction
+    assert "Simplify nothing and add nothing" in reproduction
+    assert "twin axes included, colour encoding, line styles, markers, fills, overlays, arrows" in reproduction
+    assert "name each doubt and each missing one in the answer" in reproduction
+    for conflict in ("choose smoothing windows", "lines that run off the axes", "written on it"):
+        assert conflict not in reproduction
     # Terms that cannot be told apart are a residual, not each missing; a trend too short to hold is
     # drawn and marked, not dropped.
     assert "give their sum as the residual" in reproduction and "marked not significant, never left out" in reproduction
@@ -124,6 +136,7 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     for policy in (OCEAN_EXPERT_WORKSTREAM_POLICY, STATIC_EXPERT_WORKSTREAM_POLICY):
         flat = " ".join(policy.split())
         assert "/references/coding/matplotlib.md" in flat and "map with coastlines" in flat
+        assert "choose axis ranges and smoothing" not in flat  # the same conflict, in every workstream
 
 
 @pytest.mark.parametrize("name,allowed_roles", [

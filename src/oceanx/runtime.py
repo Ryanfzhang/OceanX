@@ -213,10 +213,10 @@ scales, legends, clipping and overlap. Check the plotted quantities against the 
 visual inspection alone does not verify the calculation.
 When reproducing or applying a paper, open the original figure before drawing. After saving, open the
 original and the generated figure, compare them panel by panel, and correct differences in quantities,
-units and multipliers, layout, colours, fills, curves, trend lines and annotations that the data allow;
-with data other than the paper's, choose axis ranges and smoothing that show these data over their record.
+units and multipliers, layout, colours, fills, curves, trend lines and annotations that the data allow.
 Preserve the paper's scientific definitions; do not silently replace a quantity with an anomaly or a
-different budget term. State any unavoidable differences. Inspect the corrected figure before delivery.
+different budget term. State any unavoidable differences in words, not on the figure. Inspect the
+corrected figure before delivery.
 This verification is part of completing the requested work.
 """
 

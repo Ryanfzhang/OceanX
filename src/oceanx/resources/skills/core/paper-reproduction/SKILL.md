@@ -38,13 +38,14 @@ depths, region, period and time sampling it needs and whether the supplied data 
 files, not at their names). Do every analysis and draw every panel whose inputs exist, and name the others
 with what they need. Decide panel by panel, curve by curve and term by term, never for a figure as a whole:
 a figure is left out only when none of its panels can be computed, and a doubt, such as a definition the
-paper leaves open or an original drawn by hand, is written on the panel, not a reason to leave it out. For
-each figure give the path of its image and what the image and its caption show: panels, variables, units,
-axis ranges and their multipliers, colour encoding, fills, overlays, reference lines, annotations and
-layout. For each quantity, copy the paper's equation as printed, in its order of operations, write below it
-the discrete form you will compute, and give the paper's values, each with the dataset and period it comes
-from. Write only what the paper shows or states, mark what you could not read, and correct the file from the
-paper, never to fit your results. Read it again whenever earlier messages have been replaced by a summary.
+paper leaves open or an original drawn by hand, is said in the answer, not a reason to leave it out. For
+each figure give the path of its image and what the image and its caption show: its panels and their
+arrangement, each axis with its variable, units, range and multiplier, twin axes included, colour encoding,
+line styles, markers, fills, overlays, arrows, reference lines, legends and annotations. For each quantity,
+copy the paper's equation as printed, in its order of operations, write below it the discrete form you will
+compute, and give the paper's values, each with the dataset and period it comes from. Write only what the
+paper shows or states, mark what you could not read, and correct the file from the paper, never to fit your
+results. Read it again whenever earlier messages have been replaced by a summary.
 
 ## One computation per quantity
 Fix one computation of each quantity and check it, as under Checking the computation, on a part of the
@@ -87,24 +88,23 @@ it. Account for serial dependence when estimating uncertainty from averaged or s
 overlapping windows do not provide independent samples. Name each departure from the paper's method and why.
 
 ## Figures
-Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures.
-Redraw each figure listed in repro_spec.md as one figure with the paper's panels, from your quantities:
-the same variables, symbols, units, colour encoding, fills, overlays, reference lines, annotations and
-layout. Draw every element the original has, the trend line of each period included; one the record is
-too short to support is drawn and marked not significant, never left out. With the paper's own data, keep
-its scales and smoothing too, so that yours looks like the original. With other data the original gives
-the form, not the look: choose smoothing windows and axis ranges so that every curve, smoothed ones
-included, shows these data over their whole record, over the raw series drawn faintly behind at the data's
-time resolution, and name each change from the original. Before drawing each figure, read repro_spec.md
-again and, when you can read images, open the original again, since what you read at the start lies far
-back in the conversation. After saving, open the original and yours together, compare them item by item
-(panel layout, fills, line styles, axis ranges and their multipliers, panel letters, legends and
-annotations, text that crosses a line, lines that run off the axes) and fix every difference the data
-allow other than the changes you named. Draw each panel, curve and term the data allow, with any doubt
-written on it, and mark each missing one as not available, with what it needs. Draw a partial budget as
-partial and not closed rather than withholding it; never draw a missing term as zero, or a mechanism these
-data did not test as established, and never fill a gap with another quantity, a table or another kind of
-figure.
+Before drawing the first figure, read /references/coding/matplotlib.md, under Publication figures, and
+before drawing a map, read /references/coding/matplotlib.md, under Maps. Redraw each figure listed in
+repro_spec.md from your quantities as the original draws it, with the paper's data or other data: the same
+panels and arrangement, axes with any twin axes, variables, symbols, units, colour encoding, line styles,
+markers, fills, overlays, arrows, reference lines, legends and annotations. Simplify nothing and add
+nothing: draw every element the original has, the trend line of each period included; one the record is too
+short to support is drawn and marked not significant, never left out. Only what the data set may differ, the
+values on the axes and the span of the record; with the paper's own data its scales are kept too. Every
+figure that shows a smoothed series draws the one the computation saved, with the window chosen under
+Adapting the method to the record. Before drawing each figure, read repro_spec.md again and, when you can
+read images, open the original again, since what you read at the start lies far back in the conversation.
+After saving, open the original and yours together, compare them item by item (panel layout, axes, line
+styles, markers, colours, fills, axis multipliers, panel letters, legends and annotations, text that crosses
+a line) and fix every difference the data allow. Draw each panel, curve and term the data allow, and name
+each doubt and each missing one in the answer, with what it needs. Draw a partial budget as partial and not
+closed rather than withholding it; never draw a missing term as zero, or a mechanism these data did not test
+as established, and never fill a gap with another quantity, a table or another kind of figure.
 
 ## Reviewing the results
 Before answering, read repro_spec.md again and review your results against it: every figure it lists,

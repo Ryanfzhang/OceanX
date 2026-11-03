@@ -137,6 +137,8 @@ def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     reproduction = "Reproducing, testing or applying a paper's analysis is not bounded work"
     assert bounded.index(reproduction) < bounded.index("finish line")
     assert "nothing the data allow is withheld or left as an offer for later" in bounded
+    # The paper's way of drawing is part of its method, also with other data (the researcher, 2026-11-03).
+    assert "each of the paper's figures redrawn as the paper draws it" in bounded
     # Reading only what the work needs holds for a paper's analysis too, and thinning a record is not a free way
     # to save time: a run of 2026-11-01 read whole fields and kept every 12th day of daily data.
     assert "For every request, read only the variables" in bounded

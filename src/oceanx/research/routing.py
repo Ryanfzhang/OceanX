@@ -91,9 +91,9 @@ BOUNDED_WORK_POLICY = """\
 # Bounded work
 Reproducing, testing or applying a paper's analysis is not bounded work: it is finished only when every analysis
 of the paper that the data allow is done, each quantity and budget term computed as the paper defines it and
-checked, and each of the paper's figures redrawn with every panel, curve and term the data allow. A term
-counts as missing only after deriving it from the stored variables has failed, and nothing the data allow is
-withheld or left as an offer for later; /skills/paper-reproduction/SKILL.md describes how.
+checked, and each of the paper's figures redrawn as the paper draws it, with every panel, curve and term the
+data allow. A term counts as missing only after deriving it from the stored variables has failed, and nothing
+the data allow is withheld or left as an offer for later; /skills/paper-reproduction/SKILL.md describes how.
 For any other request, the requested output (a figure, number, table, route or file) is the finish line. Compute it
 with one defensible method, verify the requested output, publish it, answer and stop. Open {saved_view} of a figure
 you saved and correct errors before delivery.
@@ -134,8 +134,8 @@ def call_budget_sentence(limit: int) -> str:
 def time_budget_sentence(minutes: int = SINGLE_AGENT_MINUTES, figures: int = FIGURE_MINUTES) -> str:
     return (f"Time: a request has {minutes} minutes, and each tool result shows the minutes used. After {figures} "
             "minutes, before you start more long computation, draw each figure of the request that your saved "
-            "results allow and deliver it under OCEAN_OUTPUT_DIR under its final name, marking on it what is not "
-            "computed yet; then go on, and redraw it when its results are complete. After "
+            "results allow and deliver it under OCEAN_OUTPUT_DIR under its final name, saying in your answer what "
+            "is not computed yet; then go on, and redraw it when its results are complete. After "
             f"{minutes} minutes your next call can only answer, with no tools; code still running then is not "
             "stopped, so start no computation that cannot finish and be drawn before then.\n")
 
