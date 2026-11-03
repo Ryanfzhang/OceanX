@@ -54,8 +54,8 @@ that computation: rename or remove the outputs of the versions it replaced, and 
 compare or correlate from the same samples.
 For time derivatives, convert timestamp differences explicitly to the time unit of the reported quantity.
 For detrending, evaluate and subtract the fitted trend on the same time coordinate and in the same units
-used for fitting. If subsampling replaces a full-period average, compare both on a common subset before
-using the approximation, and disclose the sampling.
+used for fitting. Reading every n-th time step is allowed when the timescale studied is much longer than the
+step; say in the answer which steps you read.
 
 ## Deriving what the data do not store
 Before writing code for a vorticity budget or a streamfunction, read

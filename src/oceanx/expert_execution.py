@@ -24,6 +24,8 @@ from oceanx.execution_manifest import (
     execution_result_fingerprint,
     write_execution_result_manifest,
 )
+from oceanx.figure_check import LOG_ENV as FIGURE_CHECK_LOG_ENV
+from oceanx.figure_check import sitecustomize as figure_check_source
 from oceanx.figure_delivery import (
     is_delivered_figure,
     pdf_problems,
@@ -180,6 +182,27 @@ def _prepare_pdf_figures(output_root: Path, before: dict[str, tuple[int, int]]) 
         write_pdf_preview(path)
         notes += [f"outputs/{name}: {problem}" for problem in pdf_problems(path)]
     return tuple(notes)
+
+
+def _figure_check_notes(log: Path, offset: int, output_root: Path) -> tuple[str, ...]:
+    """What the figure check (figure_check.py) found in the delivered figures a run saved, from the last
+    check of each file, as the agent reads them beside its other figure notes."""
+    try:
+        with log.open("rb") as stream:
+            stream.seek(offset)
+            lines = stream.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return ()
+    outputs, last = output_root.resolve(), {}
+    for line in lines:
+        try:
+            record = json.loads(line)
+            name = Path(record["path"]).resolve().relative_to(outputs)
+        except (ValueError, KeyError, TypeError):  # a draft outside the outputs, or a torn line
+            continue
+        last[name] = [str(problem) for problem in record.get("problems") or ()]
+    return tuple(f"outputs/{name.as_posix()}: {problem}" for name, found in last.items()
+                 if is_delivered_figure(output_root / name) for problem in found)
 
 
 def _image_outputs(output_root: Path, before: dict[str, tuple[int, int]]) -> list[dict[str, Any]]:
@@ -1110,6 +1133,14 @@ class ExpertCodeExecutionService:
         if not matplotlib_rc.is_file() or matplotlib_rc.read_text(encoding="utf-8") != settings:
             matplotlib_rc.parent.mkdir(parents=True, exist_ok=True)
             matplotlib_rc.write_text(settings, encoding="utf-8")
+        # The code's Python loads the figure check as its sitecustomize and checks each figure it saves.
+        check_root = runtime_root / "figure-check"
+        hook, source = check_root / "sitecustomize.py", figure_check_source()
+        if not hook.is_file() or hook.read_text(encoding="utf-8") != source:
+            check_root.mkdir(parents=True, exist_ok=True)
+            hook.write_text(source, encoding="utf-8")
+        check_log = runtime_root / "figure-check.jsonl"
+        check_offset = check_log.stat().st_size if check_log.is_file() else 0
         execution_record = self.store.get_code_execution(execution_id)
         if execution_record is None:
             raise ExpertCodeExecutionError("Expert code execution record is unavailable")
@@ -1130,6 +1161,8 @@ class ExpertCodeExecutionService:
             # Data a library fetches once, such as the Natural Earth coastlines cartopy draws, stay in
             # the agent's folder rather than in the home of one run.
             "XDG_DATA_HOME": str(work_root / ".runtime" / "share"),
+            "PYTHONPATH": str(check_root),
+            FIGURE_CHECK_LOG_ENV: str(check_log),
         }
 
         authority = hashlib.sha256(json.dumps({
@@ -1149,7 +1182,7 @@ class ExpertCodeExecutionService:
         outputs_before = _output_state(output_root)
         if shell_command is not None:
             runtime_environment.update({
-                "PYTHONPATH": str(code_root),
+                "PYTHONPATH": os.pathsep.join((str(code_root), str(check_root))),
             })
             if on_output is not None:  # a script's prints reach the agent while it runs, not at its end
                 runtime_environment["PYTHONUNBUFFERED"] = "1"
@@ -1169,6 +1202,7 @@ class ExpertCodeExecutionService:
         setup_cell = notebook["cells"][1]
         setup_cell["execution_count"] = 1
         figure_notes = await asyncio.to_thread(_prepare_pdf_figures, output_root, outputs_before)
+        figure_notes += await asyncio.to_thread(_figure_check_notes, check_log, check_offset, output_root)
         code_cell = notebook["cells"][2]
         code_cell["execution_count"] = 1
         code_cell["outputs"] = [

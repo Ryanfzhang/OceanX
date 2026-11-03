@@ -143,10 +143,20 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     # some faces; the layer sum and the two forms of a flux are the checks that catch both.
     assert "the layer's level thicknesses add up to the layer's own thickness" in flat
     assert "So must the two forms of a flux term" in flat
+    # A run of 2026-11-03 zero-filled land before differencing and summed each layer only where it held water,
+    # which a sentence here asked for; absent water is now zero transport and the section shows the
+    # computation as code, run in test_vorticity_example.py.
+    assert "A layer's transport is an integral: zero in a water column whose sea floor lies above the layer" in flat
+    assert "def boundary_circulation(U, V, lat, lon, used):" in physical
+    for gone in ("not just the surface land mask", "outside its support"):
+        assert gone not in flat
     design = " ".join(load_ocean_skill("ocean-analysis-design")[0].split())
     assert "running mean" in design and "say what each ± is" in design
     reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")
     assert "## Publication figures" in reference
+    # A budget figure of 2026-11-03 put a deep layer about 25 times weaker than the upper one on the same axis,
+    # where its bars could not be seen; a log scale had been the answer the run before.
+    assert "give each group its own axis, rather than a log scale" in " ".join(reference.split())
     assert "## Maps" in reference and "ax.coastlines('50m'" in reference
     # A figure drawn without the Figure API is told where the craft is described, and every spatial
     # field it draws goes on a map, in either delivery mode.

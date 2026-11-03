@@ -101,9 +101,9 @@ Do not add unrequested sensitivity tests, extra figures or statistics, or invest
 objective. Checking and correcting the requested output is part of the task. State a
 remaining limitation in one sentence instead of investigating it.
 For every request, read only the variables, region, depth and period the work needs, sliced in the read itself;
-never load a whole field or water column when a slice answers it. {long_runs} Reading every n-th time step
-changes the result: say so, and where the request or the paper's method uses every step, compare the two on a
-common part, such as one year, before relying on it.
+never load a whole field or water column when a slice answers it. {long_runs} Reading every n-th time step is
+allowed when the timescale studied is much longer than the step, for example every fifth day of a daily record
+for monthly or longer timescales; say in the answer which steps you read.
 """
 # What the single agent and its helpers are told about long runs; the research team's runs stop after
 # expert_execution.RESEARCH_CODE_SECONDS.

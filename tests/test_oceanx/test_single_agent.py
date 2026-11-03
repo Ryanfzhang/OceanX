@@ -142,7 +142,10 @@ def test_the_policies_name_the_tools_the_rule_and_the_finish_line():
     # Reading only what the work needs holds for a paper's analysis too, and thinning a record is not a free way
     # to save time: a run of 2026-11-01 read whole fields and kept every 12th day of daily data.
     assert "For every request, read only the variables" in bounded
-    assert "Reading every n-th time step changes the result" in bounded and "coarser stride" not in bounded
+    # The researcher allowed reading, say, every fifth day of daily data when the answer says so (2026-11-03):
+    # the full daily year that runs read to check a thinned record cost them about a quarter of an hour.
+    assert "Reading every n-th time step is allowed when the timescale studied is much longer" in bounded
+    assert "say in the answer which steps you read" in bounded and "compare the two on a" not in bounded
     assert HELPER_TOOL in helpers and "up to 3 helpers" in helpers
     interactive, static = graphs.bounded_work_policy(False), graphs.bounded_work_policy(True)
     assert "finish line" in interactive and "Code runs until it ends, with no time limit" in interactive

@@ -46,6 +46,7 @@ def test_a_section_a_skill_points_to_is_quoted_where_it_points(tmp_path):
             quote = f"> Quoted from {path}, under {heading}:"
             assert text.count(quote) == 1 and line in text
             assert text.index(path) < text.index(quote)  # after the paragraph that points to it
+        assert "> def layer_transport(u, z_edges, top, bottom):" in text  # the section's code travels with it
     # The coordinator may not open the physics skill, yet reads the section it is sent to.
     assert not (root / "skills/ocean-physical-consistency-review").exists()
 

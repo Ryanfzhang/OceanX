@@ -23,13 +23,15 @@ text and lines of about 1 pt. Letter each panel in bold inside its top-left corn
 a figure title; the caption or the answer carries it. Stacked panels share their time axis, with
 years on top and bottom when the original shows them. Fit each axis to the series the panel is
 about: draw a noisier or secondary series lighter behind it and let it run off the axis rather
-than squash the main one, and set bar and colour limits that show every bar and value. Put
-legends and values such as r or a trend in empty space, never across the data. Save a vector PDF with `bbox_inches='tight'` when requested; set `pdf.fonttype=42` to keep text editable.
+than squash the main one, and set bar and colour limits that show every bar and value. When
+groups of bars or curves in one panel differ in size by more than about ten times, so that the
+smaller cannot be read on a shared axis, give each group its own axis, rather than a log scale.
+Put legends and values such as r or a trend in empty space, never across the data. Save a vector PDF with `bbox_inches='tight'` when requested; set `pdf.fonttype=42` to keep text editable.
 Save PNG previews at 300 dpi.
 
 When your model reads images, open the saved figure once and fix what is wrong before delivering
-it: clipped or empty panels, squashed curves, overlapping text, panels of uneven size, type too
-small to read. For a PDF, open the preview image drawn beside it after the run.
+it: clipped or empty panels, squashed curves, bars too small to see, overlapping text, panels of
+uneven size, type too small to read. For a PDF, open the preview image drawn beside it after the run.
 
 ## Maps
 
