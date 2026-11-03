@@ -92,19 +92,20 @@ Before drawing the first figure, read /references/coding/matplotlib.md, under Pu
 before drawing a map, read /references/coding/matplotlib.md, under Maps. Redraw each figure listed in
 repro_spec.md from your quantities as the original draws it, with the paper's data or other data: the same
 panels and arrangement, axes with any twin axes, variables, symbols, units, colour encoding, line styles,
-markers, fills, overlays, arrows, reference lines, legends and annotations. Simplify nothing and add
-nothing: draw every element the original has, the trend line of each period included; one the record is too
-short to support is drawn and marked not significant, never left out. Only what the data set may differ, the
-values on the axes and the span of the record; with the paper's own data its scales are kept too. Every
-figure that shows a smoothed series draws the one the computation saved, with the window chosen under
-Adapting the method to the record. Before drawing each figure, read repro_spec.md again and, when you can
-read images, open the original again, since what you read at the start lies far back in the conversation.
-After saving, open the original and yours together, compare them item by item (panel layout, axes, line
-styles, markers, colours, fills, axis multipliers, panel letters, legends and annotations, text that crosses
-a line) and fix every difference the data allow. Draw each panel, curve and term the data allow, and name
-each doubt and each missing one in the answer, with what it needs. Draw a partial budget as partial and not
-closed rather than withholding it; never draw a missing term as zero, or a mechanism these data did not test
-as established, and never fill a gap with another quantity, a table or another kind of figure.
+markers, fills, overlays, arrows, reference lines, legends and annotations. Simplify nothing: draw every
+element the original has, the trend line of each period included; one the record is too short to support is
+drawn and marked not significant, never left out. With other data only what the data set differs: each axis
+range holds all your values and bars, and the time axis spans your record; with the paper's own data its
+scales are kept too. Every figure that shows a smoothed series draws the one the computation saved, with the
+window chosen under Adapting the method to the record. Before drawing each figure, read repro_spec.md again
+and, when you can read images, open the original again, since what you read at the start lies far back in
+the conversation. After saving, open the original and yours together, compare them item by item (panel
+layout, axes, line styles, markers, colours, fills, axis multipliers, panel letters, legends and
+annotations, text that crosses a line) and fix every difference the data allow. Draw each panel, curve and
+term the data allow, and name each doubt and each missing one in the answer, with what it needs. Draw a
+partial budget as partial and not closed rather than withholding it; never draw a missing term as zero, or a
+mechanism these data did not test as established, and never fill a gap with another quantity, a table or
+another kind of figure.
 
 ## Reviewing the results
 Before answering, read repro_spec.md again and review your results against it: every figure it lists,

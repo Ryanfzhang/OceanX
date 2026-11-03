@@ -109,7 +109,12 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     # records each element that drawing needs (the researcher, 2026-11-03: the paper's way of drawing is core
     # to the paper agent; runs had dropped a twin axis and map arrows and added annual-mean markers).
     assert "as the original draws it, with the paper's data or other data" in reproduction
-    assert "Simplify nothing and add nothing" in reproduction
+    assert "Simplify nothing: draw every element the original has" in reproduction
+    # "Add nothing" was dropped the same day: a paper's budget figure has no residual bar, so it contradicted the
+    # labelled residual the skill asks for, and the next run drew neither the residual nor a partial advection term.
+    assert "add nothing" not in reproduction
+    # Copying the original's axis range cut off budget bars larger than the paper's (a run of 2026-11-03).
+    assert "each axis range holds all your values and bars" in reproduction
     assert "twin axes included, colour encoding, line styles, markers, fills, overlays, arrows" in reproduction
     assert "name each doubt and each missing one in the answer" in reproduction
     for conflict in ("choose smoothing windows", "lines that run off the axes", "written on it"):

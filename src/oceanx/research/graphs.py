@@ -54,6 +54,7 @@ from oceanx.research.routing import (
     LAST_CALL_HANDOFF,
     LONG_RUNS,
     PAPER_SKILL,
+    REPRO_SPEC,
     SINGLE_AGENT,
     SINGLE_AGENT_CALL_LIMIT,
     SINGLE_AGENT_MINUTES,
@@ -894,15 +895,17 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
         revisions=project.skills(research=research))
     # The skills this role is told to open, because they now hold something the project learned.
     learned = project.learned_in(role, research=research, capabilities=svc.skill_capabilities)
-    # The paper skill stays in the single agent's instructions once opened; this middleware comes
-    # first, so that the notice of the last call still ends them.
-    paper_skill = library / PAPER_SKILL.removeprefix("/")
-    if role == SINGLE_AGENT and paper_skill.is_file():
-        middleware = [PaperSkillMiddleware(paper_skill), *(middleware or [])]
     from oceanx.native_backend import task_backend
     # The single agent and its helpers get a long command back as a job; the team waits until it ends.
     filesystem, working_directory = task_backend(host(), config, run=run, library=library,
                                                  wait_seconds=JOB_WAIT_SECONDS if quick else None)
+    # The paper skill stays in the single agent's instructions once opened, with the repro_spec.md it
+    # has the agent write in its working directory; this middleware comes first, so that the notice
+    # of the last call still ends them.
+    paper_skill = library / PAPER_SKILL.removeprefix("/")
+    if role == SINGLE_AGENT and paper_skill.is_file():
+        middleware = [PaperSkillMiddleware(paper_skill, spec=working_directory / REPRO_SPEC),
+                      *(middleware or [])]
     discussion = role == "scientific_discussion_partner"
     static = static_figures()  # a static run describes no plotting interface (figure_delivery.py)
     if discussion:

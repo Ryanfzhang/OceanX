@@ -338,6 +338,8 @@ class HelperMiddleware(AgentMiddleware):
 
 
 PAPER_SKILL = "/skills/paper-reproduction/SKILL.md"
+REPRO_SPEC = "repro_spec.md"  # what the paper requires, written by the agent in its working directory
+SPEC_CHARS = 20_000  # of repro_spec.md shown with the instructions; the rest stays in the file
 # Named only in the text note of an attached paper, the skill was not opened in a run of
 # 2026-11-01; opened, read_file shows the first 100 of its about 200 lines, and a summary later
 # replaces what was read. So the agent decides on the call that starts the work, and the skill it
@@ -371,23 +373,40 @@ def opened_in_request(messages, path: str) -> bool:
 
 class PaperSkillMiddleware(AgentMiddleware):
     """From the call after the single agent opened the paper skill, the skill as its library holds
-    it, with the sections it points to, ends its instructions on every call of that request. It is
-    looked for in the saved messages, which a summary leaves in place."""
+    it, with the sections it points to, ends its instructions on every call of that request, and so
+    does the repro_spec.md the skill has it write, as the file stands before each call. A run of
+    2026-11-03 wrote there which panels and terms were computable, never read it again, and after a
+    summary answered that they were not. The skill is looked for in the saved messages, which a
+    summary leaves in place."""
 
-    def __init__(self, skill: Path) -> None:
+    def __init__(self, skill: Path, spec: Path | None = None) -> None:
         super().__init__()
         text = skill.read_text(encoding="utf-8")
         body = text.split("\n---\n", 1)[-1].strip()  # without its header
         self.block = (f"# Paper skill\nYou opened {PAPER_SKILL} for this request; here it is in "
                       "full, with the sections it points to, for the rest of the request.\n\n"
                       + body)
+        self.spec = spec
+
+    def _spec_block(self) -> str:
+        try:
+            text = self.spec.read_text(encoding="utf-8").strip() if self.spec is not None else ""
+        except (OSError, UnicodeDecodeError):
+            return ""
+        if not text:
+            return ""
+        if len(text) > SPEC_CHARS:
+            text = f"{text[:SPEC_CHARS]}\n[The rest is in {self.spec}.]"
+        return (f"# {REPRO_SPEC}\nYour {self.spec} as it stands before this call; reading the file "
+                "gives the same text.\n\n" + text)
 
     def _prepare(self, request):
         if not opened_in_request(request.state.get("messages") or (), PAPER_SKILL):
             return request
+        blocks = [self.block, *filter(None, [self._spec_block()])]
         content = request.system_message.content if request.system_message else ""
-        content = ([*content, {"type": "text", "text": self.block}] if isinstance(content, list)
-                   else f"{content}\n\n{self.block}".strip())
+        content = ([*content, *({"type": "text", "text": block} for block in blocks)]
+                   if isinstance(content, list) else "\n\n".join([content, *blocks]).strip())
         return request.override(system_message=SystemMessage(content=content))
 
     def wrap_model_call(self, request, handler):
@@ -420,8 +439,8 @@ def last_answer(messages) -> str:
 __all__ = [
     "AGENT_TAG", "BOUNDED_WORK_POLICY", "FIGURE_MINUTES", "HANDOFF_POLICY", "HANDOFF_TOOL", "HELPER",
     "HELPER_CALL_LIMIT", "HELPER_LAST_CALL", "HELPER_POLICY", "HELPER_TOOL", "LAST_CALL", "LAST_CALL_HANDOFF",
-    "LONG_RUNS", "MAX_HELPERS", "PAPER_RULE", "PAPER_SKILL", "SINGLE_AGENT", "SINGLE_AGENT_CALL_LIMIT",
-    "SINGLE_AGENT_MINUTES", "TEAM",
+    "LONG_RUNS", "MAX_HELPERS", "PAPER_RULE", "PAPER_SKILL", "REPRO_SPEC", "SINGLE_AGENT",
+    "SINGLE_AGENT_CALL_LIMIT", "SINGLE_AGENT_MINUTES", "TEAM",
     "HandoffMiddleware", "HelperMiddleware", "PaperSkillMiddleware", "QuickCallBudgetMiddleware",
     "budget_handoff", "call_budget_sentence", "handed_over", "handoff_note", "handoff_request",
     "last_answer", "opened_in_request", "paper_rule", "seen_by", "tagged", "team_config",

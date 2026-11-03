@@ -261,6 +261,35 @@ def test_a_paper_skill_is_kept_only_for_a_request_whose_agent_opened_it(tmp_path
     assert system(later) == "base"
 
 
+def test_the_agents_repro_spec_comes_with_the_paper_skill_as_the_file_stands(tmp_path):
+    # A run of 2026-11-03 wrote in repro_spec.md which panels and terms its data allowed, never read the
+    # file again, and after a summary answered that they could not be computed.
+    from oceanx.native_skills import prepare_skill_library
+    from oceanx.research.routing import REPRO_SPEC, SPEC_CHARS
+    library = prepare_skill_library(tmp_path / "skills", role=SINGLE_AGENT)
+    spec = tmp_path / "scratch" / REPRO_SPEC
+    kept = PaperSkillMiddleware(library / PAPER_SKILL.removeprefix("/"), spec=spec)
+    read = {"name": "read_file", "args": {"file_path": PAPER_SKILL}, "id": "r1", "type": "tool_call"}
+    state = [HumanMessage(content="Apply the paper's method to my data"),
+             AIMessage(content="", tool_calls=[read]), ToolMessage(content="the skill", tool_call_id="r1")]
+
+    def system():
+        request = ModelRequest(model=SimpleNamespace(), messages=state, tools=[], state={"messages": state},
+                               system_message=SystemMessage(content="base"))
+        return kept._prepare(request).system_message.text
+
+    assert f"# {REPRO_SPEC}" not in system()  # not written yet
+    spec.parent.mkdir()
+    spec.write_text("Fig. 4 (f)-(h): trend maps are computable\n", encoding="utf-8")
+    text = system()
+    assert text.index("# Paper skill") < text.index(f"# {REPRO_SPEC}")
+    assert "Fig. 4 (f)-(h): trend maps are computable" in text and str(spec) in text
+    spec.write_text("Fig. 4 (f)-(h): drawn\n", encoding="utf-8")  # each call shows the file as it stands
+    assert "Fig. 4 (f)-(h): drawn" in system() and "trend maps are computable" not in system()
+    spec.write_text("x" * (SPEC_CHARS + 50), encoding="utf-8")
+    assert "x" * (SPEC_CHARS + 1) not in system() and f"[The rest is in {spec}.]" in system()
+
+
 # --- the conversation each agent sees --------------------------------------------------------------
 
 def test_each_agent_sees_the_other_ones_answers_but_not_its_tool_work():

@@ -245,12 +245,17 @@ async def test_the_single_agent_keeps_the_paper_skill_from_the_call_after_it_ope
         monkeypatch.setattr("oceanx.deep_runtime.create_chat_model", lambda _: model)
 
         graph = await graphs.build(config, SINGLE_AGENT)
+        # The repro_spec.md the agent keeps in its working directory comes with the skill.
+        scratch = host.task_workspace_projector.ensure_task_root(task.task_id) / "agents" / "coordinator" / "scratch"
+        assert scratch.is_dir()
+        (scratch / "repro_spec.md").write_text("Fig. 4 (f)-(h): trend maps are computable\n", encoding="utf-8")
         await graph.ainvoke({"messages": [HumanMessage(content="Apply its method to my data")]})
 
         first, second = (messages[0].text for messages in model.seen_messages)
         assert "# Attached paper" in first and text in first and "# Paper skill" not in first
         assert "# Paper skill" in second
         assert "Before computing anything, write repro_spec.md" in second
+        assert "trend maps are computable" in second and "trend maps are computable" not in first
     finally:
         await host.close()
 
