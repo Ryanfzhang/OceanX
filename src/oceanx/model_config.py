@@ -270,7 +270,9 @@ def _is_image(block: Any) -> bool:
 def _images_after_tool_results(messages: list) -> list:
     """Chat Completions takes images in user messages: the images a tool returned, such as a
     figure opened with read_file, move into one user message right after that turn's tool
-    results, and each result says so in text."""
+    results, and each result says so in text. When a result holds several images, such as a
+    figure and the paper's original, the text between and after them is their caption and moves
+    with them in its place."""
 
     moved: list = []
     pending: list = []
@@ -280,14 +282,20 @@ def _images_after_tool_results(messages: list) -> list:
             pending = []
         if isinstance(message, ToolMessage) and isinstance(message.content, list) and any(
                 map(_is_image, message.content)):
-            images = [block for block in message.content if _is_image(block)]
+            blocks = [{"type": "text", "text": block} if isinstance(block, str) else block
+                      for block in message.content]
+            first = next(index for index, block in enumerate(blocks) if _is_image(block))
+            several = sum(map(_is_image, blocks)) > 1
+            images = blocks[first:] if several else [block for block in blocks if _is_image(block)]
+            kept = blocks[:first] if several else [block for block in blocks if not _is_image(block)]
             path = message.additional_kwargs.get("read_file_path")
             label = f"{message.name or 'a tool'} for {path}" if path else message.name or "a tool"
-            text = [block if isinstance(block, str) else block.get("text", "")
-                    for block in message.content if not _is_image(block)]
-            note = f"[The image returned by {label} follows in the next message.]"
+            text = [block.get("text", "") for block in kept]
+            note = (f"[The images returned by {label} follow in the next message.]" if several else
+                    f"[The image returned by {label} follows in the next message.]")
             message = message.model_copy(update={"content": "\n".join([*filter(None, text), note])})
-            pending += [{"type": "text", "text": f"Image returned by {label}:"}, *images]
+            pending += [{"type": "text", "text": f"{'Images' if several else 'Image'} returned by {label}:"},
+                        *images]
         moved.append(message)
     if pending:
         moved.append(HumanMessage(content=pending))

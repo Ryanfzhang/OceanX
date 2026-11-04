@@ -39,8 +39,9 @@ files, not at their names). Do every analysis and draw every panel whose inputs 
 with what they need. Decide panel by panel, curve by curve and term by term, never for a figure as a whole:
 a figure is left out only when none of its panels can be computed, and a doubt, such as a definition the
 paper leaves open or an original drawn by hand, is said in the answer, not a reason to leave it out. For
-each figure give the path of its image and what the image and its caption show: its panels and their
-arrangement, each axis with its variable, units, range and multiplier, twin axes included, colour encoding,
+each figure give the path of its image, the name of the file you will save yours as, and what the image and
+its caption show: its panels and their arrangement, each axis with its variable, units, range and multiplier,
+twin axes included, colour encoding,
 line styles, markers, fills, overlays, arrows, reference lines, legends and annotations. For each quantity,
 copy the paper's equation as printed, in its order of operations, write below it the discrete form you will
 compute, and give the paper's values, each with the dataset and period it comes from. Write only what the
@@ -101,10 +102,11 @@ original's cover its record. With other data the axis ranges are set from your v
 matplotlib section says; with the paper's own data its scales are kept too. Every figure that shows a
 smoothed series draws the one the computation saved, with the window chosen under Adapting the method to the
 record. Before drawing each figure, read repro_spec.md again and, when you can read images, open the
-original again, since what you read at the start lies far back in the conversation. After saving, open the
-original and yours together, compare them item by item (panel layout, axes, line styles, markers, colours,
-fills, axis multipliers, panel letters, legends and annotations, text that crosses a line) and fix every
-difference the data allow. Draw each panel, curve and term the data allow, and name each doubt and each
+original again, since what you read at the start lies far back in the conversation. After saving, open
+yours: the original repro_spec.md names for it comes after it. Compare them item by item (panel layout, axes,
+line styles, markers, colours, fills, axis multipliers, panel letters, legends and annotations, text that
+crosses a line) and fix every difference the data allow. Draw each panel, curve and term the data allow, and
+name each doubt and each
 missing one in the answer, with what it needs. Draw a partial budget as partial and not closed rather than
 withholding it; never draw a missing term as zero, or a mechanism these data did not test as established,
 and never fill a gap with another quantity, a table or another kind of figure.

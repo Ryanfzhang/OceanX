@@ -307,6 +307,73 @@ def test_the_agents_repro_spec_comes_with_the_paper_skill_as_the_file_stands(tmp
     assert "x" * (SPEC_CHARS + 1) not in system() and f"[The rest is in {spec}.]" in system()
 
 
+def test_the_original_of_a_figure_is_the_paper_image_the_spec_names_with_it(tmp_path):
+    from oceanx.research.routing import original_for
+    images = {name: tmp_path / name for name in ("page-02-figure-1.jpg", "page-04-figure-1.jpg", "page-05.jpg",
+                                                 "page-05-figure-1.jpg", "page-06-figure-1.jpg")}
+    # A heading for each figure, as a run of 2026-11-04 wrote it; an image drawn of a saved PDF is the figure's.
+    spec = ("# Figures\n### Fig. 2 — page-04-figure-1.jpg — layer vorticity\n- dashed trends\n"
+            "### Fig. 3 — page-05.jpg, page-05-figure-1.jpg — vorticity budget\n- (b) Γ filled about its mean\n")
+    assert original_for("/scratch/fig3-vorticity-budget.pdf.preview.png", spec, images) == (
+        images["page-05-figure-1.jpg"], "Fig. 3 (page-05-figure-1.jpg)")
+    assert original_for("/outputs/Figure2_layers.png", spec, images)[0] == images["page-04-figure-1.jpg"]
+    # A file without a number is found where the spec names it, under the figure's heading.
+    named = spec + "### Fig. 4 — page-06-figure-1.jpg — schematic\n- saved as scs-regime-trends.pdf\n"
+    assert original_for("scs-regime-trends.pdf.display.png", named, images) == (
+        images["page-06-figure-1.jpg"], "Fig. 4 (page-06-figure-1.jpg)")
+    # One line listing the figures gives each its own image; a table row may name the image first.
+    listed = "Originals: Fig. 2 page-04-figure-1.jpg, Fig. 3 page-05-figure-1.jpg, Fig. 1 page-02-figure-1.jpg\n"
+    assert original_for("fig3.png", listed, images)[0] == images["page-05-figure-1.jpg"]
+    assert original_for("fig1.png", "| page-02-figure-1.jpg | Fig. 1 | maps |\n", images)[0] == (
+        images["page-02-figure-1.jpg"])
+    # Nothing when the spec names no image of the paper for the figure, and a line about another
+    # figure lends it none.
+    assert original_for("fig5.png", spec, images) is None
+    assert original_for("sst_map.png", spec, images) is None
+    assert original_for("fig2.png", "### Fig. 2 — page-09-figure-2.jpg\n", images) is None
+    assert original_for("fig3.png", "Fig. 3a uses the layers of Fig. 2 (page-04-figure-1.jpg)\n", images) is None
+
+
+def test_the_agents_own_figure_comes_with_the_original_its_spec_names(tmp_path):
+    # A run of 2026-11-04 opened the original of Fig. 3 once, at its start, and judged its own previews
+    # three times against a repro_spec.md that had dropped the original's fills.
+    import base64
+
+    from oceanx.native_skills import prepare_skill_library
+    from oceanx.research.routing import ORIGINAL_NOTE, REPRO_SPEC
+    library = prepare_skill_library(tmp_path / "skills", role=SINGLE_AGENT)
+    text = tmp_path / "cache" / "zheng.v5.txt"
+    figures = text.with_suffix(".figures")
+    figures.mkdir(parents=True)
+    (figures / "page-05-figure-1.jpg").write_bytes(b"original")
+    spec = tmp_path / "scratch" / REPRO_SPEC
+    spec.parent.mkdir()
+    spec.write_text("### Fig. 3 — page-05-figure-1.jpg — vorticity budget\n", encoding="utf-8")
+    kept = PaperSkillMiddleware(library / PAPER_SKILL.removeprefix("/"), spec=spec, papers=[str(text)])
+    skill = {"name": "read_file", "args": {"file_path": PAPER_SKILL}, "id": "r1", "type": "tool_call"}
+    opened = [HumanMessage(content="Apply the paper's method to my data"),
+              AIMessage(content="", tool_calls=[skill]), ToolMessage(content="the skill", tool_call_id="r1")]
+    mine = {"type": "image", "base64": "bWluZQ==", "mime_type": "image/png"}
+
+    def read(path, earlier=opened, block=mine):
+        call = {"name": "read_file", "args": {"file_path": path}, "id": "r2", "type": "tool_call"}
+        result = ToolMessage(content_blocks=[block], name="read_file", tool_call_id="r2")
+        request = SimpleNamespace(tool_call=call, state={
+            "messages": [*earlier, AIMessage(content="", tool_calls=[call])]})
+        return kept.wrap_tool_call(request, lambda _request: result).content
+
+    seen = read(str(spec.parent / "fig3-vorticity-budget.pdf.preview.png"))
+    assert [block["type"] for block in seen] == ["image", "text", "image"]
+    assert seen[1]["text"] == ORIGINAL_NOTE.format(original="Fig. 3 (page-05-figure-1.jpg)", spec=REPRO_SPEC)
+    assert seen[2] == {"type": "image", "base64": base64.b64encode(b"original").decode(), "mime_type": "image/jpeg"}
+    # Nothing comes with the original itself, a figure the spec names no original for, a text, or an
+    # image opened before the paper skill in this request.
+    assert len(read(str(figures / "page-05-figure-1.jpg"))) == 1
+    assert len(read("fig4.png")) == 1
+    assert len(read("notes.md", block={"type": "text", "text": "notes"})) == 1
+    assert len(read("fig3.png", earlier=opened[:1])) == 1
+
+
 # --- the conversation each agent sees --------------------------------------------------------------
 
 def test_each_agent_sees_the_other_ones_answers_but_not_its_tool_work():

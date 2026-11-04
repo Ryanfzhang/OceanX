@@ -136,6 +136,24 @@ def test_a_figure_read_by_a_tool_reaches_deepseek_as_an_image():
     assert isinstance(plain["messages"][-1]["content"], str)
 
 
+def test_a_figure_and_the_original_after_it_reach_deepseek_each_with_its_caption():
+    # The single agent's own figure comes with the paper's original (PaperSkillMiddleware): both move to
+    # the user message in their order, and the text between them stays with the original.
+    call = AIMessage(content="", additional_kwargs={"reasoning_content": "open my figure"},
+                     tool_calls=[{"id": "r1", "name": "read_file", "args": {"file_path": "/fig3.png"}}])
+    both = ToolMessage(content=[{"type": "image", "base64": "bWluZQ==", "mime_type": "image/png"},
+                                {"type": "text", "text": "Next is the paper's original of this figure"},
+                                {"type": "image", "base64": "b3JpZ2luYWw=", "mime_type": "image/jpeg"}],
+                       tool_call_id="r1", name="read_file", additional_kwargs={"read_file_path": "/fig3.png"})
+    model = create_chat_model(profile(model="deepseek-flash"))
+    sent = model._get_request_payload([HumanMessage(content="q"), call, both], tools=[TOOL])["messages"]
+    assert [m["role"] for m in sent] == ["user", "assistant", "tool", "user"]
+    assert sent[2]["content"] == "[The images returned by read_file for /fig3.png follow in the next message.]"
+    parts = [part["text"] if part["type"] == "text" else part["image_url"]["url"] for part in sent[3]["content"]]
+    assert parts == ["Images returned by read_file for /fig3.png:", "data:image/png;base64,bWluZQ==",
+                     "Next is the paper's original of this figure", "data:image/jpeg;base64,b3JpZ2luYWw="]
+
+
 def test_images_follow_all_parallel_tool_results():
     model = create_chat_model(profile(model="deepseek-flash"))
     calls = AIMessage(content="", tool_calls=[

@@ -73,7 +73,11 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
                  "Before drawing each figure, read repro_spec.md again",
                  "Before answering, read repro_spec.md again and review your results against it"):
         assert step in reproduction
-    assert "## One computation per quantity" in reproduction and "open the original and yours together" in reproduction
+    assert "## One computation per quantity" in reproduction
+    # A run of 2026-11-04 opened the original once, at its start, and judged its own previews against a spec
+    # that had dropped the original's fills: the spec names each figure's file, and opening it shows the original.
+    assert "the name of the file you will save yours as" in reproduction
+    assert "After saving, open yours: the original repro_spec.md names for it comes after it." in reproduction
     # Each paper value is written down with its data and period, so a run on the paper's own data sees the overlap.
     assert "each with the dataset and period it comes from" in reproduction
     # The skill applies a paper's method to other data too (2026-11-01): it finds the analyses the data support,

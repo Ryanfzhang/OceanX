@@ -260,6 +260,78 @@ async def test_the_single_agent_keeps_the_paper_skill_from_the_call_after_it_ope
         await host.close()
 
 
+@pytest.mark.asyncio
+async def test_the_single_agent_sees_the_original_when_it_opens_its_own_figure(tmp_path, monkeypatch):
+    # A run of 2026-11-04 opened the original once, at its start, and later judged its own previews
+    # against a repro_spec.md that had dropped the original's fills.
+    import base64
+    import sys
+    from io import BytesIO
+    from types import SimpleNamespace
+
+    from langchain_core.callbacks import BaseCallbackHandler
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+    from PIL import Image
+
+    from oceanx.research import graphs
+    from oceanx.research.routing import ORIGINAL_NOTE, PAPER_SKILL, REPRO_SPEC, SINGLE_AGENT
+    from tests.test_oceanx.test_deep_agent_runtime import _BoundFakeModel
+
+    monkeypatch.setenv("OCEAN_SANDBOX_PYTHON", sys.executable)
+    workspace = tmp_path / "workspace"
+    (workspace / "papers").mkdir(parents=True)
+    _write_pdf_with_images(workspace / "papers" / "zheng2026.pdf", "Fig. 1. Layer circulation", [(600, 400)])
+    host = OceanBackendHost(tmp_path / "state", write_frame=lambda _frame: None)
+    try:
+        recorder = _Recorder()
+        client = BackendClient(transport="stdio", expected_client_kind="desktop", sender=recorder.send)
+        await host.event_bus.register(client)
+        await _send(host, client, "system.handshake", {
+            "client_kind": "desktop", "client_version": "test", "supported_protocol_versions": [2]})
+        context = {"client_id": str(client.client_id), "session_id": str(client.session_id),
+                   "workspace_id": WORKSPACE}
+        await _send(host, client, "workspace.open", {"path": str(workspace)}, context=context,
+                    expected_workspace_revision=0)
+        task = host.store.create_research_task(workspace_id=WORKSPACE, title="Apply a paper")
+        await _send(host, client, "source.import",
+                    {"relative_path": "papers/zheng2026.pdf", "title": "Zheng et al. 2026"},
+                    context={**context, "task_id": task.task_id}, expected_workspace_revision=1)
+        [text] = task_pdf_texts(host.store, host.paths, workspace_id=WORKSPACE, task_id=task.task_id)
+        [original] = pdf_figures(Path(text))
+        assert original.name == "page-01-figure-1.jpg"
+        config = {"configurable": {"workspace_id": WORKSPACE, "workspace_path": str(workspace),
+                                   "task_id": task.task_id, "thread_id": "paper",
+                                   "request_id": "req_paper"}}
+        monkeypatch.setattr(graphs, "host", lambda: host)
+        monkeypatch.setattr(graphs, "load_model_profile", lambda _: SimpleNamespace(provider="openai"))
+        monkeypatch.setattr("oceanx.research.metering.CallMeter",
+                            lambda *args, **kwargs: BaseCallbackHandler())
+        scratch = host.task_workspace_projector.ensure_task_root(task.task_id) / "agents" / "coordinator" / "scratch"
+        mine = scratch / "fig1-layers.pdf.preview.png"
+        skill = {"name": "read_file", "args": {"file_path": PAPER_SKILL}, "id": "skill"}
+        look = {"name": "read_file", "args": {"file_path": str(mine)}, "id": "look"}
+        model = _BoundFakeModel(responses=[AIMessage(content="", tool_calls=[skill]),
+                                           AIMessage(content="", tool_calls=[look]), AIMessage(content="Done.")])
+        monkeypatch.setattr("oceanx.deep_runtime.create_chat_model", lambda _: model)
+
+        graph = await graphs.build(config, SINGLE_AGENT)
+        (scratch / REPRO_SPEC).write_text("### Fig. 1 — page-01-figure-1.jpg — layer circulation\n",
+                                          encoding="utf-8")
+        buffer = BytesIO()
+        Image.new("RGB", (40, 30), (200, 40, 40)).save(buffer, format="PNG")
+        mine.write_bytes(buffer.getvalue())
+        await graph.ainvoke({"messages": [HumanMessage(content="Apply its method to my data")]})
+
+        [seen] = [message for message in model.seen_messages[2]
+                  if isinstance(message, ToolMessage) and message.tool_call_id == "look"]
+        assert [block["type"] for block in seen.content] == ["image", "text", "image"]
+        assert seen.content[1]["text"] == ORIGINAL_NOTE.format(original="Fig. 1 (page-01-figure-1.jpg)",
+                                                               spec=REPRO_SPEC)
+        assert base64.b64decode(seen.content[2]["base64"]) == original.read_bytes()
+    finally:
+        await host.close()
+
+
 def test_deepseek_models_are_sent_no_pdf_attachments():
     flash = OceanChatDeepSeek(model="deepseek-flash", api_key="test")
     assert flash.profile == {"pdf_inputs": False, "image_inputs": True}

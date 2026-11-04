@@ -903,11 +903,16 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                                                  wait_seconds=JOB_WAIT_SECONDS if quick else None,
                                                  code_seconds=None if quick else RESEARCH_CODE_SECONDS)
     # The paper skill stays in the single agent's instructions once opened, with the repro_spec.md it
-    # has the agent write in its working directory; this middleware comes first, so that the notice
-    # of the last call still ends them.
+    # has the agent write in its working directory, and the originals it names come with the agent's
+    # own figures; this middleware comes first, so that the notice of the last call still ends them.
+    papers: list[str] = []
+    if role == SINGLE_AGENT:
+        from oceanx.pdf_text import task_pdf_texts
+        papers = task_pdf_texts(host().store, host().paths,
+                                workspace_id=c["workspace_id"], task_id=c["task_id"])
     paper_skill = library / PAPER_SKILL.removeprefix("/")
     if role == SINGLE_AGENT and paper_skill.is_file():
-        middleware = [PaperSkillMiddleware(paper_skill, spec=working_directory / REPRO_SPEC),
+        middleware = [PaperSkillMiddleware(paper_skill, spec=working_directory / REPRO_SPEC, papers=papers),
                       *(middleware or [])]
     discussion = role == "scientific_discussion_partner"
     static = static_figures()  # a static run describes no plotting interface (figure_delivery.py)
@@ -937,9 +942,6 @@ async def build(config, role: str, *, run: AgentRun | None = None, middleware=No
                        "array analysis of saved results or small data; use execute for shell work and for "
                        "parallel passes over many files.\n" + bounded_work_policy(static))
             if role == SINGLE_AGENT:
-                from oceanx.pdf_text import task_pdf_texts
-                papers = task_pdf_texts(host().store, host().paths,
-                                        workspace_id=c["workspace_id"], task_id=c["task_id"])
                 prompt += paper_rule(papers)
         else:
             prompt += (f"\nEach execute or ocean_expert_run_code run is stopped after {RESEARCH_CODE_SECONDS} s; "

@@ -9,6 +9,8 @@ costs nothing extra: the agent makes it on the call that starts the work.
 from __future__ import annotations
 
 import asyncio
+import base64
+import re
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -341,6 +343,15 @@ class HelperMiddleware(AgentMiddleware):
 PAPER_SKILL = "/skills/paper-reproduction/SKILL.md"
 REPRO_SPEC = "repro_spec.md"  # what the paper requires, written by the agent in its working directory
 SPEC_CHARS = 20_000  # of repro_spec.md shown with the instructions; the rest stays in the file
+# A run of 2026-11-04 looked at the original of each figure once, at its start, and later judged its
+# own previews against a repro_spec.md that had dropped the original's fills; so when the agent opens a
+# figure of its own, the original repro_spec.md names for it comes after it (PaperSkillMiddleware).
+ORIGINAL_NOTE = ("Next is the paper's original of this figure, {original}, as {spec} names it; compare yours "
+                 "with it item by item.")
+_PAPER_IMAGE = re.compile(r"page-(\d+)[\w-]*\.jpg")  # the page, part and figure images of pdf_text.py
+_DRAWN = (".preview.png", ".display.png")  # the images figure_delivery.py draws of a saved PDF
+_FIGURE_FILE = re.compile(r"^fig(?:ure)?[_\- ]?(\d+)(?!\d)", re.IGNORECASE)  # fig3_budget.pdf
+_FIGURE = re.compile(r"\bfig(?:ure)?s?\.?\s*(\d+)(?!\d)", re.IGNORECASE)  # Fig. 3, Figure 3
 # Named only in the text note of an attached paper, the skill was not opened in a run of
 # 2026-11-01; opened, read_file shows the first 100 of its about 200 lines, and a summary later
 # replaces what was read. So the agent decides on the call that starts the work, and the skill it
@@ -372,15 +383,76 @@ def opened_in_request(messages, path: str) -> bool:
     return False
 
 
+def _named(text: str, images: dict[str, Path]) -> list[str]:
+    return [found.group() for found in _PAPER_IMAGE.finditer(text) if found.group() in images]
+
+
+def _page(name: str) -> str:
+    return _PAPER_IMAGE.match(name).group(1)
+
+
+def _one_page(named: list[str]) -> str:
+    """Of paper images named together, the first one's page: its figure image, else the first."""
+    page = [name for name in named if _page(name) == _page(named[0])]
+    return next((name for name in page if "-figure-" in name), page[0])
+
+
+def original_for(figure: str, spec: str, images: dict[str, Path]) -> tuple[Path, str] | None:
+    """The paper's original of the agent's figure image ``figure``, and how to name it, from where
+    ``spec`` names them together: a line, else a section under a heading, that names the figure's file
+    or, failing that, the number its file name starts with (fig3_budget.pdf is Fig. 3). The image is
+    the first of ``images`` the spec names after that mention and before the next figure's, or the
+    one page a line or section about no other figure names. None when the spec names no image of the
+    paper for it."""
+
+    name = Path(figure).name
+    for drawn in _DRAWN:
+        name = name.removesuffix(drawn)
+    stem = Path(name).stem
+    number = _FIGURE_FILE.match(stem)
+    keys = [re.compile(re.escape(stem), re.IGNORECASE)] if len(stem) >= 4 else []
+    if number:
+        keys.append(re.compile(rf"\bfig(?:ure)?s?\.?\s*{number.group(1)}(?!\d)", re.IGNORECASE))
+    lines, sections, section = spec.splitlines(), [], []
+    for line in lines:
+        if line.lstrip().startswith("#") and section:
+            sections.append("\n".join(section))
+            section = []
+        section.append(line)
+    sections.append("\n".join(section))
+    for key in keys:
+        for unit in [*lines, *sections]:
+            found = None
+            for mention in key.finditer(unit):
+                after = unit[mention.end():]
+                following = _FIGURE.search(after)
+                named = _named(after[:following.start()] if following else after, images)
+                if named:
+                    found = _one_page(named)
+                    break
+            numbers = {other.group(1) for other in _FIGURE.finditer(unit)}
+            if (found is None and key.search(unit) and len(numbers) <= 1
+                    and (not number or numbers <= {number.group(1)})):
+                named = _named(unit, images)
+                if named and len({_page(image) for image in named}) == 1:
+                    found = _one_page(named)
+            if found:
+                label = number or _FIGURE.search(unit)
+                return images[found], f"Fig. {label.group(1)} ({found})" if label else found
+    return None
+
+
 class PaperSkillMiddleware(AgentMiddleware):
     """From the call after the single agent opened the paper skill, the skill as its library holds
     it, with the sections it points to, ends its instructions on every call of that request, and so
     does the repro_spec.md the skill has it write, as the file stands before each call. A run of
     2026-11-03 wrote there which panels and terms were computable, never read it again, and after a
     summary answered that they were not. The skill is looked for in the saved messages, which a
-    summary leaves in place."""
+    summary leaves in place. In that request, when the agent opens an image of a figure of its own
+    that repro_spec.md names with one of the images of ``papers``, the extracted texts of the attached
+    papers, that original comes after it in the same result (ORIGINAL_NOTE)."""
 
-    def __init__(self, skill: Path, spec: Path | None = None) -> None:
+    def __init__(self, skill: Path, spec: Path | None = None, papers: list[str] | None = None) -> None:
         super().__init__()
         text = skill.read_text(encoding="utf-8")
         body = text.split("\n---\n", 1)[-1].strip()  # without its header
@@ -388,6 +460,7 @@ class PaperSkillMiddleware(AgentMiddleware):
                       "full, with the sections it points to, for the rest of the request.\n\n"
                       + body)
         self.spec = spec
+        self.papers = list(papers or [])
 
     def _spec_block(self) -> str:
         try:
@@ -416,6 +489,38 @@ class PaperSkillMiddleware(AgentMiddleware):
     async def awrap_model_call(self, request, handler):
         return await handler(self._prepare(request))
 
+    def _with_original(self, request, result):
+        """``result`` of a read_file, with the paper's original after an image of the agent's own figure."""
+        if (request.tool_call.get("name") != "read_file" or self.spec is None or not self.papers
+                or not isinstance(result, ToolMessage) or not isinstance(result.content, list)
+                or not any(isinstance(block, dict) and block.get("type") == "image" for block in result.content)):
+            return result
+        state = request.state if isinstance(request.state, dict) else {}
+        if not opened_in_request(state.get("messages") or (), PAPER_SKILL):
+            return result
+        from oceanx.pdf_text import paper_images
+        images = paper_images(self.papers)
+        path = str((request.tool_call.get("args") or {}).get("file_path", ""))
+        if Path(path).name in images:  # the paper's own image
+            return result
+        try:
+            found = original_for(path, self.spec.read_text(encoding="utf-8"), images)
+            data = base64.b64encode(found[0].read_bytes()).decode() if found else None
+        except (OSError, UnicodeDecodeError):
+            return result
+        if not data:
+            return result
+        note = ORIGINAL_NOTE.format(original=found[1], spec=REPRO_SPEC)
+        return result.model_copy(update={"content": [
+            *result.content, {"type": "text", "text": note},
+            {"type": "image", "base64": data, "mime_type": "image/jpeg"}]})
+
+    def wrap_tool_call(self, request, handler):
+        return self._with_original(request, handler(request))
+
+    async def awrap_tool_call(self, request, handler):
+        return self._with_original(request, await handler(request))
+
 
 def tagged(messages, agent: str) -> list:
     """``messages`` marked as written by ``agent``."""
@@ -440,10 +545,10 @@ def last_answer(messages) -> str:
 __all__ = [
     "AGENT_TAG", "BOUNDED_WORK_POLICY", "FIGURE_MINUTES", "HANDOFF_POLICY", "HANDOFF_TOOL", "HELPER",
     "HELPER_CALL_LIMIT", "HELPER_LAST_CALL", "HELPER_POLICY", "HELPER_TOOL", "LAST_CALL", "LAST_CALL_HANDOFF",
-    "LONG_RUNS", "MAX_HELPERS", "PAPER_RULE", "PAPER_SKILL", "REPRO_SPEC", "SINGLE_AGENT",
+    "LONG_RUNS", "MAX_HELPERS", "ORIGINAL_NOTE", "PAPER_RULE", "PAPER_SKILL", "REPRO_SPEC", "SINGLE_AGENT",
     "SINGLE_AGENT_CALL_LIMIT", "SINGLE_AGENT_MINUTES", "TEAM",
     "HandoffMiddleware", "HelperMiddleware", "PaperSkillMiddleware", "QuickCallBudgetMiddleware",
     "budget_handoff", "call_budget_sentence", "handed_over", "handoff_note", "handoff_request",
-    "last_answer", "opened_in_request", "paper_rule", "seen_by", "tagged", "team_config",
+    "last_answer", "opened_in_request", "original_for", "paper_rule", "seen_by", "tagged", "team_config",
     "time_budget_sentence", "workflow_mode",
 ]

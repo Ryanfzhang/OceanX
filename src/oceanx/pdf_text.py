@@ -260,6 +260,18 @@ def pdf_figures(text: Path) -> list[Path]:
     return sorted(folder.glob("page-*-figure-*.jpg")) if folder.is_dir() else []
 
 
+def paper_images(texts: list[str]) -> dict[str, Path]:
+    """The page, enlarged-part and figure images saved beside extracted texts, by file name; a name
+    two papers share keeps the first paper's image."""
+
+    images: dict[str, Path] = {}
+    for text in texts:
+        folder = _figure_folder(Path(text))
+        for image in sorted(folder.glob("page-*.jpg")) if folder.is_dir() else ():
+            images.setdefault(image.name, image)
+    return images
+
+
 def source_pdfs(source: Path) -> tuple[list[Path], int]:
     """The PDFs a Task source offers, and how many more a folder holds beyond them."""
 
@@ -354,6 +366,7 @@ __all__ = [
     "TEXT_NOTE",
     "PdfTextError",
     "document_text_allowed",
+    "paper_images",
     "pdf_figures",
     "pdf_text",
     "readable_texts",
