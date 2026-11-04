@@ -1,6 +1,8 @@
 """The physics skill shows a layer's circulation as code, under Vorticity budgets and streamfunctions, and
 agents copy it, so it is run here as written. A run of 2026-11-03 zero-filled land before differencing and
-summed only where a layer held water, with the section's prose in its prompt."""
+summed only where a layer held water, with the section's prose in its prompt. The line integral that checks
+the example by Stokes' theorem lives here: the run of 2026-11-04 copied it from the skill and, weighted by f,
+took it for a flux term, which needs the normal component."""
 import re
 
 import numpy as np
@@ -30,8 +32,22 @@ def _basin(top, bottom):
     return {"z": z, "u": u, "v": v, "top": top, "bottom": bottom, "lat": LAT, "lon": LON, "region": region}, land
 
 
+def _boundary_circulation(U, V, lat, lon, used, R):
+    """The line integral of (U, V), counterclockwise along the edge of the cells used, each face taking the
+    mean of the two cells beside it; by Stokes' theorem it equals the example's circulation to rounding."""
+    phi, lam = np.deg2rad(lat), np.deg2rad(lon)
+    inside, Uc = np.asarray(used, dtype=float), U * np.cos(phi)[:, None]
+    east = inside[..., :, :-1] - inside[..., :, 1:]  # 1 on the edge where the used cell has the lower index
+    north = inside[..., 1:, :] - inside[..., :-1, :]
+    dy = R * np.abs(np.gradient(phi))[:, None] * np.sign(lam[-1] - lam[0])
+    dx = R * np.abs(np.gradient(lam)) * np.sign(phi[-1] - phi[0])
+    along_x = np.where(east != 0, east * (V[..., :, :-1] + V[..., :, 1:]) / 2 * dy, 0.0)
+    along_y = np.where(north != 0, north * (Uc[..., :-1, :] + Uc[..., 1:, :]) / 2 * dx, 0.0)
+    return along_x.sum(axis=(-2, -1)) + along_y.sum(axis=(-2, -1))
+
+
 def _example(inputs):
-    """The example run on ``inputs``, its own check of the two forms included; what it defines and computes."""
+    """The example run on ``inputs``; what it defines and computes."""
     section = _sections(load_ocean_skill("ocean-physical-consistency-review")[0])[
         "Vorticity budgets and streamfunctions"]
     (code,) = re.findall(r"```python\n(.*?)```", section, re.DOTALL)
@@ -44,7 +60,7 @@ def test_the_example_runs_and_every_layer_uses_the_same_cells():
     (upper, land), (deep, _) = _basin(0.0, 750.0), _basin(1500.0, np.inf)
     upper, deep = _example(upper), _example(deep)
     for layer in (upper, deep):
-        check = layer["boundary_circulation"](layer["U"], layer["V"], LAT, LON, layer["used"])
+        check = _boundary_circulation(layer["U"], layer["V"], LAT, LON, layer["used"], layer["R"])
         assert np.isfinite(layer["gamma"]) and layer["gamma"] != 0
         assert np.isclose(check, layer["gamma"], rtol=1e-9)
     # Absent water is zero transport, so only land and missing data decide the cells, and both layers
@@ -83,7 +99,7 @@ def test_the_operator_is_exact_on_linear_fields_and_a_cyclonic_gyre_is_positive(
 def test_the_grid_may_run_either_way_and_carry_a_time_axis():
     example = _example(_basin(0.0, 750.0)[0])
     vorticity, circulation = example["vorticity"], example["circulation"]
-    boundary, U, V, region = example["boundary_circulation"], example["U"], example["V"], example["region"]
+    U, V, region, R = example["U"], example["V"], example["region"], example["R"]
     gamma, area = example["gamma"], example["area"]
     for rows, cols in ((slice(None, None, -1), slice(None)), (slice(None), slice(None, None, -1)),
                        (slice(None, None, -1), slice(None, None, -1))):
@@ -91,12 +107,13 @@ def test_the_grid_may_run_either_way_and_carry_a_time_axis():
         zeta = vorticity(U[rows, cols], V[rows, cols], lat, lon)
         used = region[rows, cols] & np.isfinite(zeta)
         assert np.allclose(circulation(zeta, lat, lon, used), (gamma, area), rtol=1e-12)
-        assert np.isclose(boundary(U[rows, cols], V[rows, cols], lat, lon, used), gamma, rtol=1e-9)
+        line = _boundary_circulation(U[rows, cols], V[rows, cols], lat, lon, used, R)
+        assert np.isclose(line, gamma, rtol=1e-9)
     U2, V2 = np.stack([U, 2 * U]), np.stack([V, 2 * V])
     zeta = vorticity(U2, V2, LAT, LON)
     used = region & np.isfinite(zeta)
     assert np.allclose(circulation(zeta, LAT, LON, used)[0], [gamma, 2 * gamma], rtol=1e-12)
-    assert np.allclose(boundary(U2, V2, LAT, LON, used), [gamma, 2 * gamma], rtol=1e-9)
+    assert np.allclose(_boundary_circulation(U2, V2, LAT, LON, used, R), [gamma, 2 * gamma], rtol=1e-9)
     layer = example["layer_transport"](np.stack([example["u"], example["u"]]), example["z_edges"], 0.0, 750.0)
     assert np.array_equal(layer[1], U, equal_nan=True)
 

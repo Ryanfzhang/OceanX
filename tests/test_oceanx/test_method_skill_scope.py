@@ -147,8 +147,10 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     # which a sentence here asked for; absent water is now zero transport and the section shows the
     # computation as code, run in test_vorticity_example.py.
     assert "A layer's transport is an integral: zero in a water column whose sea floor lies above the layer" in flat
-    assert "def boundary_circulation(U, V, lat, lon, used):" in physical
-    for gone in ("not just the surface land mask", "outside its support"):
+    assert "def circulation(zeta, lat, lon, used):" in physical
+    # The run of 2026-11-04 copied the example's tangential line integral and, weighted by f, took it for the
+    # flux term, which needs the normal component; the example keeps only what holds for every use.
+    for gone in ("not just the surface land mask", "outside its support", "def boundary_circulation"):
         assert gone not in flat
     design = " ".join(load_ocean_skill("ocean-analysis-design")[0].split())
     assert "running mean" in design and "say what each ± is" in design

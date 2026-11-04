@@ -115,27 +115,12 @@ def circulation(zeta, lat, lon, used):
     area = R**2 * np.cos(phi)[:, None] * np.abs(np.gradient(phi))[:, None] * np.abs(np.gradient(lam))
     return np.where(used, zeta * area, 0.0).sum(axis=(-2, -1)), np.where(used, area, 0.0).sum(axis=(-2, -1))
 
-def boundary_circulation(U, V, lat, lon, used):
-    """The same circulation as the line integral of (U, V), counterclockwise along the edge of the cells
-    used, each face taking the mean of the two cells beside it. It equals circulation() to rounding; a
-    difference means the operator, the cells used or the face values are wrong."""
-    phi, lam = np.deg2rad(lat), np.deg2rad(lon)
-    inside, Uc = np.asarray(used, dtype=float), U * np.cos(phi)[:, None]
-    east = inside[..., :, :-1] - inside[..., :, 1:]  # 1 on the edge where the used cell has the lower index
-    north = inside[..., 1:, :] - inside[..., :-1, :]
-    dy = R * np.abs(np.gradient(phi))[:, None] * np.sign(lam[-1] - lam[0])
-    dx = R * np.abs(np.gradient(lam)) * np.sign(phi[-1] - phi[0])
-    along_x = np.where(east != 0, east * (V[..., :, :-1] + V[..., :, 1:]) / 2 * dy, 0.0)
-    along_y = np.where(north != 0, north * (Uc[..., :-1, :] + Uc[..., 1:, :]) / 2 * dx, 0.0)
-    return along_x.sum(axis=(-2, -1)) + along_y.sum(axis=(-2, -1))
-
 # z: the level depths (m, positive down); region: the domain (bool, lat x lon), open only at real straits
 z_edges = np.r_[0.0, (z[1:] + z[:-1]) / 2, z[-1] + (z[-1] - z[-2]) / 2]
 U, V = layer_transport(u, z_edges, top, bottom), layer_transport(v, z_edges, top, bottom)
 zeta = vorticity(U, V, lat, lon)
 used = region & np.isfinite(zeta)
 gamma, area = circulation(zeta, lat, lon, used)  # m3 s-1 and m2; gamma / area for a domain average
-assert np.allclose(boundary_circulation(U, V, lat, lon, used), gamma, rtol=1e-6, atol=1.0)
 ```
 
 Archives rarely store every term of a vorticity budget; derive a term before calling it missing:
