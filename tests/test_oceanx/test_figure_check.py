@@ -40,13 +40,36 @@ def test_a_colour_range_far_from_its_field_is_found():
     lon, lat = np.meshgrid(np.linspace(105, 122, 40), np.linspace(5, 23, 40))
     field = 3 * np.sin(lon / 3) * np.cos(lat / 4)  # about -3 to 3
     fig, (wide, narrow, fitted) = plt.subplots(1, 3)
-    wide.contourf(lon, lat, field, levels=np.linspace(-20, 20, 9), cmap="RdBu_r", extend="both")
-    narrow.pcolormesh(lon, lat, 10 * field, vmin=-5, vmax=5, cmap="RdBu_r")
+    fig.colorbar(wide.contourf(lon, lat, field, levels=np.linspace(-20, 20, 9), cmap="RdBu_r", extend="both"),
+                 ax=wide)
+    fig.colorbar(narrow.pcolormesh(lon, lat, 10 * field, vmin=-5, vmax=5, cmap="RdBu_r"), ax=narrow)
     fig.colorbar(fitted.contourf(lon, lat, field, levels=np.linspace(-3, 3, 13), cmap="RdBu_r"), ax=fitted)
     found = problems(fig)
     assert len(found) == 2, found
     assert found[0].startswith("axes 1: the field spans") and "of its colour range -20 to 20" in found[0]
     assert found[1].startswith("axes 2: the field reaches") and "beyond its colour range -5 to 5" in found[1]
+    plt.close(fig)
+
+
+def test_a_coloured_field_without_its_colour_bar_is_found():
+    # A run of 2026-11-05 drew a surface speed and three layers' streamfunctions, two periods each, with no
+    # colour bar. One bar serves the panels coloured the same way, and no other.
+    lon, lat = np.meshgrid(np.linspace(105, 122, 40), np.linspace(5, 23, 40))
+    field = 3 * np.sin(lon / 3) * np.cos(lat / 4)
+    fig, axes = plt.subplots(2, 3)
+    for ax, letter in zip(axes.flat, "abcdef", strict=True):
+        ax.text(0.02, 0.9, f"({letter})", transform=ax.transAxes)
+    upper = [ax.pcolormesh(lon, lat, field, vmin=-3, vmax=3, cmap="RdBu_r") for ax in axes[:, 0]]
+    fig.colorbar(upper[0], ax=list(axes[:, 0]))  # both periods of the layer share it
+    for ax in axes[:, 1]:
+        ax.contourf(lon, lat, field / 4, levels=np.linspace(-0.75, 0.75, 7), cmap="RdBu_r")
+    land = np.where(field > 2, 1.0, np.nan)
+    axes[0, 2].pcolormesh(lon, lat, land, cmap="Greys", vmin=0, vmax=2)  # land: one value
+    axes[0, 2].imshow(np.random.default_rng(0).random((8, 8, 3)))  # an image in its own colours
+    axes[1, 2].contour(lon, lat, field, levels=5, colors="k")  # lines, no fill
+    found = problems(fig)
+    missing = [item for item in found if "has no colour bar" in item]
+    assert [item.split(":")[0] for item in missing] == ["panel (b)", "panel (e)"], found
     plt.close(fig)
 
 

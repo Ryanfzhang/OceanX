@@ -2,7 +2,8 @@
 
 Runs of 2026-11-03 delivered figures whose agents had read the figure rules: a smoothed curve squashed under
 the light raw series that set its y axis, maps whose colour range was copied from a paper, budget bars on a
-symlog axis, notes in 5.6 pt type. One agent opened the preview of the squashed figure not at all.
+symlog axis, notes in 5.6 pt type. One agent opened the preview of the squashed figure not at all. A run of
+2026-11-05 delivered eight coloured maps in four colourings with no colour bar at all.
 
 This file is also the ``sitecustomize`` of every agent's Python (expert_execution.py writes it into the
 agent's runtime folder and puts that folder on PYTHONPATH), so it imports nothing of OceanX and loads
@@ -25,11 +26,12 @@ _LETTER = re.compile(r"^\(?([a-z])\)?$", re.IGNORECASE)
 def problems(figure) -> list[str]:
     """What a reader of ``figure`` could not see, or would read wrongly."""
     found = []
+    bars = [ax._colorbar for ax in figure.axes if getattr(ax, "_colorbar", None) is not None]
     for index, ax in enumerate(figure.axes):
         if getattr(ax, "_colorbar", None) is not None:
             continue
         name = _panel(ax, index)
-        for problem in (_squashed(ax), *_colour_ranges(ax), _log_bars(ax)):
+        for problem in (_squashed(ax), *_colour_ranges(ax), _log_bars(ax), _no_colour_bar(ax, bars)):
             if problem:
                 found.append(f"{name}: {problem}")
     small = _small_text(figure)
@@ -117,6 +119,35 @@ def _colour_ranges(ax) -> list[str]:
                          f"{(field_high - field_low) / width:.0%} of its colour range {low:.3g} to {high:.3g}; "
                          "set the colour range from the field")
     return found
+
+
+def _colouring(cmap, norm) -> tuple:
+    return (cmap.name, type(norm).__name__,
+            *(f"{limit:.6g}" if limit is not None else "" for limit in (norm.vmin, norm.vmax)))
+
+
+def _no_colour_bar(ax, bars) -> str | None:
+    """A field coloured by its values that no colour bar explains: none was drawn for it, nor for another
+    field coloured the same way, with the same colour map and range. A mask of one or two values, such as
+    land, and an image in its own colours need none."""
+    import numpy as np
+    from matplotlib.contour import ContourSet
+
+    drawn = {id(bar.mappable) for bar in bars}
+    shared = {_colouring(bar.cmap, bar.norm) for bar in bars}
+    for mappable in [*ax.collections, *ax.images]:
+        array, norm = getattr(mappable, "get_array", lambda: None)(), getattr(mappable, "norm", None)
+        if (array is None or norm is None or np.ndim(array) > 2 or id(mappable) in drawn
+                or (isinstance(mappable, ContourSet) and not mappable.filled)):
+            continue
+        try:
+            values = np.unique(np.ma.masked_invalid(np.ma.asarray(array, dtype=float)).compressed())
+        except (TypeError, ValueError):
+            continue
+        if values.size > 2 and _colouring(mappable.get_cmap(), norm) not in shared:
+            return ("a field coloured by its values has no colour bar; add one with the field's variable and "
+                    "units, shared only by panels coloured the same way")
+    return None
 
 
 def _log_bars(ax) -> str | None:

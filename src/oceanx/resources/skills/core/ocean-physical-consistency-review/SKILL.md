@@ -106,7 +106,10 @@ Archives rarely store every term of a vorticity budget; derive a term before cal
   so they stay inside the labelled residual;
 - the planetary vorticity flux through a strait, `f` times the layer transport normal to the
   strait section, on the section's own grid points; a boundary cut through open sea to shape the
-  domain carries flux too, so the domain's open boundaries are the real straits and nothing else;
+  domain carries flux too, so the domain's open boundaries are the real straits and nothing else:
+  `open_edges(region, ocean, lat, lon, U, V)` from `ocean_layers` lists them with the transport through
+  each and every corner where the edge turns in open water, which a domain closed at its straits does not
+  have, and a strait's transport is the sum over the open edges that cross it;
 - advection and tilting from the velocity fields, and the tendency from successive fields;
 - one remaining term as the budget residual, labelled as a residual.
 A term is missing only when neither the archive nor the attached sources hold what it needs.

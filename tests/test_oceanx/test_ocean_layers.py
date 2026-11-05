@@ -6,6 +6,7 @@ of the middle and deep layers. The functions are checked here, with the line int
 Stokes' theorem; the skill's call is run as written, and an agent's Python imports the module."""
 import re
 import sys
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,7 @@ from oceanx.ocean_layers import (
     layer_circulations,
     layer_transport,
     level_edges,
+    open_edges,
     vorticity,
 )
 from oceanx.skills import load_ocean_skill
@@ -68,7 +70,9 @@ def _layer(inputs, top, bottom):
 
 def test_every_layer_uses_the_same_cells_and_area_and_the_line_integral_agrees():
     inputs, land = _basin()
-    gammas, area = layer_circulations(inputs["u"], inputs["v"], inputs["z"], LAT, LON, inputs["region"], LAYERS)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # its cut through the sea ends on land and at the end of the data
+        gammas, area = layer_circulations(inputs["u"], inputs["v"], inputs["z"], LAT, LON, inputs["region"], LAYERS)
     shared = None
     for (top, bottom), gamma in zip(LAYERS, gammas, strict=True):
         U, V, zeta = _layer(inputs, top, bottom)
@@ -193,3 +197,56 @@ async def test_an_agents_python_imports_the_module(tmp_path: Path, monkeypatch):
         assert "layer_circulations" in shell.stdout
     finally:
         await host.close()
+
+
+# A basin closed by land but for a strait through a barrier, with open sea beyond it: 0.5 degree cells.
+OPEN_LAT, OPEN_LON = np.arange(0.25, 20, 0.5), np.arange(100.25, 130, 0.5)
+
+
+def _strait():
+    lon, lat = np.meshgrid(OPEN_LON, OPEN_LAT)
+    land = (lon < 103) | ((lon < 120) & ((lat < 2) | (lat > 18))) | ((lon > 118) & (lon < 120) & ~((lat > 9) & (lat < 11)))
+    return lon, lat, ~land
+
+
+def test_a_domain_closed_at_its_strait_has_one_open_edge_and_no_corner():
+    lon, lat, ocean = _strait()
+    U = np.where((lat > 9) & (lat < 11) & (lon > 118), 2.0, 0.0)  # m2 s-1 out through the strait
+    edges, corners = open_edges(lon < 119, ocean, OPEN_LAT, OPEN_LON, U, np.zeros_like(U))
+    assert corners == []
+    [strait] = edges
+    assert (strait["side"], strait["at"], strait["start"], strait["end"], strait["faces"]) == ("east", 119.0, 9.25, 10.75, 4)
+    assert np.isclose(strait["transport"], 2.0 * 4 * R * np.deg2rad(0.5))
+
+
+def test_a_box_cut_through_the_open_sea_shows_its_corner_and_the_water_crossing_it():
+    # A run of 2026-11-05 took its strait's transport from the east edge of such a box; nearly all of that
+    # water left again across the box's north edge, past the corner in open water.
+    lon, lat, ocean = _strait()
+    V = np.where(lon > 120, 3.0, 0.0)  # a current running north beyond the strait
+    edges, corners = open_edges((lon < 125) & (lat < 15), ocean, OPEN_LAT, OPEN_LON, np.zeros_like(V), V)
+    assert corners == [(15.0, 125.0)]
+    out = {(edge["side"], edge["start"]): edge["transport"] for edge in edges}
+    assert out[("north", 120.25)] > 0 and out[("south", 120.25)] < 0 and out[("east", 0.25)] == 0
+    assert np.isclose(out[("north", 120.25)], -out[("south", 120.25)] * np.cos(np.deg2rad(15)) / np.cos(np.deg2rad(0.25)))
+    assert out[("north", 103.25)] == 0  # the cut across the basin itself ends on land at both sides
+
+
+def test_a_diagonal_cut_has_no_corner_and_a_box_in_open_water_has_four():
+    lon, lat = np.meshgrid(OPEN_LON, OPEN_LAT)
+    ocean = np.ones(lon.shape, bool)
+    assert open_edges(lon - 100 < lat, ocean, OPEN_LAT, OPEN_LON)[1] == []
+    corners = open_edges((lon > 110) & (lon < 120) & (lat > 5) & (lat < 15), ocean, OPEN_LAT, OPEN_LON)[1]
+    assert sorted(corners) == [(5.0, 110.0), (5.0, 120.0), (15.0, 110.0), (15.0, 120.0)]
+    # The same box with the grid running north to south and east to west.
+    flipped = open_edges(((lon > 110) & (lon < 120) & (lat > 5) & (lat < 15))[::-1, ::-1], ocean,
+                         OPEN_LAT[::-1], OPEN_LON[::-1])[1]
+    assert sorted(flipped) == sorted(corners)
+
+
+def test_layer_circulations_warns_of_a_corner_in_open_water():
+    inputs, _ = _basin()
+    box = np.zeros(inputs["region"].shape, bool)
+    box[:30, :30] = True
+    with pytest.warns(UserWarning, match="turns a corner in open water"):
+        layer_circulations(inputs["u"], inputs["v"], inputs["z"], LAT, LON, box, LAYERS[:1])

@@ -151,6 +151,10 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "bottom pressure torque" in physical and "transport streamfunction" in physical
     flat = " ".join(physical.split())
     assert "open boundaries are the real straits" in flat
+    # A run of 2026-11-05 cut its domain from a box whose corner lay in the open sea beside its strait, and most
+    # of the water it counted through the strait left again across the box's other edge.
+    assert "`open_edges(region, ocean, lat, lon, U, V)` from `ocean_layers` lists them" in flat
+    assert "every corner where the edge turns in open water" in flat
     # The same run gave a 0-750 m layer 775 m of level thickness and took a boundary flux from the cell outside
     # some faces; the layer sum and the two forms of a flux are the checks that catch both.
     assert "the layer's level thicknesses add up to the layer's own thickness" in flat
