@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from oceanx import ocean_layers
+from oceanx import natural_earth, ocean_layers
 from oceanx.artifacts.models import ArtifactRef
 from oceanx.backend.store import CodeExecutionRecord, RequestStore
 from oceanx.command_jobs import CommandJobs
@@ -1168,6 +1168,8 @@ class ExpertCodeExecutionService:
             # Data a library fetches once, such as the Natural Earth coastlines cartopy draws, stay in
             # the agent's folder rather than in the home of one run.
             "XDG_DATA_HOME": str(work_root / ".runtime" / "share"),
+            # The Natural Earth files installed with OceanX, which cartopy reads before the network.
+            natural_earth.DATA_DIR_ENV: str(natural_earth.data_root(runtime.prefix)),
             "PYTHONPATH": os.pathsep.join((str(check_root), str(library_root))),
             FIGURE_CHECK_LOG_ENV: str(check_log),
         }

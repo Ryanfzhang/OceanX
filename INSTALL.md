@@ -16,6 +16,12 @@ conda env update -n oceanx -f environment.yml
 conda activate oceanx
 ```
 
+地图的海岸线、陆地、湖泊、河流和国界来自 Natural Earth。智能体的代码在沙箱里运行，可能连不上网，所以安装或更新环境后下载一次（约 18 MB，放在运行智能体代码的环境的 `share/cartopy`；已有的文件会跳过）：
+
+```bash
+python -m oceanx.natural_earth
+```
+
 这条安装命令同时安装 OceanX 主程序和科学计算依赖，不需要额外创建 `ocean` 环境，也不需要再执行 `pip install -e .`。项目仍只使用 `oceanx` 和 `oceanx-bench` 两个环境；Node.js 与 Python 共用 `oceanx`。
 
 读取任务来源里的 PDF（ADR 0023）需要 `pypdf>=6.0` 和 `pypdfium2>=4.30`（把每页渲染成图片，公式和表格靠它保留），它们在 `pyproject.toml` 的主依赖里，随上面的命令安装。2026-10-26 以前建立的环境执行一次上面的 `conda env update` 即可。在激活的 `oceanx` 中检查（基础环境的 Python 3.8 装不了 pypdf 6）：

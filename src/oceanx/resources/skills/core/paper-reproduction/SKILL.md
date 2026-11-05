@@ -95,9 +95,12 @@ Before drawing the first figure, read /references/coding/matplotlib.md, under Pu
 before drawing a map, read /references/coding/matplotlib.md, under Maps. Redraw each figure listed in
 repro_spec.md from your quantities as the original draws it, with the paper's data or other data: the same
 panels and arrangement, axes with any twin axes, variables, symbols, units, colour encoding, line styles,
-markers, fills, overlays, arrows, reference lines, legends and annotations. Simplify nothing: draw every
-element the original has, the trend line of each period included; one the record is too short to support is
-drawn and marked not significant, never left out. Text on the original that states a result, such as a
+markers, fills, overlays, arrows, reference lines, legends and annotations, and how each field is drawn:
+colour bands at the original's levels with contourf where the original shows bands, its contour lines with
+their levels and labels, and continuous shading with pcolormesh only where the original shows shading.
+Simplify nothing and add nothing: draw every element the original has, the trend line of each period included; one the record is too short to support is
+drawn and marked not significant, never left out. Put no text panel, table or note in a figure that the
+original lacks: numbers belong in the answer. Text on the original that states a result, such as a
 rotation sense, a transport or a correlation, is written from your values, never copied. Smoothed curves and
 their fills cover your record as the original's cover its record; a fill about a mean is drawn around the
 quantity itself, and a series drawn minus its mean is labelled as an anomaly. With other data the axis
@@ -106,8 +109,9 @@ are kept too. Every figure that shows a smoothed series draws the one the comput
 chosen under Adapting the method to the record. Before drawing each figure, read repro_spec.md again and,
 when you can read images, open the original again, since what you read at the start lies far back in the
 conversation. After saving, open yours: the original repro_spec.md names for it comes after it. Compare them
-item by item (panel layout, axes, line styles, markers, colours, fills, axis multipliers, panel letters,
-legends and annotations, text that crosses a line) and fix every difference the data allow. Draw each panel,
+item by item (panel layout, axes, line styles, markers, colours, colour bands or shading, contour lines,
+fills, axis multipliers, panel letters, legends and annotations, text that crosses a line, text the
+original lacks) and fix every difference the data allow. Draw each panel,
 curve and term the data allow, and name each doubt and each missing one in the answer, with what it needs.
 Draw a partial budget as partial and not closed rather than withholding it; never draw a missing term as
 zero, or a mechanism these data did not test as established, and never fill a gap with another quantity, a
