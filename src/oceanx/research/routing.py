@@ -350,7 +350,8 @@ ORIGINAL_NOTE = ("Next is the paper's original of this figure, {original}, as {s
                  "with it item by item.")
 _PAPER_IMAGE = re.compile(r"page-(\d+)[\w-]*\.jpg")  # the page, part and figure images of pdf_text.py
 _DRAWN = (".preview.png", ".display.png")  # the images figure_delivery.py draws of a saved PDF
-_FIGURE_FILE = re.compile(r"^fig(?:ure)?[_\- ]?(\d+)(?!\d)", re.IGNORECASE)  # fig3_budget.pdf
+# A figure number in a file name: fig3_budget.pdf, or _fig3_check.png as a run of 2026-11-05 named its drafts
+_FIGURE_FILE = re.compile(r"(?<![a-z])fig(?:ure)?[_\- ]?(\d+)(?!\d)", re.IGNORECASE)
 _FIGURE = re.compile(r"\bfig(?:ure)?s?\.?\s*(\d+)(?!\d)", re.IGNORECASE)  # Fig. 3, Figure 3
 # Named only in the text note of an attached paper, the skill was not opened in a run of
 # 2026-11-01; opened, read_file shows the first 100 of its about 200 lines, and a summary later
@@ -400,16 +401,16 @@ def _one_page(named: list[str]) -> str:
 def original_for(figure: str, spec: str, images: dict[str, Path]) -> tuple[Path, str] | None:
     """The paper's original of the agent's figure image ``figure``, and how to name it, from where
     ``spec`` names them together: a line, else a section under a heading, that names the figure's file
-    or, failing that, the number its file name starts with (fig3_budget.pdf is Fig. 3). The image is
-    the first of ``images`` the spec names after that mention and before the next figure's, or the
-    one page a line or section about no other figure names. None when the spec names no image of the
-    paper for it."""
+    or, failing that, the figure number its file name carries (fig3_budget.pdf and _fig3_check.png are
+    Fig. 3). The image is the first of ``images`` the spec names after that mention and before the next
+    figure's, or the one page a line or section about no other figure names. None when the spec names
+    no image of the paper for it."""
 
     name = Path(figure).name
     for drawn in _DRAWN:
         name = name.removesuffix(drawn)
     stem = Path(name).stem
-    number = _FIGURE_FILE.match(stem)
+    number = _FIGURE_FILE.search(stem)
     keys = [re.compile(re.escape(stem), re.IGNORECASE)] if len(stem) >= 4 else []
     if number:
         keys.append(re.compile(rf"\bfig(?:ure)?s?\.?\s*{number.group(1)}(?!\d)", re.IGNORECASE))

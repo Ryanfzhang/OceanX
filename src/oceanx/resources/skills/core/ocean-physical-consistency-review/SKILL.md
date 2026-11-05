@@ -80,53 +80,30 @@ through the derivatives, so that the cells beside land or missing data drop out,
 points next to land require; filling them with zero first gives those cells the shear against the
 zeros, which can change a circulation several times over, and restoring the mask afterwards does not
 undo it. On a regular latitude-longitude grid with both components at the same points and NaN on land,
-below the sea floor and where data are missing, compute it as below, following the paper wherever it
-defines the layer, the domain, the grid or the masking otherwise.
+below the sea floor and where data are missing, compute it with `ocean_layers`, tested functions every
+agent's Python imports, rather than with code of your own: `layer_circulations` gives every layer's
+circulation on one domain and one area, and its steps serve the other terms of a budget:
+`level_edges(z)`, `layer_transport(u, edges, top, bottom)` (zero where a column holds no water in the
+layer, NaN where it holds no valid data), `vorticity(U, V, lat, lon)` (NaN beside land and missing data)
+and `circulation(zeta, lat, lon, used)`. Follow the paper wherever it defines the layer, the domain or the
+grid otherwise; its masking of the points next to land is already done, land being the same for every
+layer.
 
 ```python
-import numpy as np
+from ocean_layers import layer_circulations
 
-R = 6.371e6  # Earth's radius, m
-
-def layer_transport(u, z_edges, top, bottom):
-    """Integral of u (..., level, lat, lon) from depth top to bottom (m, positive down; np.inf for the sea
-    floor), in m2 s-1 for a velocity. z_edges (level + 1) bound the levels' cells: for depths given as points,
-    the midpoints between them. Zero where the column holds water but none in the layer; NaN where it holds
-    no valid data, on land or where data are missing."""
-    dz = np.clip(np.minimum(z_edges[1:], bottom) - np.maximum(z_edges[:-1], top), 0, None)[:, None, None]
-    total = np.where(np.isfinite(u), u * dz, 0.0).sum(axis=-3)
-    return np.where(np.isfinite(u).any(axis=-3), total, np.nan)
-
-def vorticity(U, V, lat, lon):
-    """Relative vorticity of (U, V) (..., lat, lon) by centred differences on the sphere. A cell gets NaN
-    when it or one of its four neighbours is NaN, so the cells beside land or missing data drop out."""
-    phi, lam = np.deg2rad(lat), np.deg2rad(lon)
-    Uc = U * np.cos(phi)[:, None]
-    zeta = np.full(np.shape(U), np.nan)
-    zeta[..., 1:-1, 1:-1] = ((V[..., 1:-1, 2:] - V[..., 1:-1, :-2]) / (lam[2:] - lam[:-2])
-                             - (Uc[..., 2:, 1:-1] - Uc[..., :-2, 1:-1]) / (phi[2:] - phi[:-2])[:, None]
-                             ) / (R * np.cos(phi[1:-1])[:, None])
-    return np.where(np.isfinite(U) & np.isfinite(V), zeta, np.nan)
-
-def circulation(zeta, lat, lon, used):
-    """Area integral of zeta over the cells used (bool, ..., lat, lon), in m3 s-1 for transports, and the
-    area of those cells in m2, the denominator of a domain average."""
-    phi, lam = np.deg2rad(lat), np.deg2rad(lon)
-    area = R**2 * np.cos(phi)[:, None] * np.abs(np.gradient(phi))[:, None] * np.abs(np.gradient(lam))
-    return np.where(used, zeta * area, 0.0).sum(axis=(-2, -1)), np.where(used, area, 0.0).sum(axis=(-2, -1))
-
-# z: the level depths (m, positive down); region: the domain (bool, lat x lon), open only at real straits
-z_edges = np.r_[0.0, (z[1:] + z[:-1]) / 2, z[-1] + (z[-1] - z[-2]) / 2]
-U, V = layer_transport(u, z_edges, top, bottom), layer_transport(v, z_edges, top, bottom)
-zeta = vorticity(U, V, lat, lon)
-used = region & np.isfinite(zeta)
-gamma, area = circulation(zeta, lat, lon, used)  # m3 s-1 and m2; gamma / area for a domain average
+# u, v: (..., level, lat, lon), NaN on land, below the sea floor and where data are missing; z: their depths
+# (m, positive down); region: the domain (bool, lat x lon), open only at real straits; layers: the paper's
+# layers as (top, bottom) in m, np.inf for the sea floor
+gammas, area = layer_circulations(u, v, z, lat, lon, region, layers)  # m3 s-1 each, and the one area in m2
 ```
 
 Archives rarely store every term of a vorticity budget; derive a term before calling it missing:
 - pressure from temperature, salinity and sea surface height, through the equation of state and
   the hydrostatic relation `p(z) = rho0 * g * eta + integral(rho * g, z..0)`; from it a layer's
-  pressure-gradient torque and the bottom pressure torque `J(p_b, H) / rho0`;
+  pressure-gradient torque and the bottom pressure torque `J(p_b, H) / rho0`; without sea surface
+  height the density part alone is no estimate of them, since at depth the two parts largely cancel,
+  so they stay inside the labelled residual;
 - the planetary vorticity flux through a strait, `f` times the layer transport normal to the
   strait section, on the section's own grid points; a boundary cut through open sea to shape the
   domain carries flux too, so the domain's open boundaries are the real straits and nothing else;
@@ -145,8 +122,10 @@ A layer's transport streamfunction integrates the layer's depth-integrated trans
 `psi(x, y) = integral(V, x0..x)` or of `-U` along y, on the native grid. Inverting vorticity with a
 Poisson solve needs boundary values the data do not give, so its pattern is not evidence.
 
-Retain the layer mask when interpreting or plotting the result. Do not integrate across disconnected
-water bodies without specifying their separate boundaries and reference constants.
+Retain the layer mask when interpreting or plotting the result. Water around an island is one body: no
+water crosses the island, so the integral keeps its value across it, neither stopping there nor starting
+again from zero beyond it. Only water bodies the domain does not join need their own boundaries and
+reference constants.
 
 Check a reconstructed streamfunction against both transport components, with the chosen sign and
 grid metrics: `U = -dpsi/dy`, `V = dpsi/dx`. Layer transport can be divergent through exchange across

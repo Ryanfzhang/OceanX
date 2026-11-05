@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from oceanx import ocean_layers
 from oceanx.artifacts.models import ArtifactRef
 from oceanx.backend.store import CodeExecutionRecord, RequestStore
 from oceanx.command_jobs import CommandJobs
@@ -1139,6 +1140,12 @@ class ExpertCodeExecutionService:
         if not hook.is_file() or hook.read_text(encoding="utf-8") != source:
             check_root.mkdir(parents=True, exist_ok=True)
             hook.write_text(source, encoding="utf-8")
+        # It also imports ocean_layers, the tested layer operators the physics skill has it call.
+        library_root = runtime_root / "ocean-lib"
+        module, source = library_root / "ocean_layers.py", Path(ocean_layers.__file__).read_text(encoding="utf-8")
+        if not module.is_file() or module.read_text(encoding="utf-8") != source:
+            library_root.mkdir(parents=True, exist_ok=True)
+            module.write_text(source, encoding="utf-8")
         check_log = runtime_root / "figure-check.jsonl"
         check_offset = check_log.stat().st_size if check_log.is_file() else 0
         execution_record = self.store.get_code_execution(execution_id)
@@ -1161,7 +1168,7 @@ class ExpertCodeExecutionService:
             # Data a library fetches once, such as the Natural Earth coastlines cartopy draws, stay in
             # the agent's folder rather than in the home of one run.
             "XDG_DATA_HOME": str(work_root / ".runtime" / "share"),
-            "PYTHONPATH": str(check_root),
+            "PYTHONPATH": os.pathsep.join((str(check_root), str(library_root))),
             FIGURE_CHECK_LOG_ENV: str(check_log),
         }
 
@@ -1182,7 +1189,7 @@ class ExpertCodeExecutionService:
         outputs_before = _output_state(output_root)
         if shell_command is not None:
             runtime_environment.update({
-                "PYTHONPATH": os.pathsep.join((str(code_root), str(check_root))),
+                "PYTHONPATH": os.pathsep.join((str(code_root), str(check_root), str(library_root))),
             })
             if on_output is not None:  # a script's prints reach the agent while it runs, not at its end
                 runtime_environment["PYTHONUNBUFFERED"] = "1"

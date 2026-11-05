@@ -114,6 +114,14 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     # to the paper agent; runs had dropped a twin axis and map arrows and added annual-mean markers).
     assert "as the original draws it, with the paper's data or other data" in reproduction
     assert "Simplify nothing: draw every element the original has" in reproduction
+    # A run of 2026-11-05 copied the original's "Cyclonic" onto its deep layer, whose own circulation was negative:
+    # text that states a result is written from the run's values.
+    assert "Text on the original that states a result" in reproduction
+    assert "is written from your values, never copied" in reproduction
+    # The same run filled its layer series about their means by drawing each minus its mean, under an axis
+    # still named for the series, so the upper layer read as turning anticyclonic.
+    assert "a fill about a mean is drawn around the quantity itself" in reproduction
+    assert "a series drawn minus its mean is labelled as an anomaly" in reproduction
     # "Add nothing" was dropped the same day: a paper's budget figure has no residual bar, so it contradicted the
     # labelled residual the skill asks for, and the next run drew neither the residual nor a partial advection term.
     assert "add nothing" not in reproduction
@@ -148,14 +156,24 @@ def test_a_paper_reproduction_points_to_where_its_methods_live():
     assert "the layer's level thicknesses add up to the layer's own thickness" in flat
     assert "So must the two forms of a flux term" in flat
     # A run of 2026-11-03 zero-filled land before differencing and summed each layer only where it held water,
-    # which a sentence here asked for; absent water is now zero transport and the section shows the
-    # computation as code, run in test_vorticity_example.py.
+    # which a sentence here asked for; absent water is now zero transport. A run of 2026-11-05 had the
+    # computation in the section as code and wrote its own with a mask for each layer, so the section has the
+    # agent call ocean_layers, tested in test_ocean_layers.py, and shows no function to copy.
     assert "A layer's transport is an integral: zero in a water column whose sea floor lies above the layer" in flat
-    assert "def circulation(zeta, lat, lon, used):" in physical
+    assert "from ocean_layers import layer_circulations" in physical and "rather than with code of your own" in flat
+    assert "def layer_transport" not in physical and "def circulation" not in physical
     # The run of 2026-11-04 copied the example's tangential line integral and, weighted by f, took it for the
     # flux term, which needs the normal component; the example keeps only what holds for every use.
     for gone in ("not just the surface land mask", "outside its support", "def boundary_circulation"):
         assert gone not in flat
+    # The run of 2026-11-05 integrated each latitude's streamfunction over its first stretch of water only, so every
+    # row crossing an island was left empty past it; an earlier run started again from zero beyond each island.
+    assert "Water around an island is one body" in flat
+    assert "neither stopping there nor starting again from zero beyond it" in flat
+    assert "Do not integrate across disconnected water bodies" not in flat
+    # Runs of 2026-11-04 and 11-05 drew the pressure torque from density alone, with no sea surface height,
+    # about ten times the other terms, and the residual cancelled it.
+    assert "without sea surface height the density part alone is no estimate of them" in flat
     design = " ".join(load_ocean_skill("ocean-analysis-design")[0].split())
     assert "running mean" in design and "say what each ± is" in design
     reference = (ocean_reference_root() / "coding" / "matplotlib.md").read_text(encoding="utf-8")

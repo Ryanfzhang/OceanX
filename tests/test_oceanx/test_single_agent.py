@@ -317,6 +317,9 @@ def test_the_original_of_a_figure_is_the_paper_image_the_spec_names_with_it(tmp_
     assert original_for("/scratch/fig3-vorticity-budget.pdf.preview.png", spec, images) == (
         images["page-05-figure-1.jpg"], "Fig. 3 (page-05-figure-1.jpg)")
     assert original_for("/outputs/Figure2_layers.png", spec, images)[0] == images["page-04-figure-1.jpg"]
+    # A run of 2026-11-05 checked its figures as drafts named _fig2_check.png, with fig2.pdf in its spec.
+    assert original_for("/scratch/_fig2_check.png", spec, images)[0] == images["page-04-figure-1.jpg"]
+    assert original_for("/scratch/config3.png", spec, images) is None
     # A file without a number is found where the spec names it, under the figure's heading.
     named = spec + "### Fig. 4 — page-06-figure-1.jpg — schematic\n- saved as scs-regime-trends.pdf\n"
     assert original_for("scs-regime-trends.pdf.display.png", named, images) == (
